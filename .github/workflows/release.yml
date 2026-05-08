@@ -173,7 +173,7 @@ jobs:
           cargo install --locked --version 0.5.5 cargo-cyclonedx
           VERSION="${TAG#v}"
           # cargo-cyclonedx writes `<crate>.cdx.json` next to Cargo.toml.
-          cargo cyclonedx --format json --spec-version 1.5 -p gigastt
+          cargo cyclonedx --format json --spec-version 1.5 --manifest-path crates/gigastt/Cargo.toml
           mkdir -p dist
           # Pin the artifact name to the release tag for reproducibility.
           cp crates/gigastt/gigastt.cdx.json "dist/gigastt-${VERSION}.cdx.json"
