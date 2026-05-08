@@ -19,13 +19,13 @@ pub(crate) async fn http_metrics_middleware(
     let Some(registry) = state.metrics_registry.clone() else {
         return next.run(req).await;
     };
-    let method = req.method().as_str().to_string();
+    let method = req.method().clone();
     let path = req.uri().path().to_string();
     let start = std::time::Instant::now();
     // Sample pool availability on every request.
     registry.gauge_set(
         "gigastt_pool_available",
-        vec![],
+        &[],
         state.engine.pool.available() as i64,
     );
     let response = next.run(req).await;
@@ -33,16 +33,16 @@ pub(crate) async fn http_metrics_middleware(
     let status = response.status().as_u16().to_string();
     registry.counter_inc(
         "gigastt_http_requests_total",
-        vec![
-            ("method".into(), method.clone()),
-            ("path".into(), path.clone()),
-            ("status".into(), status),
+        &[
+            ("method", method.as_str()),
+            ("path", path.as_str()),
+            ("status", status.as_str()),
         ],
         1,
     );
     registry.histogram_record(
         "gigastt_http_request_duration_seconds",
-        vec![("method".into(), method), ("path".into(), path)],
+        &[("method", method.as_str()), ("path", path.as_str())],
         elapsed,
     );
     response

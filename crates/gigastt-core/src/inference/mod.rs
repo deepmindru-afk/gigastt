@@ -51,10 +51,13 @@ fn ort_err(e: impl std::fmt::Display) -> anyhow::Error {
 }
 
 pub fn now_timestamp() -> f64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs_f64()
+    match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+        Ok(d) => d.as_secs_f64(),
+        Err(e) => {
+            tracing::warn!("System clock is before Unix epoch: {e}");
+            0.0
+        }
+    }
 }
 
 /// Encoder time subsampling factor (4 frames → 1 encoder output frame).
@@ -163,6 +166,16 @@ impl<T: Send> Pool<T> {
             if self.inner.closed.load(std::sync::atomic::Ordering::SeqCst) {
                 return Err(PoolError::Closed);
             }
+            // Re-check items under the waiters lock to prevent the lost-wakeup
+            // race: between releasing items.lock() and acquiring waiters.lock(),
+            // another thread may have checked in an item and pushed it back to
+            // items because there were no waiters yet.
+            let mut items = self.inner.items.lock();
+            if let Some(item) = items.pop_front() {
+                drop(items);
+                drop(waiters);
+                return Ok(PoolGuard::new(self.inner.clone(), item));
+            }
             waiters.push_back(Waiter::Async(tx));
         }
 
@@ -191,6 +204,13 @@ impl<T: Send> Pool<T> {
             let mut waiters = self.inner.waiters.lock();
             if self.inner.closed.load(std::sync::atomic::Ordering::SeqCst) {
                 return Err(PoolError::Closed);
+            }
+            // Same lost-wakeup guard as the async variant.
+            let mut items = self.inner.items.lock();
+            if let Some(item) = items.pop_front() {
+                drop(items);
+                drop(waiters);
+                return Ok(PoolGuard::new(self.inner.clone(), item));
             }
             waiters.push_back(Waiter::Blocking(tx));
         }
@@ -232,25 +252,39 @@ impl<T: Send> Pool<T> {
 }
 
 impl<T> PoolInner<T> {
-    fn checkin(&self, item: T) {
+    fn checkin(&self, mut item: T) {
         if self.closed.load(std::sync::atomic::Ordering::SeqCst) {
             return;
         }
-        let mut waiters = self.waiters.lock();
-        if let Some(waiter) = waiters.pop_front() {
-            drop(waiters);
-            match waiter {
-                Waiter::Async(tx) => {
-                    let _ = tx.send(item);
+        // Retry loop: if the waiter at the front of the queue was abandoned
+        // (its receiver was dropped because the checkout future was cancelled
+        // via timeout, select!, or abort), we must skip it and try the next
+        // one, or return the item to the pool. Without this retry a cancelled
+        // waiter permanently leaks a pool slot.
+        loop {
+            let mut waiters = self.waiters.lock();
+            if let Some(waiter) = waiters.pop_front() {
+                drop(waiters);
+                match waiter {
+                    Waiter::Async(tx) => {
+                        if let Err(returned_item) = tx.send(item) {
+                            item = returned_item;
+                            continue;
+                        }
+                    }
+                    Waiter::Blocking(tx) => {
+                        if let Err(std::sync::mpsc::SendError(returned_item)) = tx.send(item) {
+                            item = returned_item;
+                            continue;
+                        }
+                    }
                 }
-                Waiter::Blocking(tx) => {
-                    let _ = tx.send(item);
-                }
+            } else {
+                drop(waiters);
+                let mut items = self.items.lock();
+                items.push_back(item);
             }
-        } else {
-            drop(waiters);
-            let mut items = self.items.lock();
-            items.push_back(item);
+            break;
         }
     }
 }
@@ -436,6 +470,10 @@ pub struct StreamingState {
     pub mel_fft_input: Vec<rustfft::num_complex::Complex<f32>>,
     /// Reusable power spectrum buffer for mel spectrogram.
     pub mel_power: Vec<f32>,
+    /// Reusable mel-output buffer (avoids per-chunk allocation).
+    pub mel_output: Vec<f32>,
+    /// Reusable resampler output buffer (avoids per-chunk allocation).
+    pub resample_output_buf: Vec<f32>,
     /// Diarization state (present only when diarization is enabled).
     #[cfg(feature = "diarization")]
     pub diarization_state: Option<OnlineDiarizer>,
@@ -464,8 +502,8 @@ impl FeatureExtractor {
         }
     }
 
-    /// Prepare incoming samples (append to buffer, return a complete frame if available).
-    pub fn prepare_buffer(&self, samples: &[f32], audio_buffer: &mut Vec<f32>) -> Option<Vec<f32>> {
+    /// Prepare incoming samples (append to buffer, return the usable sample count if available).
+    pub fn prepare_buffer(&self, samples: &[f32], audio_buffer: &mut Vec<f32>) -> Option<usize> {
         audio::prepare_audio_buffer(samples, audio_buffer)
     }
 
@@ -475,8 +513,10 @@ impl FeatureExtractor {
         samples: &[f32],
         fft_buf: &mut Vec<rustfft::num_complex::Complex<f32>>,
         power_buf: &mut Vec<f32>,
-    ) -> (Vec<f32>, usize) {
-        self.mel.compute_with_buffers(samples, fft_buf, power_buf)
+        output_buf: &mut Vec<f32>,
+    ) -> usize {
+        self.mel
+            .compute_with_buffers(samples, fft_buf, power_buf, output_buf)
     }
 
     /// One-shot mel computation (for file transcription where buffer reuse is unnecessary).
@@ -710,7 +750,9 @@ impl Engine {
         #[cfg(not(any(feature = "coreml", feature = "cuda")))]
         let (encoder, decoder, joiner) = {
             let cache_dir = dir.join("optimized_cache");
-            std::fs::create_dir_all(&cache_dir).ok();
+            std::fs::create_dir_all(&cache_dir).with_context(|| {
+                format!("Failed to create ONNX cache dir: {}", cache_dir.display())
+            })?;
             let cpu_fallback = ort::execution_providers::CPUExecutionProvider::default();
             let eps = [cpu_fallback.into()];
             let encoder = Session::builder()
@@ -890,6 +932,8 @@ impl Engine {
             resampler: None,
             mel_fft_input: Vec::new(),
             mel_power: Vec::new(),
+            mel_output: Vec::new(),
+            resample_output_buf: Vec::new(),
             #[cfg(feature = "diarization")]
             diarization_state,
         }
@@ -924,19 +968,25 @@ impl Engine {
             None
         };
 
-        let samples = match self
+        let usable = match self
             .features
             .prepare_buffer(samples, &mut state.audio_buffer)
         {
-            Some(s) => s,
+            Some(n) => n,
             None => return Ok(vec![]),
         };
-        let samples = &samples[..];
+        let samples = &state.audio_buffer[..usable];
 
         let mel_start = std::time::Instant::now();
-        let (features, num_frames) =
-            self.features
-                .compute_mel(samples, &mut state.mel_fft_input, &mut state.mel_power);
+        let num_frames = self.features.compute_mel(
+            samples,
+            &mut state.mel_fft_input,
+            &mut state.mel_power,
+            &mut state.mel_output,
+        );
+        audio::consume_audio_buffer(&mut state.audio_buffer, usable);
+
+        let features = &state.mel_output[..];
         tracing::debug!(
             elapsed_us = mel_start.elapsed().as_micros() as u64,
             "mel_compute"
@@ -949,7 +999,7 @@ impl Engine {
         let (mut new_words, endpoint) = self
             .run_inference(
                 triplet,
-                &features,
+                features,
                 num_frames,
                 &mut state.decoder,
                 state.total_frames,
@@ -1144,16 +1194,14 @@ impl Engine {
 
         tracing::debug!("Encoder output: {} frames", enc_len);
 
-        // Copy encoder data so we can release the encoder output borrow
-        let enc_data_owned: Vec<f32> = enc_data.to_vec();
-        drop(encoder_outputs);
-
-        // RNN-T greedy decode
+        // RNN-T greedy decode — we pass the encoder-output borrow directly
+        // instead of copying it.  The `encoder_outputs` variable is dropped
+        // automatically at the end of this scope, after decode finishes.
         let dec_start = std::time::Instant::now();
         let result = decode::greedy_decode(
             &mut triplet.decoder,
             &mut triplet.joiner,
-            &enc_data_owned,
+            enc_data,
             enc_len,
             self.tokenizer.blank_id(),
             decoder_state,
@@ -1518,5 +1566,90 @@ mod tests {
         assert_eq!(val, 43);
         drop(reservation);
         assert_eq!(pool.available(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_pool_slot_not_leaked_on_cancelled_checkout() {
+        // If a checkout future is cancelled after registering a waiter but
+        // before receiving an item, the oneshot receiver is dropped while the
+        // sender remains in the waiters queue.  When another item is checked
+        // in, the dead waiter must be skipped and the item returned to the
+        // pool — otherwise the slot is leaked forever.
+        let pool = std::sync::Arc::new(Pool::new(vec![42u32]));
+        let primary = pool.checkout().await.expect("checkout");
+
+        let aborted = tokio::spawn({
+            let pool = pool.clone();
+            async move { pool.checkout().await }
+        });
+        // Let the spawned task register as a waiter.
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        aborted.abort();
+        let _ = aborted.await;
+
+        // The abandoned waiter is still queued.
+        assert_eq!(pool.waiters(), 1);
+
+        // Return the primary item.  Without the retry loop in checkin this
+        // would silently drop the item because tx.send fails.
+        drop(primary);
+
+        assert_eq!(pool.available(), 1, "item must return to pool, not leak");
+        assert_eq!(pool.waiters(), 0, "dead waiter must be removed");
+    }
+
+    #[tokio::test]
+    async fn test_pool_slot_not_leaked_on_timeout_checkout() {
+        // Same scenario as above, but using tokio::time::timeout instead of
+        // abort — this is the exact path hit by the REST and WS handlers.
+        let pool = std::sync::Arc::new(Pool::new(vec![42u32]));
+        let primary = pool.checkout().await.expect("checkout");
+
+        let result =
+            tokio::time::timeout(std::time::Duration::from_millis(10), pool.checkout()).await;
+        assert!(result.is_err(), "checkout must time out");
+
+        assert_eq!(pool.waiters(), 1);
+
+        drop(primary);
+
+        assert_eq!(
+            pool.available(),
+            1,
+            "item must return to pool after timeout"
+        );
+        assert_eq!(pool.waiters(), 0, "dead waiter must be removed");
+    }
+
+    #[tokio::test]
+    async fn test_pool_multiple_dead_waiters_are_skipped() {
+        // Several cancelled waiters in a row should all be skipped in one
+        // checkin pass.
+        let pool = std::sync::Arc::new(Pool::new(vec![0u32]));
+        let primary = pool.checkout().await.expect("checkout");
+
+        let mut handles = Vec::new();
+        for _ in 0..3 {
+            handles.push(tokio::spawn({
+                let pool = pool.clone();
+                async move { pool.checkout().await }
+            }));
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        for h in handles {
+            h.abort();
+            let _ = h.await;
+        }
+
+        assert_eq!(pool.waiters(), 3);
+
+        drop(primary);
+
+        assert_eq!(
+            pool.available(),
+            1,
+            "item returned after skipping 3 dead waiters"
+        );
+        assert_eq!(pool.waiters(), 0);
     }
 }

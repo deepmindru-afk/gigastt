@@ -15,6 +15,14 @@ use std::ffi::{CStr, CString, c_char};
 use std::ptr;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+/// Convert a Rust string to a C string, falling back to a static message
+/// if the input contains interior NUL bytes.  The fallback literal is
+/// guaranteed NUL-free, so this never panics.
+fn to_cstring(s: &str) -> CString {
+    CString::new(s)
+        .unwrap_or_else(|_| CString::new("invalid string").expect("static literal is NUL-free"))
+}
+
 use gigastt_core::inference::{Engine, OwnedReservation, SessionTriplet, StreamingState, audio};
 
 /// Opaque handle to the inference engine.
@@ -152,7 +160,19 @@ pub unsafe extern "C" fn gigastt_transcribe_file(
         }
     };
     let resolved = cwd.join(path);
-    if !resolved.starts_with(&cwd) {
+    // Resolve symlinks before the boundary check; a symlink inside cwd that
+    // points outside (e.g., evil.wav → /etc/passwd) must be rejected.
+    let canonical = match std::fs::canonicalize(&resolved) {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::error!(
+                "gigastt_transcribe_file: path does not exist or is not accessible: {e}"
+            );
+            eprintln!("gigastt_transcribe_file: path does not exist or is not accessible: {e}");
+            return ptr::null_mut();
+        }
+    };
+    if !canonical.starts_with(&cwd) {
         tracing::error!("gigastt_transcribe_file: path escapes working directory");
         eprintln!("gigastt_transcribe_file: path escapes working directory");
         return ptr::null_mut();
@@ -169,11 +189,18 @@ pub unsafe extern "C" fn gigastt_transcribe_file(
         }
     };
 
-    let result = match engine_ref.transcribe_file(path_str, &mut guard) {
-        Ok(r) => r,
-        Err(e) => {
+    let result = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        engine_ref.transcribe_file(path_str, &mut guard)
+    })) {
+        Ok(Ok(r)) => r,
+        Ok(Err(e)) => {
             tracing::error!("gigastt_transcribe_file: transcription failed: {e}");
             eprintln!("gigastt_transcribe_file: transcription failed: {e}");
+            return ptr::null_mut();
+        }
+        Err(_) => {
+            tracing::error!("gigastt_transcribe_file: panic during transcription");
+            eprintln!("gigastt_transcribe_file: panic during transcription");
             return ptr::null_mut();
         }
     };
@@ -240,10 +267,7 @@ pub unsafe extern "C" fn gigastt_quantize_model(
     if model_dir.is_null() {
         tracing::error!("gigastt_quantize_model: model_dir is null");
         eprintln!("gigastt_quantize_model: model_dir is null");
-        return match CString::new("model_dir is null") {
-            Ok(cstr) => cstr.into_raw(),
-            Err(_) => CString::new("quantization error").unwrap().into_raw(),
-        };
+        return to_cstring("model_dir is null").into_raw();
     }
 
     let dir_str = match unsafe { CStr::from_ptr(model_dir) }.to_str() {
@@ -252,12 +276,7 @@ pub unsafe extern "C" fn gigastt_quantize_model(
             tracing::error!("gigastt_quantize_model: model_dir is not valid UTF-8: {e}");
             eprintln!("gigastt_quantize_model: model_dir is not valid UTF-8: {e}");
             let msg = format!("model_dir is not valid UTF-8: {e}");
-            return match CString::new(msg) {
-                Ok(cstr) => cstr.into_raw(),
-                Err(_) => CString::new("model_dir is not valid UTF-8")
-                    .unwrap()
-                    .into_raw(),
-            };
+            return to_cstring(&msg).into_raw();
         }
     };
 
@@ -266,26 +285,17 @@ pub unsafe extern "C" fn gigastt_quantize_model(
     let output = model_dir.join("v3_e2e_rnnt_encoder_int8.onnx");
 
     if !force && output.exists() {
-        return match CString::new("ok") {
-            Ok(cstr) => cstr.into_raw(),
-            Err(_) => CString::new("ok").unwrap().into_raw(),
-        };
+        return to_cstring("ok").into_raw();
     }
 
     if let Err(e) = gigastt_core::quantize::quantize_model(&input, &output) {
         tracing::error!("gigastt_quantize_model: quantization failed: {e}");
         eprintln!("gigastt_quantize_model: quantization failed: {e}");
         let msg = format!("quantization failed: {e}");
-        return match CString::new(msg) {
-            Ok(cstr) => cstr.into_raw(),
-            Err(_) => CString::new("quantization failed").unwrap().into_raw(),
-        };
+        return to_cstring(&msg).into_raw();
     }
 
-    match CString::new("ok") {
-        Ok(cstr) => cstr.into_raw(),
-        Err(_) => CString::new("ok").unwrap().into_raw(),
-    }
+    to_cstring("ok").into_raw()
 }
 
 // ---------------------------------------------------------------------------
@@ -374,18 +384,17 @@ pub unsafe extern "C" fn gigastt_stream_process_chunk(
 
     // Resample to 16 kHz if needed.
     if sample_rate != 16000 {
-        samples_f32 = match audio::resample_with_cache(
-            &samples_f32,
+        if let Err(e) = audio::resample_with_cache(
+            samples_f32,
             audio::SampleRate(sample_rate),
             audio::SampleRate(16000),
             &mut stream_ref.state.resampler,
+            &mut stream_ref.state.resample_output_buf,
         ) {
-            Ok(s) => s,
-            Err(e) => {
-                tracing::error!("gigastt_stream_process_chunk: resample failed: {e}");
-                return ptr::null_mut();
-            }
-        };
+            tracing::error!("gigastt_stream_process_chunk: resample failed: {e}");
+            return ptr::null_mut();
+        }
+        samples_f32 = std::mem::take(&mut stream_ref.state.resample_output_buf);
     }
 
     let segments = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {

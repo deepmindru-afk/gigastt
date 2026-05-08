@@ -9,7 +9,7 @@ pub struct MelSpectrogram {
     n_fft: usize,
     hop_length: usize,
     window: Vec<f32>,
-    mel_filterbank: Vec<Vec<f32>>, // [n_mels][n_fft/2 + 1]
+    mel_filterbank: Vec<f32>, // [n_mels * (n_fft/2 + 1)]
     fft: Arc<dyn Fft<f32>>,
 }
 
@@ -57,7 +57,7 @@ impl MelSpectrogram {
         sample_rate: f32,
         fmin: f32,
         fmax: f32,
-    ) -> Vec<Vec<f32>> {
+    ) -> Vec<f32> {
         let n_freqs = n_fft / 2 + 1; // 161
 
         let mel_min = Self::hz_to_mel(fmin);
@@ -76,20 +76,24 @@ impl MelSpectrogram {
             .map(|&hz| hz * n_fft as f32 / sample_rate)
             .collect();
 
-        let mut filterbank = vec![vec![0.0_f32; n_freqs]; n_mels];
+        let mut filterbank = vec![0.0_f32; n_mels * n_freqs];
 
         for m in 0..n_mels {
             let f_left = bin_points[m];
             let f_center = bin_points[m + 1];
             let f_right = bin_points[m + 2];
 
-            for (k, bin) in filterbank[m].iter_mut().enumerate() {
+            let row_start = m * n_freqs;
+            for k in 0..n_freqs {
                 let freq = k as f32;
-                if freq >= f_left && freq <= f_center && f_center > f_left {
-                    *bin = (freq - f_left) / (f_center - f_left);
+                let val = if freq >= f_left && freq <= f_center && f_center > f_left {
+                    (freq - f_left) / (f_center - f_left)
                 } else if freq > f_center && freq <= f_right && f_right > f_center {
-                    *bin = (f_right - freq) / (f_right - f_center);
-                }
+                    (f_right - freq) / (f_right - f_center)
+                } else {
+                    0.0
+                };
+                filterbank[row_start + k] = val;
             }
         }
 
@@ -102,7 +106,10 @@ impl MelSpectrogram {
         let n_freqs = self.n_fft / 2 + 1;
         let mut fft_input = vec![Complex::new(0.0_f32, 0.0); self.n_fft];
         let mut power = vec![0.0_f32; n_freqs];
-        self.compute_with_buffers(samples, &mut fft_input, &mut power)
+        let mut output = Vec::new();
+        let num_frames =
+            self.compute_with_buffers(samples, &mut fft_input, &mut power, &mut output);
+        (output, num_frames)
     }
 
     /// Compute log-mel spectrogram reusing pre-allocated `fft_input` and `power` buffers.
@@ -114,17 +121,19 @@ impl MelSpectrogram {
         samples: &[f32],
         fft_input: &mut Vec<Complex<f32>>,
         power: &mut Vec<f32>,
-    ) -> (Vec<f32>, usize) {
+        output: &mut Vec<f32>,
+    ) -> usize {
         let n_freqs = self.n_fft / 2 + 1;
 
         // Number of frames (center=false)
+        let n_mels = self.mel_filterbank.len() / n_freqs;
         if samples.len() < self.n_fft {
-            return (vec![0.0; self.mel_filterbank.len()], 1);
+            output.resize(n_mels, 0.0);
+            return 1;
         }
         let num_frames = (samples.len() - self.n_fft) / self.hop_length + 1;
 
-        let n_mels = self.mel_filterbank.len();
-        let mut output = vec![0.0_f32; n_mels * num_frames];
+        output.resize(n_mels * num_frames, 0.0_f32);
 
         // Ensure reusable buffers are large enough
         if fft_input.len() < self.n_fft {
@@ -156,17 +165,18 @@ impl MelSpectrogram {
             }
 
             // Apply mel filterbank + log
-            for (m, filter) in self.mel_filterbank.iter().enumerate() {
+            for m in 0..n_mels {
                 let mut mel_energy: f32 = 0.0;
-                for (k, &p) in power.iter().enumerate() {
-                    mel_energy += filter[k] * p;
+                let row_start = m * n_freqs;
+                for (k, &p) in power.iter().enumerate().take(n_freqs) {
+                    mel_energy += self.mel_filterbank[row_start + k] * p;
                 }
                 // Log with floor
                 output[m * num_frames + frame_idx] = (mel_energy.max(1e-10)).ln();
             }
         }
 
-        (output, num_frames)
+        num_frames
     }
 }
 

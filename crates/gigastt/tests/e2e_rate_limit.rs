@@ -46,12 +46,13 @@ async fn test_rate_limit_burst_then_refill() {
         .map(str::to_string);
     assert_eq!(
         retry_after.as_deref(),
-        Some("60"),
-        "Retry-After header must be set to 60"
+        Some("2"),
+        "Retry-After header must match the refill interval (30 rpm → 2 s)"
     );
     let body_text = r2.text().await.expect("429 body readable");
     let body: serde_json::Value = serde_json::from_str(&body_text).expect("429 body is JSON");
     assert_eq!(body["code"], "rate_limited");
+    assert_eq!(body["retry_after_ms"], 2000);
 
     // Wait more than the refill interval (2 s for 30 rpm) and retry.
     tokio::time::sleep(Duration::from_millis(2_500)).await;

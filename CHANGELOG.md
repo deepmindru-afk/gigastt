@@ -7,6 +7,103 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.6] - 2026-05-08
+
+### Security / Reliability
+
+- **Pool slot leak on cancelled checkout** — `PoolInner::checkin` now retries dead
+  waiters instead of silently dropping the item when a `checkout` future is
+  cancelled (timeout, `select!`, or abort).  Three new unit tests verify the fix.
+- **SIGTERM handling** — the server now traps `SIGTERM` on Unix in addition to
+  `SIGINT`, enabling graceful shutdown in Docker and Kubernetes environments.
+- **FFI panic safety** — `gigastt_transcribe_file` wraps inference in
+  `catch_unwind`, preventing undefined behavior when an ONNX panic crosses the
+  C ABI boundary.
+- **FFI path traversal via symlinks** — `gigastt_transcribe_file` now resolves
+  symlinks with `canonicalize()` before the working-directory boundary check,
+  blocking symlink attacks that escape the sandbox.
+- **Tokenizer blank-id underflow** — `Tokenizer::load` guards against empty
+  vocabularies and uses `saturating_sub` instead of `tokens.len() - 1`,
+  eliminating a subtraction underflow on corrupted `vocab.txt`.
+- **SIGHUP registration failure** — replaces `expect()` with graceful degradation;
+  the server no longer aborts when signal fds are exhausted in containers.
+- **Decode loop panic surface** — replaces `unwrap()` in the RNN-T greedy decode
+  blank-run cache with `anyhow::bail!` and `expect` with clear messages.
+- **Resampler cache invariant** — replaces `unreachable!()` in
+  `resample_with_cache` with `anyhow::bail!`, and surfaces resampler failures
+  instead of silently returning empty output.
+
+### Protocol / API
+
+- **WebSocket idle timeout Close frame** — idle timeouts now emit a
+  `ServerMessage::Error` with code `"idle_timeout"` followed by `Close(1001)`,
+  making the reason distinguishable from a network partition.
+- **WebSocket empty-frame spam Close frame** — exceeding
+  `MAX_EMPTY_FRAMES_PER_SESSION` now sends `Error` + `Close(1008)` before
+  dropping the connection.
+- **CORS preflight for all protected routes** — `OPTIONS` handlers added to
+  `/v1/models`, `/v1/ws`, and `/metrics` so browser preflight requests no
+  longer receive 405.
+- **Rate limiter `Retry-After`** — header is now computed from the actual refill
+  interval instead of the hard-coded `60` seconds.  The 429 JSON body now
+  includes `retry_after_ms` for consistency with the 503 pool-saturation response.
+- **SSE final segment on shutdown** — the SSE streaming task always flushes a
+  final segment (even during shutdown), matching WebSocket behavior.
+
+### Concurrency / Reliability
+
+- **Pool lost-wakeup race** — `checkout` and `checkout_blocking` now re-check
+  the `items` queue under the `waiters` lock before registering a waiter,
+  closing the race where a concurrent `checkin` could return an item to the
+  pool while the caller needlessly sleeps.
+- **Rate limiter O(n) eviction** — replaced the global `iter().min_by_key()`
+  scan with a bounded 100-entry sample, eliminating the DoS vector where an
+  attacker fills the map and forces a 100 k-entry scan on every new IP.
+
+### Performance
+
+- **Eliminated encoder output copy** — `run_inference` passes the encoder
+  tensor borrow directly to `greedy_decode` instead of `to_vec()`-copying it.
+  Saves ~1–4 MB of transient allocation per chunk (scales with audio duration).
+- **Reusable mel-output buffer** — `StreamingState` now owns a `mel_output`
+  `Vec<f32>` that is resized in-place by `compute_with_buffers`, removing one
+  ~4–20 KB allocation per `process_chunk` call.
+- **Metrics interning** — metric family names are now `Arc<str>` keys in the
+  Prometheus registry, eliminating `String` allocation on every `counter_inc`,
+  `gauge_set`, and `histogram_record`.  The public API accepts
+  `&[(&str, &str)]` labels so callers no longer allocate `Vec<(String, String)>`
+  on the hot path.
+- **Flattened mel filterbank** — `MelSpectrogram.mel_filterbank` changed from
+  `Vec<Vec<f32>>` to a contiguous `Vec<f32>` (row-major), improving cache
+  locality during the per-frame mel dot-product and removing one
+  pointer-indirection per bin.
+- **Zero-copy audio buffer preparation** — `prepare_audio_buffer` now returns
+  `Option<usize>` (usable sample count) instead of allocating a new `Vec<f32>`.
+  The caller borrows `&buffer[..usable]` for feature extraction and then shifts
+  leftovers in-place, removing one ~0.5–5 KB allocation per `process_chunk`.
+- **Reusable PCM decode buffer** — new `parse_pcm16_with_carry_into` writes
+  decoded f32 samples into a caller-provided `&mut Vec<f32>`. The WebSocket
+  handler reuses a single buffer across binary frames, eliminating the per-frame
+  `Vec<f32>` allocation from PCM16 decoding.
+- **Resampler zero-alloc path** — `resample_with_cache` now sanitizes non-finite
+  samples in-place (no extra `Vec`), takes owned input, and writes output into a
+  reusable buffer via `process_into_buffer`, removing rubato's internal output
+  allocation on every resampling call.
+
+### Fixed
+
+- **Dependency version mismatch** — `gigastt/Cargo.toml` and
+  `gigastt-ffi/Cargo.toml` now specify `gigastt-core = "2.0.5"` instead of the
+  stale `"2.0.2"`.
+- **ONNX cache dir creation error swallowed** — `create_dir_all` failure now
+  propagates with context instead of being silently ignored.
+- **Pre-epoch clock warning** — `now_timestamp()` logs a `warn!` when the
+  system clock is before Unix epoch instead of silently returning `0.0`.
+- **`libc::flock` safety comment** — added `// SAFETY:` documentation for the
+  only `unsafe` block outside the FFI crate.
+- **AGENTS.md updated** — removed stale `/ws` alias references and documented
+  the `nnapi` execution-provider feature.
+
 ## [2.0.5] - 2026-05-07
 
 ### Fixed

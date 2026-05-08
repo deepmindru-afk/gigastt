@@ -1,6 +1,6 @@
 //! BPE tokenizer for GigaAM v3 e2e_rnnt.
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, ensure};
 use std::path::Path;
 
 pub struct Tokenizer {
@@ -41,10 +41,15 @@ impl Tokenizer {
             tokens.push(token);
         }
 
+        ensure!(
+            !tokens.is_empty(),
+            "Vocabulary file is empty: {}",
+            path.display()
+        );
         let blank_id = tokens
             .iter()
             .position(|t| t == "<blk>")
-            .unwrap_or(tokens.len() - 1);
+            .unwrap_or_else(|| tokens.len().saturating_sub(1));
 
         tracing::info!(
             "Loaded vocabulary: {} tokens, blank_id={}",

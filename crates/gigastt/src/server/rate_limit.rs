@@ -219,22 +219,35 @@ impl RateLimiter {
         let now = Instant::now();
         let now_ms = unix_ms();
 
-        // Cap enforcement: if we're at the limit and this is a new IP,
-        // evict the oldest bucket before inserting.
-        if !self.buckets.contains_key(&ip)
-            && self.buckets.len() >= self.max_entries
-            && let Some(oldest) = self.buckets.iter().min_by_key(|e| e.value().last_seen_ms)
+        // Fast path: existing bucket.
+        if let Some(mut bucket) = self.buckets.get_mut(&ip) {
+            return bucket.try_consume(now, now_ms);
+        }
+
+        // Slow path: new IP.  Evict a random entry if at capacity.
+        if self.buckets.len() >= self.max_entries {
+            self.evict_random();
+        }
+
+        let mut bucket = TokenBucket::new(self.capacity.0, self.refill_per_ms, now, now_ms);
+        let allowed = bucket.try_consume(now, now_ms);
+        self.buckets.insert(ip, bucket);
+        allowed
+    }
+
+    /// Evict the stalest bucket from a sample of 100 entries.  This replaces
+    /// the previous O(n) global scan with an O(100) bounded operation.
+    fn evict_random(&self) {
+        if let Some(oldest) = self
+            .buckets
+            .iter()
+            .take(100)
+            .min_by_key(|e| e.value().last_seen_ms)
         {
             let key = *oldest.key();
             drop(oldest);
             self.buckets.remove(&key);
         }
-
-        let mut entry = self
-            .buckets
-            .entry(ip)
-            .or_insert_with(|| TokenBucket::new(self.capacity.0, self.refill_per_ms, now, now_ms));
-        entry.try_consume(now, now_ms)
     }
 
     /// Drop buckets whose `last_seen_ms` is older than `older_than`. Called
@@ -353,14 +366,20 @@ pub async fn rate_limit_middleware(
     } else {
         tracing::debug!(client_ip = %ip, "rate limit rejected request");
         if let Some(ref reg) = metrics {
-            reg.counter_inc("gigastt_rate_limit_rejections_total", vec![], 1);
+            reg.counter_inc("gigastt_rate_limit_rejections_total", &[], 1);
         }
+        let retry_after_ms = limiter.interval_ms();
+        let retry_after_secs = retry_after_ms.div_ceil(1000).max(1);
         (
             StatusCode::TOO_MANY_REQUESTS,
-            [(axum::http::header::RETRY_AFTER, "60")],
+            [(
+                axum::http::header::RETRY_AFTER,
+                retry_after_secs.to_string(),
+            )],
             Json(serde_json::json!({
                 "error": "Too many requests",
                 "code": "rate_limited",
+                "retry_after_ms": retry_after_ms,
             })),
         )
             .into_response()
@@ -564,6 +583,29 @@ mod tests {
         assert!(
             limiter.buckets.contains_key(&fresh),
             "fresh bucket must survive eviction"
+        );
+    }
+
+    #[test]
+    fn test_rate_limiter_random_eviction_at_cap() {
+        // Create a tiny-capacity limiter so eviction fires immediately.
+        let limiter = RateLimiter::new(60, 1);
+        let mut ips = Vec::new();
+        for i in 0..=limiter.max_entries {
+            let ip = IpAddr::V4(Ipv4Addr::from(i as u32));
+            ips.push(ip);
+            assert!(limiter.check(ip), "IP {i} must be allowed on first visit");
+        }
+        // At this point we are at (or slightly over) capacity.  Adding one
+        // more distinct IP must succeed because random eviction makes room.
+        let extra = IpAddr::V4(Ipv4Addr::new(10, 1, 0, 1));
+        limiter.check(extra);
+        // Total count must stay bounded by max_entries.
+        assert!(
+            limiter.len() <= limiter.max_entries,
+            "len={} must not exceed cap={}",
+            limiter.len(),
+            limiter.max_entries
         );
     }
 

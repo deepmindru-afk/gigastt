@@ -196,7 +196,13 @@ pub async fn run_with_config_listener(
         let reload_limiter = rate_limiter_swap.clone();
         tokio::spawn(async move {
             use tokio::signal::unix::{SignalKind, signal};
-            let mut sig = signal(SignalKind::hangup()).expect("failed to register SIGHUP handler");
+            let mut sig = match signal(SignalKind::hangup()) {
+                Ok(s) => s,
+                Err(e) => {
+                    tracing::error!("Failed to register SIGHUP handler: {e}");
+                    return;
+                }
+            };
             loop {
                 tokio::select! {
                     biased;
@@ -259,6 +265,7 @@ pub async fn run_with_config_listener(
     // the origin allowlist and (when enabled) the per-IP rate limiter.
     let protected = Router::new()
         .route("/v1/models", get(http::models))
+        .route("/v1/models", options(|| async { StatusCode::NO_CONTENT }))
         .route("/v1/transcribe", post(http::transcribe))
         .route(
             "/v1/transcribe",
@@ -271,7 +278,9 @@ pub async fn run_with_config_listener(
         )
         // /v1/ws is the canonical WebSocket path (versioned, aligned with REST).
         .route("/v1/ws", get(ws::ws_handler))
+        .route("/v1/ws", options(|| async { StatusCode::NO_CONTENT }))
         .route("/metrics", get(http::metrics))
+        .route("/metrics", options(|| async { StatusCode::NO_CONTENT }))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             middleware::http_metrics_middleware,
@@ -362,7 +371,28 @@ pub async fn run_with_config_listener(
                     rx.await.ok();
                 }
                 None => {
-                    tokio::signal::ctrl_c().await.ok();
+                    #[cfg(unix)]
+                    {
+                        use tokio::signal::unix::{SignalKind, signal};
+                        let mut sigterm = match signal(SignalKind::terminate()) {
+                            Ok(s) => s,
+                            Err(e) => {
+                                tracing::error!("Failed to register SIGTERM handler: {e}");
+                                tokio::signal::ctrl_c().await.ok();
+                                return;
+                            }
+                        };
+                        tokio::select! {
+                            _ = tokio::signal::ctrl_c() => {},
+                            _ = sigterm.recv() => {
+                                tracing::info!("Received SIGTERM, starting graceful shutdown");
+                            }
+                        }
+                    }
+                    #[cfg(not(unix))]
+                    {
+                        tokio::signal::ctrl_c().await.ok();
+                    }
                 }
             }
             tracing::info!("Shutting down server");

@@ -55,9 +55,10 @@ and auto-invoked on first `serve`/`download` unless `--skip-quantize` is passed.
 |---|---|---|
 | macOS ARM64 | `--features coreml` | CoreML + Neural Engine |
 | Linux x86_64 + NVIDIA | `--features cuda` | CUDA 12+ |
+| Android / ARM64 | `--features nnapi` | NNAPI (via `ort/nnapi`) |
 | Any | _(default)_ | CPU |
 
-Features `coreml` and `cuda` are **mutually exclusive**.
+Features `coreml` and `cuda` are **mutually exclusive**. `nnapi` is not mutually exclusive with either.
 
 ## Build Requirements
 
@@ -81,6 +82,9 @@ cargo build --release --features coreml
 
 # Linux x86_64 with NVIDIA CUDA 12+
 cargo build --release --features cuda
+
+# Android with NNAPI
+cargo build --release --features nnapi
 
 # With speaker diarization support
 cargo build --release --features diarization
@@ -222,8 +226,7 @@ Downloaded to `~/.gigastt/models/` from `istupakov/gigaam-v3-onnx`:
 ### API versioning & backward compatibility
 
 - WebSocket protocol version: `PROTOCOL_VERSION = "1.0"` (in `protocol/mod.rs`)
-- Canonical WS path: `/v1/ws` (v0.7.0+). `/ws` is a deprecated alias with warn log;
-  removal planned for v1.0
+- Canonical WS path: `/v1/ws` (v0.7.0+). The `/ws` alias was removed in v0.8.0.
 - New fields are **additive only** — never remove or rename existing fields
 - Fields like `supported_rates`, `diarization`, `retry_after_ms` use
   `skip_serializing_if` to keep older clients happy
