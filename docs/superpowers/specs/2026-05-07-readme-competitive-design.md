@@ -26,7 +26,7 @@ Rows:
 | Row | gigastt | whisper.cpp | faster-whisper | Vosk | sherpa-onnx | Cloud APIs |
 |---|---|---|---|---|---|---|
 | Model | GigaAM v3 | Whisper large-v3 | Whisper large-v3 | Vosk models | varies (Whisper, Zipformer…) | vendor |
-| WER (Russian) | **10.4%** | ~18% | ~18% | ~20%+ | model-dependent | 5–10% |
+| WER (Russian) | **11.4%** | ~18% | ~18% | ~20%+ | model-dependent | 5–10% |
 | Language | Russian only | 99 languages | 99 languages | 20+ languages | 10+ languages | 100+ |
 | Streaming | real-time WS | — | — | WS + gRPC | WS + TCP | varies |
 | Latency (16s, M1) | ~700ms | ~4s | ~2s (CTranslate2) | ~3s | ~1.5s | network |
@@ -70,7 +70,7 @@ Update the command example to show 153 instead of 125. Add mention of `e2e_rate_
 ### 5. No changes
 
 These sections stay as-is:
-- WER 10.4% figure (still accurate)
+- WER 11.4% figure (verified on 9 994 Golos crowd samples)
 - Architecture diagram
 - Client examples (Python, Bun, Go, Kotlin)
 - Performance table
