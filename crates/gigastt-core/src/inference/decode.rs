@@ -187,14 +187,19 @@ pub fn greedy_decode(
             // Therefore run_decoder() with the same inputs produces identical output.
             let decoder_out = if in_blank_run {
                 skipped_decoder_calls += 1;
-                // Safe: cached_decoder_output is always Some when in_blank_run is true,
-                // because in_blank_run is only set after a successful decoder call.
-                cached_decoder_output.as_ref().unwrap()
+                match cached_decoder_output.as_ref() {
+                    Some(cache) => cache,
+                    None => {
+                        anyhow::bail!("blank run invariant violated: cached_decoder_output is None")
+                    }
+                }
             } else {
                 decoder_calls += 1;
                 let out = run_decoder(decoder, state)?;
                 cached_decoder_output = Some(out);
-                cached_decoder_output.as_ref().unwrap()
+                cached_decoder_output
+                    .as_ref()
+                    .expect("decoder output just cached")
             };
 
             // === JOINER CALL ===

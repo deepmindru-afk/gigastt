@@ -349,26 +349,39 @@ pub fn resample(samples: &[f32], from_rate: SampleRate, to_rate: SampleRate) -> 
 /// chunk size matches. If the chunk size changes, the cache is recreated.
 ///
 /// { from_rate.0 > 0 && to_rate.0 > 0 }
-/// fn resample_with_cache(samples: &[f32], from_rate: SampleRate, to_rate: SampleRate, cache: &mut Option<rubato::SincFixedIn<f32>>) -> anyhow::Result<Vec<f32>>
+/// fn resample_with_cache(samples: Vec<f32>, from_rate: SampleRate, to_rate: SampleRate, cache: &mut Option<rubato::SincFixedIn<f32>>, out_buf: &mut Vec<f32>) -> anyhow::Result<()>
 /// { ret.as_ref().map(|v| !v.is_empty() || samples.is_empty() || from_rate == to_rate).unwrap_or(true) }
+/// Resample audio using an optional cached resampler, writing into a caller-provided buffer.
+///
+/// The cached resampler is created on first call and reused when the input
+/// chunk size matches. If the chunk size changes, the cache is recreated.
+/// Non-finite samples are sanitized in-place.
+///
+/// `samples` is consumed (moved) so that in-place sanitization avoids an
+/// extra allocation. Callers that already own the input vector should pass
+/// it directly; the buffer is not borrowed after the call.
 pub fn resample_with_cache(
-    samples: &[f32],
+    mut samples: Vec<f32>,
     from_rate: SampleRate,
     to_rate: SampleRate,
     cache: &mut Option<rubato::SincFixedIn<f32>>,
-) -> anyhow::Result<Vec<f32>> {
+    out_buf: &mut Vec<f32>,
+) -> anyhow::Result<()> {
     if samples.is_empty() || from_rate.0 == 0 || to_rate.0 == 0 {
-        return Ok(Vec::new());
+        out_buf.clear();
+        return Ok(());
     }
     if from_rate == to_rate {
-        return Ok(samples.to_vec());
+        *out_buf = samples;
+        return Ok(());
     }
 
-    // Sanitize non-finite values
-    let samples: Vec<f32> = samples
-        .iter()
-        .map(|&s| if s.is_finite() { s } else { 0.0 })
-        .collect();
+    // Sanitize non-finite values in-place
+    for s in &mut samples {
+        if !s.is_finite() {
+            *s = 0.0;
+        }
+    }
 
     let ratio = to_rate.0 as f64 / from_rate.0 as f64;
 
@@ -393,11 +406,16 @@ pub fn resample_with_cache(
         *cache = Some(r);
     }
 
-    let resampler = cache.as_mut().unwrap_or_else(|| unreachable!());
-    let out = resampler
-        .process(&[samples], None)
+    let resampler = match cache.as_mut() {
+        Some(r) => r,
+        None => anyhow::bail!("Resampler cache is None after initialization"),
+    };
+    let needed = resampler.output_frames_next();
+    out_buf.resize(needed, 0.0);
+    resampler
+        .process_into_buffer(&[samples], std::slice::from_mut(out_buf), None)
         .map_err(|e| anyhow::anyhow!("Resampling failed: {e}"))?;
-    Ok(out.into_iter().next().unwrap_or_default())
+    Ok(())
 }
 
 /// Parse PCM16 LE bytes into f32 samples, carrying a trailing odd byte across calls.
@@ -406,26 +424,42 @@ pub fn resample_with_cache(
 /// This function maintains a carry byte across frames so that odd-length payloads
 /// don't introduce a 1-sample phase shift in the decoded audio.
 pub fn parse_pcm16_with_carry(data: &[u8], pending: &mut Option<u8>) -> Vec<f32> {
+    let mut out = Vec::new();
+    parse_pcm16_with_carry_into(data, pending, &mut out);
+    out
+}
+
+/// Parse PCM16 LE bytes into f32 samples, writing into a caller-provided buffer.
+///
+/// Same semantics as [`parse_pcm16_with_carry`] but avoids allocating a new
+/// `Vec<f32>` on every call when the caller supplies a reusable buffer.
+pub fn parse_pcm16_with_carry_into(data: &[u8], pending: &mut Option<u8>, out: &mut Vec<f32>) {
+    out.clear();
     let carry_prev = pending.take();
     let needs_combine = carry_prev.is_some() || !data.len().is_multiple_of(2);
 
     if needs_combine {
-        let mut combined = Vec::with_capacity(data.len() + 1);
+        out.reserve(data.len().div_ceil(2));
+        let mut bytes = data.iter().copied();
         if let Some(prev) = carry_prev {
-            combined.push(prev);
+            if let Some(b) = bytes.next() {
+                out.push(i16::from_le_bytes([prev, b]) as f32 / 32768.0);
+            } else {
+                *pending = Some(prev);
+                return;
+            }
         }
-        combined.extend_from_slice(data);
-        if !combined.len().is_multiple_of(2) {
-            *pending = combined.pop();
+        while let (Some(b0), Some(b1)) = (bytes.next(), bytes.next()) {
+            out.push(i16::from_le_bytes([b0, b1]) as f32 / 32768.0);
         }
-        combined
-            .chunks_exact(2)
-            .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]) as f32 / 32768.0)
-            .collect()
+        if let Some(b) = bytes.next() {
+            *pending = Some(b);
+        }
     } else {
-        data.chunks_exact(2)
-            .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]) as f32 / 32768.0)
-            .collect()
+        out.reserve(data.len() / 2);
+        for chunk in data.chunks_exact(2) {
+            out.push(i16::from_le_bytes([chunk[0], chunk[1]]) as f32 / 32768.0);
+        }
     }
 }
 
@@ -437,9 +471,14 @@ pub fn parse_pcm16_with_carry(data: &[u8], pending: &mut Option<u8>) -> Vec<f32>
 /// Updates `buffer` in-place with leftover samples.
 ///
 /// { true }
-/// fn prepare_audio_buffer(new_samples: &[f32], buffer: &mut Vec<f32>) -> Option<Vec<f32>>
+/// fn prepare_audio_buffer(new_samples: &[f32], buffer: &mut Vec<f32>) -> Option<usize>
 /// { ret.is_none() == (buffer.len() < N_FFT) }
-pub(crate) fn prepare_audio_buffer(new_samples: &[f32], buffer: &mut Vec<f32>) -> Option<Vec<f32>> {
+/// Determine how many samples at the front of `buffer` form complete frames.
+///
+/// Returns `Some(usable)` if enough data for at least one frame, `None` otherwise.
+/// The caller should borrow `&buffer[..usable]`, then call
+/// [`consume_audio_buffer`] to shift the leftovers.
+pub(crate) fn prepare_audio_buffer(new_samples: &[f32], buffer: &mut Vec<f32>) -> Option<usize> {
     buffer.extend_from_slice(new_samples);
 
     if buffer.len() > MAX_BUFFER_SAMPLES {
@@ -451,22 +490,19 @@ pub(crate) fn prepare_audio_buffer(new_samples: &[f32], buffer: &mut Vec<f32>) -
 
     let hop_length = HOP_LENGTH;
     let n_fft = N_FFT;
-    let usable = if buffer.len() >= n_fft {
+    if buffer.len() >= n_fft {
         let num_frames = (buffer.len() - n_fft) / hop_length + 1;
-        (num_frames - 1) * hop_length + n_fft
+        let usable = (num_frames - 1) * hop_length + n_fft;
+        Some(usable)
     } else {
-        0
-    };
-
-    if usable == 0 {
-        return None;
+        None
     }
+}
 
-    let mut result = Vec::with_capacity(usable);
-    result.extend_from_slice(&buffer[..usable]);
+/// Shift leftover samples in `buffer` forward by `usable` samples and truncate.
+pub(crate) fn consume_audio_buffer(buffer: &mut Vec<f32>, usable: usize) {
     buffer.copy_within(usable.., 0);
     buffer.truncate(buffer.len() - usable);
-    Some(result)
 }
 
 #[cfg(test)]
@@ -568,7 +604,9 @@ mod tests {
         let mut buffer = Vec::new();
         let result = prepare_audio_buffer(&new_samples, &mut buffer);
         assert!(result.is_some());
-        assert_eq!(result.unwrap().len(), N_FFT);
+        let usable = result.unwrap();
+        assert_eq!(usable, N_FFT);
+        consume_audio_buffer(&mut buffer, usable);
         assert!(buffer.is_empty());
     }
 
@@ -580,7 +618,8 @@ mod tests {
         let result = prepare_audio_buffer(&new_samples, &mut buffer);
         assert!(result.is_some());
         let usable = result.unwrap();
-        assert_eq!(usable.len(), N_FFT); // one frame
+        assert_eq!(usable, N_FFT); // one frame
+        consume_audio_buffer(&mut buffer, usable);
         assert_eq!(buffer.len(), 50);
     }
 
@@ -596,7 +635,8 @@ mod tests {
         let result = prepare_audio_buffer(&vec![2.0; 200], &mut buffer);
         assert!(result.is_some());
         let usable = result.unwrap();
-        assert_eq!(usable.len(), 320);
+        assert_eq!(usable, 320);
+        consume_audio_buffer(&mut buffer, usable);
         assert_eq!(buffer.len(), 80);
     }
 
@@ -609,7 +649,8 @@ mod tests {
         // Total was 91000, truncated to 80000, then split into usable + leftover
         assert!(result.is_some());
         let usable = result.unwrap();
-        assert!(usable.len() + buffer.len() <= MAX_BUFFER_SAMPLES);
+        consume_audio_buffer(&mut buffer, usable);
+        assert!(usable + buffer.len() <= MAX_BUFFER_SAMPLES);
     }
 
     #[test]
@@ -620,7 +661,9 @@ mod tests {
         let result = prepare_audio_buffer(&new_samples, &mut buffer);
         assert!(result.is_some());
         // 2 frames: usable = (2-1)*160 + 320 = 480
-        assert_eq!(result.unwrap().len(), N_FFT + HOP_LENGTH);
+        let usable = result.unwrap();
+        assert_eq!(usable, N_FFT + HOP_LENGTH);
+        consume_audio_buffer(&mut buffer, usable);
         assert!(buffer.is_empty());
     }
 
@@ -679,7 +722,8 @@ mod tests {
         let result = prepare_audio_buffer(&new_samples, &mut buffer);
         assert!(result.is_some());
         let usable = result.unwrap();
-        assert!(usable.len() + buffer.len() <= MAX_BUFFER_SAMPLES);
+        consume_audio_buffer(&mut buffer, usable);
+        assert!(usable + buffer.len() <= MAX_BUFFER_SAMPLES);
     }
 
     #[test]
@@ -690,7 +734,8 @@ mod tests {
         let result = prepare_audio_buffer(&new_samples, &mut buffer);
         assert!(result.is_some());
         let usable = result.unwrap();
-        assert!(usable.len() + buffer.len() <= MAX_BUFFER_SAMPLES);
+        consume_audio_buffer(&mut buffer, usable);
+        assert!(usable + buffer.len() <= MAX_BUFFER_SAMPLES);
     }
 
     // --- decode_audio_bytes tests ---

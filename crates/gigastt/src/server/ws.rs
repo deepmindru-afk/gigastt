@@ -77,13 +77,13 @@ pub(super) async fn ws_handler(
 
 async fn handle_ws(socket: WebSocket, peer: SocketAddr, state: Arc<http::AppState>) {
     if let Some(ref reg) = state.metrics_registry {
-        reg.gauge_inc("gigastt_ws_active_connections", vec![], 1);
+        reg.gauge_inc("gigastt_ws_active_connections", &[], 1);
     }
     struct WsMetricsGuard(Arc<http::AppState>);
     impl Drop for WsMetricsGuard {
         fn drop(&mut self) {
             if let Some(ref reg) = self.0.metrics_registry {
-                reg.gauge_inc("gigastt_ws_active_connections", vec![], -1);
+                reg.gauge_inc("gigastt_ws_active_connections", &[], -1);
             }
         }
     }
@@ -124,8 +124,8 @@ async fn handle_ws(socket: WebSocket, peer: SocketAddr, state: Arc<http::AppStat
             Err(_) => {
                 tracing::warn!("WebSocket pool checkout timeout for {peer}");
                 if let Some(ref reg) = state.metrics_registry {
-                    reg.counter_inc("gigastt_pool_timeouts_total", vec![], 1);
-                    reg.histogram_record("gigastt_pool_checkout_duration_seconds", vec![], checkout_start.elapsed().as_secs_f64());
+                    reg.counter_inc("gigastt_pool_timeouts_total", &[], 1);
+                    reg.histogram_record("gigastt_pool_checkout_duration_seconds", &[], checkout_start.elapsed().as_secs_f64());
                 }
                 let (mut sink, _) = socket.split();
                 let limits = state.limits.load();
@@ -143,7 +143,7 @@ async fn handle_ws(socket: WebSocket, peer: SocketAddr, state: Arc<http::AppStat
     if let Some(ref reg) = state.metrics_registry {
         reg.histogram_record(
             "gigastt_pool_checkout_duration_seconds",
-            vec![],
+            &[],
             checkout_start.elapsed().as_secs_f64(),
         );
     }
@@ -193,11 +193,24 @@ async fn handle_binary_frame(
     pending_byte: &mut Option<u8>,
     peer: SocketAddr,
     data: axum::body::Bytes,
+    pcm_decode_buf: &mut Vec<f32>,
 ) -> Result<FrameOutcome> {
     if data.is_empty() {
         *empty_frame_count += 1;
         if *empty_frame_count > MAX_EMPTY_FRAMES_PER_SESSION {
             tracing::warn!("Empty binary frame spam from {peer}, closing connection");
+            let err = ServerMessage::Error {
+                message: "Empty frame limit exceeded".into(),
+                code: "policy_violation".into(),
+                retry_after_ms: None,
+            };
+            let _ = sink.send(WsMessage::Text(json_text(&err).into())).await;
+            let _ = sink
+                .send(WsMessage::Close(Some(axum::extract::ws::CloseFrame {
+                    code: 1008,
+                    reason: "policy violation".into(),
+                })))
+                .await;
             return Err(anyhow::anyhow!("Empty frame limit exceeded"));
         }
         tracing::debug!(
@@ -209,7 +222,11 @@ async fn handle_binary_frame(
 
     // V1-25: delegate carry-byte logic to the extracted pure function so it
     // can be property-tested independently of the async handler.
-    let samples_f32 = gigastt_core::inference::audio::parse_pcm16_with_carry(&data, pending_byte);
+    gigastt_core::inference::audio::parse_pcm16_with_carry_into(
+        &data,
+        pending_byte,
+        pcm_decode_buf,
+    );
     if pending_byte.is_some() {
         tracing::warn!(
             "Odd-length PCM stream from {peer}: {} bytes, deferring 1 byte",
@@ -217,17 +234,19 @@ async fn handle_binary_frame(
         );
     }
     let samples_16k = if client_sample_rate == 16000 {
-        samples_f32
+        std::mem::take(pcm_decode_buf)
     } else {
         let state_ref = state_opt
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Streaming state lost"))?;
         gigastt_core::inference::audio::resample_with_cache(
-            &samples_f32,
+            std::mem::take(pcm_decode_buf),
             gigastt_core::inference::audio::SampleRate(client_sample_rate),
             gigastt_core::inference::audio::SampleRate(16000),
             &mut state_ref.resampler,
-        )?
+            &mut state_ref.resample_output_buf,
+        )?;
+        std::mem::take(&mut state_ref.resample_output_buf)
     };
 
     let state = state_opt
@@ -466,6 +485,7 @@ async fn handle_ws_inner(
     // that split their streams on odd boundaries don't accumulate a
     // 1-sample phase shift in the decoded audio.
     let mut pending_byte: Option<u8> = None;
+    let mut pcm_decode_buf: Vec<f32> = Vec::new();
 
     let idle_timeout = std::time::Duration::from_secs(limits.idle_timeout_secs);
 
@@ -580,6 +600,18 @@ async fn handle_ws_inner(
                             "Client {peer} idle timeout ({}s)",
                             limits.idle_timeout_secs
                         );
+                        let err = ServerMessage::Error {
+                            message: "Idle timeout".into(),
+                            code: "idle_timeout".into(),
+                            retry_after_ms: None,
+                        };
+                        let _ = sink.send(WsMessage::Text(json_text(&err).into())).await;
+                        let _ = sink
+                            .send(WsMessage::Close(Some(axum::extract::ws::CloseFrame {
+                                code: 1001,
+                                reason: "idle timeout".into(),
+                            })))
+                            .await;
                         break Ok(());
                     }
                 };
@@ -597,6 +629,7 @@ async fn handle_ws_inner(
                             &mut pending_byte,
                             peer,
                             data,
+                            &mut pcm_decode_buf,
                         )
                         .await
                     }

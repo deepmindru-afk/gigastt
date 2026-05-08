@@ -99,9 +99,11 @@ async fn test_ws_oversized_frame_rejected() {
 
     // Send a binary frame that exceeds the server's 512 KB limit.
     let oversized: Vec<u8> = vec![0u8; 600 * 1024];
-    ws.send(Message::Binary(oversized.into()))
-        .await
-        .expect("send should succeed on client side");
+    // The server may RST the connection as soon as it sees the oversized
+    // frame header, so `send` can race with the close. Either outcome is
+    // acceptable — what matters is that the connection is terminated and the
+    // server stays healthy.
+    let _ = ws.send(Message::Binary(oversized.into())).await;
 
     // Server should close the connection; the next read returns an error or
     // None (stream closed).
@@ -279,6 +281,17 @@ async fn test_ws_idle_timeout() {
         }
         Ok(Some(Err(_))) => {
             // Connection reset — also acceptable.
+        }
+        Ok(Some(Ok(Message::Text(text)))) => {
+            // V1-25: server now sends an Error text message before the Close frame.
+            let msg: serde_json::Value = serde_json::from_str(&text).expect("valid JSON");
+            assert_eq!(msg.get("code").and_then(|v| v.as_str()), Some("idle_timeout"));
+            // After the error text, the next message should be Close or stream end.
+            let next = tokio::time::timeout(Duration::from_secs(5), ws.next()).await;
+            match next {
+                Ok(None) | Ok(Some(Ok(Message::Close(_)))) | Ok(Some(Err(_))) => {}
+                other => panic!("Expected close after idle timeout text, got: {other:?}"),
+            }
         }
         Ok(Some(Ok(other))) => {
             panic!("Expected idle-timeout close, got unexpected message: {other:?}");

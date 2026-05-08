@@ -197,10 +197,10 @@ pub async fn readiness(State(state): State<Arc<AppState>>) -> Response {
     }
     let available = state.engine.pool.available();
     if let Some(ref reg) = state.metrics_registry {
-        reg.gauge_set("gigastt_pool_available", vec![], available as i64);
+        reg.gauge_set("gigastt_pool_available", &[], available as i64);
         reg.gauge_set(
             "gigastt_pool_waiters",
-            vec![],
+            &[],
             state.engine.pool.waiters() as i64,
         );
     }
@@ -235,10 +235,10 @@ pub async fn models(State(state): State<Arc<AppState>>) -> Json<ModelInfo> {
     if let Some(ref reg) = state.metrics_registry {
         reg.gauge_set(
             "gigastt_pool_available",
-            vec![],
+            &[],
             engine.pool.available() as i64,
         );
-        reg.gauge_set("gigastt_pool_waiters", vec![], engine.pool.waiters() as i64);
+        reg.gauge_set("gigastt_pool_waiters", &[], engine.pool.waiters() as i64);
     }
     Json(ModelInfo {
         id: "gigaam-v3-e2e-rnnt".into(),
@@ -311,10 +311,10 @@ pub async fn transcribe(
         Ok(Err(_pool_closed)) => return Err(api_pool_closed_error()),
         Err(_timeout) => {
             if let Some(ref reg) = state.metrics_registry {
-                reg.counter_inc("gigastt_pool_timeouts_total", vec![], 1);
+                reg.counter_inc("gigastt_pool_timeouts_total", &[], 1);
                 reg.histogram_record(
                     "gigastt_pool_checkout_duration_seconds",
-                    vec![],
+                    &[],
                     checkout_start.elapsed().as_secs_f64(),
                 );
             }
@@ -324,7 +324,7 @@ pub async fn transcribe(
     if let Some(ref reg) = state.metrics_registry {
         reg.histogram_record(
             "gigastt_pool_checkout_duration_seconds",
-            vec![],
+            &[],
             checkout_start.elapsed().as_secs_f64(),
         );
     }
@@ -358,7 +358,7 @@ pub async fn transcribe(
     if let Some(ref reg) = state.metrics_registry {
         reg.histogram_record(
             "gigastt_inference_duration_seconds",
-            vec![],
+            &[],
             inference_start.elapsed().as_secs_f64(),
         );
     }
@@ -456,10 +456,10 @@ pub async fn transcribe_stream(
         Ok(Err(_pool_closed)) => return Err(api_pool_closed_error()),
         Err(_timeout) => {
             if let Some(ref reg) = state.metrics_registry {
-                reg.counter_inc("gigastt_pool_timeouts_total", vec![], 1);
+                reg.counter_inc("gigastt_pool_timeouts_total", &[], 1);
                 reg.histogram_record(
                     "gigastt_pool_checkout_duration_seconds",
-                    vec![],
+                    &[],
                     checkout_start.elapsed().as_secs_f64(),
                 );
             }
@@ -469,7 +469,7 @@ pub async fn transcribe_stream(
     if let Some(ref reg) = state.metrics_registry {
         reg.histogram_record(
             "gigastt_pool_checkout_duration_seconds",
-            vec![],
+            &[],
             checkout_start.elapsed().as_secs_f64(),
         );
     }
@@ -516,10 +516,9 @@ pub async fn transcribe_stream(
                 }
             }
 
-            // Flush final segment — best-effort; skipped on cancel.
-            if !cancel.is_cancelled()
-                && let Some(seg) = engine.flush_state(&mut stream_state)
-            {
+            // Flush final segment — best-effort; always emit so SSE clients
+            // receive a clean end-of-stream marker even during shutdown.
+            if let Some(seg) = engine.flush_state(&mut stream_state) {
                 let _ = tx.blocking_send(Ok(seg));
             }
         }));
@@ -582,6 +581,7 @@ mod tests {
         let resp = TranscribeResponse {
             text: "hello".into(),
             words: vec![],
+
             duration: 1.5,
         };
         let json = serde_json::to_string(&resp).unwrap();

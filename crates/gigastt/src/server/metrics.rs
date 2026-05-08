@@ -22,6 +22,7 @@
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::fmt::Write;
+use std::sync::Arc;
 
 /// Default histogram bucket bounds (seconds-scaled). Upper bound `f64::INFINITY`
 /// is appended implicitly when rendering — consumers do not need to supply it.
@@ -34,7 +35,11 @@ pub const DEFAULT_BUCKETS: &[f64] = &[
 /// counter + label combination always maps to the same storage slot.
 pub type Labels = Vec<(String, String)>;
 
-fn sort_labels(mut labels: Labels) -> Labels {
+fn sort_labels(labels: &[(&str, &str)]) -> Labels {
+    let mut labels: Labels = labels
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
     labels.sort_by(|a, b| a.0.cmp(&b.0));
     labels
 }
@@ -100,9 +105,9 @@ struct HistogramSeries {
 /// an `Arc` and stashed on `AppState` so every handler can record into it.
 #[derive(Debug, Default)]
 pub struct MetricsRegistry {
-    counters: RwLock<HashMap<String, CounterFamily>>,
-    gauges: RwLock<HashMap<String, GaugeFamily>>,
-    histograms: RwLock<HashMap<String, HistogramFamily>>,
+    counters: RwLock<HashMap<Arc<str>, CounterFamily>>,
+    gauges: RwLock<HashMap<Arc<str>, GaugeFamily>>,
+    histograms: RwLock<HashMap<Arc<str>, HistogramFamily>>,
 }
 
 impl MetricsRegistry {
@@ -116,22 +121,22 @@ impl MetricsRegistry {
     /// Set the `# HELP` text for a gauge family.
     pub fn register_gauge(&self, name: &str, help: &str) {
         let mut map = self.gauges.write();
-        map.entry(name.to_string()).or_default().help = help.to_string();
+        map.entry(Arc::from(name)).or_default().help = help.to_string();
     }
 
     /// Set a gauge to an absolute value.
-    pub fn gauge_set(&self, name: &str, labels: Labels, value: i64) {
+    pub fn gauge_set(&self, name: &str, labels: &[(&str, &str)], value: i64) {
         let labels = sort_labels(labels);
         let mut map = self.gauges.write();
-        let family = map.entry(name.to_string()).or_default();
+        let family = map.entry(Arc::from(name)).or_default();
         *family.values.entry(labels).or_insert(0) = value;
     }
 
     /// Increment a gauge by `delta` (may be negative).
-    pub fn gauge_inc(&self, name: &str, labels: Labels, delta: i64) {
+    pub fn gauge_inc(&self, name: &str, labels: &[(&str, &str)], delta: i64) {
         let labels = sort_labels(labels);
         let mut map = self.gauges.write();
-        let family = map.entry(name.to_string()).or_default();
+        let family = map.entry(Arc::from(name)).or_default();
         *family.values.entry(labels).or_insert(0) += delta;
     }
 
@@ -139,7 +144,7 @@ impl MetricsRegistry {
     /// overwrites any previously registered help text for the same name.
     pub fn register_counter(&self, name: &str, help: &str) {
         let mut map = self.counters.write();
-        map.entry(name.to_string()).or_default().help = help.to_string();
+        map.entry(Arc::from(name)).or_default().help = help.to_string();
     }
 
     /// Set the `# HELP` text and bucket bounds for a histogram family.
@@ -150,25 +155,25 @@ impl MetricsRegistry {
         normalised.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         normalised.dedup();
         let mut map = self.histograms.write();
-        let family = map.entry(name.to_string()).or_default();
+        let family = map.entry(Arc::from(name)).or_default();
         family.help = help.to_string();
         family.buckets = normalised;
     }
 
     /// Increment a counter. Lazily creates the family if it didn't exist.
-    pub fn counter_inc(&self, name: &str, labels: Labels, delta: u64) {
+    pub fn counter_inc(&self, name: &str, labels: &[(&str, &str)], delta: u64) {
         let labels = sort_labels(labels);
         let mut map = self.counters.write();
-        let family = map.entry(name.to_string()).or_default();
+        let family = map.entry(Arc::from(name)).or_default();
         *family.values.entry(labels).or_insert(0) += delta;
     }
 
     /// Record one observation into a histogram. Lazily creates the family
     /// with [`DEFAULT_BUCKETS`] if it didn't exist.
-    pub fn histogram_record(&self, name: &str, labels: Labels, value: f64) {
+    pub fn histogram_record(&self, name: &str, labels: &[(&str, &str)], value: f64) {
         let labels = sort_labels(labels);
         let mut map = self.histograms.write();
-        let family = map.entry(name.to_string()).or_default();
+        let family = map.entry(Arc::from(name)).or_default();
         if family.buckets.is_empty() {
             family.buckets = DEFAULT_BUCKETS.to_vec();
         }
@@ -204,7 +209,7 @@ impl MetricsRegistry {
         // Counters first — stable alphabetical order for reproducible
         // scrape output across invocations.
         let counters = self.counters.read();
-        let mut names: Vec<&String> = counters.keys().collect();
+        let mut names: Vec<&Arc<str>> = counters.keys().collect();
         names.sort();
         for name in names {
             let family = &counters[name];
@@ -227,7 +232,7 @@ impl MetricsRegistry {
         drop(counters);
 
         let gauges = self.gauges.read();
-        let mut names: Vec<&String> = gauges.keys().collect();
+        let mut names: Vec<&Arc<str>> = gauges.keys().collect();
         names.sort();
         for name in names {
             let family = &gauges[name];
@@ -250,7 +255,7 @@ impl MetricsRegistry {
         drop(gauges);
 
         let histograms = self.histograms.read();
-        let mut names: Vec<&String> = histograms.keys().collect();
+        let mut names: Vec<&Arc<str>> = histograms.keys().collect();
         names.sort();
         for name in names {
             let family = &histograms[name];
@@ -352,20 +357,12 @@ mod tests {
         let r = registry();
         r.counter_inc(
             "gigastt_http_requests_total",
-            vec![
-                ("method".into(), "GET".into()),
-                ("path".into(), "/health".into()),
-                ("status".into(), "200".into()),
-            ],
+            &[("method", "GET"), ("path", "/health"), ("status", "200")],
             1,
         );
         r.counter_inc(
             "gigastt_http_requests_total",
-            vec![
-                ("method".into(), "GET".into()),
-                ("path".into(), "/health".into()),
-                ("status".into(), "200".into()),
-            ],
+            &[("method", "GET"), ("path", "/health"), ("status", "200")],
             2,
         );
         let text = r.render_prometheus();
@@ -379,9 +376,9 @@ mod tests {
     #[test]
     fn test_histogram_bucket_cumulative() {
         let r = registry();
-        let labels = vec![("method".into(), "GET".into())];
+        let labels = [("method", "GET")];
         for v in [0.001, 0.03, 0.3, 1.5] {
-            r.histogram_record("gigastt_http_request_duration_seconds", labels.clone(), v);
+            r.histogram_record("gigastt_http_request_duration_seconds", &labels, v);
         }
         let text = r.render_prometheus();
         // 0.001 ≤ 0.005 → contributes to every bucket including 0.005+
@@ -408,16 +405,8 @@ mod tests {
     #[test]
     fn test_label_ordering_stable() {
         let r = MetricsRegistry::new();
-        r.counter_inc(
-            "c",
-            vec![("b".into(), "1".into()), ("a".into(), "2".into())],
-            1,
-        );
-        r.counter_inc(
-            "c",
-            vec![("a".into(), "2".into()), ("b".into(), "1".into())],
-            4,
-        );
+        r.counter_inc("c", &[("b", "1"), ("a", "2")], 1);
+        r.counter_inc("c", &[("a", "2"), ("b", "1")], 4);
         let text = r.render_prometheus();
         // Same counter despite different insert order — totals to 5.
         assert!(text.contains("c{a=\"2\",b=\"1\"} 5"));
@@ -426,7 +415,7 @@ mod tests {
     #[test]
     fn test_label_escaping() {
         let r = MetricsRegistry::new();
-        r.counter_inc("c", vec![("l".into(), "a\"b\\c\nd".into())], 1);
+        r.counter_inc("c", &[("l", "a\"b\\c\nd")], 1);
         let text = r.render_prometheus();
         assert!(
             text.contains("c{l=\"a\\\"b\\\\c\\nd\"} 1"),
@@ -437,7 +426,7 @@ mod tests {
     #[test]
     fn test_empty_labels_render() {
         let r = MetricsRegistry::new();
-        r.counter_inc("c", vec![], 7);
+        r.counter_inc("c", &[], 7);
         let text = r.render_prometheus();
         assert!(text.contains("c 7"));
     }
@@ -446,13 +435,13 @@ mod tests {
     fn test_gauge_set_inc_and_render() {
         let r = MetricsRegistry::new();
         r.register_gauge("g", "A gauge");
-        r.gauge_set("g", vec![], 5);
+        r.gauge_set("g", &[], 5);
         let text = r.render_prometheus();
         assert!(text.contains("# HELP g A gauge"));
         assert!(text.contains("# TYPE g gauge"));
         assert!(text.contains("g 5"));
 
-        r.gauge_inc("g", vec![], -2);
+        r.gauge_inc("g", &[], -2);
         let text = r.render_prometheus();
         assert!(text.contains("g 3"));
     }
@@ -461,9 +450,9 @@ mod tests {
     fn test_histogram_sum_tracks_observations() {
         let r = MetricsRegistry::new();
         r.register_histogram("h", "H", &[1.0, 2.0]);
-        r.histogram_record("h", vec![], 0.5);
-        r.histogram_record("h", vec![], 1.5);
-        r.histogram_record("h", vec![], 2.5);
+        r.histogram_record("h", &[], 0.5);
+        r.histogram_record("h", &[], 1.5);
+        r.histogram_record("h", &[], 2.5);
         let text = r.render_prometheus();
         assert!(text.contains("h_sum 4.5"));
         assert!(text.contains("h_count 3"));
