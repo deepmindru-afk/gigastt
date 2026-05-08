@@ -1,0 +1,13 @@
+#!/bin/bash
+set -euo pipefail
+
+echo "[pre-commit] Running format check..."
+cargo fmt --all --check
+
+echo "[pre-commit] Running clippy..."
+cargo clippy --workspace -- -D warnings -A dead_code
+
+echo "[pre-commit] Running unit tests..."
+cargo test --workspace
+
+echo "[pre-commit] All checks passed."

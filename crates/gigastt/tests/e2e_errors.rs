@@ -285,7 +285,10 @@ async fn test_ws_idle_timeout() {
         Ok(Some(Ok(Message::Text(text)))) => {
             // V1-25: server now sends an Error text message before the Close frame.
             let msg: serde_json::Value = serde_json::from_str(&text).expect("valid JSON");
-            assert_eq!(msg.get("code").and_then(|v| v.as_str()), Some("idle_timeout"));
+            assert_eq!(
+                msg.get("code").and_then(|v| v.as_str()),
+                Some("idle_timeout")
+            );
             // After the error text, the next message should be Close or stream end.
             let next = tokio::time::timeout(Duration::from_secs(5), ws.next()).await;
             match next {
