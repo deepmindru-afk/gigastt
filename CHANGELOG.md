@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **WER benchmark expanded to full Golos crowd dataset** — `benchmark.rs` now
+  reads from `~/.gigastt/benchmarks/golos_wav/manifest.json` (9 994 samples) and
+  falls back to the bundled 15-file smoke test when the external set is missing.
+  Full run: **11.4% WER** (5 729 errors / 50 394 words, 95% bootstrap CI
+  [10.9%, 11.9%]) on Apple M1 CPU (~105 min).  Added bootstrap confidence
+  intervals, progress reporting every 50 samples, and `translit_anglicisms`
+  normalization for loanwords (`tv` → `тв`, `synergy` → `синергия`, etc.).
+
 ## [2.0.7] - 2026-05-08
 
 ### Fixed

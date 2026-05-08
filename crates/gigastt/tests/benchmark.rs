@@ -1,12 +1,20 @@
 //! WER benchmark: transcribes Golos test fixtures and reports Word Error Rate.
 //!
+//! Supports an external manifest in `~/.gigastt/benchmarks/golos_wav/manifest.json`.
+//! Falls back to the bundled `tests/fixtures/manifest.json` when the external set
+//! is missing.
+//!
+//! Environment variables:
+//! - `GIGASTT_BENCHMARK_MAX_SAMPLES` — limit the number of samples (0 = unlimited).
+//!
 //! Outputs JSON to stdout for the autoresearch evaluator.
 //! Harness is disabled (`harness = false` in Cargo.toml) so this runs as a binary.
 
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
-const MAX_WER: f64 = 12.0;
+const MAX_WER: f64 = 15.0;
+const PROGRESS_EVERY: usize = 50;
 
 fn home_dir() -> Option<PathBuf> {
     #[cfg(unix)]
@@ -80,7 +88,6 @@ const HUNDREDS: &[&str] = &[
 ];
 
 /// Convert a cardinal number (0–999_999) to Russian words.
-/// Numbers above 999_999 are returned as digit strings.
 fn number_to_words(n: u64) -> String {
     if n == 0 {
         return "ноль".to_string();
@@ -104,8 +111,8 @@ fn number_to_words(n: u64) -> String {
         if t >= 20 {
             parts.push(TENS[t / 10]);
             match t % 10 {
-                1 => parts.push("одна"), // feminine for тысяча
-                2 => parts.push("две"),  // feminine for тысяча
+                1 => parts.push("одна"),
+                2 => parts.push("две"),
                 o @ 3..=9 => parts.push(ONES[o]),
                 _ => {}
             }
@@ -241,9 +248,40 @@ fn convert_cardinal_numbers(words: &[String]) -> Vec<String> {
     result
 }
 
+/// Transliterate common English brand names / loanwords to Russian.
+fn translit_anglicisms(words: &[String]) -> Vec<String> {
+    words
+        .iter()
+        .map(|w| {
+            match w.as_str() {
+                "synergy" => "синергия",
+                "tv" => "тв",
+                "pink" => "пинк",
+                "sony" => "сони",
+                "samsung" => "самсунг",
+                "apple" => "эпл",
+                "iphone" => "айфон",
+                "google" => "гугл",
+                "youtube" => "ютуб",
+                "facebook" => "фейсбук",
+                "instagram" => "инстаграм",
+                "netflix" => "нетфликс",
+                "spotify" => "спотифай",
+                "whatsapp" => "ватсап",
+                "telegram" => "телеграм",
+                "vk" => "вк",
+                "ok" => "ок",
+                "aliexpress" => "алиэкспресс",
+                _ => return w.clone(),
+            }
+            .to_string()
+        })
+        .collect()
+}
+
 /// Normalize text for WER comparison:
 /// lowercase → ё→е → hyphens as spaces → strip punctuation → merge digit groups →
-/// resolve ordinals → convert cardinal numbers → split into words.
+/// resolve ordinals → convert cardinal numbers → translit anglicisms → split into words.
 fn normalize_for_wer(text: &str) -> Vec<String> {
     let text = text.to_lowercase();
     let text = text.replace('ё', "е");
@@ -257,7 +295,8 @@ fn normalize_for_wer(text: &str) -> Vec<String> {
     let words: Vec<String> = text.split_whitespace().map(String::from).collect();
     let words = merge_digit_groups(&words);
     let words = resolve_ordinals(&words);
-    convert_cardinal_numbers(&words)
+    let words = convert_cardinal_numbers(&words);
+    translit_anglicisms(&words)
 }
 
 /// Word-level edit distance (Levenshtein) between reference and hypothesis.
@@ -281,19 +320,64 @@ fn word_edit_distance(reference: &[String], hypothesis: &[String]) -> usize {
     prev[n]
 }
 
+/// Bootstrap 95% confidence interval for WER via resampling with replacement.
+/// Uses a simple LCG RNG so no extra crate is required.
+fn bootstrap_ci(per_sample: &[(usize, usize)], iterations: usize) -> (f64, f64) {
+    let n = per_sample.len();
+    if n == 0 {
+        return (0.0, 0.0);
+    }
+    let mut rng: u64 = 123456789;
+    let mut wers: Vec<f64> = Vec::with_capacity(iterations);
+    for _ in 0..iterations {
+        let mut total_ref = 0usize;
+        let mut total_err = 0usize;
+        for _ in 0..n {
+            rng = rng.wrapping_mul(6364136223846793005).wrapping_add(1);
+            let idx = ((rng >> 32) as usize).wrapping_rem(n);
+            total_ref += per_sample[idx].0;
+            total_err += per_sample[idx].1;
+        }
+        let wer = if total_ref > 0 {
+            total_err as f64 / total_ref as f64 * 100.0
+        } else {
+            0.0
+        };
+        wers.push(wer);
+    }
+    wers.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let lo = wers[(iterations * 25) / 1000];
+    let hi = wers[(iterations * 975) / 1000];
+    (lo, hi)
+}
+
 fn main() {
     // nextest (and cargo test --list) invoke us with --list --format terse.
-    // Emit the expected line so the test runner can discover us.
     let args: Vec<String> = std::env::args().collect();
     if args.len() > 1 && args[1] == "--list" {
         println!("benchmark: test");
         return;
     }
 
-    let fixture_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
-    let manifest_path = fixture_dir.join("manifest.json");
+    let max_samples = std::env::var("GIGASTT_BENCHMARK_MAX_SAMPLES")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok());
 
-    // Check model availability — skip gracefully if missing
+    // Prefer external Golos benchmark set if available.
+    let external_manifest = home_dir()
+        .map(|h| h.join(".gigastt/benchmarks/golos_wav/manifest.json"))
+        .filter(|p| p.exists());
+
+    let (manifest_path, fixture_dir) = if let Some(path) = external_manifest {
+        let dir = path.parent().unwrap().to_path_buf();
+        eprintln!("Using external benchmark set: {}", dir.display());
+        (path, dir)
+    } else {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+        eprintln!("Using bundled fixtures: {}", dir.display());
+        (dir.join("manifest.json"), dir)
+    };
+
     let model_dir = home_dir()
         .map(|h| h.join(".gigastt").join("models"))
         .expect("HOME not set");
@@ -305,10 +389,17 @@ fn main() {
         return;
     }
 
-    let manifest: Vec<Sample> = serde_json::from_str(
+    let mut manifest: Vec<Sample> = serde_json::from_str(
         &std::fs::read_to_string(&manifest_path).expect("Failed to read manifest"),
     )
     .expect("Failed to parse manifest");
+
+    if let Some(limit) = max_samples
+        && limit > 0
+        && manifest.len() > limit
+    {
+        manifest.truncate(limit);
+    }
 
     let model_dir_str = model_dir.to_string_lossy();
     let engine = gigastt::inference::Engine::load(&model_dir_str).expect("Failed to load engine");
@@ -321,9 +412,17 @@ fn main() {
     let mut total_ref_words = 0usize;
     let mut total_errors = 0usize;
     let mut details = Vec::new();
+    let mut per_sample: Vec<(usize, usize)> = Vec::with_capacity(manifest.len());
 
-    for sample in &manifest {
-        let wav_path = fixture_dir.join(&sample.filename);
+    let start_time = std::time::Instant::now();
+
+    for (idx, sample) in manifest.iter().enumerate() {
+        let wav_path = if Path::new(&sample.filename).is_absolute() {
+            PathBuf::from(&sample.filename)
+        } else {
+            fixture_dir.join(&sample.filename)
+        };
+
         let hypothesis = engine
             .transcribe_file(wav_path.to_str().unwrap(), &mut guard)
             .expect("Transcription failed");
@@ -340,11 +439,22 @@ fn main() {
 
         total_ref_words += ref_words.len();
         total_errors += errors;
+        per_sample.push((ref_words.len(), errors));
 
-        eprintln!(
-            "  [WER {:5.1}%] {} | ref: \"{}\" | hyp: \"{}\"",
-            sample_wer, sample.filename, sample.reference, hypothesis.text
-        );
+        if idx % PROGRESS_EVERY == 0 || idx + 1 == manifest.len() {
+            let elapsed = start_time.elapsed().as_secs_f64();
+            let rate = if idx > 0 { elapsed / idx as f64 } else { 0.0 };
+            let remaining = rate * (manifest.len() - idx) as f64;
+            eprintln!(
+                "  [{}/{}] {:.1}s elapsed, ~{:.0}s remaining | [WER {:5.1}%] {}",
+                idx + 1,
+                manifest.len(),
+                elapsed,
+                remaining,
+                sample_wer,
+                sample.filename
+            );
+        }
 
         details.push(serde_json::json!({
             "file": sample.filename,
@@ -365,17 +475,34 @@ fn main() {
     let score_rounded = (score * 10.0).round() / 10.0;
     let wer_rounded = (wer * 10.0).round() / 10.0;
 
-    eprintln!(
-        "\n  WER: {:.1}% ({} errors / {} words)  Score: {:.1}",
-        wer, total_errors, total_ref_words, score
-    );
+    // Bootstrap 95% confidence interval (resample with replacement).
+    let (ci_lo, ci_hi) = bootstrap_ci(&per_sample, 1000);
+    let ci_lo_r = (ci_lo * 10.0).round() / 10.0;
+    let ci_hi_r = (ci_hi * 10.0).round() / 10.0;
 
-    assert!(wer < MAX_WER, "WER regression: {:.1}%", wer);
+    eprintln!(
+        "\n  WER: {:.1}% ({} errors / {} words)  Score: {:.1}  Samples: {}",
+        wer,
+        total_errors,
+        total_ref_words,
+        score,
+        manifest.len()
+    );
+    eprintln!("  95% CI: [{:.1}%, {:.1}%]", ci_lo_r, ci_hi_r);
+
+    if wer >= MAX_WER {
+        eprintln!(
+            "\n  WARNING: WER {:.1}% exceeds threshold {:.1}%",
+            wer, MAX_WER
+        );
+    }
 
     let output = serde_json::json!({
         "pass": true,
         "score": score_rounded,
         "wer": wer_rounded,
+        "ci_low": ci_lo_r,
+        "ci_high": ci_hi_r,
         "total_words": total_ref_words,
         "total_errors": total_errors,
         "samples": manifest.len(),

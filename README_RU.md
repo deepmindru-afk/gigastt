@@ -1,6 +1,6 @@
 <p align="center">
   <h1 align="center">gigastt</h1>
-  <p align="center"><strong>Распознавание русской речи на устройстве с WER 10.4%</strong></p>
+  <p align="center"><strong>Распознавание русской речи на устройстве с WER 11.4%</strong></p>
   <p align="center">Локальный STT-сервер на базе GigaAM v3 — без облака, без API-ключей, полная приватность</p>
   <p align="center">
     <a href="https://github.com/ekhodzitsky/gigastt/actions"><img src="https://github.com/ekhodzitsky/gigastt/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -28,7 +28,7 @@ brew install gigastt && gigastt serve
 | | gigastt | whisper.cpp | faster-whisper | Vosk | sherpa-onnx | Облачные API |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
 | **Модель** | GigaAM v3 | Whisper large-v3 | Whisper large-v3 | Vosk models | разные | вендор |
-| **WER (русский)** | **10.4%** | ~18% | ~18% | ~20%+ | зависит от модели | 5–10% |
+| **WER (русский)** | **11.4%** | ~18% | ~18% | ~20%+ | зависит от модели | 5–10% |
 | **Языки** | русский | 99 | 99 | 20+ | 10+ | 100+ |
 | **Стриминг** | WebSocket в реальном времени | — | — | WebSocket + gRPC | WebSocket + TCP | по-разному |
 | **Задержка (16с, M1)** | **~700мс** | ~4с | ~2с | ~3с | ~1.5с | сеть |
@@ -227,8 +227,8 @@ java -jar client.jar recording.wav
 
 | Метрика | Значение |
 |---|---|
-| **WER (русский)** | 10.4% (993 записи Golos, 4991 слово) |
-| **INT8 vs FP32** | 0% деградации WER (10.4% vs 10.5% на 993 записях) |
+| **WER (русский)** | 11.4% (9 994 записи Golos, 50 394 слова, 95% ДИ [10.9%, 11.9%]) |
+| **INT8 vs FP32** | 0% деградации WER (11.4% vs 11.5% на 9 994 записях) |
 | **Задержка (16с аудио, M1)** | ~700 мс (encoder 667 мс + decode 31 мс) |
 | **Память (RSS)** | ~560 МБ |
 | **Размер модели** | 851 МБ (FP32) / 222 МБ (INT8) |

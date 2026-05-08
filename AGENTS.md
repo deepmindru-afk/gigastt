@@ -27,7 +27,7 @@ and auto-invoked on first `serve`/`download` unless `--skip-quantize` is passed.
 
 | Property | Value |
 |---|---|
-| WER (Russian) | 10.4% (993 Golos crowd samples, 4991 words) |
+| WER (Russian) | **11.4%** (9 994 Golos crowd samples, 50 394 words, 95% CI [10.9%, 11.9%]) |
 | Latency (16s audio, M1) | ~700 ms |
 | Memory (RSS) | ~560 MB |
 | Concurrent sessions | 4 (configurable via `--pool-size`) |
