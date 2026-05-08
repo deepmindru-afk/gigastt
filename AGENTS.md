@@ -221,7 +221,11 @@ Downloaded to `~/.gigastt/models/` from `istupakov/gigaam-v3-onnx`:
 1. Write failing test first
 2. Implement minimal code to pass
 3. Refactor, verify tests still pass
-4. `cargo test && cargo clippy` before every commit
+4. `cargo test && cargo clippy` before every commit (or `make check`)
+5. Enable the pre-commit hook so step 4 is enforced automatically:
+   ```sh
+   git config core.hooksPath .githooks
+   ```
 
 ### API versioning & backward compatibility
 
@@ -257,6 +261,16 @@ Downloaded to `~/.gigastt/models/` from `istupakov/gigaam-v3-onnx`:
 - Model is cached via `actions/cache` with key derived from `crates/gigastt-core/src/model/mod.rs`
 - E2E tests run with `--test-threads=1` because each loads the full ONNX model
   into memory; concurrent runs OOM on CI runners
+
+### Branch protection (repository settings)
+
+The following rules must be enabled in **GitHub Settings → Branches** for `main`:
+
+- **Require a pull request before merging** — direct push to `main` is blocked.
+- **Require status checks to pass** — at minimum `fmt`, `clippy`, and `unit-tests` jobs from `ci.yml` must be green.
+- **Include administrators** — rules apply to everyone, no exceptions.
+
+This guarantees that a regression like a broken `cargo test` cannot reach `main` even if the local pre-commit hook is bypassed.
 
 ## Security Considerations
 

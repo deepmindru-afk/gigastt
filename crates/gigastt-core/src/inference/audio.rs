@@ -449,11 +449,15 @@ pub fn parse_pcm16_with_carry_into(data: &[u8], pending: &mut Option<u8>, out: &
                 return;
             }
         }
-        while let (Some(b0), Some(b1)) = (bytes.next(), bytes.next()) {
+        while let Some(b0) = bytes.next() {
+            let b1 = match bytes.next() {
+                Some(b) => b,
+                None => {
+                    *pending = Some(b0);
+                    break;
+                }
+            };
             out.push(i16::from_le_bytes([b0, b1]) as f32 / 32768.0);
-        }
-        if let Some(b) = bytes.next() {
-            *pending = Some(b);
         }
     } else {
         out.reserve(data.len() / 2);
