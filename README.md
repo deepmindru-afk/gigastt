@@ -1,6 +1,6 @@
 <p align="center">
   <h1 align="center">gigastt</h1>
-  <p align="center"><strong>On-device Russian speech recognition with 10.4% WER</strong></p>
+  <p align="center"><strong>On-device Russian speech recognition with 11.4% WER</strong></p>
   <p align="center">Local STT server powered by GigaAM v3 — no cloud, no API keys, full privacy</p>
   <p align="center">
     <a href="https://github.com/ekhodzitsky/gigastt/actions"><img src="https://github.com/ekhodzitsky/gigastt/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -42,7 +42,7 @@ $ curl -X POST http://127.0.0.1:9876/v1/transcribe \
 | | gigastt | whisper.cpp | faster-whisper | Vosk | sherpa-onnx | Cloud APIs |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
 | **Model** | GigaAM v3 | Whisper large-v3 | Whisper large-v3 | Vosk models | varies | vendor |
-| **WER (Russian)** | **10.4%** | ~18% | ~18% | ~20%+ | model-dependent | 5–10% |
+| **WER (Russian)** | **11.4%** | ~18% | ~18% | ~20%+ | model-dependent | 5–10% |
 | **Languages** | Russian | 99 | 99 | 20+ | 10+ | 100+ |
 | **Streaming** | real-time WebSocket | — | — | WebSocket + gRPC | WebSocket + TCP | varies |
 | **Latency (16s, M1)** | **~700ms** | ~4s | ~2s | ~3s | ~1.5s | network |
@@ -232,8 +232,8 @@ java -jar client.jar recording.wav
 
 | Metric | Value |
 |---|---|
-| **WER (Russian)** | 10.4% (993 Golos crowd samples, 4991 words) |
-| **INT8 vs FP32** | 0% WER degradation (10.4% vs 10.5% on 993 samples) |
+| **WER (Russian)** | 11.4% (9 994 Golos crowd samples, 50 394 words, 95% CI [10.9%, 11.9%]) |
+| **INT8 vs FP32** | 0% WER degradation (11.4% vs 11.5% on 9 994 samples) |
 | **Latency (16s audio, M1)** | ~700 ms (encoder 667 ms + decode 31 ms) |
 | **Memory (RSS)** | ~560 MB |
 | **Model size** | 851 MB (FP32) / 222 MB (INT8) |
