@@ -196,7 +196,7 @@ All new findings from the 2026-04-18 review are catalogued in
   Generate `bom.cdx.json` in the release workflow (item 1).
 
 ### 15. Benchmark reports single WER number, no histograms
-- README lists `10.4%` on 993 Golos samples. No distribution by
+- README lists `11.4%` on 9 994 Golos samples. No distribution by
   utterance length, no noise-bucket breakdown, no per-speaker
   variance.
 - Fix: emit `tests/benchmark.rs` output as JSON + markdown table with

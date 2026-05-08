@@ -1342,7 +1342,7 @@ Create `.github/wer-threshold.txt`:
 12.0
 ```
 
-Use `12.0` to match the existing `MAX_WER` in `tests/benchmark.rs`.
+Use `15.0` to match the existing `MAX_WER` in `tests/benchmark.rs`.
 
 - [ ] **Step 3: Add benchmark job to CI**
 
