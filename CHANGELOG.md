@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.7] - 2026-05-08
+
+### Fixed
+
+- **PCM16 carry byte loss** — `parse_pcm16_with_carry_into` no longer drops the
+  last byte of an odd-length chunk when no carry is pending. The previous
+  tuple-pattern loop `while let (Some(b0), Some(b1))` consumed the trailing byte
+  into `b0` and then discarded it when `b1` was `None`.
+
+### Added
+
+- **Pre-commit hook** — `.githooks/pre-commit` enforces `fmt`, `clippy`, and
+  `cargo test --workspace` before every commit.
+- **Makefile** — `make check` runs the full local validation suite;
+  `make fix` auto-formats and applies clippy suggestions.
+
+### Changed
+
+- **AGENTS.md** — documents hook setup and required GitHub branch protection
+  rules to prevent broken code from reaching `main`.
+
 ## [2.0.6] - 2026-05-08
 
 ### Security / Reliability
