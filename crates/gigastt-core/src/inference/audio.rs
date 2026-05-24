@@ -183,7 +183,11 @@ pub fn decode_audio_bytes_shared(data: Bytes) -> Result<Vec<f32>> {
 }
 
 /// Shared decode logic: probe → format → decode → mono mix → duration check → resample.
-fn decode_audio_inner<'s>(mss: MediaSourceStream<'s>, hint: Hint, source_label: &str) -> Result<Vec<f32>> {
+fn decode_audio_inner<'s>(
+    mss: MediaSourceStream<'s>,
+    hint: Hint,
+    source_label: &str,
+) -> Result<Vec<f32>> {
     let mut format = symphonia::default::get_probe()
         .probe(
             &hint,
@@ -202,9 +206,7 @@ fn decode_audio_inner<'s>(mss: MediaSourceStream<'s>, hint: Hint, source_label: 
         .as_ref()
         .and_then(|p| p.audio())
         .context("No audio codec parameters")?;
-    let sample_rate = audio_params
-        .sample_rate
-        .context("Unknown sample rate")?;
+    let sample_rate = audio_params.sample_rate.context("Unknown sample rate")?;
     let channels = audio_params
         .channels
         .as_ref()
