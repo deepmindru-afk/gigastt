@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.9] - 2026-05-24
+
+### Changed
+
+- **symphonia 0.5 → 0.6** — migrated audio decoding (`decode_audio_inner`) for
+  breaking changes in Symphonia 0.6.0: `SampleBuffer` replaced with
+  `GenericAudioBufferRef` copy methods, `next_packet()` now returns `Ok(None)` on
+  EOF, `default_track()` requires `TrackType::Audio`, `CodecParameters` is now an
+  enum with audio params accessed via `.audio()`.
+- **thiserror 1.0 → 2.0** — error derive macro update.
+- **toml 0.8 → 1.1** — TOML config file parsing update.
+- **tokio 1.52.2 → 1.52.3** — async runtime patch update.
+- **cbindgen 0.28 → 0.29** — FFI header generation build-dependency update.
+- **codecov-action 5 → 6** — CI coverage action update.
+
 ## [2.0.8] - 2026-05-07
 
 ### Changed
