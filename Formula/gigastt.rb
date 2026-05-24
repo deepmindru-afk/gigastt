@@ -17,15 +17,15 @@ class Gigastt < Formula
 
   on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/ekhodzitsky/gigastt/releases/download/v2.0.8/gigastt-2.0.8-aarch64-apple-darwin.tar.gz"
-      sha256 "833176fab37c76897da4134a80fdfeb3e0ae26938b5c66dd31c51e5e5f64fa9d"
+      url "https://github.com/ekhodzitsky/gigastt/releases/download/v2.0.9/gigastt-2.0.9-aarch64-apple-darwin.tar.gz"
+      sha256 "dc70d999f7d7419d6371b9b9f450b7ed14483ac07f3743cafe147892a030c02d"
     end
   end
 
   on_linux do
     if Hardware::CPU.intel?
-      url "https://github.com/ekhodzitsky/gigastt/releases/download/v2.0.8/gigastt-2.0.8-x86_64-unknown-linux-gnu.tar.gz"
-      sha256 "1aec3fc5d4cddec6c7f27bbe59ea89380702b8e646310c45d863c3a69876b723"
+      url "https://github.com/ekhodzitsky/gigastt/releases/download/v2.0.9/gigastt-2.0.9-x86_64-unknown-linux-gnu.tar.gz"
+      sha256 "416a97e388120f228f6bca3641fac8828756e190ba368d4013f248f348f7864e"
     end
   end
 
