@@ -12,7 +12,7 @@
 class Gigastt < Formula
   desc "On-device Russian speech recognition server powered by GigaAM v3"
   homepage "https://github.com/ekhodzitsky/gigastt"
-  version "2.0.8"
+  version "2.0.9"
   license "MIT"
 
   on_macos do
