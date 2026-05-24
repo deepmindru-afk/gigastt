@@ -3,12 +3,11 @@
 use anyhow::{Context, Result};
 use bytes::Bytes;
 use rubato::Resampler;
-use symphonia::core::audio::SampleBuffer;
-use symphonia::core::codecs::DecoderOptions;
-use symphonia::core::formats::FormatOptions;
+use symphonia::core::codecs::audio::AudioDecoderOptions;
+use symphonia::core::formats::probe::Hint;
+use symphonia::core::formats::{FormatOptions, TrackType};
 use symphonia::core::io::{MediaSource, MediaSourceStream};
 use symphonia::core::meta::MetadataOptions;
-use symphonia::core::probe::Hint;
 
 use super::{HOP_LENGTH, N_FFT};
 
@@ -184,35 +183,43 @@ pub fn decode_audio_bytes_shared(data: Bytes) -> Result<Vec<f32>> {
 }
 
 /// Shared decode logic: probe → format → decode → mono mix → duration check → resample.
-fn decode_audio_inner(mss: MediaSourceStream, hint: Hint, source_label: &str) -> Result<Vec<f32>> {
-    let probed = symphonia::default::get_probe()
-        .format(
+fn decode_audio_inner<'s>(mss: MediaSourceStream<'s>, hint: Hint, source_label: &str) -> Result<Vec<f32>> {
+    let mut format = symphonia::default::get_probe()
+        .probe(
             &hint,
             mss,
-            &FormatOptions::default(),
-            &MetadataOptions::default(),
+            FormatOptions::default(),
+            MetadataOptions::default(),
         )
         .context("Unsupported audio format")?;
 
-    let mut format = probed.format;
-
-    let track = format.default_track().context("No audio track found")?;
+    let track = format
+        .default_track(TrackType::Audio)
+        .context("No audio track found")?;
     let track_id = track.id;
-    let sample_rate = track
+    let audio_params = track
         .codec_params
+        .as_ref()
+        .and_then(|p| p.audio())
+        .context("No audio codec parameters")?;
+    let sample_rate = audio_params
         .sample_rate
         .context("Unknown sample rate")?;
-    let channels = track.codec_params.channels.map(|c| c.count()).unwrap_or(1);
-    // Some formats (WAV, FLAC) publish the total frame count in codec_params;
+    let channels = audio_params
+        .channels
+        .as_ref()
+        .map(|c| c.count())
+        .unwrap_or(1);
+    // Some formats (WAV, FLAC) publish the total frame count in the track;
     // reserve up-front to avoid `Vec` reallocation thrash for large uploads.
     // Streaming codecs (MP3) leave this as None and we fall back to the
     // default growth strategy.
-    let n_frames_hint = track.codec_params.n_frames;
+    let n_frames_hint = track.num_frames;
 
     tracing::info!("Audio ({source_label}): {sample_rate}Hz, {channels}ch");
 
     let mut decoder = symphonia::default::get_codecs()
-        .make(&track.codec_params, &DecoderOptions::default())
+        .make_audio_decoder(audio_params, &AudioDecoderOptions::default())
         .context("Unsupported audio codec")?;
 
     let mut all_samples: Vec<f32> = match n_frames_hint {
@@ -227,39 +234,35 @@ fn decode_audio_inner(mss: MediaSourceStream, hint: Hint, source_label: &str) ->
 
     loop {
         let packet = match format.next_packet() {
-            Ok(p) => p,
-            Err(symphonia::core::errors::Error::IoError(ref e))
-                if e.kind() == std::io::ErrorKind::UnexpectedEof =>
-            {
-                break;
-            }
+            Ok(Some(p)) => p,
+            Ok(None) => break,
             Err(e) => return Err(anyhow::anyhow!("Error reading packet: {e}")),
         };
 
-        if packet.track_id() != track_id {
+        if packet.track_id != track_id {
             continue;
         }
 
         let decoded = decoder.decode(&packet).context("Decode error")?;
-        let spec = *decoded.spec();
+        let spec = decoded.spec().clone();
         let num_frames = decoded.frames();
-
-        let mut sample_buf = SampleBuffer::<f32>::new(num_frames as u64, spec);
-        sample_buf.copy_interleaved_ref(decoded);
-        let samples = sample_buf.samples();
+        let ch = spec.channels().count();
 
         // Mix to mono if multi-channel
-        if spec.channels.count() > 1 {
-            let ch = spec.channels.count();
+        if ch > 1 {
+            let mut interleaved: Vec<f32> = Vec::with_capacity(num_frames * ch);
+            decoded.copy_to_vec_interleaved(&mut interleaved);
             for frame in 0..num_frames {
                 let mut sum = 0.0_f32;
                 for c in 0..ch {
-                    sum += samples[frame * ch + c];
+                    sum += interleaved[frame * ch + c];
                 }
                 all_samples.push(sum / ch as f32);
             }
         } else {
-            all_samples.extend_from_slice(samples);
+            let offset = all_samples.len();
+            all_samples.resize(offset + num_frames, 0.0);
+            decoded.copy_to_slice_interleaved(&mut all_samples[offset..]);
         }
 
         // Incremental duration cap: abort before the next packet is decoded
