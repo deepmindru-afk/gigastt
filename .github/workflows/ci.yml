@@ -28,10 +28,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - uses: arduino/setup-protoc@v3
-        with:
-          version: '29.x'
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - uses: actions/cache@v5
         with:
           path: |
@@ -47,10 +45,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
-      - uses: arduino/setup-protoc@v3
-        with:
-          version: '29.x'
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - uses: actions/cache@v5
         with:
           path: |
@@ -68,10 +64,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
-      - uses: arduino/setup-protoc@v3
-        with:
-          version: '29.x'
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install protoc
+        run: brew install protobuf
       - uses: actions/cache@v5
         with:
           path: |
@@ -87,10 +81,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
-      - uses: arduino/setup-protoc@v3
-        with:
-          version: '29.x'
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - uses: actions/cache@v5
         with:
           path: |
@@ -106,10 +98,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
-      - uses: arduino/setup-protoc@v3
-        with:
-          version: '29.x'
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - uses: actions/cache@v5
         with:
           path: |
@@ -127,10 +117,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
-      - uses: arduino/setup-protoc@v3
-        with:
-          version: '29.x'
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - uses: actions/cache@v5
         with:
           path: |
@@ -162,10 +150,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
-      - uses: arduino/setup-protoc@v3
-        with:
-          version: '29.x'
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - uses: actions/cache@v5
         with:
           path: |
@@ -217,10 +203,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
-      - uses: arduino/setup-protoc@v3
-        with:
-          version: '29.x'
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - uses: actions/cache@v5
         with:
           path: |
@@ -237,10 +221,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
-      - uses: arduino/setup-protoc@v3
-        with:
-          version: '29.x'
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - uses: actions/cache@v5
         with:
           path: |
