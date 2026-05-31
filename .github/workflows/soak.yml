@@ -96,11 +96,16 @@ jobs:
             fuzz/target
           key: ${{ runner.os }}-cargo-fuzz-${{ hashFiles('**/Cargo.lock') }}
 
+      # RUSTUP_TOOLCHAIN overrides the stable pin in rust-toolchain.toml so the
+      # nightly `-Z sanitizer` flags are accepted; the explicit gnu target keeps
+      # the musl-built cargo-fuzz binary from defaulting to an unbuildable musl.
       - name: Run fuzz targets (60s each)
+        env:
+          RUSTUP_TOOLCHAIN: nightly
         run: |
           for target in audio_decode protocol_parse pcm16_framing tokenizer; do
             echo "::group::fuzz $target"
-            cargo fuzz run "$target" -- -max_total_time=60 -rss_limit_mb=4096
+            cargo fuzz run "$target" --target x86_64-unknown-linux-gnu -- -max_total_time=60 -rss_limit_mb=4096
             echo "::endgroup::"
           done
 
