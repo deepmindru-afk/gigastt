@@ -375,7 +375,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-      - uses: taiki-e/install-action@cargo-fuzz
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
       - uses: actions/cache@v5
         with:
           path: |
