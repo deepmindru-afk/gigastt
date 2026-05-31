@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.10] - 2026-05-31
+
+### Changed
+
+- **rubato 0.16 → 3.0** — migrated resampling (`resample` / `resample_with_cache`)
+  for the breaking 3.0 API: `SincFixedIn` replaced by `Async::new_sinc` with
+  `FixedAsync::Input`, and the new `audioadapter` buffer model
+  (`SequentialSliceOfVecs`). Behaviour-preserving (same sinc parameters).
+- **polyvoice 0.5 → 0.6.7** — migrated speaker diarization for the new 0.6 API:
+  `OfflineDiarizer` / `OnlineDiarizer` replaced by `Pipeline` / `StreamingPipeline`
+  that take an explicit `EnergyVad`. The `EmbeddingExtractor` is now owned per
+  pipeline, so the shared ONNX speaker encoder is wrapped in `Arc` behind a
+  `SharedExtractor` adapter and cloned into each session. `DiarizationConfig`
+  flat fields moved under nested `ClusterConfig` / `VadConfig` (streaming
+  clustering threshold pinned to 0.5).
+- **toml 0.9 → 1.1** — TOML config parsing update.
+- **dashmap 6.1 → 6.2** — concurrent map update (per-IP rate limiter).
+- **serde_json 1.0.149 → 1.0.150** — JSON serialization patch update.
+
 ## [2.0.9] - 2026-05-24
 
 ### Changed
@@ -919,7 +938,8 @@ _Release candidate for v0.9.0 — bundles five P0 fixes (V1-03, V1-04, V1-05, V1
 - Multi-format audio support: WAV, MP3, M4A/AAC, OGG/Vorbis, FLAC (via symphonia).
 - 39 unit tests (tokenizer, features, decode, inference, protocol).
 
-[Unreleased]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.3...HEAD
+[Unreleased]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.10...HEAD
+[2.0.10]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.9...v2.0.10
 [2.0.3]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.2...v2.0.3
 [2.0.2]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.0...v2.0.1
