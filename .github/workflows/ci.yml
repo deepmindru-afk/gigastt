@@ -233,7 +233,10 @@ jobs:
       # Default features only — coreml+cuda is a hard compile_error, so
       # `--all-features` is impossible here (unlike single-crate repos).
       - name: Run tarpaulin
-        run: cargo tarpaulin --workspace --out xml --timeout 120 --skip-clean
+        # Floor only — the unit-test-only run measures ~19.8% (model-gated
+        # inference/server paths are exercised by the --ignored e2e suite,
+        # which has no model here). --fail-under guards against regressions.
+        run: cargo tarpaulin --workspace --out xml --timeout 120 --fail-under 18 --skip-clean
       - uses: codecov/codecov-action@v6
         with:
           files: ./cobertura.xml
