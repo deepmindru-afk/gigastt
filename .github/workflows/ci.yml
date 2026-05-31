@@ -215,7 +215,6 @@ jobs:
       - uses: obi1kenobi/cargo-semver-checks-action@v2
 
   coverage:
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     name: Coverage
     steps:
@@ -223,6 +222,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - uses: taiki-e/install-action@cargo-tarpaulin
       - uses: actions/cache@v5
         with:
           path: |
@@ -230,12 +230,14 @@ jobs:
             ~/.cargo/git
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - name: Install cargo-tarpaulin
-        run: cargo install cargo-tarpaulin --locked
+      # Default features only — coreml+cuda is a hard compile_error, so
+      # `--all-features` is impossible here (unlike single-crate repos).
       - name: Run tarpaulin
-        run: cargo tarpaulin --workspace --out xml --skip-clean
+        run: cargo tarpaulin --workspace --out xml --timeout 120 --skip-clean
       - uses: codecov/codecov-action@v6
         with:
+          files: ./cobertura.xml
+          fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
 
   audit:
@@ -261,3 +263,202 @@ jobs:
           # but the stable-musl `cargo-deny` refused the trailing positional
           # args as subcommands (`unrecognized subcommand 'licenses'`).
           command: check
+
+  typos:
+    runs-on: ubuntu-latest
+    name: Typos
+    steps:
+      - uses: actions/checkout@v6
+      - uses: crate-ci/typos@v1
+
+  dependency-review:
+    # PR-only: compares the PR's dependency delta against the base branch,
+    # so it has nothing to diff on a direct push to main.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    name: Dependency Review
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: low
+          comment-summary-in-pr: on-failure
+          # Mirrors the allowlist enforced by `deny.toml` so a new transitive
+          # dep with an off-list license fails review instead of slipping in.
+          allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, Zlib, CC0-1.0, MPL-2.0, OpenSSL, Unicode-3.0, Unicode-DFS-2016, CDLA-Permissive-2.0
+
+  docs:
+    runs-on: ubuntu-latest
+    name: Doc Build
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Build docs (deny warnings)
+        run: cargo doc --no-deps --workspace
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+  hack:
+    runs-on: ubuntu-latest
+    name: Feature Powerset
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - uses: taiki-e/install-action@cargo-hack
+      - uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      # coreml+cuda is a hard compile_error and nnapi is Android-only, so the
+      # platform execution-provider features are excluded from the powerset.
+      - run: cargo hack check --feature-powerset --workspace --exclude-features coreml,cuda,nnapi --locked
+
+  publish-dry-run:
+    runs-on: ubuntu-latest
+    name: Publish Dry Run
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - run: cargo publish --dry-run -p gigastt-core --locked
+
+  msrv:
+    runs-on: ubuntu-latest
+    name: MSRV (1.87)
+    steps:
+      - uses: actions/checkout@v6
+      # MSRV floor: edition 2024 needs >=1.85, is_multiple_of needs >=1.87.
+      - uses: dtolnay/rust-toolchain@1.87
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-msrv-${{ hashFiles('**/Cargo.lock') }}
+      - run: cargo check --workspace --locked
+
+  fuzz:
+    runs-on: ubuntu-latest
+    name: Fuzz Build
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - uses: taiki-e/install-action@cargo-fuzz
+      - uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            fuzz/target
+          key: ${{ runner.os }}-cargo-fuzz-${{ hashFiles('**/Cargo.lock') }}
+      - run: cargo fuzz build
+
+  bench:
+    # PR-only: criterion needs a main baseline to diff against, and the
+    # regression gate is meaningless on the very push that moves main.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    name: Benchmarks (regression gate)
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Save baseline from main
+        # Branch refs are untrusted input — pass them through env vars rather
+        # than interpolating into the shell directly (script-injection guard).
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          git stash --include-untracked || true
+          git checkout "$BASE_REF"
+          cargo bench -p gigastt-core --features __internals -- --save-baseline main || true
+          git checkout "$HEAD_REF"
+          git stash pop || true
+
+      - name: Run benchmarks
+        run: cargo bench -p gigastt-core --features __internals -- --baseline main 2>&1 | tee benchmark.log
+
+      - name: Check for performance regressions (>5%)
+        run: |
+          python3 - <<'PY'
+          import re, sys
+
+          with open("benchmark.log") as f:
+              log = f.read()
+
+          # Criterion prints `change: [lo% mid% hi%]` followed by
+          # `Performance has regressed.` for confirmed slowdowns. Gate on the
+          # lower confidence bound so we only fail when we're confident the
+          # slowdown actually exceeds the threshold.
+          pattern = re.compile(
+              r"change:\s+\[([+\-][\d.]+)%\s+[+\-][\d.]+%\s+[+\-][\d.]+%\]"
+              r"[^\n]*\n\s*Performance has regressed\."
+          )
+
+          THRESHOLD = 5.0
+          regressions = [
+              (m.group(0).splitlines()[0].strip(), float(m.group(1)))
+              for m in pattern.finditer(log)
+              if float(m.group(1)) > THRESHOLD
+          ]
+
+          if regressions:
+              print(f"Performance regressions exceeding {THRESHOLD}% detected:")
+              for line, lower in regressions:
+                  print(f"  {line} (lower bound +{lower}%)")
+              sys.exit(1)
+          print(f"No performance regressions exceeding {THRESHOLD}% threshold.")
+          PY
+
+      - name: Upload criterion report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: criterion-report
+          path: target/criterion/
+          if-no-files-found: ignore

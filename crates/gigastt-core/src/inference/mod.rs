@@ -5,7 +5,12 @@
 pub mod audio;
 mod decode;
 mod features;
+#[cfg(not(feature = "__internals"))]
 mod tokenizer;
+/// Tokenizer module, exposed for fuzzing/benchmarking under the private
+/// `__internals` feature only. Not part of the stable public API.
+#[cfg(feature = "__internals")]
+pub mod tokenizer;
 
 #[cfg(feature = "diarization")]
 use polyvoice::streaming::StreamingPipeline;

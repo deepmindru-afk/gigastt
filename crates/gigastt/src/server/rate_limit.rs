@@ -201,9 +201,11 @@ impl RateLimiter {
     /// Minimum interval between successful requests for the effective (clamped)
     /// rpm, in milliseconds. Used for the startup log line.
     ///
+    /// ```text
     /// { self.effective_rpm.0 > 0 }
     /// fn interval_ms(&self) -> u64
     /// { ret >= 1 }
+    /// ```
     pub fn interval_ms(&self) -> u64 {
         (60_000u64 / self.effective_rpm.0.max(1) as u64).max(1)
     }
@@ -212,9 +214,11 @@ impl RateLimiter {
     /// `false` when the caller should be 429'd. Inserts a fresh bucket for
     /// first-time callers.
     ///
+    /// ```text
     /// { self.capacity.0 >= 1 }
     /// fn check(&self, ip: IpAddr) -> bool
     /// { ret == (self.buckets[&ip].tokens >= 1.0 after refill) }
+    /// ```
     pub fn check(&self, ip: IpAddr) -> bool {
         let now = Instant::now();
         let now_ms = unix_ms();
@@ -254,9 +258,11 @@ impl RateLimiter {
     /// from the background tokio task in `run_with_config` to bound memory
     /// under sustained single-visitor traffic.
     ///
+    /// ```text
     /// { true }
     /// fn evict_stale(&self, older_than: Duration)
     /// { self.buckets.len() <= old(self.buckets.len()) }
+    /// ```
     pub fn evict_stale(&self, older_than: Duration) {
         let cutoff = unix_ms().saturating_sub(older_than.as_millis() as u64);
         self.buckets
@@ -265,17 +271,21 @@ impl RateLimiter {
 
     #[cfg(test)]
     #[allow(clippy::len_without_is_empty)]
+    /// ```text
     /// { true }
     /// fn len(&self) -> usize
     /// { ret == self.buckets.len() }
+    /// ```
     pub fn len(&self) -> usize {
         self.buckets.len()
     }
 }
 
+/// ```text
 /// { true }
 /// fn unix_ms() -> u64
 /// { ret >= 0 }
+/// ```
 fn unix_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -291,9 +301,11 @@ fn unix_ms() -> u64 {
 /// only `ConnectInfo` is used. When `true`, the headers are consulted only
 /// if the direct peer IP is loopback or RFC1918.
 ///
+/// ```text
 /// { true }
 /// fn extract_client_ip(req: &Request, trust_proxy: bool) -> Option<IpAddr>
 /// { ret.is_some() == (!trust_proxy || req.extensions().get::<ConnectInfo<SocketAddr>>().is_some() || has_forwarded_headers) }
+/// ```
 pub fn extract_client_ip(req: &Request, trust_proxy: bool) -> Option<IpAddr> {
     let direct_ip = req
         .extensions()
@@ -347,9 +359,11 @@ fn is_rfc1918(ip: IpAddr) -> bool {
 /// to the next layer. Emits the same `429 Too Many Requests` +
 /// `Retry-After: 60` contract the previous `tower_governor` layer produced.
 ///
+/// ```text
 /// { true }
 /// async fn rate_limit_middleware(limiter: Arc<RateLimiter>, trust_proxy: bool, req: Request, next: Next) -> Response
 /// { ret.status() == 429 || ret.status() == next.run(req).await.status() }
+/// ```
 pub async fn rate_limit_middleware(
     limiter: Arc<RateLimiter>,
     trust_proxy: bool,

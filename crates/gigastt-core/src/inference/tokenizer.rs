@@ -60,6 +60,38 @@ impl Tokenizer {
         Ok(Self { tokens, blank_id })
     }
 
+    /// Build a tokenizer directly from an in-memory vocab list, without
+    /// touching the filesystem or the 850 MB model. Exposed only under the
+    /// private `__internals` feature for fuzzing and benchmarking; it is not
+    /// part of the stable public API. The blank token is located the same way
+    /// [`Tokenizer::load`] does (`<blk>` if present, else the last index).
+    #[cfg(feature = "__internals")]
+    pub fn from_tokens(tokens: Vec<String>) -> Self {
+        let blank_id = tokens
+            .iter()
+            .position(|t| t == "<blk>")
+            .unwrap_or_else(|| tokens.len().saturating_sub(1));
+        Self { tokens, blank_id }
+    }
+
+    /// Construct a tiny synthetic tokenizer (Cyrillic letters, a couple of
+    /// `▁`-prefixed word-boundary tokens, `<unk>`, and `<blk>`) for fuzzing /
+    /// benchmarking the decode path with no model on disk. Exposed only under
+    /// the private `__internals` feature.
+    #[cfg(feature = "__internals")]
+    pub fn synthetic() -> Self {
+        let mut tokens: Vec<String> = Vec::new();
+        for ch in 'а'..='я' {
+            tokens.push(ch.to_string());
+        }
+        tokens.push("\u{2581}привет".to_string());
+        tokens.push("\u{2581}мир".to_string());
+        tokens.push("\u{2581}".to_string());
+        tokens.push("<unk>".to_string());
+        tokens.push("<blk>".to_string());
+        Self::from_tokens(tokens)
+    }
+
     pub fn blank_id(&self) -> usize {
         self.blank_id
     }
