@@ -71,3 +71,42 @@ jobs:
             soak.log
           if-no-files-found: ignore
           retention-days: 14
+
+  fuzz:
+    # Continuous fuzzing: ci.yml only builds the targets, so the actual input
+    # exploration happens here nightly. All four targets run on synthetic /
+    # raw-byte input (no model on disk required).
+    runs-on: ubuntu-latest
+    name: Continuous Fuzz (60s/target)
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - uses: taiki-e/install-action@cargo-fuzz
+      - uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            fuzz/target
+          key: ${{ runner.os }}-cargo-fuzz-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run fuzz targets (60s each)
+        run: |
+          for target in audio_decode protocol_parse pcm16_framing tokenizer; do
+            echo "::group::fuzz $target"
+            cargo fuzz run "$target" -- -max_total_time=60 -rss_limit_mb=4096
+            echo "::endgroup::"
+          done
+
+      - name: Upload crash artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-artifacts-${{ github.run_id }}
+          path: fuzz/artifacts/
+          if-no-files-found: ignore
+          retention-days: 14

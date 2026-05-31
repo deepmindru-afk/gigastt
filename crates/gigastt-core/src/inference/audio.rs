@@ -115,9 +115,11 @@ impl MediaSource for BytesMediaSource {
 ///
 /// Returns an error if the file cannot be opened, decoded, or exceeds the duration limit.
 ///
+/// ```text
 /// { !path.is_empty() }
 /// fn decode_audio_file(path: &str) -> Result<Vec<f32>>
 /// { ret.as_ref().map(|v| !v.is_empty() || path.is_empty()).unwrap_or(true) }
+/// ```
 pub fn decode_audio_file(path: &str) -> Result<Vec<f32>> {
     let file =
         std::fs::File::open(path).with_context(|| format!("Failed to open audio file: {path}"))?;
@@ -152,9 +154,11 @@ pub fn decode_audio_file(path: &str) -> Result<Vec<f32>> {
 ///
 /// Returns an error if the bytes cannot be decoded or the audio exceeds the duration limit.
 ///
+/// ```text
 /// { true }
 /// fn decode_audio_bytes(data: &[u8]) -> Result<Vec<f32>>
 /// { ret.as_ref().map(|v| !v.is_empty()).unwrap_or(true) }
+/// ```
 pub fn decode_audio_bytes(data: &[u8]) -> Result<Vec<f32>> {
     decode_audio_bytes_shared(Bytes::copy_from_slice(data))
 }
@@ -172,9 +176,11 @@ pub fn decode_audio_bytes(data: &[u8]) -> Result<Vec<f32>> {
 /// Returns an error if the bytes cannot be decoded or the audio exceeds the
 /// duration limit.
 ///
+/// ```text
 /// { true }
 /// fn decode_audio_bytes_shared(data: Bytes) -> Result<Vec<f32>>
 /// { ret.as_ref().map(|v| !v.is_empty()).unwrap_or(true) }
+/// ```
 pub fn decode_audio_bytes_shared(data: Bytes) -> Result<Vec<f32>> {
     let source = BytesMediaSource::new(data);
     let mss = MediaSourceStream::new(Box::new(source), Default::default());
@@ -302,9 +308,11 @@ fn decode_audio_inner<'s>(
 ///
 /// Non-finite samples (NaN, infinity) are replaced with `0.0` before resampling.
 ///
+/// ```text
 /// { from_rate.0 > 0 && to_rate.0 > 0 }
 /// fn resample(samples: &[f32], from_rate: SampleRate, to_rate: SampleRate) -> Result<Vec<f32>>
 /// { ret.as_ref().map(|v| !v.is_empty() || samples.is_empty() || from_rate == to_rate).unwrap_or(true) }
+/// ```
 pub fn resample(samples: &[f32], from_rate: SampleRate, to_rate: SampleRate) -> Result<Vec<f32>> {
     if samples.is_empty() || from_rate.0 == 0 || to_rate.0 == 0 {
         return Ok(Vec::new());
@@ -358,9 +366,11 @@ pub fn resample(samples: &[f32], from_rate: SampleRate, to_rate: SampleRate) -> 
 /// The cached resampler is created on first call and reused when the input
 /// chunk size matches. If the chunk size changes, the cache is recreated.
 ///
+/// ```text
 /// { from_rate.0 > 0 && to_rate.0 > 0 }
 /// fn resample_with_cache(samples: Vec<f32>, from_rate: SampleRate, to_rate: SampleRate, cache: &mut Option<rubato::Async<f32>>, out_buf: &mut Vec<f32>) -> anyhow::Result<()>
 /// { ret.as_ref().map(|v| !v.is_empty() || samples.is_empty() || from_rate == to_rate).unwrap_or(true) }
+/// ```
 /// Resample audio using an optional cached resampler, writing into a caller-provided buffer.
 ///
 /// The cached resampler is created on first call and reused when the input

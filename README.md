@@ -8,11 +8,14 @@
     <a href="https://crates.io/crates/gigastt"><img src="https://img.shields.io/crates/d/gigastt.svg" alt="crates.io downloads"></a>
     <a href="https://github.com/ekhodzitsky/gigastt/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
     <a href="https://github.com/ekhodzitsky/gigastt/blob/main/CHANGELOG.md"><img src="https://img.shields.io/badge/changelog-Keep%20a%20Changelog-orange" alt="Changelog"></a>
+    <a href="https://codecov.io/gh/ekhodzitsky/gigastt"><img src="https://codecov.io/gh/ekhodzitsky/gigastt/branch/main/graph/badge.svg" alt="codecov"></a>
+    <a href="https://docs.rs/gigastt-core"><img src="https://docs.rs/gigastt-core/badge.svg" alt="docs.rs"></a>
+    <a href="https://github.com/ekhodzitsky/gigastt"><img src="https://img.shields.io/badge/MSRV-1.87-blue.svg" alt="MSRV 1.87"></a>
   <p align="center"><b>English</b> | <a href="README_RU.md">Русский</a></p>
 </p>
 
 <p align="center">
-  <sub>Latest: <b>v2.0.3</b> — see <a href="CHANGELOG.md">CHANGELOG</a>.</sub>
+  <sub>Latest: <b>v2.0.10</b> — see <a href="CHANGELOG.md">CHANGELOG</a>.</sub>
 </p>
 
 ---
@@ -54,7 +57,7 @@ $ curl -X POST http://127.0.0.1:9876/v1/transcribe \
 | **Concurrent sessions** | configurable pool | 1 | 1 | 1 | 1 | provider limits |
 | **Cost** | free | free | free | free | free | $0.006/min+ |
 
-> **Trade-off:** gigastt supports Russian only. If you need multilingual recognition, consider whisper.cpp or sherpa-onnx. If you need the best Russian accuracy running locally — gigastt is the only Rust-native option built on GigaAM v3, the current SOTA for Russian ASR. Trained on **700K+ hours** of Russian speech. WER measured on 993 Golos crowd-sourced samples (4991 words).
+> **Trade-off:** gigastt supports Russian only. If you need multilingual recognition, consider whisper.cpp or sherpa-onnx. If you need the best Russian accuracy running locally — gigastt is the only Rust-native option built on GigaAM v3, the current SOTA for Russian ASR. Trained on **700K+ hours** of Russian speech. WER measured on 9 994 Golos crowd-sourced samples (50 394 words).
 
 ## Who is this for?
 
@@ -257,7 +260,7 @@ Features are compile-time and mutually exclusive.
 
 ### INT8 Quantization
 
-Quantized encoder: 4x smaller, ~43% faster, 0% WER degradation (verified on 993 Golos samples / 4991 words). Auto-detected at runtime.
+Quantized encoder: 4x smaller, ~43% faster, 0% WER degradation (verified on 9 994 Golos samples / 50 394 words). Auto-detected at runtime.
 
 Since v0.9.0 quantization is always compiled in and auto-invoked on first `download` or `serve` — no feature flag and no manual steps needed. The `quantize` Cargo feature is retained as a no-op for backward compat.
 
@@ -395,7 +398,7 @@ gigastt quantize --force
 | **GPU** | _(integrated, via CoreML)_ | NVIDIA + CUDA 12+ (optional) |
 | **Disk** | ~1.5 GB | ~1.5 GB |
 | **RAM** | ~560 MB | ~560 MB |
-| **Rust** | 1.85+ | 1.85+ |
+| **Rust** | 1.87+ | 1.87+ |
 
 ## Security
 
@@ -439,10 +442,10 @@ Remote deployment (TLS + reverse proxy): see [`docs/deployment.md`](docs/deploym
 
 ## Testing
 
-163 unit tests (including property-based via proptest) + 35 e2e/load/soak tests + WER benchmark:
+171 unit tests (including property-based via proptest) + 33 e2e/load/soak tests + WER benchmark + 4 cargo-fuzz targets + 3 criterion micro-benchmarks:
 
 ```sh
-cargo test --workspace               # 163 unit tests (no model needed)
+cargo test --workspace               # 171 unit tests (no model needed)
 cargo clippy --workspace             # Lint (zero warnings)
 
 # E2E tests (require model, serial to avoid OOM)
@@ -452,6 +455,10 @@ cargo test -p gigastt --test e2e_rest --test e2e_ws --test e2e_errors --test e2e
 # Load & soak (local only)
 cargo test -p gigastt --test load_test -- --ignored
 cargo test -p gigastt --test soak_test -- --ignored
+
+# Fuzzing (nightly) & micro-benchmarks (no model needed)
+cargo +nightly fuzz run audio_decode    # also: protocol_parse, pcm16_framing, tokenizer
+cargo bench -p gigastt-core --features __internals
 ```
 
 ## Contributing

@@ -2,6 +2,7 @@
 name = "gigastt-core"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 readme = "README.md"
@@ -11,6 +12,9 @@ categories = ["multimedia::audio"]
 
 [lib]
 crate-type = ["rlib"]
+# The library's unit-test harness is not a benchmark; without this, plain
+# `cargo bench` tries to run it as one and chokes on criterion's CLI flags.
+bench = false
 
 [features]
 default = ["diarization"]
@@ -19,6 +23,11 @@ cuda = ["ort/cuda"]
 nnapi = ["ort/nnapi"]
 diarization = ["dep:polyvoice"]
 quantize = []
+# Private/unstable: exposes internal items (tokenizer module + synthetic
+# constructors) so the out-of-workspace `fuzz/` crate and criterion benches can
+# reach them without a model on disk. Double underscore = not a public API
+# surface; never enable in production builds.
+__internals = []
 
 [dependencies]
 ort = "2.0.0-rc.12"
@@ -47,3 +56,16 @@ prost-build = "0.14"
 [dev-dependencies]
 tempfile = "3"
 proptest = "1"
+criterion = "0.5"
+
+[[bench]]
+name = "mel"
+harness = false
+
+[[bench]]
+name = "resample"
+harness = false
+
+[[bench]]
+name = "tokenizer"
+harness = false

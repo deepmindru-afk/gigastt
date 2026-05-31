@@ -1,0 +1,54 @@
+[package]
+name = "gigastt-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+# Empty `[workspace]` table: keeps this crate OUT of the parent gigastt
+# workspace so `cargo build --workspace` (stable) never compiles the fuzz
+# targets, which require a nightly toolchain and the libfuzzer sanitizer
+# runtime. cargo-fuzz drives it directly via `cargo +nightly fuzz build`.
+[workspace]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+serde_json = "1"
+
+[dependencies.gigastt-core]
+path = "../crates/gigastt-core"
+# `__internals` exposes the private tokenizer module + synthetic constructors
+# so targets can exercise them without the 850 MB model on disk. Disable
+# default features (no diarization needed for fuzzing the pure-CPU paths).
+default-features = false
+features = ["__internals"]
+
+[[bin]]
+name = "audio_decode"
+path = "fuzz_targets/audio_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "protocol_parse"
+path = "fuzz_targets/protocol_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "pcm16_framing"
+path = "fuzz_targets/pcm16_framing.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "tokenizer"
+path = "fuzz_targets/tokenizer.rs"
+test = false
+doc = false
+bench = false
