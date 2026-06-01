@@ -419,7 +419,7 @@ mod tests {
             name: Some("small_weight".into()),
             dims: vec![16, 16],
             data_type: Some(FLOAT),
-            float_data: float_data,
+            float_data,
             ..Default::default()
         };
         let node = NodeProto {
@@ -472,7 +472,7 @@ mod tests {
             name: Some("shared_weight".into()),
             dims: vec![32, 32],
             data_type: Some(FLOAT),
-            float_data: float_data,
+            float_data,
             ..Default::default()
         };
         let node1 = NodeProto {

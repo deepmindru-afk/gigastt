@@ -6,3 +6,7 @@
 mis = "mis"
 # "unparseable" — accepted variant of "unparsable".
 unparseable = "unparseable"
+
+[default.extend-identifiers]
+# "hel\0lo" — intentional test string with embedded NUL byte.
+hel = "hel"

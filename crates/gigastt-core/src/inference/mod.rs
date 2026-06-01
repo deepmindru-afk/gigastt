@@ -1425,10 +1425,7 @@ mod tests {
     fn test_pool_checkout_blocking_closed() {
         let pool = Pool::<u32>::new(vec![]);
         pool.close();
-        assert!(matches!(
-            pool.checkout_blocking(),
-            Err(PoolError::Closed)
-        ));
+        assert!(matches!(pool.checkout_blocking(), Err(PoolError::Closed)));
     }
 
     #[test]

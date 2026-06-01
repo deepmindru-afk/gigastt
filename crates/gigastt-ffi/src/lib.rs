@@ -481,6 +481,51 @@ pub unsafe extern "C" fn gigastt_stream_free(stream: *mut GigasttStream) {
 mod tests {
     use super::*;
 
+    fn shared_test_engine() -> *mut GigasttEngine {
+        use std::sync::OnceLock;
+        struct SendPtr(*mut GigasttEngine);
+        // SAFETY: the pointer is written exactly once by `get_or_init` and then
+        // only read by test threads.  The underlying `GigasttEngine` is `Send`.
+        unsafe impl Send for SendPtr {}
+        unsafe impl Sync for SendPtr {}
+        static ENGINE: OnceLock<SendPtr> = OnceLock::new();
+        ENGINE
+            .get_or_init(|| {
+                let dir = CString::new(gigastt_core::model::default_model_dir()).unwrap();
+                let engine = unsafe { gigastt_engine_new(dir.as_ptr()) };
+                assert!(!engine.is_null(), "failed to load engine for ffi tests");
+                SendPtr(engine)
+            })
+            .0
+    }
+
+    fn generate_test_wav(duration_s: u32, sample_rate: u32) -> Vec<u8> {
+        let num_samples = sample_rate * duration_s;
+        let data_size = num_samples * 2;
+        let file_size = 44 + data_size;
+        let mut wav = Vec::with_capacity(file_size as usize);
+        wav.extend_from_slice(b"RIFF");
+        wav.extend_from_slice(&(file_size - 8).to_le_bytes());
+        wav.extend_from_slice(b"WAVE");
+        wav.extend_from_slice(b"fmt ");
+        wav.extend_from_slice(&16u32.to_le_bytes());
+        wav.extend_from_slice(&1u16.to_le_bytes());
+        wav.extend_from_slice(&1u16.to_le_bytes());
+        wav.extend_from_slice(&sample_rate.to_le_bytes());
+        wav.extend_from_slice(&(sample_rate * 2).to_le_bytes());
+        wav.extend_from_slice(&2u16.to_le_bytes());
+        wav.extend_from_slice(&16u16.to_le_bytes());
+        wav.extend_from_slice(b"data");
+        wav.extend_from_slice(&data_size.to_le_bytes());
+        for i in 0..num_samples {
+            let sample = (440.0_f64 * 2.0 * std::f64::consts::PI * i as f64 / sample_rate as f64)
+                .sin()
+                * 1000.0;
+            wav.extend_from_slice(&(sample as i16).to_le_bytes());
+        }
+        wav
+    }
+
     #[test]
     fn test_stream_new_null_engine() {
         let stream = unsafe { gigastt_stream_new(ptr::null_mut()) };
@@ -683,51 +728,4 @@ mod tests {
     fn test_string_free_null() {
         unsafe { gigastt_string_free(ptr::null_mut()) };
     }
-}
-
-#[cfg(test)]
-fn shared_test_engine() -> *mut GigasttEngine {
-    use std::sync::OnceLock;
-    struct SendPtr(*mut GigasttEngine);
-    // SAFETY: the pointer is written exactly once by `get_or_init` and then
-    // only read by test threads.  The underlying `GigasttEngine` is `Send`.
-    unsafe impl Send for SendPtr {}
-    unsafe impl Sync for SendPtr {}
-    static ENGINE: OnceLock<SendPtr> = OnceLock::new();
-    ENGINE
-        .get_or_init(|| {
-            let dir = CString::new(gigastt_core::model::default_model_dir()).unwrap();
-            let engine = unsafe { gigastt_engine_new(dir.as_ptr()) };
-            assert!(!engine.is_null(), "failed to load engine for ffi tests");
-            SendPtr(engine)
-        })
-        .0
-}
-
-#[cfg(test)]
-fn generate_test_wav(duration_s: u32, sample_rate: u32) -> Vec<u8> {
-    let num_samples = sample_rate * duration_s;
-    let data_size = num_samples * 2;
-    let file_size = 44 + data_size;
-    let mut wav = Vec::with_capacity(file_size as usize);
-    wav.extend_from_slice(b"RIFF");
-    wav.extend_from_slice(&(file_size - 8).to_le_bytes());
-    wav.extend_from_slice(b"WAVE");
-    wav.extend_from_slice(b"fmt ");
-    wav.extend_from_slice(&16u32.to_le_bytes());
-    wav.extend_from_slice(&1u16.to_le_bytes());
-    wav.extend_from_slice(&1u16.to_le_bytes());
-    wav.extend_from_slice(&sample_rate.to_le_bytes());
-    wav.extend_from_slice(&(sample_rate * 2).to_le_bytes());
-    wav.extend_from_slice(&2u16.to_le_bytes());
-    wav.extend_from_slice(&16u16.to_le_bytes());
-    wav.extend_from_slice(b"data");
-    wav.extend_from_slice(&data_size.to_le_bytes());
-    for i in 0..num_samples {
-        let sample =
-            (440.0_f64 * 2.0 * std::f64::consts::PI * i as f64 / sample_rate as f64).sin()
-                * 1000.0;
-        wav.extend_from_slice(&(sample as i16).to_le_bytes());
-    }
-    wav
 }

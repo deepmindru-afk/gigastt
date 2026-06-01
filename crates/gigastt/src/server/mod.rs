@@ -523,7 +523,10 @@ mod tests {
             }
         }
         let json = json_text(&FailingSerialize);
-        assert_eq!(json, r#"{"type":"error","message":"Internal serialization error","code":"internal"}"#);
+        assert_eq!(
+            json,
+            r#"{"type":"error","message":"Internal serialization error","code":"internal"}"#
+        );
     }
 
     #[tokio::test]

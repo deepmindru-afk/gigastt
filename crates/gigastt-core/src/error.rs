@@ -144,10 +144,7 @@ mod tests {
     fn test_display_model_load() {
         let e = GigasttError::ModelLoad {
             path: "encoder.onnx".into(),
-            source: Some(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "missing weights",
-            ))),
+            source: Some(Box::new(std::io::Error::other("missing weights"))),
         };
         assert!(e.to_string().contains("encoder.onnx"));
     }
@@ -155,10 +152,7 @@ mod tests {
     #[test]
     fn test_display_inference() {
         let e = GigasttError::Inference {
-            source: Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "decoder failed",
-            )),
+            source: Box::new(std::io::Error::other("decoder failed")),
         };
         assert_eq!(e.to_string(), "inference failed");
     }
@@ -195,7 +189,7 @@ mod tests {
         // Verify GigasttError works with ? in anyhow::Result contexts
         fn returns_anyhow() -> anyhow::Result<()> {
             Err(GigasttError::Inference {
-                source: Box::new(std::io::Error::new(std::io::ErrorKind::Other, "test")),
+                source: Box::new(std::io::Error::other("test")),
             })?;
             Ok(())
         }
