@@ -419,7 +419,10 @@ async fn test_ready_returns_ok() {
 async fn test_options_v1_models_returns_204() {
     let (port, shutdown) = common::start_server(&common::model_dir()).await;
     let resp = reqwest::Client::new()
-        .request(reqwest::Method::OPTIONS, format!("http://127.0.0.1:{port}/v1/models"))
+        .request(
+            reqwest::Method::OPTIONS,
+            format!("http://127.0.0.1:{port}/v1/models"),
+        )
         .send()
         .await
         .expect("OPTIONS /v1/models failed");

@@ -658,10 +658,7 @@ mod tests {
         let payload = b"wrong bytes";
         wiremock::Mock::given(wiremock::matchers::method("GET"))
             .and(wiremock::matchers::path("/model.onnx"))
-            .respond_with(
-                wiremock::ResponseTemplate::new(200)
-                    .set_body_bytes(payload.as_slice()),
-            )
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_bytes(payload.as_slice()))
             .mount(&server)
             .await;
 
@@ -670,14 +667,10 @@ mod tests {
         let url = format!("{}/model.onnx", server.uri());
         let wrong_hash = sha256_hex(b"different bytes");
 
-        let err = stream_to_partial_then_finalize(
-            &url,
-            &final_path,
-            Some(&wrong_hash),
-            "model.onnx",
-        )
-        .await
-        .expect_err("checksum mismatch should fail");
+        let err =
+            stream_to_partial_then_finalize(&url, &final_path, Some(&wrong_hash), "model.onnx")
+                .await
+                .expect_err("checksum mismatch should fail");
         let msg = format!("{err}");
         assert!(
             msg.contains("SHA-256 mismatch"),

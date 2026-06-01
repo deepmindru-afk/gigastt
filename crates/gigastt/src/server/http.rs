@@ -636,7 +636,12 @@ mod tests {
         let (parts, body) = resp.into_parts();
         assert_eq!(parts.status, StatusCode::SERVICE_UNAVAILABLE);
         assert_eq!(
-            parts.headers.get(header::RETRY_AFTER).unwrap().to_str().unwrap(),
+            parts
+                .headers
+                .get(header::RETRY_AFTER)
+                .unwrap()
+                .to_str()
+                .unwrap(),
             pool_retry_after_secs(&limits).to_string()
         );
         let bytes = axum::body::to_bytes(body, 1024).await.unwrap();
@@ -849,82 +854,69 @@ mod tests {
             Err(_) => panic!("transcribe_stream with metrics failed"),
         }
     }
-}
 
-#[cfg(test)]
-fn test_engine() -> Arc<Engine> {
-    use std::sync::OnceLock;
-    static ENGINE: OnceLock<Arc<Engine>> = OnceLock::new();
-    ENGINE
-        .get_or_init(|| {
-            Arc::new(
-                Engine::load_with_pool_size(
-                    &gigastt_core::model::default_model_dir(),
-                    1,
+    fn test_engine() -> Arc<Engine> {
+        use std::sync::OnceLock;
+        static ENGINE: OnceLock<Arc<Engine>> = OnceLock::new();
+        ENGINE
+            .get_or_init(|| {
+                Arc::new(
+                    Engine::load_with_pool_size(&gigastt_core::model::default_model_dir(), 1)
+                        .unwrap(),
                 )
-                .unwrap(),
-            )
-        })
-        .clone()
-}
-
-#[cfg(test)]
-fn fresh_engine() -> Arc<Engine> {
-    Arc::new(
-        Engine::load_with_pool_size(
-            &gigastt_core::model::default_model_dir(),
-            1,
-        )
-        .unwrap(),
-    )
-}
-
-#[cfg(test)]
-fn minimal_wav() -> Bytes {
-    let data_size = 4u32;
-    let file_size = 44 + data_size - 8;
-    let mut wav = vec![];
-    wav.extend_from_slice(b"RIFF");
-    wav.extend_from_slice(&file_size.to_le_bytes());
-    wav.extend_from_slice(b"WAVE");
-    wav.extend_from_slice(b"fmt ");
-    wav.extend_from_slice(&16u32.to_le_bytes());
-    wav.extend_from_slice(&1u16.to_le_bytes());
-    wav.extend_from_slice(&1u16.to_le_bytes());
-    wav.extend_from_slice(&16000u32.to_le_bytes());
-    wav.extend_from_slice(&(16000u32 * 2).to_le_bytes());
-    wav.extend_from_slice(&2u16.to_le_bytes());
-    wav.extend_from_slice(&16u16.to_le_bytes());
-    wav.extend_from_slice(b"data");
-    wav.extend_from_slice(&data_size.to_le_bytes());
-    wav.extend_from_slice(&0i16.to_le_bytes());
-    wav.extend_from_slice(&0i16.to_le_bytes());
-    Bytes::from(wav)
-}
-
-#[cfg(test)]
-fn short_wav() -> Bytes {
-    let sample_rate = 16000u32;
-    let duration_s = 0.1f32;
-    let num_samples = (sample_rate as f32 * duration_s) as u32;
-    let data_size = num_samples * 2;
-    let file_size = 44 + data_size - 8;
-    let mut wav = vec![];
-    wav.extend_from_slice(b"RIFF");
-    wav.extend_from_slice(&file_size.to_le_bytes());
-    wav.extend_from_slice(b"WAVE");
-    wav.extend_from_slice(b"fmt ");
-    wav.extend_from_slice(&16u32.to_le_bytes());
-    wav.extend_from_slice(&1u16.to_le_bytes());
-    wav.extend_from_slice(&1u16.to_le_bytes());
-    wav.extend_from_slice(&sample_rate.to_le_bytes());
-    wav.extend_from_slice(&(sample_rate * 2).to_le_bytes());
-    wav.extend_from_slice(&2u16.to_le_bytes());
-    wav.extend_from_slice(&16u16.to_le_bytes());
-    wav.extend_from_slice(b"data");
-    wav.extend_from_slice(&data_size.to_le_bytes());
-    for _ in 0..num_samples {
-        wav.extend_from_slice(&0i16.to_le_bytes());
+            })
+            .clone()
     }
-    Bytes::from(wav)
+
+    fn fresh_engine() -> Arc<Engine> {
+        Arc::new(Engine::load_with_pool_size(&gigastt_core::model::default_model_dir(), 1).unwrap())
+    }
+
+    fn minimal_wav() -> Bytes {
+        let data_size = 4u32;
+        let file_size = 44 + data_size - 8;
+        let mut wav = vec![];
+        wav.extend_from_slice(b"RIFF");
+        wav.extend_from_slice(&file_size.to_le_bytes());
+        wav.extend_from_slice(b"WAVE");
+        wav.extend_from_slice(b"fmt ");
+        wav.extend_from_slice(&16u32.to_le_bytes());
+        wav.extend_from_slice(&1u16.to_le_bytes());
+        wav.extend_from_slice(&1u16.to_le_bytes());
+        wav.extend_from_slice(&16000u32.to_le_bytes());
+        wav.extend_from_slice(&(16000u32 * 2).to_le_bytes());
+        wav.extend_from_slice(&2u16.to_le_bytes());
+        wav.extend_from_slice(&16u16.to_le_bytes());
+        wav.extend_from_slice(b"data");
+        wav.extend_from_slice(&data_size.to_le_bytes());
+        wav.extend_from_slice(&0i16.to_le_bytes());
+        wav.extend_from_slice(&0i16.to_le_bytes());
+        Bytes::from(wav)
+    }
+
+    fn short_wav() -> Bytes {
+        let sample_rate = 16000u32;
+        let duration_s = 0.1f32;
+        let num_samples = (sample_rate as f32 * duration_s) as u32;
+        let data_size = num_samples * 2;
+        let file_size = 44 + data_size - 8;
+        let mut wav = vec![];
+        wav.extend_from_slice(b"RIFF");
+        wav.extend_from_slice(&file_size.to_le_bytes());
+        wav.extend_from_slice(b"WAVE");
+        wav.extend_from_slice(b"fmt ");
+        wav.extend_from_slice(&16u32.to_le_bytes());
+        wav.extend_from_slice(&1u16.to_le_bytes());
+        wav.extend_from_slice(&1u16.to_le_bytes());
+        wav.extend_from_slice(&sample_rate.to_le_bytes());
+        wav.extend_from_slice(&(sample_rate * 2).to_le_bytes());
+        wav.extend_from_slice(&2u16.to_le_bytes());
+        wav.extend_from_slice(&16u16.to_le_bytes());
+        wav.extend_from_slice(b"data");
+        wav.extend_from_slice(&data_size.to_le_bytes());
+        for _ in 0..num_samples {
+            wav.extend_from_slice(&0i16.to_le_bytes());
+        }
+        Bytes::from(wav)
+    }
 }

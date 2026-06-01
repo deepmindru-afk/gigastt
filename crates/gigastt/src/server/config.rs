@@ -402,8 +402,10 @@ mod tests {
 
     #[test]
     fn test_pool_retry_after_ms_saturation() {
-        let mut limits = RuntimeLimits::default();
-        limits.pool_checkout_timeout_secs = u32::MAX as u64;
+        let limits = RuntimeLimits {
+            pool_checkout_timeout_secs: u32::MAX as u64,
+            ..Default::default()
+        };
         let ms = pool_retry_after_ms(&limits);
         assert_eq!(ms, u32::MAX);
     }

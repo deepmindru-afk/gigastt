@@ -160,6 +160,7 @@ enum Commands {
     },
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_limits(
     config_path: Option<&str>,
     idle_timeout_secs: Option<u64>,
@@ -206,6 +207,7 @@ fn build_limits(
     Ok(limits)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_server_config(
     port: u16,
     host: String,
@@ -624,7 +626,8 @@ mod tests {
 
     #[test]
     fn test_build_limits_allows_zero_rpm() {
-        let limits = build_limits(None, None, None, None, Some(0), Some(0), None, None, None).unwrap();
+        let limits =
+            build_limits(None, None, None, None, Some(0), Some(0), None, None, None).unwrap();
         assert_eq!(limits.rate_limit_per_minute, 0);
         assert_eq!(limits.rate_limit_burst, 0);
     }
@@ -648,7 +651,10 @@ mod tests {
         assert!(!cfg.origin_policy.allow_any);
         assert!(cfg.metrics_enabled);
         assert!(cfg.trust_proxy);
-        assert_eq!(cfg.config_path, Some(std::path::PathBuf::from("/tmp/config.toml")));
+        assert_eq!(
+            cfg.config_path,
+            Some(std::path::PathBuf::from("/tmp/config.toml"))
+        );
         assert_eq!(cfg.limits.idle_timeout_secs, limits.idle_timeout_secs);
     }
 }

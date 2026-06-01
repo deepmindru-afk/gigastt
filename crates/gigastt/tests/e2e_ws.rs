@@ -424,9 +424,11 @@ async fn test_ws_empty_frame_spam_closes_connection() {
 
     // Send many empty binary frames to trigger the spam limit.
     for _ in 0..1002 {
-        sink.send(tokio_tungstenite::tungstenite::Message::Binary(vec![].into()))
-            .await
-            .expect("send empty frame");
+        sink.send(tokio_tungstenite::tungstenite::Message::Binary(
+            vec![].into(),
+        ))
+        .await
+        .expect("send empty frame");
     }
 
     // Server should close with an error or close frame.
