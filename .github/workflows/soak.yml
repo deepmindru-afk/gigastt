@@ -26,11 +26,11 @@ jobs:
     name: Soak (${{ github.event.inputs.duration_secs || 300 }}s)
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-      - uses: actions/cache@v5
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -42,7 +42,7 @@ jobs:
 
       - name: Cache model
         id: cache-model
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
           path: ~/.gigastt/models
           key: gigastt-model-v3-onnx-${{ hashFiles('crates/gigastt-core/src/model/mod.rs') }}
@@ -64,7 +64,7 @@ jobs:
 
       - name: Upload test artefacts
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: soak-logs-${{ github.run_id }}
           path: |
@@ -80,14 +80,14 @@ jobs:
     name: Continuous Fuzz (60s/target)
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-fuzz
-      - uses: actions/cache@v5
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -111,7 +111,7 @@ jobs:
 
       - name: Upload crash artifacts on failure
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: fuzz-artifacts-${{ github.run_id }}
           path: fuzz/artifacts/

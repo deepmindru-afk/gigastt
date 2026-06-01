@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Format
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
@@ -24,30 +24,30 @@ jobs:
     runs-on: ubuntu-latest
     name: Clippy
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-      - uses: actions/cache@v5
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - run: cargo clippy --workspace -- -D warnings -A dead_code
+      - run: cargo clippy --workspace --all-targets -- -D warnings -A dead_code
 
   unit-tests:
     runs-on: ubuntu-latest
     name: Unit Tests
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-      - uses: actions/cache@v5
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -55,18 +55,20 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - run: cargo test --workspace
-      - uses: taiki-e/install-action@nextest
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
       - run: cargo nextest run --workspace --retries 2
 
   build-coreml:
     runs-on: macos-14
     name: Build (CoreML)
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Install protoc
         run: brew install protobuf
-      - uses: actions/cache@v5
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -79,11 +81,11 @@ jobs:
     runs-on: ubuntu-latest
     name: Build (CUDA)
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-      - uses: actions/cache@v5
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -96,11 +98,11 @@ jobs:
     runs-on: ubuntu-latest
     name: Build (Diarization)
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-      - uses: actions/cache@v5
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -115,11 +117,11 @@ jobs:
     runs-on: ubuntu-latest
     name: E2E Tests
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-      - uses: actions/cache@v5
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -129,7 +131,7 @@ jobs:
 
       - name: Cache model
         id: cache-model
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
           path: ~/.gigastt/models
           key: gigastt-model-v3-onnx-${{ hashFiles('crates/gigastt-core/src/model/mod.rs') }}
@@ -148,11 +150,11 @@ jobs:
     runs-on: ubuntu-latest
     name: WER Benchmark
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-      - uses: actions/cache@v5
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -162,7 +164,7 @@ jobs:
 
       - name: Cache model
         id: cache-model
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
           path: ~/.gigastt/models
           key: gigastt-model-v3-onnx-${{ hashFiles('crates/gigastt-core/src/model/mod.rs') }}
@@ -191,7 +193,7 @@ jobs:
 
       - name: Upload benchmark results
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: benchmark-results
           path: benchmark_output.txt
@@ -201,11 +203,11 @@ jobs:
     runs-on: ubuntu-latest
     name: Semver Checks
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-      - uses: actions/cache@v5
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -218,12 +220,14 @@ jobs:
     runs-on: ubuntu-latest
     name: Coverage
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-      - uses: taiki-e/install-action@cargo-tarpaulin
-      - uses: actions/cache@v5
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-tarpaulin
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -237,7 +241,7 @@ jobs:
         # inference/server paths are exercised by the --ignored e2e suite,
         # which has no model here). --fail-under guards against regressions.
         run: cargo tarpaulin --workspace --out xml --timeout 120 --fail-under 18 --skip-clean
-      - uses: codecov/codecov-action@v6
+      - uses: codecov/codecov-action@v4
         with:
           files: ./cobertura.xml
           fail_ci_if_error: false
@@ -247,7 +251,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Security Audit
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       # `rustsec/audit-check` ships a prebuilt cargo-audit, saving the ~90 s
       # `cargo install --locked` rebuild on every PR run.
       - uses: rustsec/audit-check@v2
@@ -258,7 +262,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Cargo Deny
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           # Default `check` covers licenses + advisories + bans + sources.
@@ -271,7 +275,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Typos
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: crate-ci/typos@v1
 
   dependency-review:
@@ -284,7 +288,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - uses: actions/dependency-review-action@v4
@@ -299,11 +303,11 @@ jobs:
     runs-on: ubuntu-latest
     name: Doc Build
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-      - uses: actions/cache@v5
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -319,12 +323,14 @@ jobs:
     runs-on: ubuntu-latest
     name: Feature Powerset
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-      - uses: taiki-e/install-action@cargo-hack
-      - uses: actions/cache@v5
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -339,11 +345,11 @@ jobs:
     runs-on: ubuntu-latest
     name: Publish Dry Run
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-      - uses: actions/cache@v5
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -356,12 +362,12 @@ jobs:
     runs-on: ubuntu-latest
     name: MSRV (1.87)
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       # MSRV floor: edition 2024 needs >=1.85, is_multiple_of needs >=1.87.
       - uses: dtolnay/rust-toolchain@1.87
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-      - uses: actions/cache@v5
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -374,14 +380,14 @@ jobs:
     runs-on: ubuntu-latest
     name: Fuzz Build
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-fuzz
-      - uses: actions/cache@v5
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -405,13 +411,13 @@ jobs:
     runs-on: ubuntu-latest
     name: Benchmarks (regression gate)
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-      - uses: actions/cache@v5
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -469,7 +475,7 @@ jobs:
 
       - name: Upload criterion report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: criterion-report
           path: target/criterion/
