@@ -248,6 +248,7 @@ java -jar client.jar recording.wav
 |---|---|---|
 | macOS ARM64 (M1-M4) | `--features coreml` | CoreML + Neural Engine |
 | Linux x86_64 + NVIDIA | `--features cuda` | CUDA 12+ |
+| Android / ARM64 | `--features nnapi` | NNAPI (NPU/DSP) |
 | Any platform | _(default)_ | CPU |
 
 ```sh
@@ -256,7 +257,7 @@ cargo build --release --features cuda     # Linux: NVIDIA CUDA 12+
 cargo build --release                     # CPU (any platform)
 ```
 
-Features are compile-time and mutually exclusive.
+`coreml` and `cuda` are mutually exclusive; `nnapi` can be combined with either.
 
 ### INT8 Quantization
 
@@ -442,11 +443,11 @@ Remote deployment (TLS + reverse proxy): see [`docs/deployment.md`](docs/deploym
 
 ## Testing
 
-171 unit tests (including property-based via proptest) + 33 e2e/load/soak tests + WER benchmark + 4 cargo-fuzz targets + 3 criterion micro-benchmarks:
+240+ unit tests (including property-based via proptest) + 33 e2e/load/soak tests + WER benchmark + 4 cargo-fuzz targets + 3 criterion micro-benchmarks:
 
 ```sh
-cargo test --workspace               # 171 unit tests (no model needed)
-cargo clippy --workspace             # Lint (zero warnings)
+cargo test --workspace               # 240+ unit tests (no model needed)
+cargo clippy --workspace --all-targets  # Lint (zero warnings)
 
 # E2E tests (require model, serial to avoid OOM)
 cargo run -p gigastt -- download

@@ -14,11 +14,11 @@ jobs:
     runs-on: ubuntu-latest
     name: Check FFI (lean build)
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-      - uses: actions/cache@v5
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -31,13 +31,13 @@ jobs:
     runs-on: ubuntu-latest
     name: Build Android (arm64)
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-      - uses: actions/cache@v5
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -56,7 +56,7 @@ jobs:
             build --release -p gigastt-ffi
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: libgigastt_ffi-arm64
           path: target/android/arm64-v8a/libgigastt_ffi.so

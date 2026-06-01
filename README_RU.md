@@ -433,7 +433,7 @@ gigastt quantize --force
 
 ```sh
 cargo test --workspace               # 163 юнит-теста (модель не нужна)
-cargo clippy --workspace             # Линтер (ноль предупреждений)
+cargo clippy --workspace --all-targets  # Линтер (ноль предупреждений)
 
 # E2E-тесты (требуется модель, последовательно во избежание OOM)
 cargo run -p gigastt -- download
