@@ -649,4 +649,5 @@ mod tests {
         let b = Burst::new(5).unwrap();
         assert_eq!(b.get(), 5);
     }
+
 }

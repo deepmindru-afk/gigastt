@@ -399,4 +399,54 @@ mod tests {
             OriginVerdict::AllowedNoEcho
         ));
     }
+
+    #[test]
+    fn test_pool_retry_after_ms_saturation() {
+        let mut limits = RuntimeLimits::default();
+        limits.pool_checkout_timeout_secs = u32::MAX as u64;
+        let ms = pool_retry_after_ms(&limits);
+        assert_eq!(ms, u32::MAX);
+    }
+
+    #[test]
+    fn test_load_config_file_not_found() {
+        let result = load_config_file(std::path::Path::new("/nonexistent/config.toml"));
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("Failed to read config file"));
+    }
+
+    #[test]
+    fn test_load_config_file_bad_toml() {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(tmp.path(), b"not valid toml {{{").unwrap();
+        let result = load_config_file(tmp.path());
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("Failed to parse config file"));
+    }
+
+    #[test]
+    fn test_load_config_file_valid() {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(
+            tmp.path(),
+            b"idle_timeout_secs = 123\nws_frame_max_bytes = 1024\n",
+        )
+        .unwrap();
+        let limits = load_config_file(tmp.path()).unwrap();
+        assert_eq!(limits.idle_timeout_secs, 123);
+        assert_eq!(limits.ws_frame_max_bytes, 1024);
+        assert_eq!(limits.max_session_secs, 3600);
+    }
+
+    #[test]
+    fn test_server_config_local_defaults() {
+        let cfg = ServerConfig::local(9876);
+        assert_eq!(cfg.port, 9876);
+        assert_eq!(cfg.host, "127.0.0.1");
+        assert!(!cfg.metrics_enabled);
+        assert!(!cfg.trust_proxy);
+        assert!(cfg.config_path.is_none());
+    }
 }

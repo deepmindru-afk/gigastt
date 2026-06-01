@@ -335,4 +335,197 @@ mod tests {
         assert_eq!(g.node.len(), 1);
         assert_eq!(g.node[0].op_type(), "Identity");
     }
+
+    #[test]
+    fn test_extract_float_data_raw_misaligned() {
+        let tensor = TensorProto {
+            name: Some("misaligned".into()),
+            raw_data: Some(vec![0x01, 0x02, 0x03]),
+            ..Default::default()
+        };
+        let err = extract_float_data(&tensor).unwrap_err().to_string();
+        assert!(
+            err.contains("not aligned to 4 bytes"),
+            "Error should mention alignment: {err}"
+        );
+    }
+
+    #[test]
+    fn test_quantize_model_matmul_end_to_end() {
+        let float_data: Vec<f32> = (0..1024).map(|i| i as f32 * 0.001).collect();
+        let weight = TensorProto {
+            name: Some("weight".into()),
+            dims: vec![32, 32],
+            data_type: Some(FLOAT),
+            float_data: float_data.clone(),
+            ..Default::default()
+        };
+        let node = NodeProto {
+            op_type: Some("MatMul".into()),
+            input: vec!["input".into(), "weight".into()],
+            output: vec!["output".into()],
+            ..Default::default()
+        };
+        let graph = crate::onnx_proto::GraphProto {
+            name: Some("test".into()),
+            initializer: vec![weight],
+            node: vec![node],
+            ..Default::default()
+        };
+        let model = ModelProto {
+            ir_version: Some(8),
+            graph: Some(graph),
+            ..Default::default()
+        };
+
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let input_path = tmp_dir.path().join("input.onnx");
+        let output_path = tmp_dir.path().join("output.onnx");
+
+        let mut bytes = Vec::new();
+        model.encode(&mut bytes).unwrap();
+        std::fs::write(&input_path, &bytes).unwrap();
+
+        quantize_model(&input_path, &output_path).unwrap();
+
+        let out_bytes = std::fs::read(&output_path).unwrap();
+        let out_model = ModelProto::decode(&out_bytes[..]).unwrap();
+        let g = out_model.graph.as_ref().unwrap();
+
+        let dq_nodes: Vec<_> = g
+            .node
+            .iter()
+            .filter(|n| n.op_type() == "DequantizeLinear")
+            .collect();
+        assert_eq!(dq_nodes.len(), 1, "Expected one DequantizeLinear node");
+
+        let init_names: Vec<_> = g.initializer.iter().map(|t| t.name()).collect();
+        assert!(
+            !init_names.contains(&"weight"),
+            "Original float weight should be removed"
+        );
+        assert!(init_names.contains(&"weight_quantized"));
+        assert!(init_names.contains(&"weight_scale"));
+        assert!(init_names.contains(&"weight_zero_point"));
+
+        let matmul = g.node.iter().find(|n| n.op_type() == "MatMul").unwrap();
+        assert_eq!(matmul.input[1], "weight_dequantized");
+    }
+
+    #[test]
+    fn test_quantize_model_small_tensor_skipped() {
+        let float_data: Vec<f32> = (0..256).map(|i| i as f32 * 0.001).collect();
+        let weight = TensorProto {
+            name: Some("small_weight".into()),
+            dims: vec![16, 16],
+            data_type: Some(FLOAT),
+            float_data: float_data,
+            ..Default::default()
+        };
+        let node = NodeProto {
+            op_type: Some("MatMul".into()),
+            input: vec!["input".into(), "small_weight".into()],
+            output: vec!["output".into()],
+            ..Default::default()
+        };
+        let graph = crate::onnx_proto::GraphProto {
+            name: Some("test".into()),
+            initializer: vec![weight],
+            node: vec![node],
+            ..Default::default()
+        };
+        let model = ModelProto {
+            ir_version: Some(8),
+            graph: Some(graph),
+            ..Default::default()
+        };
+
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let input_path = tmp_dir.path().join("input.onnx");
+        let output_path = tmp_dir.path().join("output.onnx");
+
+        let mut bytes = Vec::new();
+        model.encode(&mut bytes).unwrap();
+        std::fs::write(&input_path, &bytes).unwrap();
+
+        quantize_model(&input_path, &output_path).unwrap();
+
+        let out_bytes = std::fs::read(&output_path).unwrap();
+        let out_model = ModelProto::decode(&out_bytes[..]).unwrap();
+        let g = out_model.graph.as_ref().unwrap();
+
+        let dq_count = g
+            .node
+            .iter()
+            .filter(|n| n.op_type() == "DequantizeLinear")
+            .count();
+        assert_eq!(dq_count, 0, "Small tensor should be skipped");
+
+        let init_names: Vec<_> = g.initializer.iter().map(|t| t.name()).collect();
+        assert!(init_names.contains(&"small_weight"));
+    }
+
+    #[test]
+    fn test_quantize_model_shared_weights() {
+        let float_data: Vec<f32> = (0..1024).map(|i| i as f32 * 0.001).collect();
+        let weight = TensorProto {
+            name: Some("shared_weight".into()),
+            dims: vec![32, 32],
+            data_type: Some(FLOAT),
+            float_data: float_data,
+            ..Default::default()
+        };
+        let node1 = NodeProto {
+            op_type: Some("MatMul".into()),
+            input: vec!["a".into(), "shared_weight".into()],
+            output: vec!["b".into()],
+            ..Default::default()
+        };
+        let node2 = NodeProto {
+            op_type: Some("MatMul".into()),
+            input: vec!["c".into(), "shared_weight".into()],
+            output: vec!["d".into()],
+            ..Default::default()
+        };
+        let graph = crate::onnx_proto::GraphProto {
+            name: Some("test".into()),
+            initializer: vec![weight],
+            node: vec![node1, node2],
+            ..Default::default()
+        };
+        let model = ModelProto {
+            ir_version: Some(8),
+            graph: Some(graph),
+            ..Default::default()
+        };
+
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let input_path = tmp_dir.path().join("input.onnx");
+        let output_path = tmp_dir.path().join("output.onnx");
+
+        let mut bytes = Vec::new();
+        model.encode(&mut bytes).unwrap();
+        std::fs::write(&input_path, &bytes).unwrap();
+
+        quantize_model(&input_path, &output_path).unwrap();
+
+        let out_bytes = std::fs::read(&output_path).unwrap();
+        let out_model = ModelProto::decode(&out_bytes[..]).unwrap();
+        let g = out_model.graph.as_ref().unwrap();
+
+        let dq_count = g
+            .node
+            .iter()
+            .filter(|n| n.op_type() == "DequantizeLinear")
+            .count();
+        assert_eq!(
+            dq_count, 1,
+            "Shared weight should produce a single DequantizeLinear node"
+        );
+
+        let matmul_nodes: Vec<_> = g.node.iter().filter(|n| n.op_type() == "MatMul").collect();
+        assert_eq!(matmul_nodes.len(), 2);
+        assert_eq!(matmul_nodes[0].input[1], "shared_weight_dequantized");
+        assert_eq!(matmul_nodes[1].input[1], "shared_weight_dequantized");
+    }
 }

@@ -14,7 +14,6 @@ use tokio_tungstenite::tungstenite::Message;
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-#[ignore] // Requires model download
 async fn test_ws_connect_receives_ready() {
     let model_dir = common::model_dir();
     let (port, _shutdown) = common::start_server(&model_dir).await;
@@ -53,7 +52,6 @@ async fn test_ws_connect_receives_ready() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-#[ignore] // Requires model download
 async fn test_ws_audio_produces_final() {
     let model_dir = common::model_dir();
     let (port, _shutdown) = common::start_server(&model_dir).await;
@@ -106,7 +104,6 @@ async fn test_ws_audio_produces_final() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-#[ignore] // Requires model download
 async fn test_ws_stop_without_audio() {
     let model_dir = common::model_dir();
     let (port, _shutdown) = common::start_server(&model_dir).await;
@@ -140,7 +137,6 @@ async fn test_ws_stop_without_audio() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-#[ignore] // Requires model download
 async fn test_ws_configure_valid_sample_rate() {
     let model_dir = common::model_dir();
     let (port, _shutdown) = common::start_server(&model_dir).await;
@@ -192,7 +188,6 @@ async fn test_ws_configure_valid_sample_rate() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-#[ignore] // Requires model download
 async fn test_ws_configure_invalid_sample_rate() {
     let model_dir = common::model_dir();
     let (port, _shutdown) = common::start_server(&model_dir).await;
@@ -226,7 +221,6 @@ async fn test_ws_configure_invalid_sample_rate() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-#[ignore] // Requires model download
 async fn test_ws_configure_after_audio() {
     let model_dir = common::model_dir();
     let (port, _shutdown) = common::start_server(&model_dir).await;
@@ -265,7 +259,6 @@ async fn test_ws_configure_after_audio() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-#[ignore] // Requires model download
 async fn test_ws_malformed_json() {
     let model_dir = common::model_dir();
     let (port, _shutdown) = common::start_server(&model_dir).await;
@@ -309,7 +302,6 @@ async fn test_ws_malformed_json() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-#[ignore] // Requires model download
 async fn test_ws_client_disconnect_midstream() {
     let model_dir = common::model_dir();
     let (port, _shutdown) = common::start_server(&model_dir).await;
@@ -338,7 +330,6 @@ async fn test_ws_client_disconnect_midstream() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-#[ignore] // Requires model download
 async fn test_ws_concurrent_4_clients() {
     let model_dir = common::model_dir();
     let (port, _shutdown) = common::start_server(&model_dir).await;
@@ -397,4 +388,94 @@ async fn test_ws_concurrent_4_clients() {
             .expect("client task panicked");
         assert!(client_id < 4);
     }
+}
+
+#[tokio::test]
+async fn test_ws_empty_frame_spam_closes_connection() {
+    let model_dir = common::model_dir();
+    let (port, _shutdown) = common::start_server(&model_dir).await;
+
+    let (mut sink, mut stream) = {
+        let (ws, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/v1/ws"))
+            .await
+            .expect("WS connect failed");
+        ws.split()
+    };
+
+    // Receive Ready
+    let msg = tokio::time::timeout(Duration::from_secs(5), stream.next())
+        .await
+        .expect("timeout")
+        .expect("stream ended")
+        .expect("ws error");
+    let text = msg.into_text().unwrap();
+    let v: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(v["type"], "ready");
+
+    // Send many empty binary frames to trigger the spam limit.
+    for _ in 0..1002 {
+        sink.send(tokio_tungstenite::tungstenite::Message::Binary(vec![].into()))
+            .await
+            .expect("send empty frame");
+    }
+
+    // Server should close with an error or close frame.
+    let msg = tokio::time::timeout(Duration::from_secs(5), stream.next())
+        .await
+        .expect("timeout waiting for error/close");
+
+    match msg {
+        Some(Ok(tokio_tungstenite::tungstenite::Message::Text(text))) => {
+            let v: serde_json::Value = serde_json::from_str(&text).unwrap();
+            assert_eq!(v["type"], "error");
+            assert_eq!(v["code"], "policy_violation");
+        }
+        Some(Ok(tokio_tungstenite::tungstenite::Message::Close(_))) => {}
+        other => panic!("Expected error or close, got: {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn test_ws_configure_protocol_version_mismatch() {
+    let model_dir = common::model_dir();
+    let (port, _shutdown) = common::start_server(&model_dir).await;
+
+    let (mut sink, mut stream) = {
+        let (ws, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/v1/ws"))
+            .await
+            .expect("WS connect failed");
+        ws.split()
+    };
+
+    // Receive Ready
+    let msg = tokio::time::timeout(Duration::from_secs(5), stream.next())
+        .await
+        .expect("timeout")
+        .expect("stream ended")
+        .expect("ws error");
+    let text = msg.into_text().unwrap();
+    let v: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(v["type"], "ready");
+
+    // Configure with an unsupported protocol version
+    sink.send(Message::Text(
+        serde_json::to_string(&serde_json::json!({
+            "type": "configure",
+            "protocol_version": "0.1",
+        }))
+        .unwrap()
+        .into(),
+    ))
+    .await
+    .expect("send configure");
+
+    let msg = tokio::time::timeout(Duration::from_secs(5), stream.next())
+        .await
+        .expect("timeout waiting for protocol version error")
+        .expect("stream ended")
+        .expect("ws error");
+    let text = msg.into_text().unwrap();
+    let v: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(v["type"], "error");
+    assert_eq!(v["code"], "unsupported_protocol_version");
 }

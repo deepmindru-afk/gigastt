@@ -1400,6 +1400,80 @@ mod tests {
         assert_eq!(state.prev_token, 42);
     }
 
+    #[test]
+    fn test_feature_extractor_default() {
+        let _fe = FeatureExtractor::default();
+    }
+
+    #[test]
+    fn test_transcript_assembler_default() {
+        let ta = TranscriptAssembler::default();
+        assert!(ta.text.is_empty());
+        assert!(ta.words.is_empty());
+    }
+
+    #[test]
+    fn test_pool_checkout_blocking_fast_path() {
+        let pool = Pool::new(vec![42u32]);
+        let guard = pool.checkout_blocking().expect("checkout_blocking");
+        assert_eq!(*guard, 42);
+        drop(guard);
+        assert_eq!(pool.available(), 1);
+    }
+
+    #[test]
+    fn test_pool_checkout_blocking_closed() {
+        let pool = Pool::<u32>::new(vec![]);
+        pool.close();
+        assert!(matches!(
+            pool.checkout_blocking(),
+            Err(PoolError::Closed)
+        ));
+    }
+
+    #[test]
+    fn test_pool_checkout_blocking_slow_path() {
+        let pool = std::sync::Arc::new(Pool::new(vec![42u32]));
+        let primary = pool.checkout_blocking().unwrap();
+
+        let handle = std::thread::spawn({
+            let pool = pool.clone();
+            move || pool.checkout_blocking()
+        });
+
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        drop(primary);
+
+        let guard = handle.join().expect("join").expect("checkout");
+        assert_eq!(*guard, 42);
+        drop(guard);
+        assert_eq!(pool.available(), 1);
+    }
+
+    #[test]
+    fn test_pool_error_display() {
+        assert_eq!(format!("{}", PoolError::Closed), "session pool is closed");
+    }
+
+    #[test]
+    fn test_ort_err() {
+        let e = ort_err("test ort error");
+        assert_eq!(format!("{e}"), "test ort error");
+    }
+
+    #[test]
+    fn test_engine_load_missing_dir() {
+        let result = Engine::load_with_pool_size("/nonexistent/path/for/tests", 1);
+        assert!(matches!(result, Err(GigasttError::ModelLoad { .. })));
+    }
+
+    #[test]
+    fn test_engine_load_empty_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let result = Engine::load_with_pool_size(dir.path().to_str().unwrap(), 1);
+        assert!(matches!(result, Err(GigasttError::ModelLoad { .. })));
+    }
+
     // ---- Pool tests (B.7) ---------------------------------------------------
     //
     // These exercise `Pool<T>` with synthetic items so the contract is
@@ -1690,5 +1764,69 @@ mod tests {
             "item returned after skipping 3 dead waiters"
         );
         assert_eq!(pool.waiters(), 0);
+    }
+
+    #[test]
+    fn test_transcript_assembler_append_and_finalize() {
+        let mut asm = TranscriptAssembler::new();
+        assert!(asm.is_empty());
+        asm.append(vec![
+            WordInfo {
+                word: "hello".into(),
+                start: 0.0,
+                end: 0.5,
+                confidence: 0.9,
+                speaker: None,
+            },
+            WordInfo {
+                word: "world".into(),
+                start: 0.6,
+                end: 1.0,
+                confidence: 0.85,
+                speaker: None,
+            },
+        ]);
+        assert!(!asm.is_empty());
+        let seg = asm.finalize(1.0);
+        assert_eq!(seg.text, "hello world");
+        assert_eq!(seg.words.len(), 2);
+        assert!(seg.is_final);
+        assert_eq!(seg.timestamp, 1.0);
+        // After finalize the assembler is reset.
+        assert!(asm.is_empty());
+    }
+
+    #[test]
+    fn test_transcript_assembler_partial() {
+        let mut asm = TranscriptAssembler::new();
+        asm.append(vec![WordInfo {
+            word: "partial".into(),
+            start: 0.0,
+            end: 0.3,
+            confidence: 0.8,
+            speaker: None,
+        }]);
+        let seg = asm.partial(0.3);
+        assert_eq!(seg.text, "partial");
+        assert!(!seg.is_final);
+        // partial must not reset the assembler.
+        assert!(!asm.is_empty());
+    }
+
+    #[test]
+    fn test_feature_extractor_compute_empty() {
+        let fe = FeatureExtractor::new();
+        let (mel, frames) = fe.compute(&[]);
+        // When samples are shorter than N_FFT, compute_with_buffers returns
+        // a single zero-filled frame with n_mels elements.
+        assert_eq!(mel.len(), N_MELS);
+        assert_eq!(frames, 1);
+        assert!(mel.iter().all(|&v| v == 0.0));
+    }
+
+    #[test]
+    fn test_now_timestamp_non_negative() {
+        let ts = now_timestamp();
+        assert!(ts >= 0.0, "timestamp must be non-negative");
     }
 }

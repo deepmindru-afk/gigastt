@@ -14,7 +14,6 @@ use std::time::Duration;
 /// refill interval (30 rpm → 1 token every 2 s) the bucket refills and the
 /// follow-up succeeds.
 #[tokio::test]
-#[ignore]
 async fn test_rate_limit_burst_then_refill() {
     let model_dir = common::model_dir();
     let limits = gigastt::server::RuntimeLimits {

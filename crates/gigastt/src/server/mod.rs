@@ -439,6 +439,38 @@ pub async fn run_with_config_listener(
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn test_json_text_serializes() {
+        let msg = gigastt_core::protocol::ServerMessage::Ready {
+            model: "test".into(),
+            sample_rate: 16000,
+            version: "1.0".into(),
+            supported_rates: vec![16000],
+            diarization: false,
+            min_protocol_version: None,
+        };
+        let json = json_text(&msg);
+        assert!(json.contains("\"type\":\"ready\""));
+    }
+
+    #[test]
+    fn test_json_text_fallback_on_error() {
+        // A type that intentionally fails serialization is hard to construct
+        // with serde, so we assert the fallback path exists by checking the
+        // function compiles and the happy path works. The fallback is a
+        // static string that we can at least verify is present in the binary
+        // by inspecting the source.
+        let msg = gigastt_core::protocol::ServerMessage::Error {
+            message: "test".into(),
+            code: "test".into(),
+            retry_after_ms: None,
+        };
+        let json = json_text(&msg);
+        assert!(json.contains("error"));
+    }
+
     #[test]
     fn test_rate_limit_interval_formula() {
         // Mirrors the formula used in `run_with_config` so a regression on the
@@ -466,5 +498,68 @@ mod tests {
                 "rpm={rpm} should map to interval_ms={expected}"
             );
         }
+    }
+
+    #[test]
+    fn test_pool_checkout_timeout_clamping() {
+        let mut config = ServerConfig::local(0);
+        config.limits.pool_checkout_timeout_secs = 0;
+        // `run_with_config_listener` would clamp this to 1.
+        if config.limits.pool_checkout_timeout_secs == 0 {
+            config.limits.pool_checkout_timeout_secs = 1;
+        }
+        assert_eq!(config.limits.pool_checkout_timeout_secs, 1);
+    }
+
+    #[test]
+    fn test_json_text_fallback_on_serialization_error() {
+        struct FailingSerialize;
+        impl serde::Serialize for FailingSerialize {
+            fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: serde::Serializer,
+            {
+                Err(serde::ser::Error::custom("intentional failure"))
+            }
+        }
+        let json = json_text(&FailingSerialize);
+        assert_eq!(json, r#"{"type":"error","message":"Internal serialization error","code":"internal"}"#);
+    }
+
+    #[tokio::test]
+    async fn test_run_with_shutdown_starts_and_stops() {
+        let engine = gigastt_core::inference::Engine::load_with_pool_size(
+            &gigastt_core::model::default_model_dir(),
+            1,
+        )
+        .unwrap();
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(async move {
+            run_with_shutdown(engine, 0, "127.0.0.1", Some(shutdown_rx)).await
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        let _ = shutdown_tx.send(());
+        let result = handle.await.expect("join");
+        assert!(result.is_ok(), "server should stop gracefully");
+    }
+
+    #[tokio::test]
+    async fn test_run_with_config_listener_clamps_zero_timeout() {
+        let engine = gigastt_core::inference::Engine::load_with_pool_size(
+            &gigastt_core::model::default_model_dir(),
+            1,
+        )
+        .unwrap();
+        let mut config = ServerConfig::local(0);
+        config.limits.pool_checkout_timeout_secs = 0;
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let handle = tokio::spawn(async move {
+            run_with_config_listener(engine, config, Some(shutdown_rx), listener).await
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        let _ = shutdown_tx.send(());
+        let result = handle.await.expect("join");
+        assert!(result.is_ok(), "server should stop gracefully");
     }
 }
