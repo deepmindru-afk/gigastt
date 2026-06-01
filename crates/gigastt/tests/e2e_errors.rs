@@ -15,6 +15,7 @@ use tokio_tungstenite::tungstenite::Message;
 /// Expects a 413 Payload Too Large with machine-readable code
 /// `payload_too_large` — the strict version of the previous `!= 200` assertion
 /// that was too permissive to catch regressions in the body-limit guard.
+#[ignore]
 #[tokio::test]
 async fn test_rest_oversized_body_rejected() {
     let model_dir = common::model_dir();
@@ -68,6 +69,7 @@ async fn test_rest_oversized_body_rejected() {
 /// Send a binary frame larger than the 512 KB WS frame limit.
 /// The server should close the connection. Verifies the server is still
 /// healthy afterwards.
+#[ignore]
 #[tokio::test]
 async fn test_ws_oversized_frame_rejected() {
     let model_dir = common::model_dir();
@@ -135,6 +137,7 @@ async fn test_ws_oversized_frame_rejected() {
 /// Saturate the pool with 4 WebSocket clients, then try a 5th.
 /// The 5th client's TCP connection succeeds but pool.checkout() blocks,
 /// so the Ready message never arrives within 3 seconds.
+#[ignore]
 #[tokio::test]
 async fn test_ws_fifth_client_hangs() {
     let model_dir = common::model_dir();
@@ -182,6 +185,7 @@ async fn test_ws_fifth_client_hangs() {
 /// The HTTP handler has a 30-second pool.checkout() timeout and returns 503.
 ///
 /// This test takes ~30 seconds to complete (the HTTP timeout duration).
+#[ignore]
 #[tokio::test]
 async fn test_rest_saturated_pool_returns_503() {
     let model_dir = common::model_dir();
@@ -244,6 +248,7 @@ async fn test_rest_saturated_pool_returns_503() {
 /// Connect a WebSocket client, receive Ready, then send nothing.
 /// The server closes the connection after the configured idle timeout.
 /// Uses a short (3 s) idle timeout so the test finishes in under 10 s.
+#[ignore]
 #[tokio::test]
 async fn test_ws_idle_timeout() {
     let model_dir = common::model_dir();

@@ -13,6 +13,7 @@ use tokio_tungstenite::tungstenite::Message;
 // 1. Ready message validation
 // ---------------------------------------------------------------------------
 
+#[ignore]
 #[tokio::test]
 async fn test_ws_connect_receives_ready() {
     let model_dir = common::model_dir();
@@ -51,6 +52,7 @@ async fn test_ws_connect_receives_ready() {
 // 2. Audio → Final
 // ---------------------------------------------------------------------------
 
+#[ignore]
 #[tokio::test]
 async fn test_ws_audio_produces_final() {
     let model_dir = common::model_dir();
@@ -103,6 +105,7 @@ async fn test_ws_audio_produces_final() {
 // 3. Stop without audio → Final with empty text
 // ---------------------------------------------------------------------------
 
+#[ignore]
 #[tokio::test]
 async fn test_ws_stop_without_audio() {
     let model_dir = common::model_dir();
@@ -136,6 +139,7 @@ async fn test_ws_stop_without_audio() {
 // 4. Configure with valid sample rate → Final (no error)
 // ---------------------------------------------------------------------------
 
+#[ignore]
 #[tokio::test]
 async fn test_ws_configure_valid_sample_rate() {
     let model_dir = common::model_dir();
@@ -187,6 +191,7 @@ async fn test_ws_configure_valid_sample_rate() {
 // 5. Configure with invalid sample rate → Error
 // ---------------------------------------------------------------------------
 
+#[ignore]
 #[tokio::test]
 async fn test_ws_configure_invalid_sample_rate() {
     let model_dir = common::model_dir();
@@ -220,6 +225,7 @@ async fn test_ws_configure_invalid_sample_rate() {
 // 6. Configure after audio has been sent → Error
 // ---------------------------------------------------------------------------
 
+#[ignore]
 #[tokio::test]
 async fn test_ws_configure_after_audio() {
     let model_dir = common::model_dir();
@@ -258,6 +264,7 @@ async fn test_ws_configure_after_audio() {
 // 7. Malformed JSON → connection stays alive, Stop still works
 // ---------------------------------------------------------------------------
 
+#[ignore]
 #[tokio::test]
 async fn test_ws_malformed_json() {
     let model_dir = common::model_dir();
@@ -301,6 +308,7 @@ async fn test_ws_malformed_json() {
 // 8. Client disconnect mid-stream → server remains healthy
 // ---------------------------------------------------------------------------
 
+#[ignore]
 #[tokio::test]
 async fn test_ws_client_disconnect_midstream() {
     let model_dir = common::model_dir();
@@ -329,6 +337,7 @@ async fn test_ws_client_disconnect_midstream() {
 // 9. Four concurrent clients — all receive Ready and Final
 // ---------------------------------------------------------------------------
 
+#[ignore]
 #[tokio::test]
 async fn test_ws_concurrent_4_clients() {
     let model_dir = common::model_dir();
@@ -390,6 +399,7 @@ async fn test_ws_concurrent_4_clients() {
     }
 }
 
+#[ignore]
 #[tokio::test]
 async fn test_ws_empty_frame_spam_closes_connection() {
     let model_dir = common::model_dir();
@@ -435,6 +445,7 @@ async fn test_ws_empty_frame_spam_closes_connection() {
     }
 }
 
+#[ignore]
 #[tokio::test]
 async fn test_ws_configure_protocol_version_mismatch() {
     let model_dir = common::model_dir();

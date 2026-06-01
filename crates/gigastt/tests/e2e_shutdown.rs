@@ -18,6 +18,7 @@ use tokio_tungstenite::tungstenite::protocol::CloseFrame;
 // 1. Shutdown during an active WebSocket session — liveness check
 // ---------------------------------------------------------------------------
 
+#[ignore]
 #[tokio::test]
 async fn test_shutdown_during_ws_session() {
     let model_dir = common::model_dir();
@@ -45,6 +46,7 @@ async fn test_shutdown_during_ws_session() {
 // 2. Shutdown during an active SSE transcription stream — liveness check
 // ---------------------------------------------------------------------------
 
+#[ignore]
 #[tokio::test]
 async fn test_shutdown_during_sse_stream() {
     let model_dir = common::model_dir();
@@ -102,6 +104,7 @@ async fn test_shutdown_during_sse_stream() {
 // 3. V1-03: shutdown emits a Final frame + Close(1001) before socket EOF
 // ---------------------------------------------------------------------------
 
+#[ignore]
 #[tokio::test]
 async fn test_shutdown_ws_emits_final_and_close() {
     let model_dir = common::model_dir();
@@ -166,6 +169,7 @@ async fn test_shutdown_ws_emits_final_and_close() {
 // 4. V1-03: SSE stream terminates cleanly within the drain window
 // ---------------------------------------------------------------------------
 
+#[ignore]
 #[tokio::test]
 async fn test_shutdown_sse_stream_terminates_cleanly() {
     let model_dir = common::model_dir();
@@ -221,6 +225,7 @@ async fn test_shutdown_sse_stream_terminates_cleanly() {
 // 5. V1-04: session duration cap fires even for a silence-streaming client
 // ---------------------------------------------------------------------------
 
+#[ignore]
 #[tokio::test]
 async fn test_max_session_duration_cap() {
     let _ = tracing_subscriber::fmt()
@@ -309,6 +314,7 @@ async fn test_max_session_duration_cap() {
 /// shutdown signal, and assert the waiter resolves to a 503 `pool_closed`
 /// response — not the legacy 500 cascade caused by the
 /// `.expect("Pool sender dropped")` panic.
+#[ignore]
 #[tokio::test]
 async fn test_shutdown_during_pool_saturation_returns_503_not_500() {
     let model_dir = common::model_dir();

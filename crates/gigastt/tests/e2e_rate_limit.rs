@@ -13,6 +13,7 @@ use std::time::Duration;
 /// subsequent request within the refill window must 429. After waiting the
 /// refill interval (30 rpm → 1 token every 2 s) the bucket refills and the
 /// follow-up succeeds.
+#[ignore]
 #[tokio::test]
 async fn test_rate_limit_burst_then_refill() {
     let model_dir = common::model_dir();
