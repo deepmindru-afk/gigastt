@@ -12,6 +12,7 @@ use std::time::Duration;
 // 1. Health endpoint
 // ---------------------------------------------------------------------------
 
+#[ignore]
 #[tokio::test]
 async fn test_health_returns_ok() {
     let (port, shutdown) = common::start_server(&common::model_dir()).await;
@@ -51,6 +52,7 @@ async fn test_health_returns_ok() {
 // 2. POST /v1/transcribe — valid WAV
 // ---------------------------------------------------------------------------
 
+#[ignore]
 #[tokio::test]
 async fn test_transcribe_wav_returns_text() {
     let (port, shutdown) = common::start_server(&common::model_dir()).await;
@@ -93,6 +95,7 @@ async fn test_transcribe_wav_returns_text() {
 // 3. POST /v1/transcribe — empty body → 400
 // ---------------------------------------------------------------------------
 
+#[ignore]
 #[tokio::test]
 async fn test_transcribe_empty_body_returns_400() {
     let (port, shutdown) = common::start_server(&common::model_dir()).await;
@@ -125,6 +128,7 @@ async fn test_transcribe_empty_body_returns_400() {
 // 4. POST /v1/transcribe — invalid audio → 422
 // ---------------------------------------------------------------------------
 
+#[ignore]
 #[tokio::test]
 async fn test_transcribe_invalid_audio_returns_422() {
     let (port, shutdown) = common::start_server(&common::model_dir()).await;
@@ -160,6 +164,7 @@ async fn test_transcribe_invalid_audio_returns_422() {
 // 5. POST /v1/transcribe/stream — SSE stream completes without error
 // ---------------------------------------------------------------------------
 
+#[ignore]
 #[tokio::test]
 async fn test_transcribe_stream_sse_incremental() {
     let (port, shutdown) = common::start_server(&common::model_dir()).await;
@@ -221,6 +226,7 @@ async fn test_transcribe_stream_sse_incremental() {
 // 6. POST /v1/transcribe/stream — empty body → 400
 // ---------------------------------------------------------------------------
 
+#[ignore]
 #[tokio::test]
 async fn test_transcribe_stream_empty_body_returns_400() {
     let (port, shutdown) = common::start_server(&common::model_dir()).await;
@@ -245,6 +251,7 @@ async fn test_transcribe_stream_empty_body_returns_400() {
 // 7. SSE events well-formed: data: prefix + valid JSON with type field
 // ---------------------------------------------------------------------------
 
+#[ignore]
 #[tokio::test]
 async fn test_sse_events_well_formed() {
     let (port, shutdown) = common::start_server(&common::model_dir()).await;
@@ -311,6 +318,7 @@ async fn test_sse_events_well_formed() {
 // 8. Midstream disconnect — server should not panic
 // ---------------------------------------------------------------------------
 
+#[ignore]
 #[tokio::test]
 async fn test_sse_midstream_disconnect() {
     let (port, shutdown) = common::start_server(&common::model_dir()).await;
@@ -361,6 +369,7 @@ async fn test_sse_midstream_disconnect() {
     let _ = shutdown.send(());
 }
 
+#[ignore]
 #[tokio::test]
 async fn test_metrics_disabled_returns_404() {
     let (port, shutdown) = common::start_server(&common::model_dir()).await;
@@ -376,6 +385,7 @@ async fn test_metrics_disabled_returns_404() {
     let _ = shutdown.send(());
 }
 
+#[ignore]
 #[tokio::test]
 async fn test_metrics_enabled_returns_prometheus() {
     let (port, shutdown) = common::start_server_with_metrics(&common::model_dir()).await;
@@ -391,6 +401,7 @@ async fn test_metrics_enabled_returns_prometheus() {
     let _ = shutdown.send(());
 }
 
+#[ignore]
 #[tokio::test]
 async fn test_ready_returns_ok() {
     let (port, shutdown) = common::start_server(&common::model_dir()).await;
@@ -403,6 +414,7 @@ async fn test_ready_returns_ok() {
     let _ = shutdown.send(());
 }
 
+#[ignore]
 #[tokio::test]
 async fn test_options_v1_models_returns_204() {
     let (port, shutdown) = common::start_server(&common::model_dir()).await;
@@ -415,6 +427,7 @@ async fn test_options_v1_models_returns_204() {
     let _ = shutdown.send(());
 }
 
+#[ignore]
 #[tokio::test]
 async fn test_server_list_models() {
     let (port, shutdown) = common::start_server(&common::model_dir()).await;

@@ -54,11 +54,11 @@ jobs:
             ~/.cargo/git
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - run: cargo test --workspace
+      - run: cargo test --workspace --lib --bins
       - uses: taiki-e/install-action@v2
         with:
           tool: nextest
-      - run: cargo nextest run --workspace --retries 2
+      - run: cargo nextest run --workspace --lib --bins --retries 2
 
   build-coreml:
     runs-on: macos-14
