@@ -588,4 +588,100 @@ mod tests {
         assert!(final_path.exists());
         assert_eq!(std::fs::read(&final_path).unwrap(), payload);
     }
+
+    #[test]
+    fn test_partial_path_unique_contains_pid_and_timestamp() {
+        let p = partial_path_unique(Path::new("/tmp/final.onnx"));
+        let s = p.to_string_lossy();
+        assert!(s.contains(".partial."));
+        assert!(s.contains(&std::process::id().to_string()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_acquire_download_lock_creates_lock_file() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let lock = acquire_download_lock(tmp.path()).expect("acquire lock");
+        assert!(tmp.path().join(".download.lock").exists());
+        drop(lock);
+    }
+
+    #[tokio::test]
+    async fn test_stream_to_partial_then_finalize_success() {
+        let server = wiremock::MockServer::start().await;
+        let payload = b"fake model bytes";
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .and(wiremock::matchers::path("/model.onnx"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_bytes(payload.as_slice())
+                    .insert_header("content-length", payload.len().to_string()),
+            )
+            .mount(&server)
+            .await;
+
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let final_path = tmp.path().join("model.onnx");
+        let url = format!("{}/model.onnx", server.uri());
+
+        stream_to_partial_then_finalize(&url, &final_path, None, "model.onnx")
+            .await
+            .expect("download should succeed");
+
+        assert!(final_path.exists());
+        assert_eq!(std::fs::read(&final_path).unwrap(), payload);
+    }
+
+    #[tokio::test]
+    async fn test_stream_to_partial_then_finalize_http_error() {
+        let server = wiremock::MockServer::start().await;
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .and(wiremock::matchers::path("/missing.onnx"))
+            .respond_with(wiremock::ResponseTemplate::new(404))
+            .mount(&server)
+            .await;
+
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let final_path = tmp.path().join("missing.onnx");
+        let url = format!("{}/missing.onnx", server.uri());
+
+        let err = stream_to_partial_then_finalize(&url, &final_path, None, "missing.onnx")
+            .await
+            .expect_err("404 should fail");
+        let msg = format!("{err}");
+        assert!(msg.contains("404"), "error should mention 404: {msg}");
+    }
+
+    #[tokio::test]
+    async fn test_stream_to_partial_then_finalize_checksum_mismatch() {
+        let server = wiremock::MockServer::start().await;
+        let payload = b"wrong bytes";
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .and(wiremock::matchers::path("/model.onnx"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_bytes(payload.as_slice()),
+            )
+            .mount(&server)
+            .await;
+
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let final_path = tmp.path().join("model.onnx");
+        let url = format!("{}/model.onnx", server.uri());
+        let wrong_hash = sha256_hex(b"different bytes");
+
+        let err = stream_to_partial_then_finalize(
+            &url,
+            &final_path,
+            Some(&wrong_hash),
+            "model.onnx",
+        )
+        .await
+        .expect_err("checksum mismatch should fail");
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("SHA-256 mismatch"),
+            "error should mention mismatch: {msg}"
+        );
+    }
 }

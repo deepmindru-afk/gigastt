@@ -16,7 +16,6 @@ use tokio_tungstenite::tungstenite::Message;
 /// `payload_too_large` — the strict version of the previous `!= 200` assertion
 /// that was too permissive to catch regressions in the body-limit guard.
 #[tokio::test]
-#[ignore]
 async fn test_rest_oversized_body_rejected() {
     let model_dir = common::model_dir();
     let (port, shutdown) = common::start_server(&model_dir).await;
@@ -70,7 +69,6 @@ async fn test_rest_oversized_body_rejected() {
 /// The server should close the connection. Verifies the server is still
 /// healthy afterwards.
 #[tokio::test]
-#[ignore]
 async fn test_ws_oversized_frame_rejected() {
     let model_dir = common::model_dir();
     let (port, shutdown) = common::start_server(&model_dir).await;
@@ -138,7 +136,6 @@ async fn test_ws_oversized_frame_rejected() {
 /// The 5th client's TCP connection succeeds but pool.checkout() blocks,
 /// so the Ready message never arrives within 3 seconds.
 #[tokio::test]
-#[ignore]
 async fn test_ws_fifth_client_hangs() {
     let model_dir = common::model_dir();
     let (port, shutdown) = common::start_server(&model_dir).await;
@@ -186,7 +183,6 @@ async fn test_ws_fifth_client_hangs() {
 ///
 /// This test takes ~30 seconds to complete (the HTTP timeout duration).
 #[tokio::test]
-#[ignore]
 async fn test_rest_saturated_pool_returns_503() {
     let model_dir = common::model_dir();
     let (port, shutdown) = common::start_server(&model_dir).await;
@@ -249,7 +245,6 @@ async fn test_rest_saturated_pool_returns_503() {
 /// The server closes the connection after the configured idle timeout.
 /// Uses a short (3 s) idle timeout so the test finishes in under 10 s.
 #[tokio::test]
-#[ignore]
 async fn test_ws_idle_timeout() {
     let model_dir = common::model_dir();
     let limits = gigastt::server::RuntimeLimits {

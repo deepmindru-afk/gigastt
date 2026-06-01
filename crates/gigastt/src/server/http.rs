@@ -617,4 +617,314 @@ mod tests {
         assert_eq!(json["status"], "not_ready");
         assert_eq!(json["reason"], "pool_exhausted");
     }
+
+    #[tokio::test]
+    async fn test_api_error_basic() {
+        let resp = api_error(StatusCode::BAD_REQUEST, "bad request", "bad_request");
+        let (parts, body) = resp.into_parts();
+        assert_eq!(parts.status, StatusCode::BAD_REQUEST);
+        let bytes = axum::body::to_bytes(body, 1024).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(v["error"], "bad request");
+        assert_eq!(v["code"], "bad_request");
+    }
+
+    #[tokio::test]
+    async fn test_api_timeout_error_includes_retry_after() {
+        let limits = RuntimeLimits::default();
+        let resp = api_timeout_error(&limits);
+        let (parts, body) = resp.into_parts();
+        assert_eq!(parts.status, StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(
+            parts.headers.get(header::RETRY_AFTER).unwrap().to_str().unwrap(),
+            pool_retry_after_secs(&limits).to_string()
+        );
+        let bytes = axum::body::to_bytes(body, 1024).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(v["code"], "timeout");
+        assert_eq!(v["retry_after_ms"], pool_retry_after_ms(&limits));
+    }
+
+    #[tokio::test]
+    async fn test_api_pool_closed_error_no_retry() {
+        let resp = api_pool_closed_error();
+        let (parts, body) = resp.into_parts();
+        assert_eq!(parts.status, StatusCode::SERVICE_UNAVAILABLE);
+        assert!(parts.headers.get(header::RETRY_AFTER).is_none());
+        let bytes = axum::body::to_bytes(body, 1024).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(v["code"], "pool_closed");
+        assert!(v.get("retry_after_ms").is_none());
+    }
+
+    #[tokio::test]
+    async fn test_readiness_when_shutdown_cancelled() {
+        let state = Arc::new(AppState {
+            engine: test_engine(),
+            limits: Arc::new(ArcSwap::from_pointee(RuntimeLimits::default())),
+            metrics_registry: None,
+            shutdown: tokio_util::sync::CancellationToken::new(),
+            tracker: tokio_util::task::TaskTracker::new(),
+        });
+        state.shutdown.cancel();
+        let resp = readiness(State(state)).await;
+        assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+        let bytes = axum::body::to_bytes(resp.into_body(), 1024).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(v["status"], "not_ready");
+        assert_eq!(v["reason"], "shutting_down");
+    }
+
+    #[tokio::test]
+    async fn test_readiness_when_pool_exhausted() {
+        let engine = fresh_engine();
+        let _guards: Vec<_> = (0..engine.pool.total())
+            .map(|_| engine.pool.checkout_blocking().unwrap())
+            .collect();
+        let state = Arc::new(AppState {
+            engine,
+            limits: Arc::new(ArcSwap::from_pointee(RuntimeLimits::default())),
+            metrics_registry: None,
+            shutdown: tokio_util::sync::CancellationToken::new(),
+            tracker: tokio_util::task::TaskTracker::new(),
+        });
+        let resp = readiness(State(state)).await;
+        assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+        let bytes = axum::body::to_bytes(resp.into_body(), 1024).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(v["status"], "not_ready");
+        assert_eq!(v["reason"], "pool_exhausted");
+    }
+
+    #[tokio::test]
+    async fn test_transcribe_payload_too_large() {
+        let state = Arc::new(AppState {
+            engine: test_engine(),
+            limits: Arc::new(ArcSwap::from_pointee(RuntimeLimits {
+                body_limit_bytes: 10,
+                ..RuntimeLimits::default()
+            })),
+            metrics_registry: None,
+            shutdown: tokio_util::sync::CancellationToken::new(),
+            tracker: tokio_util::task::TaskTracker::new(),
+        });
+        let body = Bytes::from(vec![0u8; 100]);
+        let result = transcribe(State(state), body).await;
+        match result {
+            Err(resp) => assert_eq!(resp.status(), StatusCode::PAYLOAD_TOO_LARGE),
+            Ok(_) => panic!("expected payload_too_large error"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_models_with_metrics() {
+        let state = Arc::new(AppState {
+            engine: test_engine(),
+            limits: Arc::new(ArcSwap::from_pointee(RuntimeLimits::default())),
+            metrics_registry: Some(Arc::new(MetricsRegistry::new())),
+            shutdown: tokio_util::sync::CancellationToken::new(),
+            tracker: tokio_util::task::TaskTracker::new(),
+        });
+        let resp = models(State(state)).await;
+        let json = serde_json::to_value(&*resp).unwrap();
+        assert_eq!(json["id"], "gigaam-v3-e2e-rnnt");
+    }
+
+    #[tokio::test]
+    async fn test_readiness_with_metrics() {
+        let state = Arc::new(AppState {
+            engine: fresh_engine(),
+            limits: Arc::new(ArcSwap::from_pointee(RuntimeLimits::default())),
+            metrics_registry: Some(Arc::new(MetricsRegistry::new())),
+            shutdown: tokio_util::sync::CancellationToken::new(),
+            tracker: tokio_util::task::TaskTracker::new(),
+        });
+        let resp = readiness(State(state)).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_transcribe_pool_closed() {
+        let engine = fresh_engine();
+        engine.pool.close();
+        let state = Arc::new(AppState {
+            engine,
+            limits: Arc::new(ArcSwap::from_pointee(RuntimeLimits::default())),
+            metrics_registry: None,
+            shutdown: tokio_util::sync::CancellationToken::new(),
+            tracker: tokio_util::task::TaskTracker::new(),
+        });
+        let body = Bytes::from(vec![0u8; 100]);
+        let result = transcribe(State(state), body).await;
+        match result {
+            Err(resp) => assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE),
+            Ok(_) => panic!("expected pool_closed error"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_transcribe_stream_invalid_audio() {
+        let state = Arc::new(AppState {
+            engine: test_engine(),
+            limits: Arc::new(ArcSwap::from_pointee(RuntimeLimits::default())),
+            metrics_registry: None,
+            shutdown: tokio_util::sync::CancellationToken::new(),
+            tracker: tokio_util::task::TaskTracker::new(),
+        });
+        let body = Bytes::from(vec![0u8; 100]);
+        let result = transcribe_stream(State(state), body).await;
+        match result {
+            Err(resp) => assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY),
+            Ok(_) => panic!("expected invalid_audio error"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_transcribe_stream_payload_too_large() {
+        let state = Arc::new(AppState {
+            engine: test_engine(),
+            limits: Arc::new(ArcSwap::from_pointee(RuntimeLimits {
+                body_limit_bytes: 10,
+                ..RuntimeLimits::default()
+            })),
+            metrics_registry: None,
+            shutdown: tokio_util::sync::CancellationToken::new(),
+            tracker: tokio_util::task::TaskTracker::new(),
+        });
+        let body = Bytes::from(vec![0u8; 100]);
+        let result = transcribe_stream(State(state), body).await;
+        match result {
+            Err(resp) => assert_eq!(resp.status(), StatusCode::PAYLOAD_TOO_LARGE),
+            Ok(_) => panic!("expected payload_too_large error"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_transcribe_stream_pool_closed() {
+        let engine = fresh_engine();
+        engine.pool.close();
+        let state = Arc::new(AppState {
+            engine,
+            limits: Arc::new(ArcSwap::from_pointee(RuntimeLimits::default())),
+            metrics_registry: None,
+            shutdown: tokio_util::sync::CancellationToken::new(),
+            tracker: tokio_util::task::TaskTracker::new(),
+        });
+        let body = minimal_wav();
+        let result = transcribe_stream(State(state), body).await;
+        match result {
+            Err(resp) => assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE),
+            Ok(_) => panic!("expected pool_closed error"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_transcribe_with_metrics() {
+        let state = Arc::new(AppState {
+            engine: test_engine(),
+            limits: Arc::new(ArcSwap::from_pointee(RuntimeLimits::default())),
+            metrics_registry: Some(Arc::new(MetricsRegistry::new())),
+            shutdown: tokio_util::sync::CancellationToken::new(),
+            tracker: tokio_util::task::TaskTracker::new(),
+        });
+        let body = short_wav();
+        match transcribe(State(state), body).await {
+            Ok(_) => {}
+            Err(_) => panic!("transcribe with metrics failed"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_transcribe_stream_with_metrics() {
+        let state = Arc::new(AppState {
+            engine: test_engine(),
+            limits: Arc::new(ArcSwap::from_pointee(RuntimeLimits::default())),
+            metrics_registry: Some(Arc::new(MetricsRegistry::new())),
+            shutdown: tokio_util::sync::CancellationToken::new(),
+            tracker: tokio_util::task::TaskTracker::new(),
+        });
+        let body = short_wav();
+        match transcribe_stream(State(state), body).await {
+            Ok(_) => {}
+            Err(_) => panic!("transcribe_stream with metrics failed"),
+        }
+    }
+}
+
+#[cfg(test)]
+fn test_engine() -> Arc<Engine> {
+    use std::sync::OnceLock;
+    static ENGINE: OnceLock<Arc<Engine>> = OnceLock::new();
+    ENGINE
+        .get_or_init(|| {
+            Arc::new(
+                Engine::load_with_pool_size(
+                    &gigastt_core::model::default_model_dir(),
+                    1,
+                )
+                .unwrap(),
+            )
+        })
+        .clone()
+}
+
+#[cfg(test)]
+fn fresh_engine() -> Arc<Engine> {
+    Arc::new(
+        Engine::load_with_pool_size(
+            &gigastt_core::model::default_model_dir(),
+            1,
+        )
+        .unwrap(),
+    )
+}
+
+#[cfg(test)]
+fn minimal_wav() -> Bytes {
+    let data_size = 4u32;
+    let file_size = 44 + data_size - 8;
+    let mut wav = vec![];
+    wav.extend_from_slice(b"RIFF");
+    wav.extend_from_slice(&file_size.to_le_bytes());
+    wav.extend_from_slice(b"WAVE");
+    wav.extend_from_slice(b"fmt ");
+    wav.extend_from_slice(&16u32.to_le_bytes());
+    wav.extend_from_slice(&1u16.to_le_bytes());
+    wav.extend_from_slice(&1u16.to_le_bytes());
+    wav.extend_from_slice(&16000u32.to_le_bytes());
+    wav.extend_from_slice(&(16000u32 * 2).to_le_bytes());
+    wav.extend_from_slice(&2u16.to_le_bytes());
+    wav.extend_from_slice(&16u16.to_le_bytes());
+    wav.extend_from_slice(b"data");
+    wav.extend_from_slice(&data_size.to_le_bytes());
+    wav.extend_from_slice(&0i16.to_le_bytes());
+    wav.extend_from_slice(&0i16.to_le_bytes());
+    Bytes::from(wav)
+}
+
+#[cfg(test)]
+fn short_wav() -> Bytes {
+    let sample_rate = 16000u32;
+    let duration_s = 0.1f32;
+    let num_samples = (sample_rate as f32 * duration_s) as u32;
+    let data_size = num_samples * 2;
+    let file_size = 44 + data_size - 8;
+    let mut wav = vec![];
+    wav.extend_from_slice(b"RIFF");
+    wav.extend_from_slice(&file_size.to_le_bytes());
+    wav.extend_from_slice(b"WAVE");
+    wav.extend_from_slice(b"fmt ");
+    wav.extend_from_slice(&16u32.to_le_bytes());
+    wav.extend_from_slice(&1u16.to_le_bytes());
+    wav.extend_from_slice(&1u16.to_le_bytes());
+    wav.extend_from_slice(&sample_rate.to_le_bytes());
+    wav.extend_from_slice(&(sample_rate * 2).to_le_bytes());
+    wav.extend_from_slice(&2u16.to_le_bytes());
+    wav.extend_from_slice(&16u16.to_le_bytes());
+    wav.extend_from_slice(b"data");
+    wav.extend_from_slice(&data_size.to_le_bytes());
+    for _ in 0..num_samples {
+        wav.extend_from_slice(&0i16.to_le_bytes());
+    }
+    Bytes::from(wav)
 }

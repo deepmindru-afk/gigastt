@@ -19,7 +19,6 @@ use tokio_tungstenite::tungstenite::protocol::CloseFrame;
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-#[ignore] // Requires model download
 async fn test_shutdown_during_ws_session() {
     let model_dir = common::model_dir();
     let (port, shutdown) = common::start_server(&model_dir).await;
@@ -47,7 +46,6 @@ async fn test_shutdown_during_ws_session() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-#[ignore] // Requires model download
 async fn test_shutdown_during_sse_stream() {
     let model_dir = common::model_dir();
     let (port, shutdown) = common::start_server(&model_dir).await;
@@ -105,7 +103,6 @@ async fn test_shutdown_during_sse_stream() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-#[ignore] // Requires model download
 async fn test_shutdown_ws_emits_final_and_close() {
     let model_dir = common::model_dir();
     // Use custom limits so the drain window is generous even on slow CI.
@@ -170,7 +167,6 @@ async fn test_shutdown_ws_emits_final_and_close() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-#[ignore] // Requires model download
 async fn test_shutdown_sse_stream_terminates_cleanly() {
     let model_dir = common::model_dir();
     let limits = gigastt::server::RuntimeLimits {
@@ -226,7 +222,6 @@ async fn test_shutdown_sse_stream_terminates_cleanly() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-#[ignore] // Requires model download
 async fn test_max_session_duration_cap() {
     let _ = tracing_subscriber::fmt()
         .with_env_filter("gigastt=debug")
@@ -315,7 +310,6 @@ async fn test_max_session_duration_cap() {
 /// response — not the legacy 500 cascade caused by the
 /// `.expect("Pool sender dropped")` panic.
 #[tokio::test]
-#[ignore] // Requires model download
 async fn test_shutdown_during_pool_saturation_returns_503_not_500() {
     let model_dir = common::model_dir();
     let (port, shutdown) = common::start_server(&model_dir).await;

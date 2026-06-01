@@ -525,4 +525,209 @@ mod tests {
         assert!(s.contains("UTF-8"));
         unsafe { gigastt_string_free(r) };
     }
+
+    #[test]
+    fn test_engine_new_null() {
+        let engine = unsafe { gigastt_engine_new(ptr::null()) };
+        assert!(engine.is_null());
+    }
+
+    #[test]
+    fn test_engine_new_invalid_utf8() {
+        let bad = [0x80u8, 0x81, 0x82, 0];
+        let engine = unsafe { gigastt_engine_new(bad.as_ptr() as *const c_char) };
+        assert!(engine.is_null());
+    }
+
+    #[test]
+    fn test_engine_free_null() {
+        unsafe { gigastt_engine_free(ptr::null_mut()) };
+    }
+
+    #[test]
+    fn test_transcribe_file_null_engine() {
+        let file = CString::new("audio.wav").unwrap();
+        let r = unsafe { gigastt_transcribe_file(ptr::null_mut(), file.as_ptr()) };
+        assert!(r.is_null());
+    }
+
+    #[test]
+    fn test_transcribe_file_null_file() {
+        let r = unsafe { gigastt_transcribe_file(ptr::null_mut(), ptr::null()) };
+        assert!(r.is_null());
+    }
+
+    #[test]
+    fn test_to_cstring_valid() {
+        let c = to_cstring("hello");
+        assert_eq!(c.to_str().unwrap(), "hello");
+    }
+
+    #[test]
+    fn test_to_cstring_with_nul_fallback() {
+        let c = to_cstring("hel\0lo");
+        assert_eq!(c.to_str().unwrap(), "invalid string");
+    }
+
+    #[test]
+    fn test_transcribe_file_absolute_path_rejected() {
+        let engine = shared_test_engine();
+        let file = CString::new("/etc/passwd").unwrap();
+        let r = unsafe { gigastt_transcribe_file(engine, file.as_ptr()) };
+        assert!(r.is_null());
+    }
+
+    #[test]
+    fn test_transcribe_file_parent_dir_rejected() {
+        let engine = shared_test_engine();
+        let file = CString::new("../secret.wav").unwrap();
+        let r = unsafe { gigastt_transcribe_file(engine, file.as_ptr()) };
+        assert!(r.is_null());
+    }
+
+    #[test]
+    fn test_transcribe_file_success() {
+        let engine = shared_test_engine();
+        let wav = generate_test_wav(1, 16000);
+        let path = std::path::Path::new("target").join("tmp_ffi_test.wav");
+        std::fs::create_dir_all("target").unwrap();
+        std::fs::write(&path, &wav).unwrap();
+        let c_path = CString::new(path.to_str().unwrap()).unwrap();
+        let r = unsafe { gigastt_transcribe_file(engine, c_path.as_ptr()) };
+        assert!(!r.is_null(), "transcribe_file returned null");
+        let s = unsafe { CStr::from_ptr(r) }.to_str().unwrap();
+        // A sine wave is not speech; result may be empty.  Just verify it's valid UTF-8.
+        let _ = s;
+        unsafe { gigastt_string_free(r) };
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_stream_new_success() {
+        let engine = shared_test_engine();
+        let stream = unsafe { gigastt_stream_new(engine) };
+        assert!(!stream.is_null());
+        unsafe { gigastt_stream_free(stream) };
+    }
+
+    #[test]
+    fn test_stream_process_chunk_success() {
+        let engine = shared_test_engine();
+        let stream = unsafe { gigastt_stream_new(engine) };
+        assert!(!stream.is_null());
+        // 0.2 s of silence at 16 kHz mono PCM16 = 6400 bytes
+        let pcm16: Vec<u8> = vec![0u8; 3200 * 2];
+        let r = unsafe {
+            gigastt_stream_process_chunk(engine, stream, pcm16.as_ptr(), pcm16.len(), 16000)
+        };
+        assert!(!r.is_null());
+        let s = unsafe { CStr::from_ptr(r) }.to_str().unwrap();
+        assert!(s.starts_with('['));
+        unsafe { gigastt_string_free(r) };
+        unsafe { gigastt_stream_free(stream) };
+    }
+
+    #[test]
+    fn test_stream_process_chunk_resample() {
+        let engine = shared_test_engine();
+        let stream = unsafe { gigastt_stream_new(engine) };
+        assert!(!stream.is_null());
+        // 0.2 s of silence at 48 kHz mono PCM16 = 19200 bytes
+        let pcm16: Vec<u8> = vec![0u8; 9600 * 2];
+        let r = unsafe {
+            gigastt_stream_process_chunk(engine, stream, pcm16.as_ptr(), pcm16.len(), 48000)
+        };
+        assert!(!r.is_null());
+        unsafe { gigastt_string_free(r) };
+        unsafe { gigastt_stream_free(stream) };
+    }
+
+    #[test]
+    fn test_stream_flush_success() {
+        let engine = shared_test_engine();
+        let stream = unsafe { gigastt_stream_new(engine) };
+        assert!(!stream.is_null());
+        let pcm16: Vec<u8> = vec![0u8; 3200 * 2];
+        let r = unsafe {
+            gigastt_stream_process_chunk(engine, stream, pcm16.as_ptr(), pcm16.len(), 16000)
+        };
+        assert!(!r.is_null());
+        unsafe { gigastt_string_free(r) };
+        let r = unsafe { gigastt_stream_flush(engine, stream) };
+        assert!(!r.is_null());
+        let s = unsafe { CStr::from_ptr(r) }.to_str().unwrap();
+        assert!(s.starts_with('['));
+        unsafe { gigastt_string_free(r) };
+        unsafe { gigastt_stream_free(stream) };
+    }
+
+    #[test]
+    fn test_engine_new_with_pool_size_success() {
+        let dir = CString::new(gigastt_core::model::default_model_dir()).unwrap();
+        let engine = unsafe { gigastt_engine_new_with_pool_size(dir.as_ptr(), 1) };
+        assert!(!engine.is_null());
+        unsafe { gigastt_engine_free(engine) };
+    }
+
+    #[test]
+    fn test_quantize_model_idempotent() {
+        let dir = CString::new(gigastt_core::model::default_model_dir()).unwrap();
+        let r = unsafe { gigastt_quantize_model(dir.as_ptr(), false) };
+        assert!(!r.is_null());
+        let s = unsafe { CStr::from_ptr(r) }.to_str().unwrap();
+        assert_eq!(s, "ok");
+        unsafe { gigastt_string_free(r) };
+    }
+
+    #[test]
+    fn test_string_free_null() {
+        unsafe { gigastt_string_free(ptr::null_mut()) };
+    }
+}
+
+#[cfg(test)]
+fn shared_test_engine() -> *mut GigasttEngine {
+    use std::sync::OnceLock;
+    struct SendPtr(*mut GigasttEngine);
+    // SAFETY: the pointer is written exactly once by `get_or_init` and then
+    // only read by test threads.  The underlying `GigasttEngine` is `Send`.
+    unsafe impl Send for SendPtr {}
+    unsafe impl Sync for SendPtr {}
+    static ENGINE: OnceLock<SendPtr> = OnceLock::new();
+    ENGINE
+        .get_or_init(|| {
+            let dir = CString::new(gigastt_core::model::default_model_dir()).unwrap();
+            let engine = unsafe { gigastt_engine_new(dir.as_ptr()) };
+            assert!(!engine.is_null(), "failed to load engine for ffi tests");
+            SendPtr(engine)
+        })
+        .0
+}
+
+#[cfg(test)]
+fn generate_test_wav(duration_s: u32, sample_rate: u32) -> Vec<u8> {
+    let num_samples = sample_rate * duration_s;
+    let data_size = num_samples * 2;
+    let file_size = 44 + data_size;
+    let mut wav = Vec::with_capacity(file_size as usize);
+    wav.extend_from_slice(b"RIFF");
+    wav.extend_from_slice(&(file_size - 8).to_le_bytes());
+    wav.extend_from_slice(b"WAVE");
+    wav.extend_from_slice(b"fmt ");
+    wav.extend_from_slice(&16u32.to_le_bytes());
+    wav.extend_from_slice(&1u16.to_le_bytes());
+    wav.extend_from_slice(&1u16.to_le_bytes());
+    wav.extend_from_slice(&sample_rate.to_le_bytes());
+    wav.extend_from_slice(&(sample_rate * 2).to_le_bytes());
+    wav.extend_from_slice(&2u16.to_le_bytes());
+    wav.extend_from_slice(&16u16.to_le_bytes());
+    wav.extend_from_slice(b"data");
+    wav.extend_from_slice(&data_size.to_le_bytes());
+    for i in 0..num_samples {
+        let sample =
+            (440.0_f64 * 2.0 * std::f64::consts::PI * i as f64 / sample_rate as f64).sin()
+                * 1000.0;
+        wav.extend_from_slice(&(sample as i16).to_le_bytes());
+    }
+    wav
 }

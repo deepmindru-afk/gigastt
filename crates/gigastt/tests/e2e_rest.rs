@@ -13,7 +13,6 @@ use std::time::Duration;
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-#[ignore]
 async fn test_health_returns_ok() {
     let (port, shutdown) = common::start_server(&common::model_dir()).await;
 
@@ -53,7 +52,6 @@ async fn test_health_returns_ok() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-#[ignore]
 async fn test_transcribe_wav_returns_text() {
     let (port, shutdown) = common::start_server(&common::model_dir()).await;
     let wav = common::generate_wav(2, 16000);
@@ -96,7 +94,6 @@ async fn test_transcribe_wav_returns_text() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-#[ignore]
 async fn test_transcribe_empty_body_returns_400() {
     let (port, shutdown) = common::start_server(&common::model_dir()).await;
 
@@ -129,7 +126,6 @@ async fn test_transcribe_empty_body_returns_400() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-#[ignore]
 async fn test_transcribe_invalid_audio_returns_422() {
     let (port, shutdown) = common::start_server(&common::model_dir()).await;
 
@@ -165,7 +161,6 @@ async fn test_transcribe_invalid_audio_returns_422() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-#[ignore]
 async fn test_transcribe_stream_sse_incremental() {
     let (port, shutdown) = common::start_server(&common::model_dir()).await;
     let wav = common::generate_wav(10, 16000);
@@ -227,7 +222,6 @@ async fn test_transcribe_stream_sse_incremental() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-#[ignore]
 async fn test_transcribe_stream_empty_body_returns_400() {
     let (port, shutdown) = common::start_server(&common::model_dir()).await;
 
@@ -252,7 +246,6 @@ async fn test_transcribe_stream_empty_body_returns_400() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-#[ignore]
 async fn test_sse_events_well_formed() {
     let (port, shutdown) = common::start_server(&common::model_dir()).await;
     let wav = common::generate_wav(5, 16000);
@@ -319,7 +312,6 @@ async fn test_sse_events_well_formed() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-#[ignore]
 async fn test_sse_midstream_disconnect() {
     let (port, shutdown) = common::start_server(&common::model_dir()).await;
     let wav = common::generate_wav(10, 16000);
@@ -366,6 +358,80 @@ async fn test_sse_midstream_disconnect() {
         "Server should still be healthy after midstream disconnect"
     );
 
+    let _ = shutdown.send(());
+}
+
+#[tokio::test]
+async fn test_metrics_disabled_returns_404() {
+    let (port, shutdown) = common::start_server(&common::model_dir()).await;
+    let resp = reqwest::Client::new()
+        .get(format!("http://127.0.0.1:{port}/metrics"))
+        .send()
+        .await
+        .expect("GET /metrics failed");
+    assert_eq!(resp.status(), 404);
+    let text = resp.text().await.unwrap();
+    let body: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(body["code"], "metrics_disabled");
+    let _ = shutdown.send(());
+}
+
+#[tokio::test]
+async fn test_metrics_enabled_returns_prometheus() {
+    let (port, shutdown) = common::start_server_with_metrics(&common::model_dir()).await;
+    let resp = reqwest::Client::new()
+        .get(format!("http://127.0.0.1:{port}/metrics"))
+        .send()
+        .await
+        .expect("GET /metrics failed");
+    assert_eq!(resp.status(), 200);
+    let body = resp.text().await.unwrap();
+    assert!(body.contains("# HELP gigastt_http_requests_total"));
+    assert!(body.contains("# TYPE gigastt_http_requests_total counter"));
+    let _ = shutdown.send(());
+}
+
+#[tokio::test]
+async fn test_ready_returns_ok() {
+    let (port, shutdown) = common::start_server(&common::model_dir()).await;
+    let resp = reqwest::Client::new()
+        .get(format!("http://127.0.0.1:{port}/ready"))
+        .send()
+        .await
+        .expect("GET /ready failed");
+    assert_eq!(resp.status(), 200);
+    let _ = shutdown.send(());
+}
+
+#[tokio::test]
+async fn test_options_v1_models_returns_204() {
+    let (port, shutdown) = common::start_server(&common::model_dir()).await;
+    let resp = reqwest::Client::new()
+        .request(reqwest::Method::OPTIONS, format!("http://127.0.0.1:{port}/v1/models"))
+        .send()
+        .await
+        .expect("OPTIONS /v1/models failed");
+    assert_eq!(resp.status(), 204);
+    let _ = shutdown.send(());
+}
+
+#[tokio::test]
+async fn test_server_list_models() {
+    let (port, shutdown) = common::start_server(&common::model_dir()).await;
+    let resp = reqwest::Client::new()
+        .get(format!("http://127.0.0.1:{port}/v1/models"))
+        .send()
+        .await
+        .expect("GET /v1/models failed");
+    assert_eq!(resp.status(), 200);
+    let text = resp.text().await.unwrap();
+    let body: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(body["id"], "gigaam-v3-e2e-rnnt");
+    assert_eq!(body["name"], "GigaAM v3 RNN-T");
+    assert_eq!(body["sample_rate"], 16000);
+    let enc = body["encoder"].as_str().unwrap();
+    assert!(enc == "int8" || enc == "fp32");
+    assert!(body["vocab_size"].as_u64().unwrap() > 0);
     let _ = shutdown.send(());
 }
 

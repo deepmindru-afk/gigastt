@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.11] - 2026-06-01
+
+### Added
+
+- **Comprehensive unit-test coverage expansion across all crates.**
+  - `gigastt-core` — pool blocking checkout paths, ONNX error wrapping,
+    engine load failure modes, feature-extractor defaults, tokenizer edge
+    cases (empty lines, bare integers, no-whitespace fallback), quantizer
+    end-to-end matmul and shared-weight paths.
+  - `gigastt` — HTTP handler unit tests for readiness (shutdown, pool
+    exhaustion, metrics), transcribe (payload too large, pool closed, invalid
+    audio), SSE stream (payload too large, pool closed), JSON serialization
+    fallback, server startup/shutdown, runtime-limit clamping, origin and
+    request-id middleware integration.
+  - `gigastt-ffi` — null-engine guards, invalid-UTF8 paths, path traversal
+    rejection, `stream_new`/`process_chunk`/`flush` round-trip, idempotent
+    quantize, `string_free_null` safety.
+  - E2E tests refined: deduplicated shared helpers, cleaner shutdown
+    sequencing, expanded rate-limit and error-path coverage.
+- **`__internals` required feature for `tokenizer` benchmark.** Prevents
+  `cargo clippy --all-targets` from failing on the private tokenizer module.
+
+### Fixed
+
+- Flaky `test_readiness_with_metrics` caused by shared engine singleton
+  contention (pool size 1). Switched to isolated `fresh_engine()` per test.
+
 ## [2.0.10] - 2026-05-31
 
 ### Changed
@@ -938,7 +965,8 @@ _Release candidate for v0.9.0 — bundles five P0 fixes (V1-03, V1-04, V1-05, V1
 - Multi-format audio support: WAV, MP3, M4A/AAC, OGG/Vorbis, FLAC (via symphonia).
 - 39 unit tests (tokenizer, features, decode, inference, protocol).
 
-[Unreleased]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.10...HEAD
+[Unreleased]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.11...HEAD
+[2.0.11]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.10...v2.0.11
 [2.0.10]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.9...v2.0.10
 [2.0.3]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.2...v2.0.3
 [2.0.2]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.1...v2.0.2

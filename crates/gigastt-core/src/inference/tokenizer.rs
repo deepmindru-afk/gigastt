@@ -173,4 +173,59 @@ mod tests {
         let tok = Tokenizer::load(f.path()).unwrap();
         assert_eq!(tok.decode(&[0, 1]), "привет мир");
     }
+
+    #[test]
+    fn test_load_vocab_missing_file() {
+        let result = Tokenizer::load(std::path::Path::new("/nonexistent/vocab.txt"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_decode_empty() {
+        let f = create_test_vocab("a\t0\n<blk>\t1\n");
+        let tok = Tokenizer::load(f.path()).unwrap();
+        assert_eq!(tok.decode(&[]), "");
+    }
+
+    #[test]
+    fn test_token_text_out_of_range() {
+        let f = create_test_vocab("a\t0\n<blk>\t1\n");
+        let tok = Tokenizer::load(f.path()).unwrap();
+        assert_eq!(tok.token_text(999), "");
+    }
+
+    #[test]
+    fn test_token_text_unk_is_empty() {
+        let f = create_test_vocab("<unk>\t0\na\t1\n<blk>\t2\n");
+        let tok = Tokenizer::load(f.path()).unwrap();
+        assert_eq!(tok.token_text(0), "");
+        assert_eq!(tok.token_text(2), "");
+        assert_eq!(tok.token_text(1), "a");
+    }
+
+    #[test]
+    fn test_load_vocab_with_empty_lines_and_bare_integers() {
+        let f = create_test_vocab("\n1025\na\t0\n\nb\t1\n<blk>\t2\n");
+        let tok = Tokenizer::load(f.path()).unwrap();
+        assert_eq!(tok.vocab_size(), 3);
+        assert_eq!(tok.token_text(0), "a");
+        assert_eq!(tok.token_text(1), "b");
+    }
+
+    #[test]
+    fn test_load_vocab_no_whitespace_fallback() {
+        let f = create_test_vocab("a\nb\t1\n<blk>\t2\n");
+        let tok = Tokenizer::load(f.path()).unwrap();
+        assert_eq!(tok.vocab_size(), 3);
+        assert_eq!(tok.token_text(0), "a");
+    }
+
+    #[test]
+    fn test_load_vocab_non_numeric_after_whitespace_fallback() {
+        let f = create_test_vocab("hello world abc\n<blk>\t1\n");
+        let tok = Tokenizer::load(f.path()).unwrap();
+        // "hello world abc" has whitespace but "abc" isn't a valid number, so whole line kept
+        assert_eq!(tok.vocab_size(), 2);
+        assert_eq!(tok.token_text(0), "hello world abc");
+    }
 }

@@ -67,6 +67,25 @@ pub async fn start_server(model_dir: &str) -> (u16, oneshot::Sender<()>) {
     (port, shutdown_tx)
 }
 
+/// Start the server with metrics endpoint enabled.
+pub async fn start_server_with_metrics(model_dir: &str) -> (u16, oneshot::Sender<()>) {
+    let (port, listener) = free_port().await;
+    let (shutdown_tx, shutdown_rx) = oneshot::channel();
+
+    let engine = gigastt::inference::Engine::load(model_dir).unwrap();
+    let mut config = gigastt::server::ServerConfig::local(port);
+    config.metrics_enabled = true;
+    tokio::spawn(gigastt::server::run_with_config_listener(
+        engine,
+        config,
+        Some(shutdown_rx),
+        listener,
+    ));
+
+    wait_for_ready(port, Duration::from_secs(30)).await;
+    (port, shutdown_tx)
+}
+
 /// Start the server with a custom `RuntimeLimits`. Used by V1-03 / V1-04
 /// e2e tests that need a short drain window or session cap.
 pub async fn start_server_with_limits(

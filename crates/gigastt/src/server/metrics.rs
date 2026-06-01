@@ -457,4 +457,38 @@ mod tests {
         assert!(text.contains("h_sum 4.5"));
         assert!(text.contains("h_count 3"));
     }
+
+    #[test]
+    fn test_histogram_bucket_resize_on_reregister() {
+        let r = MetricsRegistry::new();
+        // First registration with 2 buckets
+        r.register_histogram("h", "H", &[1.0, 2.0]);
+        r.histogram_record("h", &[], 0.5);
+        // Re-register with 4 buckets — existing series should resize
+        r.register_histogram("h", "H", &[0.5, 1.0, 2.0, 5.0]);
+        r.histogram_record("h", &[], 3.0);
+        let text = r.render_prometheus();
+        // Both observations should be counted
+        assert!(text.contains("h_count 2"));
+        assert!(text.contains("h_sum 3.5"));
+        // 3.0 falls into the new 5.0 bucket (counts are non-cumulative in this impl)
+        assert!(text.contains("h_bucket{le=\"5\"} 1"));
+        assert!(text.contains("h_bucket{le=\"+Inf\"} 2"));
+    }
+
+    #[test]
+    fn test_fmt_f64_prom_special_values() {
+        assert_eq!(fmt_f64_prom(f64::INFINITY), "+Inf");
+        assert_eq!(fmt_f64_prom(f64::NEG_INFINITY), "-Inf");
+        assert_eq!(fmt_f64_prom(f64::NAN), "NaN");
+        assert_eq!(fmt_f64_prom(std::f64::consts::PI), "3.141592653589793");
+    }
+
+    #[test]
+    fn test_trim_outer_braces() {
+        assert_eq!(trim_outer_braces(""), "");
+        assert_eq!(trim_outer_braces("{a=\"b\"}"), "a=\"b\"");
+        assert_eq!(trim_outer_braces("abc"), "abc");
+        assert_eq!(trim_outer_braces("{}"), "");
+    }
 }
