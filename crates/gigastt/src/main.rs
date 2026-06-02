@@ -447,10 +447,10 @@ mod tests {
 
     #[test]
     fn test_ensure_bind_allowed_non_loopback_requires_flag() {
-        // Temporarily strip any env opt-in that might exist on the runner.
-        // SAFETY: single-threaded test harness inside this fn body; env mutation is fine.
+        // Serialize env-mutating tests to avoid races under multi-threaded harness.
+        static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _guard = ENV_LOCK.lock().unwrap();
         let previous = std::env::var("GIGASTT_ALLOW_BIND_ANY").ok();
-        // SAFETY: tests are run sequentially within this module — transient env mutation.
         unsafe {
             std::env::remove_var("GIGASTT_ALLOW_BIND_ANY");
         }
@@ -568,6 +568,9 @@ mod tests {
 
     #[test]
     fn test_ensure_bind_allowed_env_opt_in() {
+        // Serialize env-mutating tests to avoid races under multi-threaded harness.
+        static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _guard = ENV_LOCK.lock().unwrap();
         let previous = std::env::var("GIGASTT_ALLOW_BIND_ANY").ok();
         unsafe {
             std::env::set_var("GIGASTT_ALLOW_BIND_ANY", "1");
