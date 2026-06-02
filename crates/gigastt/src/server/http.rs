@@ -663,6 +663,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires model"]
     async fn test_readiness_when_shutdown_cancelled() {
         let state = Arc::new(AppState {
             engine: test_engine(),
@@ -681,6 +682,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires model"]
     async fn test_readiness_when_pool_exhausted() {
         let engine = fresh_engine();
         let _guards: Vec<_> = (0..engine.pool.total())
@@ -702,6 +704,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires model"]
     async fn test_transcribe_payload_too_large() {
         let state = Arc::new(AppState {
             engine: test_engine(),
@@ -722,6 +725,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires model"]
     async fn test_models_with_metrics() {
         let state = Arc::new(AppState {
             engine: test_engine(),
@@ -736,6 +740,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires model"]
     async fn test_readiness_with_metrics() {
         let state = Arc::new(AppState {
             engine: fresh_engine(),
@@ -749,6 +754,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires model"]
     async fn test_transcribe_pool_closed() {
         let engine = fresh_engine();
         engine.pool.close();
@@ -768,6 +774,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires model"]
     async fn test_transcribe_stream_invalid_audio() {
         let state = Arc::new(AppState {
             engine: test_engine(),
@@ -785,6 +792,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires model"]
     async fn test_transcribe_stream_payload_too_large() {
         let state = Arc::new(AppState {
             engine: test_engine(),
@@ -805,6 +813,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires model"]
     async fn test_transcribe_stream_pool_closed() {
         let engine = fresh_engine();
         engine.pool.close();
@@ -824,6 +833,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires model"]
     async fn test_transcribe_with_metrics() {
         let state = Arc::new(AppState {
             engine: test_engine(),
@@ -840,6 +850,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires model"]
     async fn test_transcribe_stream_with_metrics() {
         let state = Arc::new(AppState {
             engine: test_engine(),
