@@ -215,6 +215,9 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - uses: obi1kenobi/cargo-semver-checks-action@v2
+        with:
+          # coreml+cuda are mutually exclusive; --all-features is impossible.
+          feature-group: default-features
 
   coverage:
     runs-on: ubuntu-latest
@@ -407,7 +410,7 @@ jobs:
   bench:
     # PR-only: criterion needs a main baseline to diff against, and the
     # regression gate is meaningless on the very push that moves main.
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'dependabot/')
     runs-on: ubuntu-latest
     name: Benchmarks (regression gate)
     steps:
