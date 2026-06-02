@@ -615,6 +615,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires model"]
     fn test_transcribe_file_absolute_path_rejected() {
         let engine = shared_test_engine();
         let file = CString::new("/etc/passwd").unwrap();
@@ -623,6 +624,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires model"]
     fn test_transcribe_file_parent_dir_rejected() {
         let engine = shared_test_engine();
         let file = CString::new("../secret.wav").unwrap();
