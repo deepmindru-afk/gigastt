@@ -427,6 +427,10 @@ async fn main() -> anyhow::Result<()> {
 mod tests {
     use super::*;
 
+    // Serialize tests that mutate process env vars to avoid races under
+    // cargo test's default multi-threaded harness (used by tarpaulin).
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
     fn test_is_loopback_host_recognises_common_forms() {
         assert!(is_loopback_host("127.0.0.1"));
@@ -447,8 +451,6 @@ mod tests {
 
     #[test]
     fn test_ensure_bind_allowed_non_loopback_requires_flag() {
-        // Serialize env-mutating tests to avoid races under multi-threaded harness.
-        static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
         let _guard = ENV_LOCK.lock().unwrap();
         let previous = std::env::var("GIGASTT_ALLOW_BIND_ANY").ok();
         unsafe {
@@ -568,8 +570,6 @@ mod tests {
 
     #[test]
     fn test_ensure_bind_allowed_env_opt_in() {
-        // Serialize env-mutating tests to avoid races under multi-threaded harness.
-        static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
         let _guard = ENV_LOCK.lock().unwrap();
         let previous = std::env::var("GIGASTT_ALLOW_BIND_ANY").ok();
         unsafe {
