@@ -530,6 +530,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires model"]
     async fn test_run_with_shutdown_starts_and_stops() {
         let engine = gigastt_core::inference::Engine::load_with_pool_size(
             &gigastt_core::model::default_model_dir(),
@@ -547,6 +548,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires model"]
     async fn test_run_with_config_listener_clamps_zero_timeout() {
         let engine = gigastt_core::inference::Engine::load_with_pool_size(
             &gigastt_core::model::default_model_dir(),

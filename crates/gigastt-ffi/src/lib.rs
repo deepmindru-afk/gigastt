@@ -631,6 +631,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires model"]
     fn test_transcribe_file_success() {
         let engine = shared_test_engine();
         let wav = generate_test_wav(1, 16000);
@@ -648,6 +649,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires model"]
     fn test_stream_new_success() {
         let engine = shared_test_engine();
         let stream = unsafe { gigastt_stream_new(engine) };
@@ -656,6 +658,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires model"]
     fn test_stream_process_chunk_success() {
         let engine = shared_test_engine();
         let stream = unsafe { gigastt_stream_new(engine) };
@@ -673,6 +676,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires model"]
     fn test_stream_process_chunk_resample() {
         let engine = shared_test_engine();
         let stream = unsafe { gigastt_stream_new(engine) };
@@ -688,6 +692,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires model"]
     fn test_stream_flush_success() {
         let engine = shared_test_engine();
         let stream = unsafe { gigastt_stream_new(engine) };
@@ -707,6 +712,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires model"]
     fn test_engine_new_with_pool_size_success() {
         let dir = CString::new(gigastt_core::model::default_model_dir()).unwrap();
         let engine = unsafe { gigastt_engine_new_with_pool_size(dir.as_ptr(), 1) };
@@ -715,6 +721,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires model"]
     fn test_quantize_model_idempotent() {
         let dir = CString::new(gigastt_core::model::default_model_dir()).unwrap();
         let r = unsafe { gigastt_quantize_model(dir.as_ptr(), false) };
