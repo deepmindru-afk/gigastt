@@ -239,11 +239,11 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       # Default features only — coreml+cuda is a hard compile_error, so
       # `--all-features` is impossible here (unlike single-crate repos).
-      - name: Run tarpaulin
-        # Floor only — the unit-test-only run measures ~19.8% (model-gated
-        # inference/server paths are exercised by the --ignored e2e suite,
-        # which has no model here). --fail-under guards against regressions.
-        run: cargo tarpaulin --workspace --out xml --timeout 120 --fail-under 18 --skip-clean
+      - name: Run tarpaulin (unit tests only)
+        # `--lib --bins` excludes integration test targets from the denominator
+        # so the figure reflects production-code coverage, not test-code lines.
+        # Model-gated paths are covered by the separate coverage-e2e job on main.
+        run: cargo tarpaulin --workspace --lib --bins --out xml --timeout 120 --fail-under 18 --skip-clean
       - uses: codecov/codecov-action@v4
         with:
           files: ./cobertura.xml
@@ -483,3 +483,52 @@ jobs:
           name: criterion-report
           path: target/criterion/
           if-no-files-found: ignore
+
+  coverage-e2e:
+    # E2E coverage runs only on main because it needs the ~850 MB model and
+    # serial execution (--test-threads=1), which makes the job slow (~20 min).
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [e2e-tests]
+    runs-on: ubuntu-latest
+    name: Coverage (E2E)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-tarpaulin
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache model
+        id: cache-model
+        uses: actions/cache@v4
+        with:
+          path: ~/.gigastt/models
+          key: gigastt-model-v3-onnx-${{ hashFiles('crates/gigastt-core/src/model/mod.rs') }}
+
+      - name: Download model
+        if: steps.cache-model.outputs.cache-hit != 'true'
+        run: cargo run -p gigastt -- download
+
+      - name: Run e2e coverage
+        # Tarpaulin passes arguments after `--` to the test harness.
+        # `--ignored --test-threads=1` mirrors the e2e-tests job.
+        run: |
+          cargo tarpaulin -p gigastt \
+            --test e2e_rest --test e2e_ws --test e2e_errors --test e2e_shutdown --test e2e_rate_limit \
+            -- --ignored --test-threads=1 \
+            --out xml --timeout 300 --skip-clean
+
+      - uses: codecov/codecov-action@v4
+        with:
+          files: ./cobertura.xml
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
