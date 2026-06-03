@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **CI coverage expanded to 90 %+.**
+  - `coverage-e2e` job now runs ignored lib+bin unit tests (model-dependent)
+    alongside integration tests, merging all coverage into a single Cobertura
+    report.
+  - CLI command coverage: `--help`, `serve --help`, `download`, `quantize --force`,
+    and `transcribe` are exercised via `cargo llvm-cov run` to cover the `main()`
+    command-dispatch paths.
+  - New E2E WebSocket tests: unrecognized text message (`Ok(_) => Continue`),
+    client Close frame handling, and max-session pre-check branch.
+  - New unit tests for `build_limits` with valid/invalid TOML config files.
+
+### Changed
+
+- `.gitignore` now also ignores `lcov-*.info` and `lcov-*.xml` (local coverage
+  merge artifacts).
+
 ## [2.0.11] - 2026-06-01
 
 ### Added

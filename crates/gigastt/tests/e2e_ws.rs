@@ -492,3 +492,175 @@ async fn test_ws_configure_protocol_version_mismatch() {
     assert_eq!(v["type"], "error");
     assert_eq!(v["code"], "unsupported_protocol_version");
 }
+
+// ---------------------------------------------------------------------------
+// 12. Unrecognized text message is ignored (covers the Ok(_) => Continue path)
+// ---------------------------------------------------------------------------
+
+#[ignore]
+#[tokio::test]
+async fn test_ws_unrecognized_text_message_ignored() {
+    let model_dir = common::model_dir();
+    let (port, _shutdown) = common::start_server(&model_dir).await;
+
+    let (mut sink, mut stream) = {
+        let (ws, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/v1/ws"))
+            .await
+            .expect("WS connect failed");
+        ws.split()
+    };
+
+    // Consume Ready
+    let _ = tokio::time::timeout(Duration::from_secs(5), stream.next())
+        .await
+        .expect("timeout")
+        .expect("stream ended")
+        .expect("ws error");
+
+    // Send a text message that is valid JSON but not a recognized ClientMessage variant
+    sink.send(Message::Text(
+        serde_json::json!({ "type": "unknown_command", "payload": 42 })
+            .to_string()
+            .into(),
+    ))
+    .await
+    .expect("send text");
+
+    // Send a minimal audio frame so the server has something to process,
+    // then stop. This proves the unrecognized message did not kill the session.
+    let chunk = common::generate_pcm16_silence(0.02, 48000);
+    sink.send(Message::Binary(chunk.into())).await.unwrap();
+
+    sink.send(Message::Text(
+        serde_json::json!({ "type": "stop" }).to_string().into(),
+    ))
+    .await
+    .unwrap();
+
+    let msg = tokio::time::timeout(Duration::from_secs(10), stream.next())
+        .await
+        .expect("timeout waiting for final")
+        .expect("stream ended")
+        .expect("ws error");
+    let text = msg.into_text().unwrap();
+    let v: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(v["type"], "final");
+}
+
+// ---------------------------------------------------------------------------
+// 13. Client sends a Close frame — server should break cleanly
+// ---------------------------------------------------------------------------
+
+#[ignore]
+#[tokio::test]
+async fn test_ws_client_close_frame_ends_session() {
+    let model_dir = common::model_dir();
+    let (port, _shutdown) = common::start_server(&model_dir).await;
+
+    let (mut sink, mut stream) = {
+        let (ws, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/v1/ws"))
+            .await
+            .expect("WS connect failed");
+        ws.split()
+    };
+
+    // Consume Ready
+    let _ = tokio::time::timeout(Duration::from_secs(5), stream.next())
+        .await
+        .expect("timeout")
+        .expect("stream ended")
+        .expect("ws error");
+
+    // Send Close frame from client side
+    sink.send(Message::Close(None)).await.expect("send close");
+
+    // Server should end the stream; nothing more should arrive.
+    let next = tokio::time::timeout(Duration::from_secs(3), stream.next()).await;
+    match next {
+        Ok(None) | Ok(Some(Ok(Message::Close(_)))) | Ok(Some(Err(_))) => {}
+        other => panic!("Expected stream end after client Close, got: {other:?}"),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 15. Rapid frames during short max_session_secs hit the pre-check branch
+// ---------------------------------------------------------------------------
+
+#[ignore]
+#[tokio::test]
+async fn test_ws_max_session_precheck() {
+    let model_dir = common::model_dir();
+    let limits = gigastt::server::RuntimeLimits {
+        max_session_secs: 1,
+        idle_timeout_secs: 5,
+        ..Default::default()
+    };
+    let (port, _shutdown) = common::start_server_with_limits(&model_dir, limits).await;
+
+    let (mut sink, mut stream) = {
+        let (ws, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/v1/ws"))
+            .await
+            .expect("WS connect failed");
+        ws.split()
+    };
+
+    // Consume Ready
+    let _ = tokio::time::timeout(Duration::from_secs(5), stream.next())
+        .await
+        .expect("timeout")
+        .expect("stream ended")
+        .expect("ws error");
+
+    // Stream frames rapidly (every 50 ms) so the pre-check at the top of the
+    // loop fires before the select! sleep_until branch can time out.
+    let chunk = common::generate_pcm16_silence(0.02, 48000);
+    let stream_task = tokio::spawn(async move {
+        for _ in 0..200 {
+            if sink
+                .send(Message::Binary(chunk.clone().into()))
+                .await
+                .is_err()
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    });
+
+    // We expect either max_session_duration_exceeded error or a Close(1008).
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+    let mut saw_cap_close = false;
+
+    while tokio::time::Instant::now() < deadline {
+        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+        let next = tokio::time::timeout(remaining, stream.next()).await;
+        match next {
+            Ok(Some(Ok(Message::Text(text)))) => {
+                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {
+                    if v["code"] == "max_session_duration_exceeded" {
+                        saw_cap_close = true;
+                    }
+                }
+            }
+            Ok(Some(Ok(Message::Close(Some(
+                tokio_tungstenite::tungstenite::protocol::frame::CloseFrame { code, .. },
+            ))))) => {
+                if u16::from(code) == 1008 {
+                    saw_cap_close = true;
+                }
+                break;
+            }
+            Ok(None) | Ok(Some(Err(_))) => break,
+            Err(_) => break,
+            _ => continue,
+        }
+    }
+
+    stream_task.abort();
+    let _ = stream_task.await;
+
+    assert!(
+        saw_cap_close,
+        "Must hit max session cap via pre-check or sleep_until"
+    );
+}
