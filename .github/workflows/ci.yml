@@ -521,11 +521,12 @@ jobs:
       - name: Run e2e coverage
         # Tarpaulin passes arguments after `--` to the test harness.
         # `--ignored --test-threads=1` mirrors the e2e-tests job.
+        # tarpaulin options (--out, --timeout) must come BEFORE `--`.
         run: |
           cargo tarpaulin -p gigastt \
             --test e2e_rest --test e2e_ws --test e2e_errors --test e2e_shutdown --test e2e_rate_limit \
-            -- --ignored --test-threads=1 \
-            --out xml --timeout 300 --skip-clean
+            --out xml --timeout 300 --skip-clean \
+            -- --ignored --test-threads=1
 
       - uses: codecov/codecov-action@v4
         with:
