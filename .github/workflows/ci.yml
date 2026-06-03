@@ -229,7 +229,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-tarpaulin
+          tool: cargo-llvm-cov
       - uses: actions/cache@v4
         with:
           path: |
@@ -239,14 +239,15 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       # Default features only — coreml+cuda is a hard compile_error, so
       # `--all-features` is impossible here (unlike single-crate repos).
-      - name: Run tarpaulin (unit tests only)
-        # `--lib --bins` excludes integration test targets from the denominator
-        # so the figure reflects production-code coverage, not test-code lines.
-        # Model-gated paths are covered by the separate coverage-e2e job on main.
-        run: cargo tarpaulin --workspace --lib --bins --out xml --timeout 120 --fail-under 18 --skip-clean
+      - name: Run unit coverage
+        # `--lib --bins` excludes integration test targets so the badge reflects
+        # production-code coverage, not test-code lines.
+        run: |
+          cargo llvm-cov --no-report --workspace --lib --bins
+          cargo llvm-cov report --cobertura --output-path cobertura-unit.xml
       - uses: codecov/codecov-action@v4
         with:
-          files: ./cobertura.xml
+          files: ./cobertura-unit.xml
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
 
@@ -498,7 +499,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-tarpaulin
+          tool: cargo-llvm-cov
       - uses: actions/cache@v4
         with:
           path: |
@@ -519,17 +520,20 @@ jobs:
         run: cargo run -p gigastt -- download
 
       - name: Run e2e coverage
-        # Tarpaulin passes arguments after `--` to the test harness.
-        # `--ignored --test-threads=1` mirrors the e2e-tests job.
-        # tarpaulin options (--out, --timeout) must come BEFORE `--`.
+        # Run each integration test target sequentially with `--no-report` so
+        # coverage data accumulates in target/llvm-cov-target, then generate a
+        # single Cobertura report. `cargo-llvm-cov` has lower overhead than
+        # tarpaulin and is more stable for timing-sensitive e2e tests.
         run: |
-          cargo tarpaulin -p gigastt \
-            --test e2e_rest --test e2e_ws --test e2e_errors --test e2e_shutdown --test e2e_rate_limit \
-            --out xml --timeout 300 --skip-clean \
-            -- --ignored --test-threads=1
+          cargo llvm-cov --no-report -p gigastt --test e2e_rest     -- --ignored --test-threads=1
+          cargo llvm-cov --no-report -p gigastt --test e2e_ws       -- --ignored --test-threads=1
+          cargo llvm-cov --no-report -p gigastt --test e2e_errors   -- --ignored --test-threads=1
+          cargo llvm-cov --no-report -p gigastt --test e2e_shutdown -- --ignored --test-threads=1
+          cargo llvm-cov --no-report -p gigastt --test e2e_rate_limit -- --ignored --test-threads=1
+          cargo llvm-cov report --cobertura --output-path cobertura-e2e.xml
 
       - uses: codecov/codecov-action@v4
         with:
-          files: ./cobertura.xml
+          files: ./cobertura-e2e.xml
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
