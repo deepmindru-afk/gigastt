@@ -133,7 +133,7 @@ historical audit trail; trust this rollup over the table cells for
 | S.9 | SUS-11 | `terminationGracePeriodSeconds` + shutdown guide in `deployment.md` | ⏳ open |
 | S.10 | SUS-09 | Grafana dashboard JSON + `alerts.yml` examples | ⏳ open |
 | S.11 | SUS-06 | `cargo-fuzz` harness for WAV header, WS binary frame, ONNX protobuf | ⏳ open |
-| S.12 | SUS-08 | Coverage gate (`tarpaulin` or `grcov`) | ⏳ open |
+| S.12 | SUS-08 | Coverage gate (`cargo-llvm-cov` → codecov, 90 %+) | ✅ done (v2.0.12) |
 | S.13 | SUS-07 | Miri + ASAN / TSAN nightly | ⏳ open |
 | S.14 | SUS-12 | OpenAPI spec for REST (complements AsyncAPI) | ⏳ open |
 

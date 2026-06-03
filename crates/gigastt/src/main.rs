@@ -620,6 +620,43 @@ mod tests {
     }
 
     #[test]
+    fn test_build_limits_with_valid_config_file() {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(tmp.path(), b"idle_timeout_secs = 123\n").unwrap();
+        let limits = build_limits(
+            Some(tmp.path().to_str().unwrap()),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(limits.idle_timeout_secs, 123);
+    }
+
+    #[test]
+    fn test_build_limits_with_invalid_config_file() {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(tmp.path(), b"not valid toml {{{").unwrap();
+        let result = build_limits(
+            Some(tmp.path().to_str().unwrap()),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn test_build_limits_rejects_zero_burst_with_nonzero_rpm() {
         let result = build_limits(None, None, None, None, Some(30), Some(0), None, None, None);
         assert!(result.is_err());
