@@ -10,3 +10,4 @@ missions/
 .superpowers/
 .kimi/
 .gstack/
+*.profraw\nlcov.info\ncoverage.json\ncobertura*.xml\n
