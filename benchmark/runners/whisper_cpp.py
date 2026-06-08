@@ -28,6 +28,11 @@ class WhisperCppRunner:
 
     def _build(self) -> Path:
         """Clone and build whisper-cli from source."""
+        # Check for pre-existing local build (e.g. /tmp/whisper.cpp)
+        local_build = Path("/tmp/whisper.cpp/build/bin/whisper-cli")
+        if local_build.exists():
+            return local_build
+
         if not self._source_dir.exists():
             print(f"[whisper.cpp] Cloning source (tag {self.source_tag}) ...")
             subprocess.run(
@@ -77,12 +82,18 @@ class WhisperCppRunner:
             # Check if whisper-cli is already on PATH
             for name in ("whisper-cli", "main"):
                 try:
-                    subprocess.run([name, "--version"], capture_output=True, check=True)
+                    subprocess.run([name, "-h"], capture_output=True, check=True)
                     self._binary = Path(name)
                     self._model_path = self._download_model()
                     return True
                 except Exception:
                     continue
+            # Check for local build
+            local_build = Path("/tmp/whisper.cpp/build/bin/whisper-cli")
+            if local_build.exists():
+                self._binary = local_build
+                self._model_path = self._download_model()
+                return True
             # Build from source
             self._binary = self._build()
             self._model_path = self._download_model()
