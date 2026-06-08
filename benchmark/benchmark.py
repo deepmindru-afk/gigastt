@@ -126,7 +126,8 @@ def main():
 
     active_runners = []
     for r in all_runners:
-        if "all" in requested or r.name.replace(".", "_") in requested or r.name in requested:
+        normalized = r.name.replace(".", "_").replace("-", "_")
+        if "all" in requested or normalized in requested or r.name in requested:
             if r.is_available():
                 active_runners.append(r)
             else:
