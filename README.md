@@ -244,6 +244,15 @@ java -jar client.jar recording.wav
 | **Model size** | 851 MB (FP32) / 222 MB (INT8) |
 | **Concurrent sessions** | up to 4 (configurable via `--pool-size`) |
 
+### Cross-ASR Comparison (100 samples, Golos crowd, CPU)
+
+| Engine | WER | RTF (real-time factor) | Relative speed |
+|---|---|---|---|
+| **gigastt** (GigaAM v3, INT8) | **16.9%** | **0.17x** | **5.2× faster** |
+| whisper.cpp (Large v3) | 14.4% | 0.89x | baseline |
+
+> Full reproducible benchmark: [`benchmark/README.md`](benchmark/README.md). Raw results: [`benchmark-results`](https://github.com/ekhodzitsky/gigastt/tree/benchmark-results).
+
 ### Hardware Acceleration
 
 | Platform | Feature flag | Execution Provider |
