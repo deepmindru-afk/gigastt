@@ -246,12 +246,14 @@ java -jar client.jar recording.wav
 
 ### Cross-ASR Comparison (100 samples, Golos crowd, CPU)
 
-| Engine | WER | RTF (real-time factor) | Relative speed |
-|---|---|---|---|
-| **gigastt** (GigaAM v3, INT8) | **16.9%** | **0.17x** | **5.2× faster** |
-| whisper.cpp (Large v3) | 14.4% | 0.89x | baseline |
+| Engine | Model | WER | RTF | Relative speed |
+|---|---|---|---|---|
+| **Vosk** | vosk-model-ru-0.42 | **5.4%** | **0.043x** | **21.7× faster** |
+| whisper.cpp | Large v3 | 14.4% | 0.93x | 1.0× baseline |
+| faster-whisper | Large v3 (INT8) | 15.7% | 1.17x | 0.8× |
+| **gigastt** | GigaAM v3 (INT8) | 16.9% | **0.20x** | **4.7× faster** |
 
-> Full reproducible benchmark: [`benchmark/README.md`](benchmark/README.md). Raw results: [`benchmark-results`](https://github.com/ekhodzitsky/gigastt/tree/benchmark-results).
+> **Note:** Vosk leads on this clean-speech subset (Golos crowd) with excellent speed. gigastt targets **streaming real-time** use-cases with sub-200ms latency and hardware acceleration (CoreML/CUDA). Full reproducible benchmark: [`benchmark/README.md`](benchmark/README.md). Raw results: [`benchmark-results`](https://github.com/ekhodzitsky/gigastt/tree/benchmark-results).
 
 ### Hardware Acceleration
 
