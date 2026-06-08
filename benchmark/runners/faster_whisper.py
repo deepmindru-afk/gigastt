@@ -7,7 +7,10 @@ from pathlib import Path
 class FasterWhisperRunner:
     name = "faster-whisper"
 
-    def __init__(self, model_size: str = "large-v3", device: str = "cpu", compute_type: str = "int8"):
+    def __init__(self, model_size: str = None, device: str = "cpu", compute_type: str = "int8"):
+        import os
+        if model_size is None:
+            model_size = os.environ.get("BENCHMARK_FASTER_WHISPER_MODEL", "large-v3")
         self.model_size = model_size
         self.device = device
         self.compute_type = compute_type

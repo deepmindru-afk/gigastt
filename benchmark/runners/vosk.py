@@ -10,7 +10,10 @@ from pathlib import Path
 class VoskRunner:
     name = "vosk"
 
-    def __init__(self, model_name: str = "vosk-model-ru-0.42", download_dir: str | None = None):
+    def __init__(self, model_name: str = None, download_dir: str | None = None):
+        import os
+        if model_name is None:
+            model_name = os.environ.get("BENCHMARK_VOSK_MODEL", "vosk-model-ru-0.42")
         self.model_name = model_name
         self.download_dir = Path(download_dir) if download_dir else Path.home() / ".cache" / "vosk"
         self.download_dir.mkdir(parents=True, exist_ok=True)
