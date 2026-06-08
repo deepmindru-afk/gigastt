@@ -11,6 +11,8 @@
     <a href="https://codecov.io/gh/ekhodzitsky/gigastt"><img src="https://codecov.io/gh/ekhodzitsky/gigastt/branch/main/graph/badge.svg" alt="codecov"></a>
     <a href="https://docs.rs/gigastt-core"><img src="https://docs.rs/gigastt-core/badge.svg" alt="docs.rs"></a>
     <a href="https://github.com/ekhodzitsky/gigastt"><img src="https://img.shields.io/badge/MSRV-1.87-blue.svg" alt="MSRV 1.87"></a>
+    <a href="https://github.com/ekhodzitsky/gigastt/tree/benchmark-results"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fekhodzitsky%2Fgigastt%2Fbenchmark-results%2Fresults.json&query=%24.runners%5B0%5D.wer&suffix=%25&label=WER&color=blue" alt="WER"></a>
+    <a href="https://github.com/ekhodzitsky/gigastt/tree/benchmark-results"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fekhodzitsky%2Fgigastt%2Fbenchmark-results%2Fresults.json&query=%24.runners%5B0%5D.rtf&suffix=x&label=RTF&color=green" alt="RTF"></a>
   <p align="center"><b>English</b> | <a href="README_RU.md">Русский</a></p>
 </p>
 

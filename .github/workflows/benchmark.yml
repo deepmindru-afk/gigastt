@@ -1,0 +1,95 @@
+name: benchmark
+
+on:
+  schedule:
+    - cron: "0 4 * * 0"  # Every Sunday at 04:00 UTC
+  workflow_dispatch:
+    inputs:
+      max_samples:
+        description: "Max samples (0 = unlimited)"
+        required: false
+        default: "100"
+      runners:
+        description: "Comma-separated runners or 'all'"
+        required: false
+        default: "all"
+
+permissions:
+  contents: write
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: benchmark-release
+
+      - name: Cache models
+        uses: actions/cache@v4
+        with:
+          path: ~/.gigastt/models
+          key: gigastt-models-${{ hashFiles('crates/gigastt-core/src/model/mod.rs') }}
+
+      - name: Cache competitor models
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/whisper.cpp
+            ~/.cache/vosk
+          key: asr-models-2025
+
+      - name: Build gigastt
+        run: cargo build --release -p gigastt
+
+      - name: Download gigastt model
+        run: ./target/release/gigastt download
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r benchmark/requirements.txt
+
+      - name: Run benchmark
+        run: |
+          cd benchmark
+          python benchmark.py \
+            --max-samples ${{ github.event.inputs.max_samples || 100 }} \
+            --runners ${{ github.event.inputs.runners || 'all' }} \
+            --output results.json
+        env:
+          GIGASTT_BENCHMARK_MAX_SAMPLES: ${{ github.event.inputs.max_samples || 100 }}
+
+      - name: Upload results artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmark/results.json
+
+      - name: Commit results to benchmark-results branch
+        if: github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan benchmark-results-tmp
+          cp benchmark/results.json /tmp/results.json
+          git rm -rf .
+          cp /tmp/results.json results.json
+          git add results.json
+          git commit -m "benchmark: update results ($(date -u +%Y-%m-%d))"
+          git branch -M benchmark-results
+          git push -f origin benchmark-results
