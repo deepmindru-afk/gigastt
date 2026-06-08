@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.13] - 2026-06-08
+
+### Dependencies
+
+- **prost** 0.14.3 → 0.14.4
+- **prost-build** 0.14.3 → 0.14.4
+- **polyvoice** 0.6.7 → 0.6.8
+
+### CI
+
+- **actions/cache** 4 → 5
+- **codecov/codecov-action** 4 → 7
+
 ## [2.0.12] - 2026-06-03
 
 ### Added
@@ -985,7 +998,9 @@ _Release candidate for v0.9.0 — bundles five P0 fixes (V1-03, V1-04, V1-05, V1
 - Multi-format audio support: WAV, MP3, M4A/AAC, OGG/Vorbis, FLAC (via symphonia).
 - 39 unit tests (tokenizer, features, decode, inference, protocol).
 
-[Unreleased]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.11...HEAD
+[Unreleased]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.13...HEAD
+[2.0.13]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.12...v2.0.13
+[2.0.12]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.11...v2.0.12
 [2.0.11]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.10...v2.0.11
 [2.0.10]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.9...v2.0.10
 [2.0.3]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.2...v2.0.3
