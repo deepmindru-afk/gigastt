@@ -464,6 +464,20 @@ cargo +nightly fuzz run audio_decode    # also: protocol_parse, pcm16_framing, t
 cargo bench -p gigastt-core --features __internals
 ```
 
+## Cross-ASR Benchmark
+
+A reproducible benchmark comparing gigastt against whisper.cpp, faster-whisper, and Vosk on Russian speech (Golos crowd dataset):
+
+```bash
+cd benchmark
+pip install -r requirements.txt
+python benchmark.py --max-samples 100
+```
+
+- **Methodology & Docker:** [`benchmark/README.md`](benchmark/README.md)
+- **Self-hosted runners (CoreML / CUDA):** [`docs/self-hosted-runner.md`](docs/self-hosted-runner.md)
+- **Live results:** [`benchmark-results`](https://github.com/ekhodzitsky/gigastt/tree/benchmark-results) branch
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) — development setup, PR guidelines, and release checklist.
