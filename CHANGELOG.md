@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Full cross-ASR benchmark on 9 994 Golos crowd samples.**
+  - Vosk: 4.27% WER / 0.107x RTF (1.3 GB)
+  - gigastt: 11.37% WER / 0.335x RTF (230 MB)
+  - whisper.cpp: 14.96% WER / 1.108x RTF (~3 GB)
+  - faster-whisper: 15.73% WER / 1.224x RTF (~3 GB)
+  - Results published on `benchmark-results-local` branch with shield.io badges.
+  - Added sequential runner script and monitor for long-running benchmarks.
+
 ## [2.0.13] - 2026-06-08
 
 ### Dependencies
