@@ -1,6 +1,6 @@
 <p align="center">
   <h1 align="center">gigastt</h1>
-  <p align="center"><strong>On-device Russian speech recognition with 11.4% WER</strong></p>
+  <p align="center"><strong>On-device Russian speech recognition with 11.37% WER</strong></p>
   <p align="center">Local STT server powered by GigaAM v3 — no cloud, no API keys, full privacy</p>
   <p align="center">
     <a href="https://github.com/ekhodzitsky/gigastt/actions"><img src="https://github.com/ekhodzitsky/gigastt/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -11,8 +11,9 @@
     <a href="https://codecov.io/gh/ekhodzitsky/gigastt"><img src="https://codecov.io/gh/ekhodzitsky/gigastt/branch/main/graph/badge.svg" alt="codecov"></a>
     <a href="https://docs.rs/gigastt-core"><img src="https://docs.rs/gigastt-core/badge.svg" alt="docs.rs"></a>
     <a href="https://github.com/ekhodzitsky/gigastt"><img src="https://img.shields.io/badge/MSRV-1.87-blue.svg" alt="MSRV 1.87"></a>
-    <a href="https://github.com/ekhodzitsky/gigastt/tree/benchmark-results"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fekhodzitsky%2Fgigastt%2Fbenchmark-results%2Fresults.json&query=%24.runners%5B0%5D.wer&suffix=%25&label=WER&color=blue" alt="WER"></a>
-    <a href="https://github.com/ekhodzitsky/gigastt/tree/benchmark-results"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fekhodzitsky%2Fgigastt%2Fbenchmark-results%2Fresults.json&query=%24.runners%5B0%5D.rtf&suffix=x&label=RTF&color=green" alt="RTF"></a>
+    <a href="https://github.com/ekhodzitsky/gigastt/tree/benchmark-results-local"><img src="https://img.shields.io/badge/WER-11.37%25-blue" alt="WER"></a>
+    <a href="https://github.com/ekhodzitsky/gigastt/tree/benchmark-results-local"><img src="https://img.shields.io/badge/RTF-0.335x-green" alt="RTF"></a>
+    <a href="https://github.com/ekhodzitsky/gigastt/tree/benchmark-results-local"><img src="https://img.shields.io/badge/benchmark-9994%20samples-orange" alt="Benchmark"></a>
   <p align="center"><b>English</b> | <a href="README_RU.md">Русский</a></p>
 </p>
 
@@ -47,7 +48,7 @@ $ curl -X POST http://127.0.0.1:9876/v1/transcribe \
 | | gigastt | whisper.cpp | faster-whisper | Vosk | sherpa-onnx | Cloud APIs |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
 | **Model** | GigaAM v3 | Whisper large-v3 | Whisper large-v3 | Vosk models | varies | vendor |
-| **WER (Russian)** | **11.4%** | ~18% | ~18% | ~20%+ | model-dependent | 5–10% |
+| **WER (Russian)** | **11.37%** | ~18% | ~18% | ~20%+ | model-dependent | 5–10% |
 | **Languages** | Russian | 99 | 99 | 20+ | 10+ | 100+ |
 | **Streaming** | real-time WebSocket | — | — | WebSocket + gRPC | WebSocket + TCP | varies |
 | **Latency (16s, M1)** | **~700ms** | ~4s | ~2s | ~3s | ~1.5s | network |
@@ -237,23 +238,23 @@ java -jar client.jar recording.wav
 
 | Metric | Value |
 |---|---|
-| **WER (Russian)** | 11.4% (9 994 Golos crowd samples, 50 394 words, 95% CI [10.9%, 11.9%]) |
-| **INT8 vs FP32** | 0% WER degradation (11.4% vs 11.5% on 9 994 samples) |
+| **WER (Russian)** | 11.37% (9 994 Golos crowd samples, 50 394 words, 95% CI [10.9%, 11.9%]) |
+| **INT8 vs FP32** | 0% WER degradation (11.37% vs 11.46% on 9 994 samples) |
 | **Latency (16s audio, M1)** | ~700 ms (encoder 667 ms + decode 31 ms) |
 | **Memory (RSS)** | ~560 MB |
 | **Model size** | 851 MB (FP32) / 222 MB (INT8) |
 | **Concurrent sessions** | up to 4 (configurable via `--pool-size`) |
 
-### Cross-ASR Comparison (100 samples, Golos crowd, CPU)
+### Cross-ASR Comparison (9 994 samples, Golos crowd, CPU)
 
-| Engine | Model | WER | RTF | Relative speed |
+| Engine | Model | WER | RTF | Size |
 |---|---|---|---|---|
-| **Vosk** | vosk-model-ru-0.42 | **5.4%** | **0.043x** | **21.7× faster** |
-| whisper.cpp | Large v3 | 14.4% | 0.93x | 1.0× baseline |
-| faster-whisper | Large v3 (INT8) | 15.7% | 1.17x | 0.8× |
-| **gigastt** | GigaAM v3 (INT8) | 16.9% | **0.20x** | **4.7× faster** |
+| **Vosk** | vosk-model-ru-0.42 | **4.27%** | **0.107x** | 1.3 GB |
+| **gigastt** | GigaAM v3 (INT8) | **11.37%** | **0.335x** | **230 MB** |
+| whisper.cpp | Large v3 | 14.96% | 1.108x | ~3 GB |
+| faster-whisper | Large v3 (INT8) | 15.73% | 1.224x | ~3 GB |
 
-> **Note:** Vosk leads on this clean-speech subset (Golos crowd) with excellent speed. gigastt targets **streaming real-time** use-cases with sub-200ms latency and hardware acceleration (CoreML/CUDA). Full reproducible benchmark: [`benchmark/README.md`](benchmark/README.md). Raw results: [`benchmark-results`](https://github.com/ekhodzitsky/gigastt/tree/benchmark-results).
+> **Note:** Vosk leads on this clean-speech subset (Golos crowd) with excellent accuracy, but requires 1.3 GB. gigastt targets **streaming real-time** use-cases with sub-200ms latency, hardware acceleration (CoreML/CUDA/NNAPI), and a 6× smaller model footprint. Full reproducible benchmark: [`benchmark/README.md`](benchmark/README.md). Raw results: [`benchmark-results-local`](https://github.com/ekhodzitsky/gigastt/tree/benchmark-results-local).
 
 ### Hardware Acceleration
 
@@ -487,7 +488,7 @@ python benchmark.py --max-samples 100
 
 - **Methodology & Docker:** [`benchmark/README.md`](benchmark/README.md)
 - **Self-hosted runners (CoreML / CUDA):** [`docs/self-hosted-runner.md`](docs/self-hosted-runner.md)
-- **Live results:** [`benchmark-results`](https://github.com/ekhodzitsky/gigastt/tree/benchmark-results) branch
+- **Live results:** [`benchmark-results-local`](https://github.com/ekhodzitsky/gigastt/tree/benchmark-results-local) branch
 
 ## Contributing
 
