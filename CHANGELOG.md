@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.14] - 2026-06-11
+
 ### Fixed
 
 - **CoreML EP no longer fails at runtime on the GigaAM Conformer encoder
@@ -1029,7 +1031,8 @@ _Release candidate for v0.9.0 — bundles five P0 fixes (V1-03, V1-04, V1-05, V1
 - Multi-format audio support: WAV, MP3, M4A/AAC, OGG/Vorbis, FLAC (via symphonia).
 - 39 unit tests (tokenizer, features, decode, inference, protocol).
 
-[Unreleased]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.13...HEAD
+[Unreleased]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.14...HEAD
+[2.0.14]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.13...v2.0.14
 [2.0.13]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.12...v2.0.13
 [2.0.12]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.11...v2.0.12
 [2.0.11]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.10...v2.0.11

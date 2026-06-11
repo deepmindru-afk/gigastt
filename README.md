@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <sub>Latest: <b>v2.0.13</b> — see <a href="CHANGELOG.md">CHANGELOG</a>.</sub>
+  <sub>Latest: <b>v2.0.14</b> — see <a href="CHANGELOG.md">CHANGELOG</a>.</sub>
 </p>
 
 ---
