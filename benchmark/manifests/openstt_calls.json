@@ -1,0 +1,5011 @@
+{
+  "dataset": "openstt_calls",
+  "audio_root": "~/.gigastt/benchmarks/openstt_calls",
+  "slice_seed": 42,
+  "slice_size": 1000,
+  "total_available": 12950,
+  "license": "CC BY-NC 4.0",
+  "source": "https://github.com/snakers4/open_stt",
+  "samples": [
+    {
+      "filename": "asr_calls_2_val/0/00/2f29b7d43246.wav",
+      "reference": "забрать не могу кто вы такой",
+      "duration": 1.28
+    },
+    {
+      "filename": "asr_calls_2_val/0/01/5a37beb9960a.wav",
+      "reference": "хорошо олег михалыч",
+      "duration": 1.22
+    },
+    {
+      "filename": "asr_calls_2_val/0/03/90fd8a51e9e7.wav",
+      "reference": "с какой целью",
+      "duration": 0.88
+    },
+    {
+      "filename": "asr_calls_2_val/0/05/c40e87884d00.wav",
+      "reference": "вот она просто",
+      "duration": 0.83
+    },
+    {
+      "filename": "asr_calls_2_val/0/06/89e36bcec785.wav",
+      "reference": "и ох я тебяя буду преследовать",
+      "duration": 3.85
+    },
+    {
+      "filename": "asr_calls_2_val/0/14/cf1c5b8aa975.wav",
+      "reference": "ну хорошо давайте мы вам тогда вечером позвоним у меня муж с работы придёт мыы решим если он завтра не работает мы завтра подъедим тогда посмотрим",
+      "duration": 5.94
+    },
+    {
+      "filename": "asr_calls_2_val/0/18/0d93c2e41e1f.wav",
+      "reference": "расскажи мне про ирбит то чёнибудь",
+      "duration": 2.06
+    },
+    {
+      "filename": "asr_calls_2_val/0/19/14cbfc208f62.wav",
+      "reference": "нет не имею",
+      "duration": 0.82
+    },
+    {
+      "filename": "asr_calls_2_val/0/1b/60a428501a5f.wav",
+      "reference": "не находит общего языка",
+      "duration": 1.51
+    },
+    {
+      "filename": "asr_calls_2_val/0/1b/edc6dcbda8c9.wav",
+      "reference": "вы с кем разговариваете",
+      "duration": 1.24
+    },
+    {
+      "filename": "asr_calls_2_val/0/23/8d0ea3b09285.wav",
+      "reference": "дежурный по тактическому отделению",
+      "duration": 2.32
+    },
+    {
+      "filename": "asr_calls_2_val/0/24/22d6a3245997.wav",
+      "reference": "нее ну листочек не гигиенично ну ну как нука давайте побыстрее как",
+      "duration": 3.39
+    },
+    {
+      "filename": "asr_calls_2_val/0/24/58b450a2a920.wav",
+      "reference": "я новенький",
+      "duration": 1.3
+    },
+    {
+      "filename": "asr_calls_2_val/0/25/f5ac2c4db1f2.wav",
+      "reference": "ну вот так",
+      "duration": 0.63
+    },
+    {
+      "filename": "asr_calls_2_val/0/32/06fe16bcbcc3.wav",
+      "reference": "годится",
+      "duration": 0.62
+    },
+    {
+      "filename": "asr_calls_2_val/0/36/cff8e9c8373e.wav",
+      "reference": "не хочу жениться хочу с разными лежать мне разные нравятся",
+      "duration": 3.15
+    },
+    {
+      "filename": "asr_calls_2_val/0/41/af50f26c0b47.wav",
+      "reference": "вы куда звоните вообще",
+      "duration": 1.2
+    },
+    {
+      "filename": "asr_calls_2_val/0/44/412f878b5383.wav",
+      "reference": "ято областной военкомат",
+      "duration": 1.65
+    },
+    {
+      "filename": "asr_calls_2_val/0/49/e5e10b3d142e.wav",
+      "reference": "в лес хотите заманить",
+      "duration": 1.54
+    },
+    {
+      "filename": "asr_calls_2_val/0/56/2c30c16b5119.wav",
+      "reference": "по суворовскому училищу",
+      "duration": 1.1
+    },
+    {
+      "filename": "asr_calls_2_val/0/56/c1b28a5103ef.wav",
+      "reference": "а если я извинюсь перед вами то",
+      "duration": 2.0
+    },
+    {
+      "filename": "asr_calls_2_val/0/5d/37fe1f556832.wav",
+      "reference": "октябрьского района города новосибирска",
+      "duration": 2.28
+    },
+    {
+      "filename": "asr_calls_2_val/0/5f/6805daafb368.wav",
+      "reference": "поимели мужика мента",
+      "duration": 1.5
+    },
+    {
+      "filename": "asr_calls_2_val/0/63/fc6b855f4b0c.wav",
+      "reference": "я вам ещё раз говорю дежурного краснознаменского района что вам ещё надо",
+      "duration": 3.54
+    },
+    {
+      "filename": "asr_calls_2_val/0/66/08f13fda9a94.wav",
+      "reference": "то надо",
+      "duration": 0.55
+    },
+    {
+      "filename": "asr_calls_2_val/0/6f/ba7779fcddaf.wav",
+      "reference": "александр иванович",
+      "duration": 1.2
+    },
+    {
+      "filename": "asr_calls_2_val/0/6f/d5adf133fcfd.wav",
+      "reference": "слушаю",
+      "duration": 0.63
+    },
+    {
+      "filename": "asr_calls_2_val/0/77/75b105d39d7f.wav",
+      "reference": "у тебя военкомат ты работаешь в военкомате",
+      "duration": 2.89
+    },
+    {
+      "filename": "asr_calls_2_val/0/77/b5fb5588fbf2.wav",
+      "reference": "вадим евгеньевич выы так хотите пошутить",
+      "duration": 2.32
+    },
+    {
+      "filename": "asr_calls_2_val/0/7b/bd20c9573e3a.wav",
+      "reference": "вот найди себе подружку и разговаривай",
+      "duration": 2.33
+    },
+    {
+      "filename": "asr_calls_2_val/0/7f/c07d77fb4d2c.wav",
+      "reference": "какая пизда тебя родила то блять дурак дурак он же есть на свете блять а",
+      "duration": 3.84
+    },
+    {
+      "filename": "asr_calls_2_val/0/80/2dbc774bf17b.wav",
+      "reference": "я солдат американской армии блядь",
+      "duration": 2.04
+    },
+    {
+      "filename": "asr_calls_2_val/0/80/852a1a352acd.wav",
+      "reference": "худенков",
+      "duration": 0.61
+    },
+    {
+      "filename": "asr_calls_2_val/0/81/ef51bd754fca.wav",
+      "reference": "ты падла понимаешь ты падла",
+      "duration": 1.65
+    },
+    {
+      "filename": "asr_calls_2_val/0/82/a2a0fa0b31ff.wav",
+      "reference": "возможно он щас как раз об этом с твоим отцом разговаривает",
+      "duration": 3.51
+    },
+    {
+      "filename": "asr_calls_2_val/0/83/a63e4ed8e51f.wav",
+      "reference": "да не правильно я не знаю вы с какого отдела",
+      "duration": 3.19
+    },
+    {
+      "filename": "asr_calls_2_val/0/8b/d802702c7bbd.wav",
+      "reference": "я строю свой военкомат а вы кто",
+      "duration": 1.84
+    },
+    {
+      "filename": "asr_calls_2_val/0/94/377809235c8e.wav",
+      "reference": "у вас всё в порядке вообще",
+      "duration": 1.4
+    },
+    {
+      "filename": "asr_calls_2_val/0/94/ab4ecaa0dda8.wav",
+      "reference": "понедельник да",
+      "duration": 1.09
+    },
+    {
+      "filename": "asr_calls_2_val/0/9f/e7dee763143e.wav",
+      "reference": "что руслан николаевич",
+      "duration": 1.12
+    },
+    {
+      "filename": "asr_calls_2_val/0/a2/28f371af944f.wav",
+      "reference": "поздняков ты чё позднякова не знаешь блять местный авторитет у тебя на районе ты",
+      "duration": 4.07
+    },
+    {
+      "filename": "asr_calls_2_val/0/a7/3d1ba8d6a455.wav",
+      "reference": "понимаешь я просидел до тридцати лет блядь никому никогда не завидовал поймаешь",
+      "duration": 4.23
+    },
+    {
+      "filename": "asr_calls_2_val/0/a8/ce1fd3fbc539.wav",
+      "reference": "в какой военкоматто идти",
+      "duration": 1.44
+    },
+    {
+      "filename": "asr_calls_2_val/0/a9/b38936c4fc63.wav",
+      "reference": "секундочку щас",
+      "duration": 0.82
+    },
+    {
+      "filename": "asr_calls_2_val/0/b5/185f6def872c.wav",
+      "reference": "метро пересадка на спасской",
+      "duration": 2.57
+    },
+    {
+      "filename": "asr_calls_2_val/0/b7/6bdb75e2b350.wav",
+      "reference": "я говорю вы куда звоните",
+      "duration": 1.46
+    },
+    {
+      "filename": "asr_calls_2_val/0/b8/ae37a7fdcaf8.wav",
+      "reference": "куда придтито",
+      "duration": 0.74
+    },
+    {
+      "filename": "asr_calls_2_val/0/b9/861161f8ddbf.wav",
+      "reference": "смотрите",
+      "duration": 0.75
+    },
+    {
+      "filename": "asr_calls_2_val/0/b9/de4dac43aa1f.wav",
+      "reference": "по телефону то любой пидр может навик осмелетьто",
+      "duration": 3.36
+    },
+    {
+      "filename": "asr_calls_2_val/0/bb/4dbc1a34fa99.wav",
+      "reference": "очень долго искали мои фотографии",
+      "duration": 1.95
+    },
+    {
+      "filename": "asr_calls_2_val/0/c1/0619ca3a7081.wav",
+      "reference": "в какой организации где вы работаете",
+      "duration": 1.53
+    },
+    {
+      "filename": "asr_calls_2_val/0/c3/042e7d2c6f3c.wav",
+      "reference": "он неплохой парень блять хочу сказать",
+      "duration": 2.28
+    },
+    {
+      "filename": "asr_calls_2_val/0/c6/e2cfe43376a3.wav",
+      "reference": "а кто это говорит",
+      "duration": 1.25
+    },
+    {
+      "filename": "asr_calls_2_val/0/c9/d9befa2f8dc8.wav",
+      "reference": "как ваше здоровице я вам звонил в прошлый раз мама сказала ваша вы спите",
+      "duration": 3.98
+    },
+    {
+      "filename": "asr_calls_2_val/0/cf/3647f77d04c7.wav",
+      "reference": "я щас приду тебе дам тебе пососать",
+      "duration": 2.33
+    },
+    {
+      "filename": "asr_calls_2_val/0/cf/57855dfebf91.wav",
+      "reference": "да такая",
+      "duration": 1.16
+    },
+    {
+      "filename": "asr_calls_2_val/0/d1/f407e4b69685.wav",
+      "reference": "им тебя будет",
+      "duration": 0.58
+    },
+    {
+      "filename": "asr_calls_2_val/0/d2/6f36356cf7d0.wav",
+      "reference": "вы что ругаетесь матом",
+      "duration": 1.04
+    },
+    {
+      "filename": "asr_calls_2_val/0/d6/b89d426255a6.wav",
+      "reference": "ааа мне нужна ирина алексеевна",
+      "duration": 2.3
+    },
+    {
+      "filename": "asr_calls_2_val/0/df/152d54327f3e.wav",
+      "reference": "секунду вы куда звоните где погас свет я понятия не имею где погас свет я дежурный диспетчер",
+      "duration": 6.33
+    },
+    {
+      "filename": "asr_calls_2_val/0/e1/569b0b520a6a.wav",
+      "reference": "чё ты закрываешь трубкуто",
+      "duration": 1.72
+    },
+    {
+      "filename": "asr_calls_2_val/0/e6/5c2c7a79e650.wav",
+      "reference": "отдел военного комиссариата",
+      "duration": 1.3
+    },
+    {
+      "filename": "asr_calls_2_val/0/e6/c6020d28b8f6.wav",
+      "reference": "как фамилия говорите",
+      "duration": 1.51
+    },
+    {
+      "filename": "asr_calls_2_val/0/e8/8f34d821bf9c.wav",
+      "reference": "а вы знаете вы куда попали",
+      "duration": 1.43
+    },
+    {
+      "filename": "asr_calls_2_val/0/f1/e58606ee3c03.wav",
+      "reference": "я не слышу вас",
+      "duration": 0.35
+    },
+    {
+      "filename": "asr_calls_2_val/0/f7/7b631781ee1d.wav",
+      "reference": "мы не главный комиссариат",
+      "duration": 1.53
+    },
+    {
+      "filename": "asr_calls_2_val/0/fc/9800be07e7f7.wav",
+      "reference": "под шейсят",
+      "duration": 0.72
+    },
+    {
+      "filename": "asr_calls_2_val/0/fd/a2e1a1397cbe.wav",
+      "reference": "дальнегорск у вас красногорск у что мне виноват что ли кто",
+      "duration": 3.74
+    },
+    {
+      "filename": "asr_calls_2_val/1/04/16764edc2952.wav",
+      "reference": "эээ гандон ты",
+      "duration": 0.8
+    },
+    {
+      "filename": "asr_calls_2_val/1/09/09d9a22d79fd.wav",
+      "reference": "слушай ты слушай ты ваня успокойся подожди слушай сюда вопервых до того",
+      "duration": 5.65
+    },
+    {
+      "filename": "asr_calls_2_val/1/0a/154bb640da1f.wav",
+      "reference": "а ты мечтала",
+      "duration": 1.01
+    },
+    {
+      "filename": "asr_calls_2_val/1/0b/d1cb2a5eb8a2.wav",
+      "reference": "суть дела вашего",
+      "duration": 0.95
+    },
+    {
+      "filename": "asr_calls_2_val/1/11/4c957bd1db72.wav",
+      "reference": "будьте благоразумны",
+      "duration": 1.02
+    },
+    {
+      "filename": "asr_calls_2_val/1/14/0f544b4b552f.wav",
+      "reference": "ну что такое а",
+      "duration": 1.11
+    },
+    {
+      "filename": "asr_calls_2_val/1/18/e12be04edb5c.wav",
+      "reference": "славян он тебя тоже наркотиками",
+      "duration": 1.52
+    },
+    {
+      "filename": "asr_calls_2_val/1/21/b932420cef3b.wav",
+      "reference": "твоей души здесь больше не было понял",
+      "duration": 2.2
+    },
+    {
+      "filename": "asr_calls_2_val/1/28/7e841abf69d6.wav",
+      "reference": "я аккуратный чистоплотный да",
+      "duration": 2.38
+    },
+    {
+      "filename": "asr_calls_2_val/1/2e/b52dce3ceccc.wav",
+      "reference": "с ребятами моими",
+      "duration": 1.16
+    },
+    {
+      "filename": "asr_calls_2_val/1/31/0627ed2512a8.wav",
+      "reference": "я не понимаю ты шо жопой разговариваешь",
+      "duration": 1.99
+    },
+    {
+      "filename": "asr_calls_2_val/1/31/a6abb9c3042e.wav",
+      "reference": "если вы не прекр не прекратите заниматься ерундой",
+      "duration": 2.85
+    },
+    {
+      "filename": "asr_calls_2_val/1/34/8944e11f2ef9.wav",
+      "reference": "нуу так",
+      "duration": 0.66
+    },
+    {
+      "filename": "asr_calls_2_val/1/3f/813695281d3f.wav",
+      "reference": "ну чтото не в порядке да он чёто какойто приказание я говорю с кем я разговариваю он не представляется чёто",
+      "duration": 4.88
+    },
+    {
+      "filename": "asr_calls_2_val/1/41/cba53806ac11.wav",
+      "reference": "как ты выглядишь уёбок сколько тебе лет скажи",
+      "duration": 2.53
+    },
+    {
+      "filename": "asr_calls_2_val/1/44/05b3dc253c13.wav",
+      "reference": "в жопу",
+      "duration": 0.61
+    },
+    {
+      "filename": "asr_calls_2_val/1/45/d17448576f4d.wav",
+      "reference": "ну давайте с вами поболтаем",
+      "duration": 1.99
+    },
+    {
+      "filename": "asr_calls_2_val/1/45/f50fe206242d.wav",
+      "reference": "ааа ты знаешь помимо того что я её пялил в сарканан я ещё срал и на грудь",
+      "duration": 4.41
+    },
+    {
+      "filename": "asr_calls_2_val/1/46/458f937e16c3.wav",
+      "reference": "я оперативный дежурный",
+      "duration": 1.49
+    },
+    {
+      "filename": "asr_calls_2_val/1/48/c89e8144d8df.wav",
+      "reference": "звоните оперативному дежурному города санктпетербург",
+      "duration": 2.52
+    },
+    {
+      "filename": "asr_calls_2_val/1/4d/3bd8ceeae07f.wav",
+      "reference": "пятнадцать шестьдесят пять",
+      "duration": 1.18
+    },
+    {
+      "filename": "asr_calls_2_val/1/51/42668a51100c.wav",
+      "reference": "вы знаете что эт просто хулиганы что называется органы щас будем подключать к этому искать этих людей которые хулиганят сегодня с утра",
+      "duration": 8.33
+    },
+    {
+      "filename": "asr_calls_2_val/1/58/4ffa897e59ec.wav",
+      "reference": "со скольки",
+      "duration": 0.86
+    },
+    {
+      "filename": "asr_calls_2_val/1/59/d2b69786b0ff.wav",
+      "reference": "и я тебя",
+      "duration": 0.89
+    },
+    {
+      "filename": "asr_calls_2_val/1/5e/5b5d54ab58c1.wav",
+      "reference": "николаевич",
+      "duration": 0.71
+    },
+    {
+      "filename": "asr_calls_2_val/1/5f/ed07f6c918de.wav",
+      "reference": "тебе надо голову лечить представься как положено кто ты такой если звонишь сюда",
+      "duration": 4.21
+    },
+    {
+      "filename": "asr_calls_2_val/1/68/b1ee49c95c8f.wav",
+      "reference": "уходит у нас гулять мы его выпустили",
+      "duration": 1.56
+    },
+    {
+      "filename": "asr_calls_2_val/1/6d/e09e3e01423f.wav",
+      "reference": "ну хочу узнать как там встал сегодня",
+      "duration": 2.82
+    },
+    {
+      "filename": "asr_calls_2_val/1/6e/77849934fcf7.wav",
+      "reference": "историю",
+      "duration": 0.65
+    },
+    {
+      "filename": "asr_calls_2_val/1/74/758931fe0491.wav",
+      "reference": "зинаида николавна серёжа беспокоит и дочь её",
+      "duration": 2.81
+    },
+    {
+      "filename": "asr_calls_2_val/1/75/1c6d4c08258f.wav",
+      "reference": "наконец",
+      "duration": 0.69
+    },
+    {
+      "filename": "asr_calls_2_val/1/78/a453ee1d347c.wav",
+      "reference": "ааа я понял это мне надоо передать моему начальнику да",
+      "duration": 3.33
+    },
+    {
+      "filename": "asr_calls_2_val/1/7a/3118ec463e6c.wav",
+      "reference": "да уже выехал да",
+      "duration": 1.17
+    },
+    {
+      "filename": "asr_calls_2_val/1/84/f7913e44a758.wav",
+      "reference": "он не имеет права быть наа общественных пляжах",
+      "duration": 3.77
+    },
+    {
+      "filename": "asr_calls_2_val/1/9b/c231545a6637.wav",
+      "reference": "тюк и пиздец на хуй и головка",
+      "duration": 2.04
+    },
+    {
+      "filename": "asr_calls_2_val/1/9c/121847969eea.wav",
+      "reference": "не звони больше на этот номер хорошо",
+      "duration": 1.93
+    },
+    {
+      "filename": "asr_calls_2_val/1/9c/7971497d2670.wav",
+      "reference": "они мне не сказали откуда они звонили",
+      "duration": 2.41
+    },
+    {
+      "filename": "asr_calls_2_val/1/aa/3be5a843c332.wav",
+      "reference": "за слова будешь отвечать можно",
+      "duration": 1.48
+    },
+    {
+      "filename": "asr_calls_2_val/1/ac/141a443d8b83.wav",
+      "reference": "я вам просто никак не могу объяснить то мужчина говорит то вот женщина это ульяновская область",
+      "duration": 6.14
+    },
+    {
+      "filename": "asr_calls_2_val/1/ac/e66c4c7a5e05.wav",
+      "reference": "ну что те больше всего доставляет",
+      "duration": 1.48
+    },
+    {
+      "filename": "asr_calls_2_val/1/b0/132df2920206.wav",
+      "reference": "вот именно вот это это золотые слова но только относятся к вам",
+      "duration": 5.37
+    },
+    {
+      "filename": "asr_calls_2_val/1/b0/18a089cad61e.wav",
+      "reference": "ну и что эээ религия пытается",
+      "duration": 2.15
+    },
+    {
+      "filename": "asr_calls_2_val/1/b1/36f6ddb76b45.wav",
+      "reference": "не толкай",
+      "duration": 0.96
+    },
+    {
+      "filename": "asr_calls_2_val/1/b5/7f67b8dc40d9.wav",
+      "reference": "дальше что",
+      "duration": 0.6
+    },
+    {
+      "filename": "asr_calls_2_val/1/b6/11c27e817ee7.wav",
+      "reference": "а хуй сосать будешь",
+      "duration": 1.66
+    },
+    {
+      "filename": "asr_calls_2_val/1/c4/1a55a0651008.wav",
+      "reference": "кто это",
+      "duration": 0.76
+    },
+    {
+      "filename": "asr_calls_2_val/1/c6/cde030ce2c8f.wav",
+      "reference": "ну когда ты объяснишь",
+      "duration": 1.08
+    },
+    {
+      "filename": "asr_calls_2_val/1/c7/10781cdf8b69.wav",
+      "reference": "я не занимаюсь дом пяесят восемь",
+      "duration": 2.31
+    },
+    {
+      "filename": "asr_calls_2_val/1/c8/a0130e4d234d.wav",
+      "reference": "ты правильно вообще меня удивил аж что тебе эта позиция близка",
+      "duration": 3.77
+    },
+    {
+      "filename": "asr_calls_2_val/1/c8/a86dba3bb52d.wav",
+      "reference": "то есть вам при придётся теперь к раз в месяц принимать почтальона что б получать",
+      "duration": 3.84
+    },
+    {
+      "filename": "asr_calls_2_val/1/c8/fa0162aaf2d5.wav",
+      "reference": "а куда ко мнето вот ты мне нужен",
+      "duration": 2.37
+    },
+    {
+      "filename": "asr_calls_2_val/1/c9/82bd712d4b2e.wav",
+      "reference": "и тут подошёл сладжа",
+      "duration": 1.34
+    },
+    {
+      "filename": "asr_calls_2_val/1/ca/34643a087f0f.wav",
+      "reference": "номеров фсб и выясню всё это хозяйство",
+      "duration": 3.04
+    },
+    {
+      "filename": "asr_calls_2_val/1/cb/2318b9b1b6e0.wav",
+      "reference": "клоун блядь",
+      "duration": 0.77
+    },
+    {
+      "filename": "asr_calls_2_val/1/d4/bbeb65159aac.wav",
+      "reference": "кто вам позвонил я не звонил я вот взял трубку",
+      "duration": 2.78
+    },
+    {
+      "filename": "asr_calls_2_val/1/d7/c554165cd850.wav",
+      "reference": "эээ выехали мы там и так далее",
+      "duration": 1.96
+    },
+    {
+      "filename": "asr_calls_2_val/1/ea/c86101ca19f7.wav",
+      "reference": "начальнику второго отделения",
+      "duration": 1.79
+    },
+    {
+      "filename": "asr_calls_2_val/1/ef/592d5a6ddb4a.wav",
+      "reference": "ну и правда ли",
+      "duration": 0.85
+    },
+    {
+      "filename": "asr_calls_2_val/1/f3/400985dcc913.wav",
+      "reference": "нуу вообщето я тебе я тебе не звонил",
+      "duration": 2.96
+    },
+    {
+      "filename": "asr_calls_2_val/1/f8/c6407a62ded7.wav",
+      "reference": "я не хочу использовать эту информацию против вообще я против нико никого ничего не имею я только за",
+      "duration": 5.62
+    },
+    {
+      "filename": "asr_calls_2_val/1/fe/abeb3ead9815.wav",
+      "reference": "ну я говорю слушайте это у нас всё записывается",
+      "duration": 2.71
+    },
+    {
+      "filename": "asr_calls_2_val/1/ff/af2dabd3d74e.wav",
+      "reference": "могут открыть дело",
+      "duration": 1.38
+    },
+    {
+      "filename": "asr_calls_2_val/2/0f/83ac4f24f93b.wav",
+      "reference": "обиженно отвечает обиженно отвечает вот сука нападает",
+      "duration": 4.2
+    },
+    {
+      "filename": "asr_calls_2_val/2/11/2fe9410ff1ac.wav",
+      "reference": "на глаза украл",
+      "duration": 1.35
+    },
+    {
+      "filename": "asr_calls_2_val/2/14/5592e42113ff.wav",
+      "reference": "я чуть было не вступил в отряд специального назначения",
+      "duration": 3.06
+    },
+    {
+      "filename": "asr_calls_2_val/2/16/467253505524.wav",
+      "reference": "ну мне просто очень интересно не тыща девятьсот семнадцатый",
+      "duration": 3.54
+    },
+    {
+      "filename": "asr_calls_2_val/2/27/75a93aeb3e2a.wav",
+      "reference": "думали что я их внучок",
+      "duration": 1.24
+    },
+    {
+      "filename": "asr_calls_2_val/2/29/b220df679d7a.wav",
+      "reference": "ну я могу тебе адрес продиктовать",
+      "duration": 1.68
+    },
+    {
+      "filename": "asr_calls_2_val/2/2a/9eab0a6de0b8.wav",
+      "reference": "верите же во всю любую чушь",
+      "duration": 2.13
+    },
+    {
+      "filename": "asr_calls_2_val/2/2c/5250b2feed91.wav",
+      "reference": "ну и чё",
+      "duration": 1.17
+    },
+    {
+      "filename": "asr_calls_2_val/2/2d/1109d1b2bdaa.wav",
+      "reference": "врача не вызывали нет так у него температура такая что не скажу что большая такая",
+      "duration": 4.21
+    },
+    {
+      "filename": "asr_calls_2_val/2/30/638a5a3e7bb2.wav",
+      "reference": "поэтому всегда сдавали у него всё на пять и он никогда ничего не давал списывать",
+      "duration": 4.43
+    },
+    {
+      "filename": "asr_calls_2_val/2/3f/51965ccf9f00.wav",
+      "reference": "что вы думаете по этому поводу",
+      "duration": 1.51
+    },
+    {
+      "filename": "asr_calls_2_val/2/49/c3d6e0fcde69.wav",
+      "reference": "обзывай как хочешь",
+      "duration": 1.1
+    },
+    {
+      "filename": "asr_calls_2_val/2/49/f49ac5099a62.wav",
+      "reference": "оперативный дежурный чего",
+      "duration": 1.38
+    },
+    {
+      "filename": "asr_calls_2_val/2/4d/5ea081ba2cb6.wav",
+      "reference": "это ж вы меня будете проверять или кто",
+      "duration": 2.29
+    },
+    {
+      "filename": "asr_calls_2_val/2/62/5e8c95ba1ae4.wav",
+      "reference": "начинаю мозги компосировать он мне показывает всю переписку",
+      "duration": 3.78
+    },
+    {
+      "filename": "asr_calls_2_val/2/62/8b0f6b5dc899.wav",
+      "reference": "не понял вас",
+      "duration": 0.76
+    },
+    {
+      "filename": "asr_calls_2_val/2/64/6bd9ce234911.wav",
+      "reference": "давай нормально разберёмся",
+      "duration": 1.61
+    },
+    {
+      "filename": "asr_calls_2_val/2/66/6f685d0b2438.wav",
+      "reference": "да мне без разницы кто приехала вы чё блять поохуели вы уже какой",
+      "duration": 5.21
+    },
+    {
+      "filename": "asr_calls_2_val/2/72/810bdfa938e9.wav",
+      "reference": "я полковник",
+      "duration": 0.77
+    },
+    {
+      "filename": "asr_calls_2_val/2/79/658da7277bd9.wav",
+      "reference": "ну я в левую пришла меня запустили всё я живу",
+      "duration": 2.87
+    },
+    {
+      "filename": "asr_calls_2_val/2/7a/20e7fe726cfe.wav",
+      "reference": "я тебя слушаю",
+      "duration": 1.25
+    },
+    {
+      "filename": "asr_calls_2_val/2/7a/416259649ede.wav",
+      "reference": "а бари каримович",
+      "duration": 1.25
+    },
+    {
+      "filename": "asr_calls_2_val/2/7e/da5719535146.wav",
+      "reference": "приметы теф телефонограмму",
+      "duration": 2.0
+    },
+    {
+      "filename": "asr_calls_2_val/2/85/9963bb210142.wav",
+      "reference": "что знач издеваться",
+      "duration": 1.12
+    },
+    {
+      "filename": "asr_calls_2_val/2/87/d7707bc910fd.wav",
+      "reference": "это слева от метро короче чуть вниз",
+      "duration": 1.87
+    },
+    {
+      "filename": "asr_calls_2_val/2/91/7c200d00b2f9.wav",
+      "reference": "триста четырнадцатый кабинет",
+      "duration": 1.64
+    },
+    {
+      "filename": "asr_calls_2_val/2/9f/5203981ccc17.wav",
+      "reference": "у вас что закон изменился с тех пор это мой вопрос к вам",
+      "duration": 5.11
+    },
+    {
+      "filename": "asr_calls_2_val/2/9f/db62216d0be0.wav",
+      "reference": "какому то итогу",
+      "duration": 1.56
+    },
+    {
+      "filename": "asr_calls_2_val/2/ad/60dd02e564bf.wav",
+      "reference": "большие сиськи это достояние нации ты не имеешь права их прятать напротив ты обязана их",
+      "duration": 5.96
+    },
+    {
+      "filename": "asr_calls_2_val/2/b4/1cef822db86e.wav",
+      "reference": "приходите вы сразу повинную там пишите меньше срок дадут",
+      "duration": 3.65
+    },
+    {
+      "filename": "asr_calls_2_val/2/b4/4890db613c08.wav",
+      "reference": "и начал разговор со лжи понимаешь",
+      "duration": 2.66
+    },
+    {
+      "filename": "asr_calls_2_val/2/bb/8a0e913040f6.wav",
+      "reference": "происходит",
+      "duration": 0.78
+    },
+    {
+      "filename": "asr_calls_2_val/2/bf/c87d374fb102.wav",
+      "reference": "люди что ль",
+      "duration": 0.54
+    },
+    {
+      "filename": "asr_calls_2_val/2/c0/2b524ace4077.wav",
+      "reference": "приходи",
+      "duration": 0.52
+    },
+    {
+      "filename": "asr_calls_2_val/2/c1/1889207eaa3a.wav",
+      "reference": "и вот однажды случайно зависала мелодия",
+      "duration": 2.79
+    },
+    {
+      "filename": "asr_calls_2_val/2/c6/459f8bddb3bd.wav",
+      "reference": "а я старший санитар шестой больницы патологоанамическое отделение",
+      "duration": 6.16
+    },
+    {
+      "filename": "asr_calls_2_val/2/cd/50c946848b70.wav",
+      "reference": "иди к чёрту",
+      "duration": 0.67
+    },
+    {
+      "filename": "asr_calls_2_val/2/cd/d1b0dfdca120.wav",
+      "reference": "я не хуесос",
+      "duration": 0.81
+    },
+    {
+      "filename": "asr_calls_2_val/2/ce/23318e819d85.wav",
+      "reference": "не поэтому номер вам по поводу пенсии звонить",
+      "duration": 3.03
+    },
+    {
+      "filename": "asr_calls_2_val/2/cf/bae4ed03282d.wav",
+      "reference": "прям скушно без тебя",
+      "duration": 1.31
+    },
+    {
+      "filename": "asr_calls_2_val/2/d0/8bd2b57dc6f7.wav",
+      "reference": "из тебя из слов чтото не хорошее",
+      "duration": 1.66
+    },
+    {
+      "filename": "asr_calls_2_val/2/d1/fd030e1e9669.wav",
+      "reference": "я же вам говорила политова",
+      "duration": 2.02
+    },
+    {
+      "filename": "asr_calls_2_val/2/db/098606b9ae3c.wav",
+      "reference": "прохождение тренингаа смотрю каждое вашее домашнее задание чтото корректирую",
+      "duration": 5.25
+    },
+    {
+      "filename": "asr_calls_2_val/2/de/8aeee6837ab1.wav",
+      "reference": "ты меня не видел блять пидрила блять петушаарня ты вонючая блять а",
+      "duration": 4.97
+    },
+    {
+      "filename": "asr_calls_2_val/2/e2/316112bd9127.wav",
+      "reference": "слушайте меня внимательно слушать и отвечайте",
+      "duration": 3.27
+    },
+    {
+      "filename": "asr_calls_2_val/2/e2/ce418c850451.wav",
+      "reference": "слушаю оперативнодежурный",
+      "duration": 1.33
+    },
+    {
+      "filename": "asr_calls_2_val/2/e6/99dcc91e88b7.wav",
+      "reference": "да вы можете сказать нормально куда прибытьто",
+      "duration": 2.6
+    },
+    {
+      "filename": "asr_calls_2_val/2/eb/7377aa08f283.wav",
+      "reference": "правильно мы им сейчас покажем что такое свобода порусски",
+      "duration": 3.25
+    },
+    {
+      "filename": "asr_calls_2_val/2/f1/a8e622ea6242.wav",
+      "reference": "я не пацан тебе",
+      "duration": 1.22
+    },
+    {
+      "filename": "asr_calls_2_val/2/f8/318a89418ca6.wav",
+      "reference": "начальнику второго отделения",
+      "duration": 1.82
+    },
+    {
+      "filename": "asr_calls_2_val/2/fa/6399af146ff4.wav",
+      "reference": "каких людей ты не человек аллё ты религиозный фанатик",
+      "duration": 3.67
+    },
+    {
+      "filename": "asr_calls_2_val/3/0b/b91ce427b1be.wav",
+      "reference": "когда хачей принесёте",
+      "duration": 1.35
+    },
+    {
+      "filename": "asr_calls_2_val/3/0c/3fbfe5dac208.wav",
+      "reference": "ну это как психология я уверен у паланика там блять везде фрейд",
+      "duration": 3.27
+    },
+    {
+      "filename": "asr_calls_2_val/3/10/1a15f0ff710b.wav",
+      "reference": "пляжник ёб твою мать",
+      "duration": 1.19
+    },
+    {
+      "filename": "asr_calls_2_val/3/11/3c2868fa9982.wav",
+      "reference": "друг олега знаете",
+      "duration": 1.15
+    },
+    {
+      "filename": "asr_calls_2_val/3/18/4ce353653ca1.wav",
+      "reference": "да кто такой заболотныйто кто",
+      "duration": 2.38
+    },
+    {
+      "filename": "asr_calls_2_val/3/1b/4f1fa3fed677.wav",
+      "reference": "ну давай в екатеринбурге да как я поняла",
+      "duration": 2.88
+    },
+    {
+      "filename": "asr_calls_2_val/3/1c/9513ad751f38.wav",
+      "reference": "не я тя хорошо запомнил ты не думай я тебя родной найду",
+      "duration": 3.91
+    },
+    {
+      "filename": "asr_calls_2_val/3/21/a67209bd78cb.wav",
+      "reference": "чёто я помню с никитой когдато разговаривала",
+      "duration": 2.25
+    },
+    {
+      "filename": "asr_calls_2_val/3/2d/00d459f72a2f.wav",
+      "reference": "хорошо сергей спрашивает тебя",
+      "duration": 1.65
+    },
+    {
+      "filename": "asr_calls_2_val/3/2f/b5805b6ac3c1.wav",
+      "reference": "у нас щербинский военкомат п пермский край",
+      "duration": 2.45
+    },
+    {
+      "filename": "asr_calls_2_val/3/30/03497fa5610d.wav",
+      "reference": "звонил мне звонил про триста четырнадцатый говорил какойто дамберг дамберг когда они уже успокоятся в конце концов",
+      "duration": 9.09
+    },
+    {
+      "filename": "asr_calls_2_val/3/3f/843049f34e35.wav",
+      "reference": "пьяный чтоли",
+      "duration": 0.87
+    },
+    {
+      "filename": "asr_calls_2_val/3/3f/cedcb176af0d.wav",
+      "reference": "пояснее эээ можно поя пояснее сказать какнибудь иили",
+      "duration": 5.18
+    },
+    {
+      "filename": "asr_calls_2_val/3/41/14049071fe58.wav",
+      "reference": "добрый вечер",
+      "duration": 0.77
+    },
+    {
+      "filename": "asr_calls_2_val/3/45/b3ad6584c1ee.wav",
+      "reference": "какие франки",
+      "duration": 0.94
+    },
+    {
+      "filename": "asr_calls_2_val/3/4f/86f06fe2ebd9.wav",
+      "reference": "я таких раков всегда ебал в зоне",
+      "duration": 1.87
+    },
+    {
+      "filename": "asr_calls_2_val/3/50/ea92c2b370d0.wav",
+      "reference": "я вам текст даже не продиктую",
+      "duration": 1.46
+    },
+    {
+      "filename": "asr_calls_2_val/3/51/bf9fd9f430cb.wav",
+      "reference": "не надо не посылайте меня пожалуйста",
+      "duration": 2.58
+    },
+    {
+      "filename": "asr_calls_2_val/3/52/093cf69bdb88.wav",
+      "reference": "конечно заходи",
+      "duration": 0.94
+    },
+    {
+      "filename": "asr_calls_2_val/3/55/e6b53f781d00.wav",
+      "reference": "всё равно именно люди те которые так употребляют",
+      "duration": 3.22
+    },
+    {
+      "filename": "asr_calls_2_val/3/58/cbfc5330f95f.wav",
+      "reference": "позвони мне с московского телефона если есть вопросы приезжай на кутузовский в любой день блядь",
+      "duration": 7.15
+    },
+    {
+      "filename": "asr_calls_2_val/3/5c/f728bc853264.wav",
+      "reference": "шурыгина",
+      "duration": 0.63
+    },
+    {
+      "filename": "asr_calls_2_val/3/5d/ef3208b4c024.wav",
+      "reference": "алло здравствуйте детский",
+      "duration": 1.15
+    },
+    {
+      "filename": "asr_calls_2_val/3/62/6c26f1edcaaa.wav",
+      "reference": "неет дом колотушкина",
+      "duration": 1.94
+    },
+    {
+      "filename": "asr_calls_2_val/3/63/eb3add2aefad.wav",
+      "reference": "ну конечно",
+      "duration": 0.88
+    },
+    {
+      "filename": "asr_calls_2_val/3/66/dda792461517.wav",
+      "reference": "ну как ты ж живёшь на пенсию наверно",
+      "duration": 2.28
+    },
+    {
+      "filename": "asr_calls_2_val/3/69/198d7403544d.wav",
+      "reference": "хорошо что надо",
+      "duration": 2.04
+    },
+    {
+      "filename": "asr_calls_2_val/3/69/393f0a044287.wav",
+      "reference": "то же самое что и вы сейчас сказали начальнику второго отделения прибыть в красногорск",
+      "duration": 5.69
+    },
+    {
+      "filename": "asr_calls_2_val/3/6a/cb46a4c701e1.wav",
+      "reference": "да да да не туда попали",
+      "duration": 1.6
+    },
+    {
+      "filename": "asr_calls_2_val/3/6f/dd6966ef40b7.wav",
+      "reference": "я представилась григорьева а вы кто",
+      "duration": 2.36
+    },
+    {
+      "filename": "asr_calls_2_val/3/6f/fed8e21a46be.wav",
+      "reference": "девчонками я не поеду",
+      "duration": 1.62
+    },
+    {
+      "filename": "asr_calls_2_val/3/72/de2d1c895b7e.wav",
+      "reference": "слышь подполковник",
+      "duration": 1.03
+    },
+    {
+      "filename": "asr_calls_2_val/3/76/be7929e1d644.wav",
+      "reference": "да дежурный коровников",
+      "duration": 1.4
+    },
+    {
+      "filename": "asr_calls_2_val/3/79/2586689528c2.wav",
+      "reference": "где находится триста четырнадцатый кабинет",
+      "duration": 2.0
+    },
+    {
+      "filename": "asr_calls_2_val/3/83/e478c1f6fc93.wav",
+      "reference": "не ебёт как тебя зовут уёбок",
+      "duration": 2.0
+    },
+    {
+      "filename": "asr_calls_2_val/3/85/2c67920cb59d.wav",
+      "reference": "бля короче я тя воще не понял",
+      "duration": 1.77
+    },
+    {
+      "filename": "asr_calls_2_val/3/90/3ba69a65fc36.wav",
+      "reference": "и спросишь куда те прибыть",
+      "duration": 1.42
+    },
+    {
+      "filename": "asr_calls_2_val/3/91/ab4a22ee8a89.wav",
+      "reference": "а кто это говорит представьтесь",
+      "duration": 1.45
+    },
+    {
+      "filename": "asr_calls_2_val/3/a1/75429f7eee44.wav",
+      "reference": "свою можете",
+      "duration": 0.97
+    },
+    {
+      "filename": "asr_calls_2_val/3/a2/b91f9e7a6e9d.wav",
+      "reference": "у него",
+      "duration": 0.47
+    },
+    {
+      "filename": "asr_calls_2_val/3/b1/c9cb413aff31.wav",
+      "reference": "на самом деле",
+      "duration": 0.82
+    },
+    {
+      "filename": "asr_calls_2_val/3/b3/08c3c7b5ca95.wav",
+      "reference": "хуль ты звонишь сюда блядь мудак блять",
+      "duration": 1.96
+    },
+    {
+      "filename": "asr_calls_2_val/3/b5/8154cc784b4e.wav",
+      "reference": "дежурный здравствуйте",
+      "duration": 1.2
+    },
+    {
+      "filename": "asr_calls_2_val/3/bc/87fef5bbd7b5.wav",
+      "reference": "нет вы скажите",
+      "duration": 1.28
+    },
+    {
+      "filename": "asr_calls_2_val/3/bd/6da68b696ff7.wav",
+      "reference": "какоето второе деление",
+      "duration": 1.72
+    },
+    {
+      "filename": "asr_calls_2_val/3/c0/1785e414b583.wav",
+      "reference": "и и вот г главный звук флейты был такой",
+      "duration": 2.75
+    },
+    {
+      "filename": "asr_calls_2_val/3/c5/67955f6a7b53.wav",
+      "reference": "дебил блядь",
+      "duration": 0.73
+    },
+    {
+      "filename": "asr_calls_2_val/3/d6/4f7431f3ae89.wav",
+      "reference": "начальник отдела что сказал",
+      "duration": 1.22
+    },
+    {
+      "filename": "asr_calls_2_val/3/d7/363ac624ff79.wav",
+      "reference": "в контакте мнен пишешь",
+      "duration": 1.25
+    },
+    {
+      "filename": "asr_calls_2_val/3/e1/87a70d5b3de9.wav",
+      "reference": "тебя а за дверь голову оторву",
+      "duration": 1.94
+    },
+    {
+      "filename": "asr_calls_2_val/3/e3/7ff64df7ea01.wav",
+      "reference": "начальнику второго деления прибыть в понедельник к девяти ноль ноль в октябрьский военкомат",
+      "duration": 6.15
+    },
+    {
+      "filename": "asr_calls_2_val/3/e4/3780072f9d8d.wav",
+      "reference": "у которого все друзья стали миллиардерами хочу ли я чтобы на улицы Москвы или Питера или Краснодара или любого другого города владивостока",
+      "duration": 8.05
+    },
+    {
+      "filename": "asr_calls_2_val/3/fa/7a105f7733cf.wav",
+      "reference": "проебу тебя скалкой",
+      "duration": 1.34
+    },
+    {
+      "filename": "asr_calls_2_val/4/05/c20e09462967.wav",
+      "reference": "справка справка имеется",
+      "duration": 1.83
+    },
+    {
+      "filename": "asr_calls_2_val/4/09/acb297f093ce.wav",
+      "reference": "щас ты в тридцать шестом доме живёшь я зайду к тебе",
+      "duration": 2.47
+    },
+    {
+      "filename": "asr_calls_2_val/4/10/889bef8b00b8.wav",
+      "reference": "хабаровский край",
+      "duration": 1.04
+    },
+    {
+      "filename": "asr_calls_2_val/4/18/b71ffe0533e7.wav",
+      "reference": "я не мог написать тут темно темнотища ничё не было видно",
+      "duration": 3.0
+    },
+    {
+      "filename": "asr_calls_2_val/4/1a/3fd9cef929e7.wav",
+      "reference": "я вот не пойму вас",
+      "duration": 0.91
+    },
+    {
+      "filename": "asr_calls_2_val/4/1a/b00066196ad0.wav",
+      "reference": "мене перенастроили гла грамотный специалист взял под свою опеку",
+      "duration": 5.15
+    },
+    {
+      "filename": "asr_calls_2_val/4/1b/4f4fb58b57b0.wav",
+      "reference": "мне вот больше делать нечего",
+      "duration": 2.16
+    },
+    {
+      "filename": "asr_calls_2_val/4/1c/380c2eea8c82.wav",
+      "reference": "только тебе",
+      "duration": 0.9
+    },
+    {
+      "filename": "asr_calls_2_val/4/1c/a2571f8dacad.wav",
+      "reference": "зачитывайте",
+      "duration": 1.02
+    },
+    {
+      "filename": "asr_calls_2_val/4/1c/f2f6113e8316.wav",
+      "reference": "говорить я знаю что",
+      "duration": 0.91
+    },
+    {
+      "filename": "asr_calls_2_val/4/23/61a6f2c857ab.wav",
+      "reference": "хорошо",
+      "duration": 0.45
+    },
+    {
+      "filename": "asr_calls_2_val/4/2d/34b4c98901be.wav",
+      "reference": "вы рыдать будете кровавыми слезами вместе со своим дружком",
+      "duration": 3.52
+    },
+    {
+      "filename": "asr_calls_2_val/4/2f/d837c85ce244.wav",
+      "reference": "пожалуйста подождите идёт соединение с телефонным номером абонента",
+      "duration": 6.24
+    },
+    {
+      "filename": "asr_calls_2_val/4/31/36003d74c662.wav",
+      "reference": "и на кол натяну через задний проход и будешь висеть так как попугай понял меня",
+      "duration": 5.06
+    },
+    {
+      "filename": "asr_calls_2_val/4/32/d81b6ed95695.wav",
+      "reference": "дак это",
+      "duration": 0.51
+    },
+    {
+      "filename": "asr_calls_2_val/4/38/044eda13ae59.wav",
+      "reference": "восемь четыре",
+      "duration": 1.2
+    },
+    {
+      "filename": "asr_calls_2_val/4/38/906fb6498705.wav",
+      "reference": "а какие ты куришь",
+      "duration": 1.06
+    },
+    {
+      "filename": "asr_calls_2_val/4/39/0885231cd836.wav",
+      "reference": "во молодец второй раз повторил",
+      "duration": 2.28
+    },
+    {
+      "filename": "asr_calls_2_val/4/39/4bc37e5d5312.wav",
+      "reference": "на пиво нет",
+      "duration": 0.86
+    },
+    {
+      "filename": "asr_calls_2_val/4/3f/c821d30283fc.wav",
+      "reference": "нет нет вот такое вот в пер в первый раз такое настолько вот глобальное",
+      "duration": 4.74
+    },
+    {
+      "filename": "asr_calls_2_val/4/46/d4c0c90c6762.wav",
+      "reference": "что случилось",
+      "duration": 1.07
+    },
+    {
+      "filename": "asr_calls_2_val/4/4c/0978861fac9d.wav",
+      "reference": "куда звонишь ты откуда звонишь",
+      "duration": 1.48
+    },
+    {
+      "filename": "asr_calls_2_val/4/4f/202a55ecd053.wav",
+      "reference": "балуешься под хвостик а",
+      "duration": 1.75
+    },
+    {
+      "filename": "asr_calls_2_val/4/4f/2b1dcee48554.wav",
+      "reference": "ваши вообще не учили этот в эээ",
+      "duration": 2.01
+    },
+    {
+      "filename": "asr_calls_2_val/4/4f/5d14807cd87b.wav",
+      "reference": "да я записал я записал да",
+      "duration": 2.05
+    },
+    {
+      "filename": "asr_calls_2_val/4/4f/b6b7bec45e06.wav",
+      "reference": "прошу прощения беру ручку",
+      "duration": 1.67
+    },
+    {
+      "filename": "asr_calls_2_val/4/56/b15778cf6219.wav",
+      "reference": "ложитесь спать",
+      "duration": 0.95
+    },
+    {
+      "filename": "asr_calls_2_val/4/5a/02747b262ef0.wav",
+      "reference": "не у меня всегда дело отлично",
+      "duration": 1.8
+    },
+    {
+      "filename": "asr_calls_2_val/4/5c/0718372129c7.wav",
+      "reference": "а куда подъезжать",
+      "duration": 0.92
+    },
+    {
+      "filename": "asr_calls_2_val/4/64/cf70115c5e96.wav",
+      "reference": "это кто говорит",
+      "duration": 0.98
+    },
+    {
+      "filename": "asr_calls_2_val/4/65/2bad40eb79ba.wav",
+      "reference": "время двадцать двадцать один",
+      "duration": 1.4
+    },
+    {
+      "filename": "asr_calls_2_val/4/65/2d6d8d24fbb2.wav",
+      "reference": "девяти часам",
+      "duration": 1.0
+    },
+    {
+      "filename": "asr_calls_2_val/4/67/6e00b5a36690.wav",
+      "reference": "где живёшь а",
+      "duration": 0.78
+    },
+    {
+      "filename": "asr_calls_2_val/4/6a/682821e42412.wav",
+      "reference": "хуй на тебе вот",
+      "duration": 1.44
+    },
+    {
+      "filename": "asr_calls_2_val/4/6f/a7ca3bd0065c.wav",
+      "reference": "в дверь позвони туда прямо в дверь двадцатую квартиру",
+      "duration": 3.4
+    },
+    {
+      "filename": "asr_calls_2_val/4/76/d06d98b1edd1.wav",
+      "reference": "сука бля адрес",
+      "duration": 0.83
+    },
+    {
+      "filename": "asr_calls_2_val/4/81/bd50f67fcefa.wav",
+      "reference": "ну вот тода вот александр новиков вот очень известный екатеринбургский бард певец",
+      "duration": 4.64
+    },
+    {
+      "filename": "asr_calls_2_val/4/83/41b27df38f03.wav",
+      "reference": "я те блять такое устрою",
+      "duration": 1.89
+    },
+    {
+      "filename": "asr_calls_2_val/4/83/c28e1c5d2830.wav",
+      "reference": "я вам плачу деньги а вы мне пожалуйста обеспечьте услугу",
+      "duration": 3.16
+    },
+    {
+      "filename": "asr_calls_2_val/4/84/baff54def59f.wav",
+      "reference": "вдвоём дома жены нет",
+      "duration": 1.6
+    },
+    {
+      "filename": "asr_calls_2_val/4/8c/49a88ed5fa44.wav",
+      "reference": "так что здесь английских никакие здесь просто русские",
+      "duration": 2.62
+    },
+    {
+      "filename": "asr_calls_2_val/4/8e/2c4e1de1b401.wav",
+      "reference": "так я сам врач по образованию",
+      "duration": 1.79
+    },
+    {
+      "filename": "asr_calls_2_val/4/8f/c94fc3fc175d.wav",
+      "reference": "слушаю",
+      "duration": 0.45
+    },
+    {
+      "filename": "asr_calls_2_val/4/94/adc75955941a.wav",
+      "reference": "каким образом у нас коротится а телефон когда вы определяетесь что у вас номер неопределённый",
+      "duration": 4.6
+    },
+    {
+      "filename": "asr_calls_2_val/4/94/fbb61f7af265.wav",
+      "reference": "ваш номер телефон говорите",
+      "duration": 1.53
+    },
+    {
+      "filename": "asr_calls_2_val/4/95/6571878b03f1.wav",
+      "reference": "военкомат или что",
+      "duration": 1.11
+    },
+    {
+      "filename": "asr_calls_2_val/4/96/6a3fe678e768.wav",
+      "reference": "здравствуйте",
+      "duration": 0.74
+    },
+    {
+      "filename": "asr_calls_2_val/4/aa/138f930fe539.wav",
+      "reference": "ты что блять",
+      "duration": 0.63
+    },
+    {
+      "filename": "asr_calls_2_val/4/af/2d1da1252300.wav",
+      "reference": "назовите свою фамилию",
+      "duration": 1.33
+    },
+    {
+      "filename": "asr_calls_2_val/4/b3/e39c3f702fc8.wav",
+      "reference": "а где мне",
+      "duration": 0.49
+    },
+    {
+      "filename": "asr_calls_2_val/4/b5/64d050ba5f35.wav",
+      "reference": "в зале то есть в спортзале ты используешь да",
+      "duration": 1.88
+    },
+    {
+      "filename": "asr_calls_2_val/4/b7/269d8466bd18.wav",
+      "reference": "финансам",
+      "duration": 0.51
+    },
+    {
+      "filename": "asr_calls_2_val/4/b8/87483e589976.wav",
+      "reference": "деньги клали да",
+      "duration": 0.94
+    },
+    {
+      "filename": "asr_calls_2_val/4/b9/8a7df1ce64ce.wav",
+      "reference": "семь цифр",
+      "duration": 0.63
+    },
+    {
+      "filename": "asr_calls_2_val/4/c4/86691e5b016e.wav",
+      "reference": "сам козёл я сказал",
+      "duration": 1.3
+    },
+    {
+      "filename": "asr_calls_2_val/4/c4/a1fe307bd818.wav",
+      "reference": "всё работает",
+      "duration": 0.85
+    },
+    {
+      "filename": "asr_calls_2_val/4/c9/3cddc802b76a.wav",
+      "reference": "антон я надеюсь ты борцовское трико и капу ещё не продал",
+      "duration": 3.06
+    },
+    {
+      "filename": "asr_calls_2_val/4/ca/b7d8668c8c82.wav",
+      "reference": "ты придурок блядь у меня кафедра военная блядь долбаёб ты блядь конченный",
+      "duration": 4.33
+    },
+    {
+      "filename": "asr_calls_2_val/4/ca/dae3d37be274.wav",
+      "reference": "зато ментов не видно по городу",
+      "duration": 1.62
+    },
+    {
+      "filename": "asr_calls_2_val/4/cc/060977b03466.wav",
+      "reference": "ты знаешь куда звонишь то придурок",
+      "duration": 1.63
+    },
+    {
+      "filename": "asr_calls_2_val/4/d6/c6a936861c66.wav",
+      "reference": "хуй хуёвый",
+      "duration": 1.34
+    },
+    {
+      "filename": "asr_calls_2_val/4/d7/64807fd33798.wav",
+      "reference": "ради бога",
+      "duration": 0.87
+    },
+    {
+      "filename": "asr_calls_2_val/4/de/15a5567a3ad8.wav",
+      "reference": "на лоб себе запишите и перед зеркалом станьте и читайте",
+      "duration": 2.51
+    },
+    {
+      "filename": "asr_calls_2_val/4/e2/3a9747a92edb.wav",
+      "reference": "вы знаете как хотите просто понимаете для меня он простите больной человек а с больными надо как с маленькими детьми",
+      "duration": 6.47
+    },
+    {
+      "filename": "asr_calls_2_val/4/ea/6092beeb5a76.wav",
+      "reference": "ну мне танк нужен",
+      "duration": 1.41
+    },
+    {
+      "filename": "asr_calls_2_val/4/ec/e188e02f9112.wav",
+      "reference": "вот иди буратину еби",
+      "duration": 1.85
+    },
+    {
+      "filename": "asr_calls_2_val/4/f8/b407d1d7a729.wav",
+      "reference": "ну я вам всё рассказал что вам больше ввв надо от меня",
+      "duration": 2.71
+    },
+    {
+      "filename": "asr_calls_2_val/4/ff/88e379193835.wav",
+      "reference": "а мне уже это три часа уже названивает",
+      "duration": 1.93
+    },
+    {
+      "filename": "asr_calls_2_val/5/0e/c4b980f38161.wav",
+      "reference": "бывают такие",
+      "duration": 1.04
+    },
+    {
+      "filename": "asr_calls_2_val/5/13/a212a4a16631.wav",
+      "reference": "мы какого города",
+      "duration": 0.93
+    },
+    {
+      "filename": "asr_calls_2_val/5/16/ce1645ab941c.wav",
+      "reference": "девятнадцать нольноль",
+      "duration": 1.17
+    },
+    {
+      "filename": "asr_calls_2_val/5/16/f14839a01ed1.wav",
+      "reference": "в данный момент я заинтересована почему в финансовой стороне эээ потому что",
+      "duration": 4.05
+    },
+    {
+      "filename": "asr_calls_2_val/5/1c/438e55e4f389.wav",
+      "reference": "день сурка смотрел бля отвалился пиздюк",
+      "duration": 1.96
+    },
+    {
+      "filename": "asr_calls_2_val/5/1d/cf6689d55ab6.wav",
+      "reference": "ну шо против железная логика не попрешь",
+      "duration": 2.49
+    },
+    {
+      "filename": "asr_calls_2_val/5/22/e0ea96ce9843.wav",
+      "reference": "так что суда тебе",
+      "duration": 1.35
+    },
+    {
+      "filename": "asr_calls_2_val/5/32/ebfe22bb2707.wav",
+      "reference": "выы эээ как бы хотите",
+      "duration": 1.5
+    },
+    {
+      "filename": "asr_calls_2_val/5/37/84b54fcbecad.wav",
+      "reference": "конечно я не спорю но ааа нарушение международного законодательства",
+      "duration": 3.68
+    },
+    {
+      "filename": "asr_calls_2_val/5/3e/fdcae2d24631.wav",
+      "reference": "а знаете чё",
+      "duration": 0.73
+    },
+    {
+      "filename": "asr_calls_2_val/5/41/d84c2ad8dd94.wav",
+      "reference": "я хочу с тобой встретиться",
+      "duration": 1.74
+    },
+    {
+      "filename": "asr_calls_2_val/5/47/d5cb84c589a5.wav",
+      "reference": "щас давайте я запишу какой",
+      "duration": 1.48
+    },
+    {
+      "filename": "asr_calls_2_val/5/49/2e48bb2a7c1a.wav",
+      "reference": "вы что меня не слышите",
+      "duration": 1.31
+    },
+    {
+      "filename": "asr_calls_2_val/5/4a/ba1349682bd2.wav",
+      "reference": "если ты мужчина если ты мужчина",
+      "duration": 2.41
+    },
+    {
+      "filename": "asr_calls_2_val/5/4b/16a3dfba323e.wav",
+      "reference": "а вы кто",
+      "duration": 0.71
+    },
+    {
+      "filename": "asr_calls_2_val/5/50/670c6389b5b9.wav",
+      "reference": "тут даже настолько сложный вопрос что с вами",
+      "duration": 3.02
+    },
+    {
+      "filename": "asr_calls_2_val/5/54/b39b88353065.wav",
+      "reference": "а ты горишь ты какойто",
+      "duration": 1.56
+    },
+    {
+      "filename": "asr_calls_2_val/5/58/742112829895.wav",
+      "reference": "забил соседнюю палату к там создаётся группа идиотов",
+      "duration": 4.13
+    },
+    {
+      "filename": "asr_calls_2_val/5/59/091dc468f806.wav",
+      "reference": "нет фермер чё говорит фермер",
+      "duration": 1.49
+    },
+    {
+      "filename": "asr_calls_2_val/5/5b/bbeece24ec17.wav",
+      "reference": "ну что это такое прибыть",
+      "duration": 1.44
+    },
+    {
+      "filename": "asr_calls_2_val/5/60/6b034a4ff8d5.wav",
+      "reference": "и ссышь приехать ты",
+      "duration": 1.17
+    },
+    {
+      "filename": "asr_calls_2_val/5/62/83bc9805401c.wav",
+      "reference": "надо чё",
+      "duration": 0.58
+    },
+    {
+      "filename": "asr_calls_2_val/5/65/532f39cd202b.wav",
+      "reference": "я не сомневаюсь в этом но он сделал не правильные действия",
+      "duration": 2.99
+    },
+    {
+      "filename": "asr_calls_2_val/5/67/9db0fa056db6.wav",
+      "reference": "вам чё непонятно сказано куда вы звоните красногвардейский военкомат",
+      "duration": 3.46
+    },
+    {
+      "filename": "asr_calls_2_val/5/75/02a879d3194c.wav",
+      "reference": "как ваша фамилия блять",
+      "duration": 1.15
+    },
+    {
+      "filename": "asr_calls_2_val/5/7c/330477c33e4c.wav",
+      "reference": "простите но ничего не понимаю",
+      "duration": 1.56
+    },
+    {
+      "filename": "asr_calls_2_val/5/7d/bd39697cbe36.wav",
+      "reference": "ну я читал Коран а они не читали капитал Маркс",
+      "duration": 2.5
+    },
+    {
+      "filename": "asr_calls_2_val/5/81/dbfad4a4f953.wav",
+      "reference": "когда в отпуск идёшь",
+      "duration": 1.04
+    },
+    {
+      "filename": "asr_calls_2_val/5/8e/2e492b2c1037.wav",
+      "reference": "я сторож военкомата а вы кто",
+      "duration": 1.84
+    },
+    {
+      "filename": "asr_calls_2_val/5/8f/6ae8efada959.wav",
+      "reference": "а где полковник который всё время кричал что я полковник где он",
+      "duration": 4.17
+    },
+    {
+      "filename": "asr_calls_2_val/5/90/76548d0aa491.wav",
+      "reference": "иди нахуй чмо",
+      "duration": 1.54
+    },
+    {
+      "filename": "asr_calls_2_val/5/91/41a71f2593de.wav",
+      "reference": "здравствуйте",
+      "duration": 0.61
+    },
+    {
+      "filename": "asr_calls_2_val/5/96/3831fac2dd6e.wav",
+      "reference": "я не могу определить нету номера",
+      "duration": 1.98
+    },
+    {
+      "filename": "asr_calls_2_val/5/a0/9a4f6154240b.wav",
+      "reference": "а вы кто",
+      "duration": 0.6
+    },
+    {
+      "filename": "asr_calls_2_val/5/a4/40575febc5e8.wav",
+      "reference": "был уроком для всех",
+      "duration": 0.97
+    },
+    {
+      "filename": "asr_calls_2_val/5/a8/9ccbd07ea463.wav",
+      "reference": "кабинет",
+      "duration": 0.62
+    },
+    {
+      "filename": "asr_calls_2_val/5/ab/323c39535b0a.wav",
+      "reference": "о зашибись",
+      "duration": 0.67
+    },
+    {
+      "filename": "asr_calls_2_val/5/ac/9efac9a69564.wav",
+      "reference": "ну да блять отдыхать да",
+      "duration": 1.85
+    },
+    {
+      "filename": "asr_calls_2_val/5/b5/fbca3b4ba94b.wav",
+      "reference": "всё классно вам вам всё нравится скажите",
+      "duration": 2.17
+    },
+    {
+      "filename": "asr_calls_2_val/5/c0/048e4192e828.wav",
+      "reference": "это хуйня",
+      "duration": 0.57
+    },
+    {
+      "filename": "asr_calls_2_val/5/c1/a9b8dab3ae9f.wav",
+      "reference": "алло дарова петух ты чё мне в контакте пишешь такие вещи",
+      "duration": 3.44
+    },
+    {
+      "filename": "asr_calls_2_val/5/c2/629818476d09.wav",
+      "reference": "я щас звоню оперативно уточняю потом буду с вами разговаривать всё до свидания",
+      "duration": 4.26
+    },
+    {
+      "filename": "asr_calls_2_val/5/cf/e354523edd17.wav",
+      "reference": "тупым пидором как есть некоторые да он",
+      "duration": 2.57
+    },
+    {
+      "filename": "asr_calls_2_val/5/d3/86e9b80138f0.wav",
+      "reference": "что за постановка вопроса",
+      "duration": 1.18
+    },
+    {
+      "filename": "asr_calls_2_val/5/d7/c048896c75ac.wav",
+      "reference": "я вас не понял вы в трубку говорите",
+      "duration": 2.56
+    },
+    {
+      "filename": "asr_calls_2_val/5/da/0182b40eba3c.wav",
+      "reference": "да вот должность вашу назовите свою должность",
+      "duration": 2.74
+    },
+    {
+      "filename": "asr_calls_2_val/5/db/5fd0bd7f9579.wav",
+      "reference": "давай страх это то с чем нужно бороться страх это то с чем нужно встречаться лицом к лицу понимаешь",
+      "duration": 6.48
+    },
+    {
+      "filename": "asr_calls_2_val/5/e0/12f5be5d94a6.wav",
+      "reference": "в контактах там нет такого там просто сергей красивый ну",
+      "duration": 3.01
+    },
+    {
+      "filename": "asr_calls_2_val/5/e0/29d908c1acfa.wav",
+      "reference": "или не тот номер набрали",
+      "duration": 1.18
+    },
+    {
+      "filename": "asr_calls_2_val/5/e5/198cd2751904.wav",
+      "reference": "ты куда звонишь э",
+      "duration": 1.44
+    },
+    {
+      "filename": "asr_calls_2_val/5/eb/a68749cebef6.wav",
+      "reference": "я хочу узнать кто ты такой и с чего ты взял",
+      "duration": 2.72
+    },
+    {
+      "filename": "asr_calls_2_val/5/ec/4259e6e4690f.wav",
+      "reference": "на хуй ты мне обосрался",
+      "duration": 1.77
+    },
+    {
+      "filename": "asr_calls_2_val/5/ef/2a7783bd95e2.wav",
+      "reference": "таак а ты мне угрожаешь чтото будет",
+      "duration": 1.92
+    },
+    {
+      "filename": "asr_calls_2_val/5/f3/cc100fb357d9.wav",
+      "reference": "и какую задачу кто может ставить сторожу вот объяснитека мне",
+      "duration": 3.37
+    },
+    {
+      "filename": "asr_calls_2_val/5/f4/9a42858b125e.wav",
+      "reference": "куда прибыть",
+      "duration": 0.81
+    },
+    {
+      "filename": "asr_calls_2_val/5/f7/cecc6c4b97b5.wav",
+      "reference": "то есть вы не в курсе ничто такой не в контакте не одноклассники не двачь",
+      "duration": 3.75
+    },
+    {
+      "filename": "asr_calls_2_val/5/fc/86d3dfd9acb7.wav",
+      "reference": "всё пизда ему за это",
+      "duration": 1.32
+    },
+    {
+      "filename": "asr_calls_2_val/5/fd/723b7c5c2046.wav",
+      "reference": "аллё я слушаю",
+      "duration": 0.71
+    },
+    {
+      "filename": "asr_calls_2_val/5/ff/5a721f028929.wav",
+      "reference": "вы знаете это возмутилась вся моя семья",
+      "duration": 1.74
+    },
+    {
+      "filename": "asr_calls_2_val/6/03/617cf4fa61dd.wav",
+      "reference": "что повторить",
+      "duration": 1.08
+    },
+    {
+      "filename": "asr_calls_2_val/6/09/35dc36f78546.wav",
+      "reference": "она будет у вас в личном подсобном хозяйстве на балконе будет у вас",
+      "duration": 4.21
+    },
+    {
+      "filename": "asr_calls_2_val/6/0a/7deea5c73eda.wav",
+      "reference": "не хочешь",
+      "duration": 0.58
+    },
+    {
+      "filename": "asr_calls_2_val/6/0c/66b19f8f8064.wav",
+      "reference": "хорошо хорошо",
+      "duration": 1.09
+    },
+    {
+      "filename": "asr_calls_2_val/6/0e/1cb9216d36c1.wav",
+      "reference": "да дежурный военкомата",
+      "duration": 1.35
+    },
+    {
+      "filename": "asr_calls_2_val/6/11/63f2e3fd6f23.wav",
+      "reference": "а у одного другого кто не один год",
+      "duration": 2.05
+    },
+    {
+      "filename": "asr_calls_2_val/6/11/87f32d55b13b.wav",
+      "reference": "тебето сколько",
+      "duration": 0.77
+    },
+    {
+      "filename": "asr_calls_2_val/6/11/8ac2e1627223.wav",
+      "reference": "двести четырнадцатый кабинет",
+      "duration": 1.81
+    },
+    {
+      "filename": "asr_calls_2_val/6/19/df1da48d006b.wav",
+      "reference": "хрипатую суку",
+      "duration": 1.07
+    },
+    {
+      "filename": "asr_calls_2_val/6/21/5ce0a4ea55c7.wav",
+      "reference": "когда сделаем сайт сразу же зарегистрировать его на",
+      "duration": 2.85
+    },
+    {
+      "filename": "asr_calls_2_val/6/2a/30e52e88c306.wav",
+      "reference": "ну как это хуйню весьмаа адекватный вопрос об образовании ооо стили жизни и так далее",
+      "duration": 4.83
+    },
+    {
+      "filename": "asr_calls_2_val/6/2d/7af3fb1650f6.wav",
+      "reference": "не стыдно тебе",
+      "duration": 1.33
+    },
+    {
+      "filename": "asr_calls_2_val/6/2e/1dc0a666c615.wav",
+      "reference": "какой триста четырнадцатое вы вообще не туда попали",
+      "duration": 2.8
+    },
+    {
+      "filename": "asr_calls_2_val/6/35/f21a308b6f6d.wav",
+      "reference": "а может и нет",
+      "duration": 0.85
+    },
+    {
+      "filename": "asr_calls_2_val/6/36/cdf31d465fe9.wav",
+      "reference": "что вы от нас ходите",
+      "duration": 1.13
+    },
+    {
+      "filename": "asr_calls_2_val/6/38/0d5d14cc6b3b.wav",
+      "reference": "слышь придурок иди на хрен ды ёлки палки пидор и придурок ёб твою мать блять",
+      "duration": 4.95
+    },
+    {
+      "filename": "asr_calls_2_val/6/38/7a341d334309.wav",
+      "reference": "квартиру то я знаю",
+      "duration": 0.97
+    },
+    {
+      "filename": "asr_calls_2_val/6/3a/15dc12c1edd6.wav",
+      "reference": "ты меня слушаешь",
+      "duration": 1.21
+    },
+    {
+      "filename": "asr_calls_2_val/6/43/e35929a5036c.wav",
+      "reference": "шестнадцатый кабинет",
+      "duration": 1.22
+    },
+    {
+      "filename": "asr_calls_2_val/6/49/0d0bc75856f1.wav",
+      "reference": "иногда занимаюсь какимито",
+      "duration": 1.63
+    },
+    {
+      "filename": "asr_calls_2_val/6/52/8b48fcab092c.wav",
+      "reference": "лично у меня то есть я как бы взрослый человек да направленный нормальный так сказать сексуальной направленностью но лично у меня эти фотографии не вызывают",
+      "duration": 7.02
+    },
+    {
+      "filename": "asr_calls_2_val/6/54/b0385793f844.wav",
+      "reference": "щас посмотрим что у вас тут за внучка задолженности что ли",
+      "duration": 3.4
+    },
+    {
+      "filename": "asr_calls_2_val/6/55/12128d7b8c4b.wav",
+      "reference": "я не хочу чтобы в росте организма присутствовало то что ему не нужно понимаете тем более у моей дочери",
+      "duration": 5.54
+    },
+    {
+      "filename": "asr_calls_2_val/6/57/624c648c41db.wav",
+      "reference": "баня слушаю аллё",
+      "duration": 1.96
+    },
+    {
+      "filename": "asr_calls_2_val/6/5d/636db8cdae93.wav",
+      "reference": "киевский рвк я сказал вам",
+      "duration": 1.6
+    },
+    {
+      "filename": "asr_calls_2_val/6/61/0b9386baecae.wav",
+      "reference": "просто это смешно",
+      "duration": 1.24
+    },
+    {
+      "filename": "asr_calls_2_val/6/61/99e44542209f.wav",
+      "reference": "либо номер договора скажите",
+      "duration": 1.27
+    },
+    {
+      "filename": "asr_calls_2_val/6/61/d4e130c014fd.wav",
+      "reference": "доложите военкому что вы сняты с дежурства",
+      "duration": 2.61
+    },
+    {
+      "filename": "asr_calls_2_val/6/65/84826042b77c.wav",
+      "reference": "я никуда не звонил это вы мне звоните",
+      "duration": 1.62
+    },
+    {
+      "filename": "asr_calls_2_val/6/65/c6230be787d7.wav",
+      "reference": "ну повторите",
+      "duration": 1.14
+    },
+    {
+      "filename": "asr_calls_2_val/6/68/4597556a6f6b.wav",
+      "reference": "не понял",
+      "duration": 0.58
+    },
+    {
+      "filename": "asr_calls_2_val/6/6a/8ad91ba718c9.wav",
+      "reference": "сначала проверить действительно присылали администрации потом уже буду разговаривать",
+      "duration": 3.33
+    },
+    {
+      "filename": "asr_calls_2_val/6/6d/10c4a2ec8021.wav",
+      "reference": "выр в военкомате работаете и так что вы х какой помощи вы от нас ждёте",
+      "duration": 4.3
+    },
+    {
+      "filename": "asr_calls_2_val/6/70/d0aad307971f.wav",
+      "reference": "вы вообще нормальный человек",
+      "duration": 1.51
+    },
+    {
+      "filename": "asr_calls_2_val/6/74/eb62c36c8760.wav",
+      "reference": "закончился срокто",
+      "duration": 1.17
+    },
+    {
+      "filename": "asr_calls_2_val/6/78/488f607b7a37.wav",
+      "reference": "лазуткин какойто непонятный",
+      "duration": 1.83
+    },
+    {
+      "filename": "asr_calls_2_val/6/7a/fb8870be0103.wav",
+      "reference": "вольная семнадцать",
+      "duration": 1.44
+    },
+    {
+      "filename": "asr_calls_2_val/6/7d/d101fdb85dc8.wav",
+      "reference": "какойто вы хотите от меня",
+      "duration": 1.22
+    },
+    {
+      "filename": "asr_calls_2_val/6/7f/1921dc6bb0ad.wav",
+      "reference": "что у меня спроси куда прибыть",
+      "duration": 1.69
+    },
+    {
+      "filename": "asr_calls_2_val/6/7f/584a6e2196a4.wav",
+      "reference": "случайно нету",
+      "duration": 0.84
+    },
+    {
+      "filename": "asr_calls_2_val/6/81/4438617d4298.wav",
+      "reference": "кто василий кто заболотный я не поняла",
+      "duration": 2.33
+    },
+    {
+      "filename": "asr_calls_2_val/6/85/b5abd3c279c9.wav",
+      "reference": "семинары для бухгалтеров юристов",
+      "duration": 2.9
+    },
+    {
+      "filename": "asr_calls_2_val/6/86/20b01314d88f.wav",
+      "reference": "так вы вы туда и звоните я тады оперативному дежурному",
+      "duration": 3.47
+    },
+    {
+      "filename": "asr_calls_2_val/6/86/ea7bbd4bd96e.wav",
+      "reference": "какой текст",
+      "duration": 0.85
+    },
+    {
+      "filename": "asr_calls_2_val/6/89/b0f60d7fe45b.wav",
+      "reference": "ёбнутый чтоли блять или перепил или с похмелюги бля",
+      "duration": 3.19
+    },
+    {
+      "filename": "asr_calls_2_val/6/8b/d3adee7559e6.wav",
+      "reference": "в тучковоо помощник дежурного руденко дал ваш номер сказал чтоб я вам звонил",
+      "duration": 5.32
+    },
+    {
+      "filename": "asr_calls_2_val/6/93/c68080251b13.wav",
+      "reference": "вот и я тоже спрашиваю куда прибыть",
+      "duration": 1.86
+    },
+    {
+      "filename": "asr_calls_2_val/6/96/49f700d9093e.wav",
+      "reference": "Алиса кошкина знакома",
+      "duration": 1.8
+    },
+    {
+      "filename": "asr_calls_2_val/6/98/db9a80a908ae.wav",
+      "reference": "аллах малах ёбаный в рот",
+      "duration": 1.54
+    },
+    {
+      "filename": "asr_calls_2_val/6/98/f0dcd3cfe5dd.wav",
+      "reference": "и очень досадно что иван его забраковал",
+      "duration": 2.14
+    },
+    {
+      "filename": "asr_calls_2_val/6/a8/88ef9284de01.wav",
+      "reference": "дядя женя",
+      "duration": 1.3
+    },
+    {
+      "filename": "asr_calls_2_val/6/a8/b95400c79b2b.wav",
+      "reference": "я хочу предложить вам затусоваться с друзьями",
+      "duration": 2.73
+    },
+    {
+      "filename": "asr_calls_2_val/6/b0/5c0d8348c564.wav",
+      "reference": "шестьдесят восемь",
+      "duration": 1.0
+    },
+    {
+      "filename": "asr_calls_2_val/6/b2/dcb293b4a88b.wav",
+      "reference": "это тоже поняла",
+      "duration": 1.23
+    },
+    {
+      "filename": "asr_calls_2_val/6/b8/199062817765.wav",
+      "reference": "щас я к вам спущусь тогда вниз",
+      "duration": 1.96
+    },
+    {
+      "filename": "asr_calls_2_val/6/ba/9ab0f0288f62.wav",
+      "reference": "ну вы дозвонитеся туда кто вам звонил и вам там объяснят п это нормально по человечески во сколько прибыть и когда прибыть",
+      "duration": 6.6
+    },
+    {
+      "filename": "asr_calls_2_val/6/bd/bc39aea81491.wav",
+      "reference": "мне просто интересно понять а если",
+      "duration": 1.49
+    },
+    {
+      "filename": "asr_calls_2_val/6/c2/ab89e8b01119.wav",
+      "reference": "не очень но",
+      "duration": 1.25
+    },
+    {
+      "filename": "asr_calls_2_val/6/c6/d7b4c7469514.wav",
+      "reference": "кто там дурака валяет",
+      "duration": 1.32
+    },
+    {
+      "filename": "asr_calls_2_val/6/cc/19783a6087ff.wav",
+      "reference": "ну и я сторож ну",
+      "duration": 1.3
+    },
+    {
+      "filename": "asr_calls_2_val/6/ce/81332b2c3a9f.wav",
+      "reference": "отличное",
+      "duration": 0.62
+    },
+    {
+      "filename": "asr_calls_2_val/6/d0/d1e6e5866db0.wav",
+      "reference": "вы позвоните в клиентскую службу семьдесят двенадцать сорок яяя нне пойму",
+      "duration": 5.04
+    },
+    {
+      "filename": "asr_calls_2_val/6/d2/3954af706135.wav",
+      "reference": "щас определиться ваш номер телефона запись идёт поговорим и всё с вами немножко",
+      "duration": 5.18
+    },
+    {
+      "filename": "asr_calls_2_val/6/d5/1220e1c4988b.wav",
+      "reference": "я же щас пробью телефон тебе же придурку плохо будет",
+      "duration": 3.36
+    },
+    {
+      "filename": "asr_calls_2_val/6/d8/f90b3955279c.wav",
+      "reference": "поехала вот эээ в тюрьме она сидела три года по тому сельского её направили там признали",
+      "duration": 5.22
+    },
+    {
+      "filename": "asr_calls_2_val/6/db/df1b57dc496b.wav",
+      "reference": "не украинцы а вишиватники потому что",
+      "duration": 2.58
+    },
+    {
+      "filename": "asr_calls_2_val/6/dc/115d77bceae0.wav",
+      "reference": "не знаю использовать девчонок не знаю девятнадцативосемнадцати летних",
+      "duration": 3.56
+    },
+    {
+      "filename": "asr_calls_2_val/6/e4/391e1fff8f36.wav",
+      "reference": "я вам сказала это не больница это частная квартира",
+      "duration": 2.68
+    },
+    {
+      "filename": "asr_calls_2_val/6/e6/e97af9cabc10.wav",
+      "reference": "праильно или нет ну как нет секундочку ну",
+      "duration": 2.15
+    },
+    {
+      "filename": "asr_calls_2_val/6/ec/02b7c79549e2.wav",
+      "reference": "както там не знаю как они сумели короче они",
+      "duration": 2.48
+    },
+    {
+      "filename": "asr_calls_2_val/6/ef/9b909b86db93.wav",
+      "reference": "кто там достаёт",
+      "duration": 0.86
+    },
+    {
+      "filename": "asr_calls_2_val/6/f5/ad251f456c51.wav",
+      "reference": "так полковник",
+      "duration": 0.86
+    },
+    {
+      "filename": "asr_calls_2_val/6/f6/cdc82994c0d6.wav",
+      "reference": "вот просто поступила информация нам чтоо был когдато раньше сторож у вас",
+      "duration": 4.43
+    },
+    {
+      "filename": "asr_calls_2_val/6/f9/9aea0e73947b.wav",
+      "reference": "придёшь тогда твой адрес назовёшь понял",
+      "duration": 2.18
+    },
+    {
+      "filename": "asr_calls_2_val/6/ff/40e3c11408cd.wav",
+      "reference": "начальнику второго отделения прибыть в триста четырнадцатый кабинет",
+      "duration": 3.51
+    },
+    {
+      "filename": "asr_calls_2_val/7/02/f03ca424b794.wav",
+      "reference": "секундочку вы щас собираетесь его продавать кому",
+      "duration": 1.88
+    },
+    {
+      "filename": "asr_calls_2_val/7/06/0ee75b69819e.wav",
+      "reference": "какой же ты подонок а",
+      "duration": 1.29
+    },
+    {
+      "filename": "asr_calls_2_val/7/09/750658b34dd8.wav",
+      "reference": "слушаю",
+      "duration": 0.42
+    },
+    {
+      "filename": "asr_calls_2_val/7/0b/9362b6a7a2a2.wav",
+      "reference": "всеми возможнымии и мы будем отталкиваться от этих двух тем",
+      "duration": 3.32
+    },
+    {
+      "filename": "asr_calls_2_val/7/10/df1f7d1eacf8.wav",
+      "reference": "а важное ещё не решается",
+      "duration": 1.2
+    },
+    {
+      "filename": "asr_calls_2_val/7/16/902f1359eee5.wav",
+      "reference": "какие чебуреки",
+      "duration": 1.01
+    },
+    {
+      "filename": "asr_calls_2_val/7/29/0c0334b0f4d2.wav",
+      "reference": "а вас чего там",
+      "duration": 0.97
+    },
+    {
+      "filename": "asr_calls_2_val/7/2e/af05c2b63e42.wav",
+      "reference": "ну и давай пятьсот рублей",
+      "duration": 1.57
+    },
+    {
+      "filename": "asr_calls_2_val/7/31/7f7a2a727ef5.wav",
+      "reference": "я хотела бы узнать с кем я разговариваю",
+      "duration": 1.97
+    },
+    {
+      "filename": "asr_calls_2_val/7/31/b591b907936c.wav",
+      "reference": "у меня записан ваш номер у меня записан ваш теле эээ разговор завтра придёт начальник особого отдела и будем выяснять кто вы такой",
+      "duration": 7.93
+    },
+    {
+      "filename": "asr_calls_2_val/7/35/40fcd6fdf05b.wav",
+      "reference": "товарищ сторож я я я вас ваще не понимаю что вы говорите",
+      "duration": 3.32
+    },
+    {
+      "filename": "asr_calls_2_val/7/3b/0da869c27b2d.wav",
+      "reference": "я очень честный",
+      "duration": 1.26
+    },
+    {
+      "filename": "asr_calls_2_val/7/3b/6da7b5ad81eb.wav",
+      "reference": "товарища родственников",
+      "duration": 2.62
+    },
+    {
+      "filename": "asr_calls_2_val/7/41/dbcc8d344bbf.wav",
+      "reference": "шо это такое заа независимый а комитет независимого расследования",
+      "duration": 3.43
+    },
+    {
+      "filename": "asr_calls_2_val/7/46/e60289b92d43.wav",
+      "reference": "в общем давайте я вам ещё раз прочитаю",
+      "duration": 2.08
+    },
+    {
+      "filename": "asr_calls_2_val/7/4a/c4e857d24112.wav",
+      "reference": "это ваша бед это ваше обязательство наш разговор должен привести к одному вы мне должны назвать дату рождения не должны ааа",
+      "duration": 8.72
+    },
+    {
+      "filename": "asr_calls_2_val/7/4c/05d1b1dbf0e4.wav",
+      "reference": "позови моисеева петушиная голова",
+      "duration": 1.92
+    },
+    {
+      "filename": "asr_calls_2_val/7/4e/10d67af69cf0.wav",
+      "reference": "похорошему подойди и спроси извини там я неправ там или чёто скажи по хорошему я тебе отвечаю",
+      "duration": 7.0
+    },
+    {
+      "filename": "asr_calls_2_val/7/4f/0a12df278898.wav",
+      "reference": "что она пишет",
+      "duration": 0.62
+    },
+    {
+      "filename": "asr_calls_2_val/7/53/b8e13a9a8875.wav",
+      "reference": "я нет а кто это говорит",
+      "duration": 1.82
+    },
+    {
+      "filename": "asr_calls_2_val/7/57/fa5f2f449b64.wav",
+      "reference": "аллё всё конец связи",
+      "duration": 2.05
+    },
+    {
+      "filename": "asr_calls_2_val/7/5b/efefdb990e5b.wav",
+      "reference": "ну ты знаешь где октябрьский комиссариат",
+      "duration": 2.03
+    },
+    {
+      "filename": "asr_calls_2_val/7/5d/050333f5218f.wav",
+      "reference": "я сейчас прочитаю молитвочку останешься без хуя и без рук понятно",
+      "duration": 3.93
+    },
+    {
+      "filename": "asr_calls_2_val/7/60/c7ad18d5f4c3.wav",
+      "reference": "если я тебе животное значит ты точно не векрант",
+      "duration": 3.3
+    },
+    {
+      "filename": "asr_calls_2_val/7/64/3b2cf7e60de1.wav",
+      "reference": "я никуда не набирала вы вот сейчас звонили ко мне вы что",
+      "duration": 3.18
+    },
+    {
+      "filename": "asr_calls_2_val/7/67/ad00c5ed3a0e.wav",
+      "reference": "научись передавать информацию",
+      "duration": 2.07
+    },
+    {
+      "filename": "asr_calls_2_val/7/68/e17ac87b6484.wav",
+      "reference": "вспомнил виктор иваныча или не вспомнил",
+      "duration": 2.19
+    },
+    {
+      "filename": "asr_calls_2_val/7/6a/7b8c0fab5d32.wav",
+      "reference": "звоните куда",
+      "duration": 0.75
+    },
+    {
+      "filename": "asr_calls_2_val/7/6c/4de4aa205ad1.wav",
+      "reference": "так ты у меня в новостях появился я на тебя подписан не был",
+      "duration": 3.86
+    },
+    {
+      "filename": "asr_calls_2_val/7/6c/ee061fc3b446.wav",
+      "reference": "противник контрацепции я считаю что нужно вступать в половой акт только с целью зачатия ребёнка",
+      "duration": 5.21
+    },
+    {
+      "filename": "asr_calls_2_val/7/6e/8f1e88d05a30.wav",
+      "reference": "ды ща приду блять башку отра оторву блять",
+      "duration": 2.91
+    },
+    {
+      "filename": "asr_calls_2_val/7/6f/00223c4be949.wav",
+      "reference": "обязательно",
+      "duration": 0.77
+    },
+    {
+      "filename": "asr_calls_2_val/7/72/329a09a101dd.wav",
+      "reference": "да блин я срочник я каждый день дежурю ё маё",
+      "duration": 2.58
+    },
+    {
+      "filename": "asr_calls_2_val/7/7b/be73d4555c2f.wav",
+      "reference": "послушай меня алкоголь выжег тебе весь мозг",
+      "duration": 2.94
+    },
+    {
+      "filename": "asr_calls_2_val/7/7e/cab27b79a363.wav",
+      "reference": "ну я кто ж ещё",
+      "duration": 1.22
+    },
+    {
+      "filename": "asr_calls_2_val/7/7f/ab8881c0899e.wav",
+      "reference": "смеются с тебя",
+      "duration": 1.34
+    },
+    {
+      "filename": "asr_calls_2_val/7/80/bf00abc19559.wav",
+      "reference": "вот это только плохо",
+      "duration": 1.32
+    },
+    {
+      "filename": "asr_calls_2_val/7/93/bc1bf38a45c1.wav",
+      "reference": "пожара блядь",
+      "duration": 0.78
+    },
+    {
+      "filename": "asr_calls_2_val/7/97/23202bd41dd9.wav",
+      "reference": "добрый вечер",
+      "duration": 0.7
+    },
+    {
+      "filename": "asr_calls_2_val/7/a1/992e8293c63b.wav",
+      "reference": "вы прекратите баловаться",
+      "duration": 1.47
+    },
+    {
+      "filename": "asr_calls_2_val/7/a3/57f68304bd7c.wav",
+      "reference": "с кем вы разговариваете вот с каким военкоматом",
+      "duration": 2.34
+    },
+    {
+      "filename": "asr_calls_2_val/7/a3/b92b4066d9ed.wav",
+      "reference": "вы представьтесь я вас кого я слушаю чего я слушаю кто кто",
+      "duration": 3.49
+    },
+    {
+      "filename": "asr_calls_2_val/7/a5/4e70d20278b2.wav",
+      "reference": "и оценки я просто не знаю насчёт но то есть как я понимаю",
+      "duration": 3.41
+    },
+    {
+      "filename": "asr_calls_2_val/7/a5/83bde0a408a0.wav",
+      "reference": "я говорю порусски",
+      "duration": 1.03
+    },
+    {
+      "filename": "asr_calls_2_val/7/a7/b48c1d3ceec4.wav",
+      "reference": "ольге васильевне вашу карту она входит в астрал в это время вы лежите пять семь минут она просмотрит",
+      "duration": 7.61
+    },
+    {
+      "filename": "asr_calls_2_val/7/a8/5c0739d461a6.wav",
+      "reference": "добрый день",
+      "duration": 0.69
+    },
+    {
+      "filename": "asr_calls_2_val/7/a9/f167dd070e62.wav",
+      "reference": "чё сегодня с телефоном а",
+      "duration": 1.31
+    },
+    {
+      "filename": "asr_calls_2_val/7/aa/3d09f73f289a.wav",
+      "reference": "щас позвонит",
+      "duration": 1.16
+    },
+    {
+      "filename": "asr_calls_2_val/7/ac/2f28f03b1fc5.wav",
+      "reference": "ну ну ну",
+      "duration": 0.67
+    },
+    {
+      "filename": "asr_calls_2_val/7/ad/dbc9a6ee16a9.wav",
+      "reference": "вы куда звоните",
+      "duration": 1.3
+    },
+    {
+      "filename": "asr_calls_2_val/7/b5/e338ac3bed35.wav",
+      "reference": "да вот щас дам",
+      "duration": 1.12
+    },
+    {
+      "filename": "asr_calls_2_val/7/b7/44ed974b5c80.wav",
+      "reference": "откуда он дежурный",
+      "duration": 1.16
+    },
+    {
+      "filename": "asr_calls_2_val/7/b7/9be62caa89f5.wav",
+      "reference": "а подъезжай сюда",
+      "duration": 0.97
+    },
+    {
+      "filename": "asr_calls_2_val/7/ba/75ce124d83e5.wav",
+      "reference": "в красноярске находимся",
+      "duration": 1.42
+    },
+    {
+      "filename": "asr_calls_2_val/7/bb/efb8dd9ee0c6.wav",
+      "reference": "начальнику второго отделения прибыть в триста четырнадцатый кабинет в понедельник в девять часов к букину",
+      "duration": 8.89
+    },
+    {
+      "filename": "asr_calls_2_val/7/c6/471ed5145919.wav",
+      "reference": "скорее всего сосать надо",
+      "duration": 1.72
+    },
+    {
+      "filename": "asr_calls_2_val/7/cb/c417aa2b9cdd.wav",
+      "reference": "ты чё там где то на тэсе сидишь что ли",
+      "duration": 2.45
+    },
+    {
+      "filename": "asr_calls_2_val/7/d4/c1fca1dfd627.wav",
+      "reference": "ну я плохо слышу ну",
+      "duration": 1.6
+    },
+    {
+      "filename": "asr_calls_2_val/7/d8/f59db8fe8b2c.wav",
+      "reference": "работать надо а ты сидишь",
+      "duration": 1.33
+    },
+    {
+      "filename": "asr_calls_2_val/7/d9/8cb6559b9417.wav",
+      "reference": "кушаешь",
+      "duration": 0.68
+    },
+    {
+      "filename": "asr_calls_2_val/7/db/39f2fad7c7f5.wav",
+      "reference": "олег это бабушка моя",
+      "duration": 1.63
+    },
+    {
+      "filename": "asr_calls_2_val/7/dd/0ce0f7283283.wav",
+      "reference": "адрес мне скажи",
+      "duration": 1.24
+    },
+    {
+      "filename": "asr_calls_2_val/7/e5/bc46d125a298.wav",
+      "reference": "мозги блять ладно",
+      "duration": 1.26
+    },
+    {
+      "filename": "asr_calls_2_val/7/e6/f5f0f87fea30.wav",
+      "reference": "по поводу чего какие документы иметь",
+      "duration": 2.43
+    },
+    {
+      "filename": "asr_calls_2_val/7/e9/b5004968d9ab.wav",
+      "reference": "никого нету сторож",
+      "duration": 1.47
+    },
+    {
+      "filename": "asr_calls_2_val/7/ec/0baa1286ac67.wav",
+      "reference": "что значит нет лермонтова тридцать восемь",
+      "duration": 2.7
+    },
+    {
+      "filename": "asr_calls_2_val/7/f0/936bf145b643.wav",
+      "reference": "оттуда вчера приехал",
+      "duration": 1.1
+    },
+    {
+      "filename": "asr_calls_2_val/7/f0/c54d3d7845ab.wav",
+      "reference": "там нету вэбэк нормальных ты видел мне чувак скинул",
+      "duration": 2.22
+    },
+    {
+      "filename": "asr_calls_2_val/7/f2/fe5cc66681c4.wav",
+      "reference": "начальнику второго отделения прибыть в триста четырнадцатый кабинет",
+      "duration": 3.17
+    },
+    {
+      "filename": "asr_calls_2_val/7/f3/b7c323bae251.wav",
+      "reference": "ну смотрите тут э товар который на у нас на сайте представлен оон приобретаетсяя",
+      "duration": 4.82
+    },
+    {
+      "filename": "asr_calls_2_val/7/f5/e93237ba7bb0.wav",
+      "reference": "так давай",
+      "duration": 0.73
+    },
+    {
+      "filename": "asr_calls_2_val/7/f6/33c0cce9bdcb.wav",
+      "reference": "государство ещё и доплачивает им как я понимаю",
+      "duration": 2.21
+    },
+    {
+      "filename": "asr_calls_2_val/7/f7/f22189113ca4.wav",
+      "reference": "своим же хуем",
+      "duration": 0.79
+    },
+    {
+      "filename": "asr_calls_2_val/7/fb/eed3f1f81cee.wav",
+      "reference": "вот я думаю сейчас потерянных пакетов не будет",
+      "duration": 2.39
+    },
+    {
+      "filename": "asr_calls_2_val/7/fe/233751526c8e.wav",
+      "reference": "венеев моя фамилия",
+      "duration": 1.24
+    },
+    {
+      "filename": "asr_calls_2_val/8/0b/72219ea02316.wav",
+      "reference": "блядь это ты мне названиваешь твоя придурошная мамаша блядь ёбнутая блядь это же пиздец блядь",
+      "duration": 5.18
+    },
+    {
+      "filename": "asr_calls_2_val/8/0c/0e5fc911c6ed.wav",
+      "reference": "что ты несёшь",
+      "duration": 1.41
+    },
+    {
+      "filename": "asr_calls_2_val/8/0e/16bfa2f8e59d.wav",
+      "reference": "ну скорее да скорее всего фанаты которые хотят увидеть новый крутой пранк и всё такое ты круто блять у тебя пранки крутые всё ты блять ааа аллё слышишь",
+      "duration": 8.63
+    },
+    {
+      "filename": "asr_calls_2_val/8/11/a8d235f9ebba.wav",
+      "reference": "всем вызываемым напомнить о необходимости иметь при себе оригиналы паспортов всех заявленных членов семьи",
+      "duration": 7.1
+    },
+    {
+      "filename": "asr_calls_2_val/8/12/67f4e754ff3f.wav",
+      "reference": "по всем телефонам",
+      "duration": 1.18
+    },
+    {
+      "filename": "asr_calls_2_val/8/15/8f73d3d70ab8.wav",
+      "reference": "что вы собираетесь с этим делать скажите мне",
+      "duration": 1.65
+    },
+    {
+      "filename": "asr_calls_2_val/8/1c/2463f64774fa.wav",
+      "reference": "сказать что вам передали",
+      "duration": 2.15
+    },
+    {
+      "filename": "asr_calls_2_val/8/1e/5faac36595d3.wav",
+      "reference": "а ты чё",
+      "duration": 0.47
+    },
+    {
+      "filename": "asr_calls_2_val/8/21/492205e9ffe6.wav",
+      "reference": "ты знаешь",
+      "duration": 0.61
+    },
+    {
+      "filename": "asr_calls_2_val/8/28/44290bf09b9f.wav",
+      "reference": "я дежурный сторож",
+      "duration": 1.36
+    },
+    {
+      "filename": "asr_calls_2_val/8/29/6d121de6347f.wav",
+      "reference": "я не звонил это вы кому звоните",
+      "duration": 2.16
+    },
+    {
+      "filename": "asr_calls_2_val/8/2c/3fb80e9099d8.wav",
+      "reference": "куда придут вы куда звоните",
+      "duration": 2.27
+    },
+    {
+      "filename": "asr_calls_2_val/8/32/b743aafd3ac0.wav",
+      "reference": "ну ты наглец вообщето",
+      "duration": 1.44
+    },
+    {
+      "filename": "asr_calls_2_val/8/39/34e954380883.wav",
+      "reference": "я ведь уже заскла твой номер не один раз",
+      "duration": 3.3
+    },
+    {
+      "filename": "asr_calls_2_val/8/39/84da715574b5.wav",
+      "reference": "мы маги",
+      "duration": 0.73
+    },
+    {
+      "filename": "asr_calls_2_val/8/3c/9b817f5e3539.wav",
+      "reference": "клавиатура твоя есть этот есть",
+      "duration": 2.48
+    },
+    {
+      "filename": "asr_calls_2_val/8/3f/272859d457ba.wav",
+      "reference": "алё да",
+      "duration": 1.16
+    },
+    {
+      "filename": "asr_calls_2_val/8/3f/98bb761ba38f.wav",
+      "reference": "ну это ты мне",
+      "duration": 0.48
+    },
+    {
+      "filename": "asr_calls_2_val/8/44/b390c4ffa8d9.wav",
+      "reference": "я говорюю",
+      "duration": 1.23
+    },
+    {
+      "filename": "asr_calls_2_val/8/48/a89b624519e7.wav",
+      "reference": "ты можешь разговаривать военным языком или нет",
+      "duration": 2.33
+    },
+    {
+      "filename": "asr_calls_2_val/8/50/8c09f9ace92b.wav",
+      "reference": "вы какой военкомат можно вам начальник второго отделения перезвонит",
+      "duration": 2.97
+    },
+    {
+      "filename": "asr_calls_2_val/8/57/ec621c02ddc6.wav",
+      "reference": "давай щас милиция приедет",
+      "duration": 1.85
+    },
+    {
+      "filename": "asr_calls_2_val/8/58/f0ce6dea161d.wav",
+      "reference": "как тебя зовут",
+      "duration": 0.85
+    },
+    {
+      "filename": "asr_calls_2_val/8/5d/f65dd82770e5.wav",
+      "reference": "я просто ннн вообще ничего не понял можно я вам ща перезвоню вы можете мне свой номер телефона дать чтоб я удостоверился",
+      "duration": 5.29
+    },
+    {
+      "filename": "asr_calls_2_val/8/5f/f5be1dcf6f91.wav",
+      "reference": "бес под кобылу залез",
+      "duration": 1.21
+    },
+    {
+      "filename": "asr_calls_2_val/8/63/6fbc91ecd7e8.wav",
+      "reference": "дом двадцать пять",
+      "duration": 1.03
+    },
+    {
+      "filename": "asr_calls_2_val/8/6b/43db87d4dc38.wav",
+      "reference": "тридцать четвёртый кабинет",
+      "duration": 1.43
+    },
+    {
+      "filename": "asr_calls_2_val/8/6e/234212f65913.wav",
+      "reference": "семьсот девяносто три сто звоните",
+      "duration": 2.68
+    },
+    {
+      "filename": "asr_calls_2_val/8/6e/d1668eb8c051.wav",
+      "reference": "не город этот районный центр кунашахский военкомат",
+      "duration": 3.28
+    },
+    {
+      "filename": "asr_calls_2_val/8/70/27b26bc5f02a.wav",
+      "reference": "я вам не звонил",
+      "duration": 1.15
+    },
+    {
+      "filename": "asr_calls_2_val/8/75/2f8c35e6738c.wav",
+      "reference": "рыбаков моя фамилия вы меня слышите по голосу",
+      "duration": 2.36
+    },
+    {
+      "filename": "asr_calls_2_val/8/79/61218c63d178.wav",
+      "reference": "ну я не настолько стар эээ ноо ф поэтому сижу",
+      "duration": 4.32
+    },
+    {
+      "filename": "asr_calls_2_val/8/7d/73ba842d9c3f.wav",
+      "reference": "я хочу отомстить за мою кошку тебе",
+      "duration": 2.15
+    },
+    {
+      "filename": "asr_calls_2_val/8/80/58b8592def35.wav",
+      "reference": "всё теперь набирай",
+      "duration": 1.62
+    },
+    {
+      "filename": "asr_calls_2_val/8/88/3fc681565af6.wav",
+      "reference": "ну ты в куртке вышел ты домой собирался идти",
+      "duration": 1.96
+    },
+    {
+      "filename": "asr_calls_2_val/8/8a/dd0ac9882365.wav",
+      "reference": "ты щё там блядь яндекс открыл хуйню бля читаешь еврей пишет хуйню бля",
+      "duration": 4.61
+    },
+    {
+      "filename": "asr_calls_2_val/8/8c/3bf3ce8b50cb.wav",
+      "reference": "хуй вы поймаете",
+      "duration": 1.1
+    },
+    {
+      "filename": "asr_calls_2_val/8/8d/0a20ad40589c.wav",
+      "reference": "и я вас не пойму никак",
+      "duration": 1.57
+    },
+    {
+      "filename": "asr_calls_2_val/8/8e/a9514409cf0a.wav",
+      "reference": "ты чё в натуре дурак что ли",
+      "duration": 1.96
+    },
+    {
+      "filename": "asr_calls_2_val/8/91/0929abe5f223.wav",
+      "reference": "дай любовь викторовну",
+      "duration": 1.42
+    },
+    {
+      "filename": "asr_calls_2_val/8/93/5991c32e9cae.wav",
+      "reference": "что я вам предложила",
+      "duration": 1.22
+    },
+    {
+      "filename": "asr_calls_2_val/8/98/bcdf3a9e0f64.wav",
+      "reference": "да вы вы щас куда звонили вы вы щас вы щас куда позвонили",
+      "duration": 3.07
+    },
+    {
+      "filename": "asr_calls_2_val/8/9f/e34513946a8d.wav",
+      "reference": "знать те даже сказать не чего",
+      "duration": 1.31
+    },
+    {
+      "filename": "asr_calls_2_val/8/a3/4ed2e9ff8727.wav",
+      "reference": "пожалуйста можете больше не звонить я передал начаальнику рамазанову всё можете успокоиться",
+      "duration": 4.85
+    },
+    {
+      "filename": "asr_calls_2_val/8/a8/e2b451b9a044.wav",
+      "reference": "или надо в очередь встать",
+      "duration": 1.33
+    },
+    {
+      "filename": "asr_calls_2_val/8/a9/b888537ba956.wav",
+      "reference": "мне не нравится да ну господи водка щас стоит ну просто не люблю я",
+      "duration": 4.13
+    },
+    {
+      "filename": "asr_calls_2_val/8/bc/dbe888968074.wav",
+      "reference": "город красногорск",
+      "duration": 0.89
+    },
+    {
+      "filename": "asr_calls_2_val/8/c1/d8839bf4a3b1.wav",
+      "reference": "я у тебя спрашиваю вышла газета",
+      "duration": 2.01
+    },
+    {
+      "filename": "asr_calls_2_val/8/c7/ed52dd7c0325.wav",
+      "reference": "я допустимм",
+      "duration": 0.74
+    },
+    {
+      "filename": "asr_calls_2_val/8/d4/2f8e84f20e34.wav",
+      "reference": "а по голосу так вроде бы и старый",
+      "duration": 1.8
+    },
+    {
+      "filename": "asr_calls_2_val/8/d9/2bc449ae5290.wav",
+      "reference": "куда вы звоните",
+      "duration": 0.79
+    },
+    {
+      "filename": "asr_calls_2_val/8/db/2a21a54310d1.wav",
+      "reference": "гробовые",
+      "duration": 1.38
+    },
+    {
+      "filename": "asr_calls_2_val/8/e3/89177ac04057.wav",
+      "reference": "не любят да такие увлечения так что",
+      "duration": 2.4
+    },
+    {
+      "filename": "asr_calls_2_val/8/e7/70bc0fd47e8e.wav",
+      "reference": "вам спасибо",
+      "duration": 0.78
+    },
+    {
+      "filename": "asr_calls_2_val/8/ea/9c8f64c79557.wav",
+      "reference": "всё я вам сказал до свидания",
+      "duration": 2.39
+    },
+    {
+      "filename": "asr_calls_2_val/8/eb/a944ae09da1e.wav",
+      "reference": "сегодня жди на хуй",
+      "duration": 0.99
+    },
+    {
+      "filename": "asr_calls_2_val/8/ec/182986eb1ab7.wav",
+      "reference": "фу бухающие тёлки это противно",
+      "duration": 1.69
+    },
+    {
+      "filename": "asr_calls_2_val/8/ed/08ccfca1e959.wav",
+      "reference": "в группе вольнова",
+      "duration": 0.87
+    },
+    {
+      "filename": "asr_calls_2_val/8/f7/aac1a05e451e.wav",
+      "reference": "животным блядь жираф блядь",
+      "duration": 2.09
+    },
+    {
+      "filename": "asr_calls_2_val/8/fe/e6deb7b464d9.wav",
+      "reference": "ну кто это говорит то хоть вы можете сказать",
+      "duration": 2.27
+    },
+    {
+      "filename": "asr_calls_2_val/9/00/c453a8615910.wav",
+      "reference": "я  гражданский я  сторож",
+      "duration": 1.83
+    },
+    {
+      "filename": "asr_calls_2_val/9/0a/a8c7176b2298.wav",
+      "reference": "с нижнего тагила",
+      "duration": 1.04
+    },
+    {
+      "filename": "asr_calls_2_val/9/0a/fa62196412a0.wav",
+      "reference": "ругаются",
+      "duration": 0.74
+    },
+    {
+      "filename": "asr_calls_2_val/9/0e/d8274cb92b33.wav",
+      "reference": "по какому вопросу",
+      "duration": 1.02
+    },
+    {
+      "filename": "asr_calls_2_val/9/1a/484907f8ac60.wav",
+      "reference": "ты понимаешь я без конца таблетки",
+      "duration": 2.49
+    },
+    {
+      "filename": "asr_calls_2_val/9/28/cd5a895c62ea.wav",
+      "reference": "горбыль это кто",
+      "duration": 1.18
+    },
+    {
+      "filename": "asr_calls_2_val/9/2b/9125c929fa0f.wav",
+      "reference": "да я его вообще не видел понял",
+      "duration": 1.72
+    },
+    {
+      "filename": "asr_calls_2_val/9/2f/9d44e32e4523.wav",
+      "reference": "у вас нормально всё",
+      "duration": 1.2
+    },
+    {
+      "filename": "asr_calls_2_val/9/3b/1533045b3edf.wav",
+      "reference": "мне не хватает",
+      "duration": 0.85
+    },
+    {
+      "filename": "asr_calls_2_val/9/3c/39dd8f0d81ef.wav",
+      "reference": "у вас задолженность",
+      "duration": 1.8
+    },
+    {
+      "filename": "asr_calls_2_val/9/3d/097563ab83a1.wav",
+      "reference": "эйсмология",
+      "duration": 1.02
+    },
+    {
+      "filename": "asr_calls_2_val/9/47/3b2b0370750b.wav",
+      "reference": "мальчиком",
+      "duration": 0.63
+    },
+    {
+      "filename": "asr_calls_2_val/9/49/e082be81c147.wav",
+      "reference": "какого военкомата",
+      "duration": 0.94
+    },
+    {
+      "filename": "asr_calls_2_val/9/4e/5f254400be33.wav",
+      "reference": "начальнику второго отделения прибыть в триста четырнадцатый кабинет в понедельник",
+      "duration": 5.51
+    },
+    {
+      "filename": "asr_calls_2_val/9/51/69f6a155646e.wav",
+      "reference": "эстмология",
+      "duration": 0.87
+    },
+    {
+      "filename": "asr_calls_2_val/9/54/b124ea67426a.wav",
+      "reference": "ты чё ебанутый осёл блядь",
+      "duration": 1.73
+    },
+    {
+      "filename": "asr_calls_2_val/9/57/dec93678ec0d.wav",
+      "reference": "сторож нафин фамилия говори",
+      "duration": 1.76
+    },
+    {
+      "filename": "asr_calls_2_val/9/59/b6eb49559bf5.wav",
+      "reference": "в областной в какой областной",
+      "duration": 1.57
+    },
+    {
+      "filename": "asr_calls_2_val/9/5a/2404eaa75227.wav",
+      "reference": "и вам говорят что вы позвонили кудато",
+      "duration": 2.78
+    },
+    {
+      "filename": "asr_calls_2_val/9/5e/100413212f45.wav",
+      "reference": "это ты сюда звонишь с домофоном блядь ещё у тебя там блеете",
+      "duration": 3.38
+    },
+    {
+      "filename": "asr_calls_2_val/9/63/688db2cfbd50.wav",
+      "reference": "ты знаешь что бля",
+      "duration": 1.56
+    },
+    {
+      "filename": "asr_calls_2_val/9/63/dd8caf7502e0.wav",
+      "reference": "да я авторитет блядь кимовский и новомосковский",
+      "duration": 3.41
+    },
+    {
+      "filename": "asr_calls_2_val/9/6e/5311dc796593.wav",
+      "reference": "когда прибыть начальнику в триста четырнадцатый кабинет",
+      "duration": 2.7
+    },
+    {
+      "filename": "asr_calls_2_val/9/71/66dc4a0c966b.wav",
+      "reference": "в чём сутьто вы куда звоните скажи",
+      "duration": 1.82
+    },
+    {
+      "filename": "asr_calls_2_val/9/76/9d8946039267.wav",
+      "reference": "ну я что не так сказал",
+      "duration": 1.49
+    },
+    {
+      "filename": "asr_calls_2_val/9/79/ed96f8a611bf.wav",
+      "reference": "я тебя выебу в жопу готовься всё через неделю",
+      "duration": 3.24
+    },
+    {
+      "filename": "asr_calls_2_val/9/7a/011a844b66f5.wav",
+      "reference": "добрый вечер",
+      "duration": 0.86
+    },
+    {
+      "filename": "asr_calls_2_val/9/7a/2ec9d6ed2752.wav",
+      "reference": "плохо слышно вас",
+      "duration": 1.12
+    },
+    {
+      "filename": "asr_calls_2_val/9/80/221208e90524.wav",
+      "reference": "я не сосу",
+      "duration": 0.88
+    },
+    {
+      "filename": "asr_calls_2_val/9/85/b395fff13109.wav",
+      "reference": "короче говоря а что мы будем делать с тем что путин хуйло объясните мне",
+      "duration": 3.36
+    },
+    {
+      "filename": "asr_calls_2_val/9/8a/e0741460fa7a.wav",
+      "reference": "это кто говорит",
+      "duration": 0.92
+    },
+    {
+      "filename": "asr_calls_2_val/9/8b/175a48f32700.wav",
+      "reference": "без комиссара пока комиссар не почитает не распишет никто не имеет право их читать",
+      "duration": 4.66
+    },
+    {
+      "filename": "asr_calls_2_val/9/8d/5fe3d0172dbe.wav",
+      "reference": "триста четырнадцатый кабинет в девять ноль ноль начальнику второго отдела",
+      "duration": 3.76
+    },
+    {
+      "filename": "asr_calls_2_val/9/94/d6a41bffe18c.wav",
+      "reference": "где где простите вступил закон я хочу уточнить",
+      "duration": 2.76
+    },
+    {
+      "filename": "asr_calls_2_val/9/95/4bb0fe4bfd44.wav",
+      "reference": "щас подъедем с ребятами",
+      "duration": 1.49
+    },
+    {
+      "filename": "asr_calls_2_val/9/97/9e40c600fb00.wav",
+      "reference": "а те чё колят когда тебя лечат придурок",
+      "duration": 2.78
+    },
+    {
+      "filename": "asr_calls_2_val/9/9a/dc4baad1c28f.wav",
+      "reference": "это подрастающее поколение вы шо",
+      "duration": 1.92
+    },
+    {
+      "filename": "asr_calls_2_val/9/9e/1af15fe00894.wav",
+      "reference": "я те обещаю блять я подыму все связи блять",
+      "duration": 3.13
+    },
+    {
+      "filename": "asr_calls_2_val/9/9f/1ff36a6e6a31.wav",
+      "reference": "заходи в лёгкую",
+      "duration": 1.02
+    },
+    {
+      "filename": "asr_calls_2_val/9/a4/df184d56519a.wav",
+      "reference": "список вариантов на сайте у вас",
+      "duration": 1.25
+    },
+    {
+      "filename": "asr_calls_2_val/9/a7/5ffd297c1c94.wav",
+      "reference": "почему к шести",
+      "duration": 0.96
+    },
+    {
+      "filename": "asr_calls_2_val/9/a9/a4f87e6d127c.wav",
+      "reference": "я понимаю я",
+      "duration": 1.24
+    },
+    {
+      "filename": "asr_calls_2_val/9/aa/04527d8985fb.wav",
+      "reference": "музыкантов таких нету",
+      "duration": 1.4
+    },
+    {
+      "filename": "asr_calls_2_val/9/b7/2620f60e0841.wav",
+      "reference": "что ну",
+      "duration": 0.53
+    },
+    {
+      "filename": "asr_calls_2_val/9/bc/f0843265df84.wav",
+      "reference": "завтра прибыть",
+      "duration": 1.12
+    },
+    {
+      "filename": "asr_calls_2_val/9/be/00fac9bf9904.wav",
+      "reference": "вы вчера ночью нам не давали покоя и сегодня опять звоните",
+      "duration": 3.17
+    },
+    {
+      "filename": "asr_calls_2_val/9/c0/decdef91f2f0.wav",
+      "reference": "хуй свернётся у этого мудака а блять",
+      "duration": 2.58
+    },
+    {
+      "filename": "asr_calls_2_val/9/c2/2ce2c8aa3a87.wav",
+      "reference": "у тебя в квартире",
+      "duration": 1.15
+    },
+    {
+      "filename": "asr_calls_2_val/9/c4/ce706d18963b.wav",
+      "reference": "помогите дяденька",
+      "duration": 0.95
+    },
+    {
+      "filename": "asr_calls_2_val/9/ca/8ae19ce88867.wav",
+      "reference": "кто она такая",
+      "duration": 0.72
+    },
+    {
+      "filename": "asr_calls_2_val/9/cd/e2a5ea77286a.wav",
+      "reference": "нам никто ничего не передаёт нам всё привозят на катафалках",
+      "duration": 4.5
+    },
+    {
+      "filename": "asr_calls_2_val/9/d0/d54e9ab2700d.wav",
+      "reference": "тебя учили в школе со старшими разговаривать",
+      "duration": 2.21
+    },
+    {
+      "filename": "asr_calls_2_val/9/da/989d987cf7be.wav",
+      "reference": "а вы продаёте или нет",
+      "duration": 1.16
+    },
+    {
+      "filename": "asr_calls_2_val/9/dc/947bd300a588.wav",
+      "reference": "приходи приходи",
+      "duration": 1.29
+    },
+    {
+      "filename": "asr_calls_2_val/9/de/64ed825ff1ca.wav",
+      "reference": "наверное работает гденибудь",
+      "duration": 1.44
+    },
+    {
+      "filename": "asr_calls_2_val/9/e0/14be690676c9.wav",
+      "reference": "тебя как зовут",
+      "duration": 0.93
+    },
+    {
+      "filename": "asr_calls_2_val/9/ef/68431a13c82e.wav",
+      "reference": "я то не издеваюсь вы издеваетесь",
+      "duration": 2.34
+    },
+    {
+      "filename": "asr_calls_2_val/9/f4/8e4c2dff8024.wav",
+      "reference": "кукушкин фамилия кукушкин",
+      "duration": 1.9
+    },
+    {
+      "filename": "asr_calls_2_val/9/f9/a0eb4158448f.wav",
+      "reference": "нет у нас такого",
+      "duration": 1.55
+    },
+    {
+      "filename": "asr_calls_2_val/a/00/4d5b163191d0.wav",
+      "reference": "шикарно",
+      "duration": 0.71
+    },
+    {
+      "filename": "asr_calls_2_val/a/00/c42c8a9bbf90.wav",
+      "reference": "позвонила женщина сказала что прибыть начальнику второго отдела",
+      "duration": 3.75
+    },
+    {
+      "filename": "asr_calls_2_val/a/05/7392f7ebaf86.wav",
+      "reference": "попробовать секс втроём ты я и наташка",
+      "duration": 2.35
+    },
+    {
+      "filename": "asr_calls_2_val/a/09/0f3dfede5509.wav",
+      "reference": "вы же звоните",
+      "duration": 0.78
+    },
+    {
+      "filename": "asr_calls_2_val/a/0a/942064fe8e1b.wav",
+      "reference": "звони комунибудь другому ясно",
+      "duration": 1.72
+    },
+    {
+      "filename": "asr_calls_2_val/a/0b/39890e6aee4f.wav",
+      "reference": "ты хоть знаешь как автомат называется",
+      "duration": 1.86
+    },
+    {
+      "filename": "asr_calls_2_val/a/10/5647cd93b7e2.wav",
+      "reference": "так у меня есть просьба поговорить с экспертом на счёт травки что он думает",
+      "duration": 2.83
+    },
+    {
+      "filename": "asr_calls_2_val/a/12/6b3657d3b3fd.wav",
+      "reference": "она умерла",
+      "duration": 1.01
+    },
+    {
+      "filename": "asr_calls_2_val/a/18/ba2874bd0d13.wav",
+      "reference": "на платке есть да",
+      "duration": 0.8
+    },
+    {
+      "filename": "asr_calls_2_val/a/19/d0a7c164f4de.wav",
+      "reference": "это звонок иль как",
+      "duration": 1.24
+    },
+    {
+      "filename": "asr_calls_2_val/a/22/373bce1b2c55.wav",
+      "reference": "ну ладно я тебе ладно я тебе открою свой главный секрет я симпатичный потому что я девочка на самом деле",
+      "duration": 5.05
+    },
+    {
+      "filename": "asr_calls_2_val/a/23/5e2e825af4fa.wav",
+      "reference": "вы не платите то можно вообще не платить её получается потому что в банк подавать",
+      "duration": 4.17
+    },
+    {
+      "filename": "asr_calls_2_val/a/27/fac20bda6fe7.wav",
+      "reference": "какое время",
+      "duration": 0.99
+    },
+    {
+      "filename": "asr_calls_2_val/a/2d/d56ec137cd14.wav",
+      "reference": "мы ходим ищем",
+      "duration": 0.95
+    },
+    {
+      "filename": "asr_calls_2_val/a/2e/5b2625dd26a7.wav",
+      "reference": "вас не слышно",
+      "duration": 1.27
+    },
+    {
+      "filename": "asr_calls_2_val/a/2e/9021ab000da8.wav",
+      "reference": "кто тянут срок это вы",
+      "duration": 1.08
+    },
+    {
+      "filename": "asr_calls_2_val/a/2f/4fae5dff2470.wav",
+      "reference": "пятихаточка да окей договорились",
+      "duration": 2.29
+    },
+    {
+      "filename": "asr_calls_2_val/a/34/5041a0b8e1d4.wav",
+      "reference": "место расположение группы дальнегорск нижегородская область",
+      "duration": 3.97
+    },
+    {
+      "filename": "asr_calls_2_val/a/36/485a83323e7c.wav",
+      "reference": "бля я стою не около метро чувак я стою бля около магазина около твоего дома чё да да да",
+      "duration": 6.27
+    },
+    {
+      "filename": "asr_calls_2_val/a/39/da8da141b3b7.wav",
+      "reference": "ну так ещё хоть поворот какойто ну ну ну",
+      "duration": 3.56
+    },
+    {
+      "filename": "asr_calls_2_val/a/3e/be37c072bd60.wav",
+      "reference": "я вас спрашиваю нормально вы зачем сюда звоните",
+      "duration": 2.95
+    },
+    {
+      "filename": "asr_calls_2_val/a/3f/e6742e8345e2.wav",
+      "reference": "доброй ночи извините за поздний звонок",
+      "duration": 1.79
+    },
+    {
+      "filename": "asr_calls_2_val/a/48/6872e52a002c.wav",
+      "reference": "что не знаете",
+      "duration": 1.15
+    },
+    {
+      "filename": "asr_calls_2_val/a/4a/370a6cbb4a48.wav",
+      "reference": "скажите где находитесь",
+      "duration": 1.12
+    },
+    {
+      "filename": "asr_calls_2_val/a/4d/4d140759a964.wav",
+      "reference": "кабинет триста четырнадцать",
+      "duration": 1.8
+    },
+    {
+      "filename": "asr_calls_2_val/a/50/2a96cdd05f3f.wav",
+      "reference": "ну где я нахожусь",
+      "duration": 0.94
+    },
+    {
+      "filename": "asr_calls_2_val/a/58/b15eb26da3da.wav",
+      "reference": "мужчина вы меня слышите что я вам говорю",
+      "duration": 2.71
+    },
+    {
+      "filename": "asr_calls_2_val/a/5b/f062002edf15.wav",
+      "reference": "галин я бы не сказал бы нет",
+      "duration": 1.46
+    },
+    {
+      "filename": "asr_calls_2_val/a/63/f217a0683ed0.wav",
+      "reference": "вы странный вопрос задаёте",
+      "duration": 1.22
+    },
+    {
+      "filename": "asr_calls_2_val/a/64/e4f675935c40.wav",
+      "reference": "хочу задать вам вопросы и возможно ну есть",
+      "duration": 2.42
+    },
+    {
+      "filename": "asr_calls_2_val/a/6d/34d72a0fd062.wav",
+      "reference": "и меня щас обкладывают хренами какието люди вообще там орут на меня в общем ужас какойто",
+      "duration": 4.47
+    },
+    {
+      "filename": "asr_calls_2_val/a/71/3d8911006765.wav",
+      "reference": "да нету игдакова ещё раз говорю",
+      "duration": 1.81
+    },
+    {
+      "filename": "asr_calls_2_val/a/73/8ac1b8da7664.wav",
+      "reference": "матюками где вы таких словто понабралисьто я не знаю",
+      "duration": 3.21
+    },
+    {
+      "filename": "asr_calls_2_val/a/86/d9cf9959d912.wav",
+      "reference": "не знаю с пистолетом или нет эээ нет не раздражает потому что я в принципе с этим не согласен",
+      "duration": 4.68
+    },
+    {
+      "filename": "asr_calls_2_val/a/8a/d82c95dcc3c5.wav",
+      "reference": "это поведение и так далее",
+      "duration": 1.6
+    },
+    {
+      "filename": "asr_calls_2_val/a/8b/8942dbc9270b.wav",
+      "reference": "вы с э банка восточный экспресс правильно",
+      "duration": 2.65
+    },
+    {
+      "filename": "asr_calls_2_val/a/93/182c9faf1757.wav",
+      "reference": "потом меня в маш это в багажник какойто засунули",
+      "duration": 3.13
+    },
+    {
+      "filename": "asr_calls_2_val/a/94/2b15557b463c.wav",
+      "reference": "ой бляяха муха какойто ты",
+      "duration": 2.46
+    },
+    {
+      "filename": "asr_calls_2_val/a/96/515fd0c5121a.wav",
+      "reference": "я мечтал всю жизнь вот иии раньше я недооценивал блять вас оказывается вы на мой имидж работаете я просто блять думал что вы мне хотитее оскорбить унизить а на самом деле",
+      "duration": 9.57
+    },
+    {
+      "filename": "asr_calls_2_val/a/96/b0ab074c80fd.wav",
+      "reference": "по седьмому чего",
+      "duration": 0.89
+    },
+    {
+      "filename": "asr_calls_2_val/a/a1/2d21151ca63c.wav",
+      "reference": "ну ты знаешь у меня ситуация я же тебе писала на сайте то чтоо у меняя случилось дтп и",
+      "duration": 4.79
+    },
+    {
+      "filename": "asr_calls_2_val/a/a4/5f8e55c240b2.wav",
+      "reference": "из какого военкомата",
+      "duration": 1.83
+    },
+    {
+      "filename": "asr_calls_2_val/a/a5/287551ce6f57.wav",
+      "reference": "я говорю область какая",
+      "duration": 1.23
+    },
+    {
+      "filename": "asr_calls_2_val/a/af/1a3ae68093b2.wav",
+      "reference": "ну входят во круг",
+      "duration": 1.29
+    },
+    {
+      "filename": "asr_calls_2_val/a/b1/337dc29a6e73.wav",
+      "reference": "тысячу двести семьдесят один по россии и шестьсот двадцать с чемто",
+      "duration": 5.01
+    },
+    {
+      "filename": "asr_calls_2_val/a/b4/2c2da7386929.wav",
+      "reference": "они дорого стоят",
+      "duration": 0.81
+    },
+    {
+      "filename": "asr_calls_2_val/a/b4/3b7120a85ba4.wav",
+      "reference": "хочу ответить щас на",
+      "duration": 1.38
+    },
+    {
+      "filename": "asr_calls_2_val/a/b5/042224af59db.wav",
+      "reference": "тупой сторож значит",
+      "duration": 1.33
+    },
+    {
+      "filename": "asr_calls_2_val/a/b6/17982235a74f.wav",
+      "reference": "оперативный дежурный знает ничего не говорит",
+      "duration": 2.92
+    },
+    {
+      "filename": "asr_calls_2_val/a/bf/5b6a4312c848.wav",
+      "reference": "мирошников пётр иванович семьдесят пятого года рождения",
+      "duration": 3.36
+    },
+    {
+      "filename": "asr_calls_2_val/a/c2/ce2809eb3388.wav",
+      "reference": "ну ты затейник ну ты вообще выдумщик такой напридумывал сказок сам сидит верит в них",
+      "duration": 4.44
+    },
+    {
+      "filename": "asr_calls_2_val/a/d1/4f423e8b33cc.wav",
+      "reference": "деревня то какая давай первая буква",
+      "duration": 2.42
+    },
+    {
+      "filename": "asr_calls_2_val/a/d1/640bd00c7bbc.wav",
+      "reference": "я вас слышу слышу что вы хотели",
+      "duration": 1.89
+    },
+    {
+      "filename": "asr_calls_2_val/a/d7/3ff311648f7d.wav",
+      "reference": "вы его затронули по этому он как бы имеет право говорить",
+      "duration": 3.4
+    },
+    {
+      "filename": "asr_calls_2_val/a/da/1c0ef95ee0d6.wav",
+      "reference": "кто со мной разговаривает",
+      "duration": 1.4
+    },
+    {
+      "filename": "asr_calls_2_val/a/e1/72e00f1ebfc2.wav",
+      "reference": "пошёл ты наа хууй не звони понял пидарас",
+      "duration": 3.81
+    },
+    {
+      "filename": "asr_calls_2_val/a/e1/f67956057284.wav",
+      "reference": "и начну просить",
+      "duration": 1.48
+    },
+    {
+      "filename": "asr_calls_2_val/a/e2/324d76178f4f.wav",
+      "reference": "прибыть в обл военкомат триста четырнадцатый кабинет",
+      "duration": 3.62
+    },
+    {
+      "filename": "asr_calls_2_val/a/e4/f4f4c12f537d.wav",
+      "reference": "извините может быть",
+      "duration": 1.41
+    },
+    {
+      "filename": "asr_calls_2_val/a/ea/1af26832e2b9.wav",
+      "reference": "уроо блять",
+      "duration": 1.36
+    },
+    {
+      "filename": "asr_calls_2_val/a/ed/2fadbfe50220.wav",
+      "reference": "вторжение имущества либо аморальное",
+      "duration": 2.61
+    },
+    {
+      "filename": "asr_calls_2_val/a/f1/78f23cc172a9.wav",
+      "reference": "я начинаю переписываться с людьми",
+      "duration": 2.43
+    },
+    {
+      "filename": "asr_calls_2_val/a/f6/97bfb7badcd5.wav",
+      "reference": "телеграмма",
+      "duration": 0.89
+    },
+    {
+      "filename": "asr_calls_2_val/a/f7/49240f2e3092.wav",
+      "reference": "в какой кабинет куда прибыть",
+      "duration": 1.79
+    },
+    {
+      "filename": "asr_calls_2_val/b/02/5d5c19894682.wav",
+      "reference": "как отвечать на эти запросы",
+      "duration": 1.26
+    },
+    {
+      "filename": "asr_calls_2_val/b/03/2d7049e03d62.wav",
+      "reference": "в школе как меня учили в школе меня хорошо учили",
+      "duration": 2.44
+    },
+    {
+      "filename": "asr_calls_2_val/b/03/c21573461b97.wav",
+      "reference": "кабинет какой",
+      "duration": 1.1
+    },
+    {
+      "filename": "asr_calls_2_val/b/03/e6d1e9807213.wav",
+      "reference": "я аспирант на кафедре русского языка",
+      "duration": 2.94
+    },
+    {
+      "filename": "asr_calls_2_val/b/0f/7d7966cc69fa.wav",
+      "reference": "ды как это нет когда есть что вы мне говорите",
+      "duration": 2.77
+    },
+    {
+      "filename": "asr_calls_2_val/b/10/ad417c653d38.wav",
+      "reference": "можно представить это какойто плацдарм на будущее",
+      "duration": 2.56
+    },
+    {
+      "filename": "asr_calls_2_val/b/12/42b4cbc623d6.wav",
+      "reference": "собачий хуй тебе в глотку ты поняла ж меня хуй тебе в глотку",
+      "duration": 5.4
+    },
+    {
+      "filename": "asr_calls_2_val/b/15/a796276aae48.wav",
+      "reference": "мой телефон",
+      "duration": 0.85
+    },
+    {
+      "filename": "asr_calls_2_val/b/1a/0a5bc98f067a.wav",
+      "reference": "с этой суммы вы отказываетесь говорите что что я чтото перепутала у вас такой суммы долга нет",
+      "duration": 4.84
+    },
+    {
+      "filename": "asr_calls_2_val/b/1a/ecd36496e867.wav",
+      "reference": "сторож или начальник вы",
+      "duration": 1.52
+    },
+    {
+      "filename": "asr_calls_2_val/b/25/7426607326ee.wav",
+      "reference": "начальнику второго отделения",
+      "duration": 1.91
+    },
+    {
+      "filename": "asr_calls_2_val/b/2c/d3a35bc56df1.wav",
+      "reference": "как следует сказать вам",
+      "duration": 1.1
+    },
+    {
+      "filename": "asr_calls_2_val/b/33/2103e9095aef.wav",
+      "reference": "да ты не туда ззвонишь мужик ты чё охуел чтоли",
+      "duration": 2.76
+    },
+    {
+      "filename": "asr_calls_2_val/b/33/8a7722bd18fb.wav",
+      "reference": "сторож или начальник вы вы мне фамилию скажите",
+      "duration": 2.94
+    },
+    {
+      "filename": "asr_calls_2_val/b/34/a813360b2906.wav",
+      "reference": "юлюнина интересная фамилия да я вас слушаю",
+      "duration": 3.57
+    },
+    {
+      "filename": "asr_calls_2_val/b/3d/0473c7bfb6bc.wav",
+      "reference": "да которая умерла а тут",
+      "duration": 2.46
+    },
+    {
+      "filename": "asr_calls_2_val/b/42/9710deaf2ec7.wav",
+      "reference": "ну я я извините меня это может быть чтото с телефоном я вам то не не звонил эээ вот как вы со мной",
+      "duration": 7.94
+    },
+    {
+      "filename": "asr_calls_2_val/b/49/a829422ea76f.wav",
+      "reference": "где тебя нужно найти ты чего мне мозги паришь а",
+      "duration": 2.31
+    },
+    {
+      "filename": "asr_calls_2_val/b/4b/a25c4fc7e45e.wav",
+      "reference": "медицинский институт добрый день",
+      "duration": 1.45
+    },
+    {
+      "filename": "asr_calls_2_val/b/4b/cb84d46ad2db.wav",
+      "reference": "всё без проблем",
+      "duration": 0.8
+    },
+    {
+      "filename": "asr_calls_2_val/b/4d/65406e1d108b.wav",
+      "reference": "я тебя блядь жопу на глаз натяну твою блядь",
+      "duration": 2.65
+    },
+    {
+      "filename": "asr_calls_2_val/b/57/4b6b004ad041.wav",
+      "reference": "алло здравствуйте",
+      "duration": 0.92
+    },
+    {
+      "filename": "asr_calls_2_val/b/57/d28e10dca975.wav",
+      "reference": "вы меня спрашиваете",
+      "duration": 1.3
+    },
+    {
+      "filename": "asr_calls_2_val/b/69/28f64d7e5a3e.wav",
+      "reference": "что ты сказал",
+      "duration": 0.83
+    },
+    {
+      "filename": "asr_calls_2_val/b/6b/1beb64780e01.wav",
+      "reference": "это тебя наверно",
+      "duration": 1.39
+    },
+    {
+      "filename": "asr_calls_2_val/b/6b/aca3615f3caa.wav",
+      "reference": "да не знаете я в больнице лежу я",
+      "duration": 1.92
+    },
+    {
+      "filename": "asr_calls_2_val/b/6c/cf7d5321d7d1.wav",
+      "reference": "дальше город где находится полностью адрес называй",
+      "duration": 3.08
+    },
+    {
+      "filename": "asr_calls_2_val/b/6d/9ed0f57fa568.wav",
+      "reference": "какой процент я я долбоёб",
+      "duration": 2.06
+    },
+    {
+      "filename": "asr_calls_2_val/b/7d/205b6df96613.wav",
+      "reference": "депутат",
+      "duration": 0.66
+    },
+    {
+      "filename": "asr_calls_2_val/b/81/d4561f6afc24.wav",
+      "reference": "если вас не устроит соседнее государство нажмите три",
+      "duration": 3.04
+    },
+    {
+      "filename": "asr_calls_2_val/b/8b/ddd02779b7f9.wav",
+      "reference": "меня можно на в на какиенибудь позиции",
+      "duration": 2.24
+    },
+    {
+      "filename": "asr_calls_2_val/b/8e/2c0771b7a580.wav",
+      "reference": "зачем вы это сделали",
+      "duration": 1.43
+    },
+    {
+      "filename": "asr_calls_2_val/b/90/5b5f17428c6f.wav",
+      "reference": "ещё раз повторяй",
+      "duration": 1.02
+    },
+    {
+      "filename": "asr_calls_2_val/b/92/5976f49dc264.wav",
+      "reference": "мне ничего понятно",
+      "duration": 1.1
+    },
+    {
+      "filename": "asr_calls_2_val/b/92/80db0da74fa1.wav",
+      "reference": "ага вот значит",
+      "duration": 1.28
+    },
+    {
+      "filename": "asr_calls_2_val/b/92/f8d5f32930d8.wav",
+      "reference": "хотя я знала чтоо как бы это ну было у них",
+      "duration": 3.21
+    },
+    {
+      "filename": "asr_calls_2_val/b/95/18b084772083.wav",
+      "reference": "да слушаю",
+      "duration": 0.68
+    },
+    {
+      "filename": "asr_calls_2_val/b/9a/c8104e36a176.wav",
+      "reference": "три недели мне звонят по этому делу",
+      "duration": 1.8
+    },
+    {
+      "filename": "asr_calls_2_val/b/a0/edf301b42b56.wav",
+      "reference": "хожу с нижним бельём",
+      "duration": 1.33
+    },
+    {
+      "filename": "asr_calls_2_val/b/a6/73be5c1b738a.wav",
+      "reference": "на той стороне",
+      "duration": 0.87
+    },
+    {
+      "filename": "asr_calls_2_val/b/ab/f6c564b9644c.wav",
+      "reference": "их раком поставил",
+      "duration": 1.01
+    },
+    {
+      "filename": "asr_calls_2_val/b/c0/c391fd7e59d6.wav",
+      "reference": "по этому вы позвоните пожалуйста",
+      "duration": 1.87
+    },
+    {
+      "filename": "asr_calls_2_val/b/c1/86ac23c13ef7.wav",
+      "reference": "у нас плисе",
+      "duration": 1.01
+    },
+    {
+      "filename": "asr_calls_2_val/b/c3/bee4284567da.wav",
+      "reference": "нет зачем я никого н нет",
+      "duration": 1.6
+    },
+    {
+      "filename": "asr_calls_2_val/b/cc/3b84e41605e4.wav",
+      "reference": "ну к куда скажете",
+      "duration": 1.82
+    },
+    {
+      "filename": "asr_calls_2_val/b/d1/f0a0402459f5.wav",
+      "reference": "я из интернета звоню",
+      "duration": 1.17
+    },
+    {
+      "filename": "asr_calls_2_val/b/d3/d081f7dddd7b.wav",
+      "reference": "чё ты сделаешь чё ты сделаешь",
+      "duration": 1.87
+    },
+    {
+      "filename": "asr_calls_2_val/b/d9/dccc01a541ee.wav",
+      "reference": "он нам передал приказания",
+      "duration": 1.79
+    },
+    {
+      "filename": "asr_calls_2_val/b/da/d730b3ec5441.wav",
+      "reference": "куда я тебе подтверждаю что я курица",
+      "duration": 2.1
+    },
+    {
+      "filename": "asr_calls_2_val/b/e7/3a62679216dd.wav",
+      "reference": "а что вы делате",
+      "duration": 0.81
+    },
+    {
+      "filename": "asr_calls_2_val/b/e7/3f2e2c5b931c.wav",
+      "reference": "такого господь бог покажу сказала щас ноль три вызову идиот недоделанный",
+      "duration": 3.71
+    },
+    {
+      "filename": "asr_calls_2_val/b/ea/2de7eacac48b.wav",
+      "reference": "тем более передай пожалуйста алисе что с что с её бальникам только боярышник и пить",
+      "duration": 5.79
+    },
+    {
+      "filename": "asr_calls_2_val/b/ee/271b7822ed1f.wav",
+      "reference": "может быть какието",
+      "duration": 0.86
+    },
+    {
+      "filename": "asr_calls_2_val/b/ee/5a8fbf0e4ace.wav",
+      "reference": "ты не думаешь или",
+      "duration": 1.19
+    },
+    {
+      "filename": "asr_calls_2_val/b/f1/a62e58ea03b1.wav",
+      "reference": "такой в деловой чтоли а",
+      "duration": 1.65
+    },
+    {
+      "filename": "asr_calls_2_val/b/fe/02ffb61d06d4.wav",
+      "reference": "вы мой голос знаете",
+      "duration": 1.06
+    },
+    {
+      "filename": "asr_calls_2_val/c/01/45de2f5f55ed.wav",
+      "reference": "брось трубку не звони мне больше",
+      "duration": 1.55
+    },
+    {
+      "filename": "asr_calls_2_val/c/07/b8ec0e7b998a.wav",
+      "reference": "ты даже ей не положен",
+      "duration": 1.26
+    },
+    {
+      "filename": "asr_calls_2_val/c/09/6d81027229c4.wav",
+      "reference": "алло алло",
+      "duration": 0.92
+    },
+    {
+      "filename": "asr_calls_2_val/c/0d/6b57cee90153.wav",
+      "reference": "ну а куда деваться помогать надо внукам",
+      "duration": 2.24
+    },
+    {
+      "filename": "asr_calls_2_val/c/0e/15230097c9d9.wav",
+      "reference": "мне интересно пообщаться с тобой как просто с личностью",
+      "duration": 2.7
+    },
+    {
+      "filename": "asr_calls_2_val/c/0f/2c2bbb6732f9.wav",
+      "reference": "я те блядь",
+      "duration": 0.89
+    },
+    {
+      "filename": "asr_calls_2_val/c/11/de249ae32d49.wav",
+      "reference": "не существует культуры воспитания тринадцатилетние девочки готовы заниматься сексом в туалете клуба за бутылку яги",
+      "duration": 6.43
+    },
+    {
+      "filename": "asr_calls_2_val/c/16/4bb21f9ee152.wav",
+      "reference": "когда блять ей полную жопу бананнов блядь напихают она же колонётся блядь",
+      "duration": 4.16
+    },
+    {
+      "filename": "asr_calls_2_val/c/17/55a7eca5f348.wav",
+      "reference": "можно с телефоном прийти будет да",
+      "duration": 1.62
+    },
+    {
+      "filename": "asr_calls_2_val/c/23/ce85a6f0945a.wav",
+      "reference": "тебя что ли",
+      "duration": 1.03
+    },
+    {
+      "filename": "asr_calls_2_val/c/24/fe07930d07cc.wav",
+      "reference": "алло алло здравствуйте",
+      "duration": 2.04
+    },
+    {
+      "filename": "asr_calls_2_val/c/27/d4ce204c6b54.wav",
+      "reference": "пьяница законченный так",
+      "duration": 1.76
+    },
+    {
+      "filename": "asr_calls_2_val/c/39/aec0d594e1d0.wav",
+      "reference": "где кабинет находится",
+      "duration": 1.7
+    },
+    {
+      "filename": "asr_calls_2_val/c/3e/21cd1876db67.wav",
+      "reference": "так а я почему вам должна представлятьсято я откуда знаю что вы",
+      "duration": 4.66
+    },
+    {
+      "filename": "asr_calls_2_val/c/3f/c4a35292b935.wav",
+      "reference": "угу черкизово да",
+      "duration": 1.25
+    },
+    {
+      "filename": "asr_calls_2_val/c/4b/10820e6a33ed.wav",
+      "reference": "да там лужа огромная",
+      "duration": 1.39
+    },
+    {
+      "filename": "asr_calls_2_val/c/4f/0d8dd6899174.wav",
+      "reference": "куда прибить кому прибыть",
+      "duration": 1.39
+    },
+    {
+      "filename": "asr_calls_2_val/c/54/4ce57d31c3d3.wav",
+      "reference": "это всего лишь теория",
+      "duration": 1.17
+    },
+    {
+      "filename": "asr_calls_2_val/c/56/df34b5ac2ba3.wav",
+      "reference": "ну собственно это урна ну не урна а типа",
+      "duration": 2.28
+    },
+    {
+      "filename": "asr_calls_2_val/c/5e/177c1f205e8d.wav",
+      "reference": "молодой человек вы что хотите",
+      "duration": 1.75
+    },
+    {
+      "filename": "asr_calls_2_val/c/63/af61d1b4b16a.wav",
+      "reference": "а что двести четырнадцатый кабинетто",
+      "duration": 1.52
+    },
+    {
+      "filename": "asr_calls_2_val/c/68/5509d76d7cd1.wav",
+      "reference": "прибыть эээ в тот военкомат",
+      "duration": 1.7
+    },
+    {
+      "filename": "asr_calls_2_val/c/6c/26b79a59d8d6.wav",
+      "reference": "там один щас с мусоркой",
+      "duration": 1.24
+    },
+    {
+      "filename": "asr_calls_2_val/c/6d/e9614880bc3f.wav",
+      "reference": "я водку пью",
+      "duration": 1.71
+    },
+    {
+      "filename": "asr_calls_2_val/c/70/c344b728d1cc.wav",
+      "reference": "а что толкуто дорогой мой хороший",
+      "duration": 1.53
+    },
+    {
+      "filename": "asr_calls_2_val/c/77/d8078e385550.wav",
+      "reference": "в милицию и у э разберусь кто это звонит мне",
+      "duration": 3.28
+    },
+    {
+      "filename": "asr_calls_2_val/c/79/941a8c978e99.wav",
+      "reference": "ни чего и тем более",
+      "duration": 1.93
+    },
+    {
+      "filename": "asr_calls_2_val/c/7b/32c244fb4a2c.wav",
+      "reference": "да которая просто",
+      "duration": 1.24
+    },
+    {
+      "filename": "asr_calls_2_val/c/7b/dde26b5f86b7.wav",
+      "reference": "иди в магадане пойду щас",
+      "duration": 1.9
+    },
+    {
+      "filename": "asr_calls_2_val/c/7c/98e541567496.wav",
+      "reference": "экране у меня тысячи посланий от совершенно разных людей",
+      "duration": 4.42
+    },
+    {
+      "filename": "asr_calls_2_val/c/7e/9eb57787bc47.wav",
+      "reference": "и вот они ещё раз ширяли позвоночник внизу понимаете нет",
+      "duration": 4.22
+    },
+    {
+      "filename": "asr_calls_2_val/c/84/2b6230fc0e3b.wav",
+      "reference": "коллекторское агентство бутылка вы готовы присесть",
+      "duration": 2.42
+    },
+    {
+      "filename": "asr_calls_2_val/c/84/aa2d7e831a1b.wav",
+      "reference": "вы куда хоть звонитето вы знаете",
+      "duration": 2.18
+    },
+    {
+      "filename": "asr_calls_2_val/c/87/6e40162eda94.wav",
+      "reference": "тридцать четвёртый кабинет в понедельник",
+      "duration": 2.4
+    },
+    {
+      "filename": "asr_calls_2_val/c/88/da98267e7d9d.wav",
+      "reference": "номер телефона свой дайте",
+      "duration": 1.7
+    },
+    {
+      "filename": "asr_calls_2_val/c/8b/9948c9dbdf1d.wav",
+      "reference": "я дежурный диспетчер",
+      "duration": 1.26
+    },
+    {
+      "filename": "asr_calls_2_val/c/91/1e1cf98ddfc3.wav",
+      "reference": "нет ну при чём здесь просто нет ну подождите я вижу я вижу на э дорогах общего пользования",
+      "duration": 5.61
+    },
+    {
+      "filename": "asr_calls_2_val/c/94/b77c31d380fe.wav",
+      "reference": "да давай давай поговори маленько",
+      "duration": 2.05
+    },
+    {
+      "filename": "asr_calls_2_val/c/9d/aafc1f13d2b1.wav",
+      "reference": "осуществляется рабочей группой города дальнегорска",
+      "duration": 3.66
+    },
+    {
+      "filename": "asr_calls_2_val/c/a1/93028ec86c91.wav",
+      "reference": "ну а как это а заче а какой тогда смысл",
+      "duration": 2.32
+    },
+    {
+      "filename": "asr_calls_2_val/c/b0/806aa53e66fe.wav",
+      "reference": "ты девкам чтоли молодым не нужен",
+      "duration": 1.59
+    },
+    {
+      "filename": "asr_calls_2_val/c/b0/9587e0df3137.wav",
+      "reference": "всё я сказала ни больше не звони ща вызвов вызову милицию",
+      "duration": 3.34
+    },
+    {
+      "filename": "asr_calls_2_val/c/b1/b72f2b36dce8.wav",
+      "reference": "я не слышу",
+      "duration": 0.74
+    },
+    {
+      "filename": "asr_calls_2_val/c/b3/bae17ea8c7fa.wav",
+      "reference": "не об него об его портрет на матрасе",
+      "duration": 3.05
+    },
+    {
+      "filename": "asr_calls_2_val/c/b9/80122870db27.wav",
+      "reference": "мегунько иван фамилия моя мегунько",
+      "duration": 2.51
+    },
+    {
+      "filename": "asr_calls_2_val/c/bd/f50d0b282b63.wav",
+      "reference": "это адольф гитлер звонит",
+      "duration": 2.01
+    },
+    {
+      "filename": "asr_calls_2_val/c/c0/155d2f5ee5e8.wav",
+      "reference": "слушай дурака этого",
+      "duration": 1.21
+    },
+    {
+      "filename": "asr_calls_2_val/c/c4/0be434e5bc0b.wav",
+      "reference": "когда стемнеет подойду",
+      "duration": 1.71
+    },
+    {
+      "filename": "asr_calls_2_val/c/c6/e728d3d75687.wav",
+      "reference": "чё то я не понял кто кому позвонил",
+      "duration": 1.73
+    },
+    {
+      "filename": "asr_calls_2_val/c/c9/c0c100aea064.wav",
+      "reference": "оперативный дежурный чего",
+      "duration": 1.45
+    },
+    {
+      "filename": "asr_calls_2_val/c/ce/68620588a2f2.wav",
+      "reference": "может быть",
+      "duration": 0.92
+    },
+    {
+      "filename": "asr_calls_2_val/c/cf/a2e224fbfb43.wav",
+      "reference": "позвонил и го и объяснить не может куда нам подойтито",
+      "duration": 3.0
+    },
+    {
+      "filename": "asr_calls_2_val/c/d0/27a9cbb7de92.wav",
+      "reference": "рассчитайте",
+      "duration": 0.81
+    },
+    {
+      "filename": "asr_calls_2_val/c/db/a51cfd247328.wav",
+      "reference": "точнее так что ты соврал что ты не гей",
+      "duration": 2.33
+    },
+    {
+      "filename": "asr_calls_2_val/c/dc/5e3db0450c2f.wav",
+      "reference": "ну ничего страшного приезжай слышишь",
+      "duration": 1.98
+    },
+    {
+      "filename": "asr_calls_2_val/c/de/e44326645784.wav",
+      "reference": "ещё квартиру отнимаю теперь",
+      "duration": 2.17
+    },
+    {
+      "filename": "asr_calls_2_val/c/ea/65d2d839616e.wav",
+      "reference": "звоните",
+      "duration": 0.59
+    },
+    {
+      "filename": "asr_calls_2_val/c/eb/fe3f82d88c80.wav",
+      "reference": "нет телефон куда перезвонить можно начальнику если вы в понедельник чтобы он прибыл к десяти часам по какому телефону перезвонить можно",
+      "duration": 5.72
+    },
+    {
+      "filename": "asr_calls_2_val/c/ee/8b4d499d5a95.wav",
+      "reference": "повторили начальнику второго отделения прибыть в триста четырнадцатый кабинет",
+      "duration": 3.66
+    },
+    {
+      "filename": "asr_calls_2_val/c/f9/df4bd3649f60.wav",
+      "reference": "надо смотреть понимаешь допустим смотри вот кто с этой всей хуйни поимел вот кто америка",
+      "duration": 5.3
+    },
+    {
+      "filename": "asr_calls_2_val/d/00/6e6cd8c2ae69.wav",
+      "reference": "что что в придачу ещё",
+      "duration": 1.43
+    },
+    {
+      "filename": "asr_calls_2_val/d/06/a36615666750.wav",
+      "reference": "о чём речь",
+      "duration": 0.49
+    },
+    {
+      "filename": "asr_calls_2_val/d/0a/6db197f11784.wav",
+      "reference": "давайте вот конкретно вот этой",
+      "duration": 1.24
+    },
+    {
+      "filename": "asr_calls_2_val/d/17/87631a02a93b.wav",
+      "reference": "что что вам нужно",
+      "duration": 1.34
+    },
+    {
+      "filename": "asr_calls_2_val/d/18/18ccfe81c0ab.wav",
+      "reference": "ай и щас холодно на улице",
+      "duration": 1.97
+    },
+    {
+      "filename": "asr_calls_2_val/d/21/218bcf3b802f.wav",
+      "reference": "угу всё записала",
+      "duration": 1.23
+    },
+    {
+      "filename": "asr_calls_2_val/d/28/a4ff2fba75a3.wav",
+      "reference": "поэтому я вам говорю что",
+      "duration": 1.93
+    },
+    {
+      "filename": "asr_calls_2_val/d/34/110420f8f382.wav",
+      "reference": "кому прибыть",
+      "duration": 1.06
+    },
+    {
+      "filename": "asr_calls_2_val/d/38/84f93da5c09a.wav",
+      "reference": "эээ сучка короче слушай сюда ты когда в следующий раз подумаешь мне позвонить",
+      "duration": 4.63
+    },
+    {
+      "filename": "asr_calls_2_val/d/39/856494ddbf95.wav",
+      "reference": "назовите свою фамилию",
+      "duration": 1.33
+    },
+    {
+      "filename": "asr_calls_2_val/d/3b/6b4506e05dc5.wav",
+      "reference": "делеение там вся эта фигня",
+      "duration": 2.33
+    },
+    {
+      "filename": "asr_calls_2_val/d/3d/8faef646ee14.wav",
+      "reference": "я на мобилу",
+      "duration": 0.76
+    },
+    {
+      "filename": "asr_calls_2_val/d/42/d03cd2085e2e.wav",
+      "reference": "плохо слышно вас",
+      "duration": 1.07
+    },
+    {
+      "filename": "asr_calls_2_val/d/44/f08a0cb9257a.wav",
+      "reference": "я вас не понял",
+      "duration": 0.88
+    },
+    {
+      "filename": "asr_calls_2_val/d/47/16345cc093a8.wav",
+      "reference": "и висюкову прибыть туда у вас есть г кто висюков такой",
+      "duration": 3.87
+    },
+    {
+      "filename": "asr_calls_2_val/d/4a/90d815b36af4.wav",
+      "reference": "ну как делишки у тебя",
+      "duration": 1.35
+    },
+    {
+      "filename": "asr_calls_2_val/d/5b/3a86480247c3.wav",
+      "reference": "може я замуж хочу за тебе выйти",
+      "duration": 2.08
+    },
+    {
+      "filename": "asr_calls_2_val/d/62/1055c4d28578.wav",
+      "reference": "это уже наверно я шестой звонок идёт",
+      "duration": 1.66
+    },
+    {
+      "filename": "asr_calls_2_val/d/74/326e48722138.wav",
+      "reference": "одну ночь тогда да",
+      "duration": 1.51
+    },
+    {
+      "filename": "asr_calls_2_val/d/7a/547963f67688.wav",
+      "reference": "да настоёб ты мне я телефон выключаю",
+      "duration": 2.23
+    },
+    {
+      "filename": "asr_calls_2_val/d/7a/604ca5c65195.wav",
+      "reference": "не коротки",
+      "duration": 0.78
+    },
+    {
+      "filename": "asr_calls_2_val/d/7e/103bc56da42a.wav",
+      "reference": "что такое второе отделение",
+      "duration": 1.4
+    },
+    {
+      "filename": "asr_calls_2_val/d/7e/37f07b9f542c.wav",
+      "reference": "вы по русски можете разговаривать скажите мне начальнику второго отделения прибыть в девять ноль ноль куда",
+      "duration": 7.42
+    },
+    {
+      "filename": "asr_calls_2_val/d/84/4027578678d4.wav",
+      "reference": "и чё вам сказать не могу вы доложите утром своему начальству",
+      "duration": 3.13
+    },
+    {
+      "filename": "asr_calls_2_val/d/89/bbc684a70813.wav",
+      "reference": "нет вы фамилию свою сказали мне нет",
+      "duration": 1.8
+    },
+    {
+      "filename": "asr_calls_2_val/d/8f/fe12264c0046.wav",
+      "reference": "добрый вечер",
+      "duration": 0.77
+    },
+    {
+      "filename": "asr_calls_2_val/d/90/8e4a7cedd4cb.wav",
+      "reference": "полкило весит на хуй",
+      "duration": 1.16
+    },
+    {
+      "filename": "asr_calls_2_val/d/98/ede1e3954567.wav",
+      "reference": "такая информация прошла что это",
+      "duration": 1.95
+    },
+    {
+      "filename": "asr_calls_2_val/d/9a/2306477c9bb1.wav",
+      "reference": "куда ему прибыть в триста четырнадцатый кабинет",
+      "duration": 2.0
+    },
+    {
+      "filename": "asr_calls_2_val/d/9f/1d8876bcbc8e.wav",
+      "reference": "его любимого ученика нандо сказал прости учитель но чтото я тебя не понял",
+      "duration": 3.77
+    },
+    {
+      "filename": "asr_calls_2_val/d/a6/e35f8364513c.wav",
+      "reference": "угу понятно хорошо я вас введу обязательно в курс дела",
+      "duration": 3.1
+    },
+    {
+      "filename": "asr_calls_2_val/d/b1/13260af793b9.wav",
+      "reference": "приходи мы с тобой познакомимся если уж ты так очень желаешь меня видеть",
+      "duration": 4.52
+    },
+    {
+      "filename": "asr_calls_2_val/d/b3/bccb11c32a10.wav",
+      "reference": "на этом моменте я вообще был в шоке просто",
+      "duration": 3.52
+    },
+    {
+      "filename": "asr_calls_2_val/d/b9/a79520a289d7.wav",
+      "reference": "и что прибыть ему или что",
+      "duration": 1.54
+    },
+    {
+      "filename": "asr_calls_2_val/d/bb/13f834615dc2.wav",
+      "reference": "я вас не слышу перезвоните вы пропадаете",
+      "duration": 2.6
+    },
+    {
+      "filename": "asr_calls_2_val/d/bf/88fb8124bece.wav",
+      "reference": "на этот раз у тебя",
+      "duration": 0.87
+    },
+    {
+      "filename": "asr_calls_2_val/d/c1/0953faff4c5d.wav",
+      "reference": "и я тебя остановись",
+      "duration": 1.81
+    },
+    {
+      "filename": "asr_calls_2_val/d/c1/41e9d100b085.wav",
+      "reference": "слушай",
+      "duration": 0.55
+    },
+    {
+      "filename": "asr_calls_2_val/d/d0/7d149931b4cb.wav",
+      "reference": "опять за т трубку берёшься",
+      "duration": 1.19
+    },
+    {
+      "filename": "asr_calls_2_val/d/d2/caeb1a416531.wav",
+      "reference": "есть места где были рейды где будут рейды где проблемы",
+      "duration": 3.61
+    },
+    {
+      "filename": "asr_calls_2_val/d/d3/8aeb9f7849b9.wav",
+      "reference": "понятия не имею куда прибыть",
+      "duration": 1.4
+    },
+    {
+      "filename": "asr_calls_2_val/d/d4/b4c271fb2eda.wav",
+      "reference": "какой шямпан надо вам",
+      "duration": 1.21
+    },
+    {
+      "filename": "asr_calls_2_val/d/dc/5f8e54176016.wav",
+      "reference": "товаров определённых",
+      "duration": 1.9
+    },
+    {
+      "filename": "asr_calls_2_val/d/e5/bc64ac32599b.wav",
+      "reference": "а оно и видно",
+      "duration": 0.87
+    },
+    {
+      "filename": "asr_calls_2_val/d/e7/028b2ca6bb66.wav",
+      "reference": "чё ты сразу ёпта я тебе по нормальному а ты сразу иди наа хуй",
+      "duration": 3.33
+    },
+    {
+      "filename": "asr_calls_2_val/d/ea/ea6697ca2011.wav",
+      "reference": "андрей я хочу разговаривать",
+      "duration": 1.67
+    },
+    {
+      "filename": "asr_calls_2_val/d/ee/1347d7613532.wav",
+      "reference": "энергично практикую в течение двенадцати лет",
+      "duration": 2.5
+    },
+    {
+      "filename": "asr_calls_2_val/d/f6/ba77e503189c.wav",
+      "reference": "вашему что ль мы вскрываем то щас",
+      "duration": 1.85
+    },
+    {
+      "filename": "asr_calls_2_val/e/03/4dcb2de0ba3d.wav",
+      "reference": "а за кого считать то если ты не может свой номер телефона дать",
+      "duration": 3.48
+    },
+    {
+      "filename": "asr_calls_2_val/e/09/6c7eb05704b9.wav",
+      "reference": "нет а вы аллё",
+      "duration": 1.07
+    },
+    {
+      "filename": "asr_calls_2_val/e/09/87b90d03e7af.wav",
+      "reference": "вы куда звонитето",
+      "duration": 1.42
+    },
+    {
+      "filename": "asr_calls_2_val/e/11/31a23bca0ed6.wav",
+      "reference": "ты приятельница этого что ли",
+      "duration": 1.57
+    },
+    {
+      "filename": "asr_calls_2_val/e/1d/8f4aa0d8d6ab.wav",
+      "reference": "слушай выключай его выключай",
+      "duration": 2.15
+    },
+    {
+      "filename": "asr_calls_2_val/e/26/a373c092833a.wav",
+      "reference": "ну ещё раз представьтесь мне",
+      "duration": 1.32
+    },
+    {
+      "filename": "asr_calls_2_val/e/28/c827583326e3.wav",
+      "reference": "хуйнёю ты занимаешься",
+      "duration": 1.3
+    },
+    {
+      "filename": "asr_calls_2_val/e/32/21d8251b627f.wav",
+      "reference": "нахуй ты звонишь то блядь жену что ль я нашёл себе",
+      "duration": 2.89
+    },
+    {
+      "filename": "asr_calls_2_val/e/3b/2de3491e1a82.wav",
+      "reference": "значит татуировках но никак ни опог погашении платежей",
+      "duration": 2.87
+    },
+    {
+      "filename": "asr_calls_2_val/e/3b/35eee190abb9.wav",
+      "reference": "нет код щас ушёл",
+      "duration": 1.25
+    },
+    {
+      "filename": "asr_calls_2_val/e/3d/1f7c81459801.wav",
+      "reference": "но вы их своим",
+      "duration": 1.01
+    },
+    {
+      "filename": "asr_calls_2_val/e/3d/fae2098d7431.wav",
+      "reference": "хватит звонить бляха муха",
+      "duration": 1.84
+    },
+    {
+      "filename": "asr_calls_2_val/e/40/5c6bd66db75d.wav",
+      "reference": "это одна из жён пророка мухаммада",
+      "duration": 2.4
+    },
+    {
+      "filename": "asr_calls_2_val/e/49/e7c4f9325ccf.wav",
+      "reference": "куры тоже домашние бывают и чё теперь",
+      "duration": 1.66
+    },
+    {
+      "filename": "asr_calls_2_val/e/4e/fe27572efa91.wav",
+      "reference": "а потому что это была моя бабушка она при мне звонила",
+      "duration": 3.02
+    },
+    {
+      "filename": "asr_calls_2_val/e/51/dbb886ce2680.wav",
+      "reference": "кому вопрос задаёте",
+      "duration": 1.05
+    },
+    {
+      "filename": "asr_calls_2_val/e/52/9276528e82e6.wav",
+      "reference": "стой подожди всё дай я",
+      "duration": 1.1
+    },
+    {
+      "filename": "asr_calls_2_val/e/5d/d3a02996163d.wav",
+      "reference": "интернет деньги",
+      "duration": 1.11
+    },
+    {
+      "filename": "asr_calls_2_val/e/61/d8a447bd0c08.wav",
+      "reference": "ну и что мужчиныто ято что вам",
+      "duration": 1.76
+    },
+    {
+      "filename": "asr_calls_2_val/e/64/60c2647f7a30.wav",
+      "reference": "триста четырнадцатый кабинет куда это",
+      "duration": 2.33
+    },
+    {
+      "filename": "asr_calls_2_val/e/65/753595137ded.wav",
+      "reference": "понятно",
+      "duration": 0.67
+    },
+    {
+      "filename": "asr_calls_2_val/e/6b/2eef4ac8895e.wav",
+      "reference": "что хотели",
+      "duration": 0.91
+    },
+    {
+      "filename": "asr_calls_2_val/e/6b/54e999abda16.wav",
+      "reference": "курского района военкомат",
+      "duration": 1.43
+    },
+    {
+      "filename": "asr_calls_2_val/e/70/ea33dacb4d8b.wav",
+      "reference": "марш компания",
+      "duration": 1.13
+    },
+    {
+      "filename": "asr_calls_2_val/e/73/ffb5db6f4ff9.wav",
+      "reference": "он мне звонил кстати",
+      "duration": 0.94
+    },
+    {
+      "filename": "asr_calls_2_val/e/79/fd1516da51fe.wav",
+      "reference": "задницу наберём",
+      "duration": 0.94
+    },
+    {
+      "filename": "asr_calls_2_val/e/7b/52b9adb55b73.wav",
+      "reference": "а ты не сдохла ещё паскуда старая",
+      "duration": 1.92
+    },
+    {
+      "filename": "asr_calls_2_val/e/7b/c65887dc2553.wav",
+      "reference": "могу нарезать",
+      "duration": 1.03
+    },
+    {
+      "filename": "asr_calls_2_val/e/87/b6d6163e248c.wav",
+      "reference": "я отсюда слышу",
+      "duration": 0.83
+    },
+    {
+      "filename": "asr_calls_2_val/e/88/8b275e0f05e0.wav",
+      "reference": "нуу вот видишь как хорошо ладно окей",
+      "duration": 1.92
+    },
+    {
+      "filename": "asr_calls_2_val/e/8a/668990b853f1.wav",
+      "reference": "ну хорошо очень приятно так что вы хотели",
+      "duration": 2.67
+    },
+    {
+      "filename": "asr_calls_2_val/e/8b/8a9b151bd626.wav",
+      "reference": "я чё не порусски что ли сказал начальнику второго отделения прибыть",
+      "duration": 4.91
+    },
+    {
+      "filename": "asr_calls_2_val/e/8d/88f1f74337b6.wav",
+      "reference": "вы мне фамилию скажите",
+      "duration": 1.29
+    },
+    {
+      "filename": "asr_calls_2_val/e/95/9ec5406e023e.wav",
+      "reference": "нету таких тут дураков блять у нас",
+      "duration": 1.97
+    },
+    {
+      "filename": "asr_calls_2_val/e/95/f24204fef047.wav",
+      "reference": "вопросами почему почему бегут не к родителям",
+      "duration": 2.82
+    },
+    {
+      "filename": "asr_calls_2_val/e/96/33ab316c29e3.wav",
+      "reference": "ааа у тя фамилия мегунько",
+      "duration": 1.7
+    },
+    {
+      "filename": "asr_calls_2_val/e/96/ad8c67afd056.wav",
+      "reference": "вы знаете куда вам надо прибыть",
+      "duration": 1.68
+    },
+    {
+      "filename": "asr_calls_2_val/e/99/ddfc6c9dc8fd.wav",
+      "reference": "так почему через час в военкоматето",
+      "duration": 1.95
+    },
+    {
+      "filename": "asr_calls_2_val/e/9a/01066bd503bf.wav",
+      "reference": "я думаю про твою крошечную дырочку у тебя есть маленькая дырочка",
+      "duration": 2.7
+    },
+    {
+      "filename": "asr_calls_2_val/e/9b/3db1ab93a471.wav",
+      "reference": "а с кем ты разговариваешь то вообще",
+      "duration": 1.34
+    },
+    {
+      "filename": "asr_calls_2_val/e/9b/b17e1aeb4f96.wav",
+      "reference": "козёл ты ёбаный",
+      "duration": 1.03
+    },
+    {
+      "filename": "asr_calls_2_val/e/9b/cf4a2e200d69.wav",
+      "reference": "я чёто не пойму тебя что мужики чтоли прикалывают да ну зайди сюда ко мне иди",
+      "duration": 3.89
+    },
+    {
+      "filename": "asr_calls_2_val/e/a1/d9a585ec8385.wav",
+      "reference": "нам очень приятно",
+      "duration": 1.12
+    },
+    {
+      "filename": "asr_calls_2_val/e/aa/30d6e6ba6f8a.wav",
+      "reference": "ну так потому что я знаю что там нет триста четырнадцатого кабинета",
+      "duration": 3.09
+    },
+    {
+      "filename": "asr_calls_2_val/e/ae/ee83e02ba10e.wav",
+      "reference": "пол первого по телефону передали",
+      "duration": 1.77
+    },
+    {
+      "filename": "asr_calls_2_val/e/af/e95f4463c89b.wav",
+      "reference": "с женским днём вас",
+      "duration": 1.23
+    },
+    {
+      "filename": "asr_calls_2_val/e/b1/23c0fc35fb89.wav",
+      "reference": "главно управление министерства обороны",
+      "duration": 2.2
+    },
+    {
+      "filename": "asr_calls_2_val/e/b3/73f822db75d3.wav",
+      "reference": "здрасте вы хули трубу бросаете",
+      "duration": 1.65
+    },
+    {
+      "filename": "asr_calls_2_val/e/b5/36c9310c83c6.wav",
+      "reference": "я предупреждал",
+      "duration": 0.96
+    },
+    {
+      "filename": "asr_calls_2_val/e/b8/0e2662ad9d26.wav",
+      "reference": "вот и я",
+      "duration": 1.0
+    },
+    {
+      "filename": "asr_calls_2_val/e/bf/44350567209f.wav",
+      "reference": "и остались друзья в карнопуре дожидаться десятого дня",
+      "duration": 3.3
+    },
+    {
+      "filename": "asr_calls_2_val/e/c0/537780a4c42e.wav",
+      "reference": "алло куда вы дели фёдора вы что его убили",
+      "duration": 2.59
+    },
+    {
+      "filename": "asr_calls_2_val/e/c0/bd9e1c79be0c.wav",
+      "reference": "нашаманить чуть чуть понимаешь и тут ты сразу",
+      "duration": 2.56
+    },
+    {
+      "filename": "asr_calls_2_val/e/c2/47ce2807e0e5.wav",
+      "reference": "вот и не надо они сами к те придут завтра и расскажут какая у тебя пенсия всё расскажут",
+      "duration": 4.45
+    },
+    {
+      "filename": "asr_calls_2_val/e/c4/4b4164d9d632.wav",
+      "reference": "выходить из такой",
+      "duration": 0.91
+    },
+    {
+      "filename": "asr_calls_2_val/e/c7/79a072cdd232.wav",
+      "reference": "всё понятно всё до свидания передаю",
+      "duration": 2.1
+    },
+    {
+      "filename": "asr_calls_2_val/e/c8/5a949dd68b55.wav",
+      "reference": "спасибо",
+      "duration": 0.41
+    },
+    {
+      "filename": "asr_calls_2_val/e/c9/d9ac2171dfaf.wav",
+      "reference": "я очень вам благодарен",
+      "duration": 1.71
+    },
+    {
+      "filename": "asr_calls_2_val/e/cb/38862bfd7f83.wav",
+      "reference": "значит эээ и какие ты видишь перспективы",
+      "duration": 2.01
+    },
+    {
+      "filename": "asr_calls_2_val/e/ce/11694d20c8c9.wav",
+      "reference": "вчера весь вечер об этом",
+      "duration": 1.61
+    },
+    {
+      "filename": "asr_calls_2_val/e/ce/bd68a56a8723.wav",
+      "reference": "спросить",
+      "duration": 0.37
+    },
+    {
+      "filename": "asr_calls_2_val/e/cf/3b8d1c03addf.wav",
+      "reference": "с двенадцатого по девятнадцатое",
+      "duration": 1.33
+    },
+    {
+      "filename": "asr_calls_2_val/e/d2/98d46f82bad9.wav",
+      "reference": "проведи беседуто ты офицер",
+      "duration": 2.12
+    },
+    {
+      "filename": "asr_calls_2_val/e/d3/339156036c01.wav",
+      "reference": "а это кто",
+      "duration": 0.79
+    },
+    {
+      "filename": "asr_calls_2_val/e/d3/61d093432f85.wav",
+      "reference": "нихуя себе",
+      "duration": 1.17
+    },
+    {
+      "filename": "asr_calls_2_val/e/d7/80e186e78131.wav",
+      "reference": "до общественность крутили слушай есть закон есть правила ты эти правила нарушил",
+      "duration": 3.97
+    },
+    {
+      "filename": "asr_calls_2_val/e/de/d96d40fc4b94.wav",
+      "reference": "ну что ты ну давай да да да да да да какой ты герой блять ты приедешь блять",
+      "duration": 5.7
+    },
+    {
+      "filename": "asr_calls_2_val/e/e5/d72300667749.wav",
+      "reference": "ну ты это уговоришь ты же её читал хотя бы понимаешь утонченный человек",
+      "duration": 4.11
+    },
+    {
+      "filename": "asr_calls_2_val/e/eb/7c8ae64e7a16.wav",
+      "reference": "не слышите что ль аллё аллё",
+      "duration": 1.41
+    },
+    {
+      "filename": "asr_calls_2_val/e/eb/bfae0c6e776d.wav",
+      "reference": "да хочу и что",
+      "duration": 0.91
+    },
+    {
+      "filename": "asr_calls_2_val/e/ed/d2505113e5c3.wav",
+      "reference": "я поняла а кто тебе звонил",
+      "duration": 1.72
+    },
+    {
+      "filename": "asr_calls_2_val/e/ed/dfd021796ffb.wav",
+      "reference": "вот выы",
+      "duration": 0.83
+    },
+    {
+      "filename": "asr_calls_2_val/e/ef/295602b9b583.wav",
+      "reference": "это оренбург вас вызывал наверное",
+      "duration": 1.73
+    },
+    {
+      "filename": "asr_calls_2_val/e/f0/c4326254d07f.wav",
+      "reference": "звонить пургу гнать",
+      "duration": 2.06
+    },
+    {
+      "filename": "asr_calls_2_val/e/f3/25604c0d4b33.wav",
+      "reference": "можно я ваш номер телефона запишу я вам перезвоню а то вас очень плохо слышно",
+      "duration": 3.95
+    },
+    {
+      "filename": "asr_calls_2_val/e/f8/0bfe6f98ee8a.wav",
+      "reference": "вот что такое герой войны",
+      "duration": 1.37
+    },
+    {
+      "filename": "asr_calls_2_val/e/f9/92abfaba41ad.wav",
+      "reference": "я вообще никому не звоню мне звонят",
+      "duration": 2.36
+    },
+    {
+      "filename": "asr_calls_2_val/f/0c/765ac49ff6b5.wav",
+      "reference": "более интересных дел чем",
+      "duration": 1.32
+    },
+    {
+      "filename": "asr_calls_2_val/f/18/ca6c56346aaa.wav",
+      "reference": "хорошо ты позвони ей она сейчас блог завела и спроси у неё она же всю правду говорит",
+      "duration": 4.24
+    },
+    {
+      "filename": "asr_calls_2_val/f/1a/3d64382a9142.wav",
+      "reference": "вот это твоя православна ой фу праведная ярость и вообще такая штука как ярость это потому что ты тоже изз этих",
+      "duration": 6.81
+    },
+    {
+      "filename": "asr_calls_2_val/f/1e/2017254b9299.wav",
+      "reference": "ну дайте мне олега",
+      "duration": 1.58
+    },
+    {
+      "filename": "asr_calls_2_val/f/22/a62681571f52.wav",
+      "reference": "а вы с лермонтова тридцать восемь",
+      "duration": 2.45
+    },
+    {
+      "filename": "asr_calls_2_val/f/25/c0e2139af0d7.wav",
+      "reference": "не говори что ты гей",
+      "duration": 1.07
+    },
+    {
+      "filename": "asr_calls_2_val/f/2b/003f214b4132.wav",
+      "reference": "с двадцать минут четвёртого вы сказали да",
+      "duration": 2.41
+    },
+    {
+      "filename": "asr_calls_2_val/f/34/eb76b6db54b4.wav",
+      "reference": "у неё появилась возможность создавать материалы правильно этого же не было изначально",
+      "duration": 3.61
+    },
+    {
+      "filename": "asr_calls_2_val/f/37/4567acb83fd9.wav",
+      "reference": "а я вам в почтовый ящик насрал",
+      "duration": 1.65
+    },
+    {
+      "filename": "asr_calls_2_val/f/40/5710bd43d28f.wav",
+      "reference": "нууу не надо упарываться зачем это нужно зачем вот ааа объясни мне пожалуйста зачем себе упарывать наркотики это круто что ль",
+      "duration": 6.02
+    },
+    {
+      "filename": "asr_calls_2_val/f/46/9e59b51ff884.wav",
+      "reference": "мы не бандиты о чём вы",
+      "duration": 1.74
+    },
+    {
+      "filename": "asr_calls_2_val/f/47/2ecc8ec34fb0.wav",
+      "reference": "я с кем говорю",
+      "duration": 0.8
+    },
+    {
+      "filename": "asr_calls_2_val/f/48/ae236be0a57e.wav",
+      "reference": "а во сколько",
+      "duration": 0.92
+    },
+    {
+      "filename": "asr_calls_2_val/f/54/2864fea68a34.wav",
+      "reference": "у этого мне может оперативному позвонить",
+      "duration": 2.66
+    },
+    {
+      "filename": "asr_calls_2_val/f/56/2ca3f2502e30.wav",
+      "reference": "шестьсот четырнадцать",
+      "duration": 1.29
+    },
+    {
+      "filename": "asr_calls_2_val/f/57/234721cfa134.wav",
+      "reference": "телефон мой спаривается со всеми телефонами какими только можно",
+      "duration": 4.18
+    },
+    {
+      "filename": "asr_calls_2_val/f/5a/80153d86823c.wav",
+      "reference": "научите",
+      "duration": 0.71
+    },
+    {
+      "filename": "asr_calls_2_val/f/5b/9c80a76b528d.wav",
+      "reference": "я тебя умоляю",
+      "duration": 1.26
+    },
+    {
+      "filename": "asr_calls_2_val/f/5e/07dac34fc010.wav",
+      "reference": "а алло наталья",
+      "duration": 0.99
+    },
+    {
+      "filename": "asr_calls_2_val/f/62/f3579715a266.wav",
+      "reference": "ты мне говоришь я приеду ээто",
+      "duration": 2.43
+    },
+    {
+      "filename": "asr_calls_2_val/f/65/67141df0e22d.wav",
+      "reference": "вы куда звонить то вообще то на данный момент вот",
+      "duration": 2.9
+    },
+    {
+      "filename": "asr_calls_2_val/f/65/83b034065a5a.wav",
+      "reference": "не представился ничего уже это не первый раз",
+      "duration": 2.68
+    },
+    {
+      "filename": "asr_calls_2_val/f/6c/b5ac29840e88.wav",
+      "reference": "ты тут молодец давай бурштына",
+      "duration": 3.23
+    },
+    {
+      "filename": "asr_calls_2_val/f/6d/e10d7555e99b.wav",
+      "reference": "а предпочтения фирмы есть потому что у нас достаточно большой выбор телефонов",
+      "duration": 3.65
+    },
+    {
+      "filename": "asr_calls_2_val/f/6f/b76dc2806e19.wav",
+      "reference": "то что мне сказали да",
+      "duration": 1.31
+    },
+    {
+      "filename": "asr_calls_2_val/f/75/487de225f09c.wav",
+      "reference": "завыходишь на пранкату там есть пранк на заказ и всем отомщу",
+      "duration": 4.09
+    },
+    {
+      "filename": "asr_calls_2_val/f/77/3f3d7a782b72.wav",
+      "reference": "кабинет триста четырнадцатый",
+      "duration": 1.94
+    },
+    {
+      "filename": "asr_calls_2_val/f/83/2bac839f6e79.wav",
+      "reference": "долго мы долго будем играться",
+      "duration": 1.85
+    },
+    {
+      "filename": "asr_calls_2_val/f/89/c179164681eb.wav",
+      "reference": "из пизды покуда",
+      "duration": 1.01
+    },
+    {
+      "filename": "asr_calls_2_val/f/8c/3d1903389c56.wav",
+      "reference": "мы должны всё о тебе рассказать",
+      "duration": 1.9
+    },
+    {
+      "filename": "asr_calls_2_val/f/8d/78b2dff6e3a3.wav",
+      "reference": "понедельник к девяти ноль ноль",
+      "duration": 2.55
+    },
+    {
+      "filename": "asr_calls_2_val/f/8e/97f229b65938.wav",
+      "reference": "в общем я понял вашу позицию успехов до свидания",
+      "duration": 2.78
+    },
+    {
+      "filename": "asr_calls_2_val/f/8e/ea7aaf88eba1.wav",
+      "reference": "здравствуйте меня слышите хорошо",
+      "duration": 1.3
+    },
+    {
+      "filename": "asr_calls_2_val/f/90/775c0d35fb57.wav",
+      "reference": "познакоомиться интервью понимаешь ли надо брать интервью в другом месте",
+      "duration": 5.09
+    },
+    {
+      "filename": "asr_calls_2_val/f/95/9d52bd2be0a9.wav",
+      "reference": "вы отказываетесь оплачивать",
+      "duration": 1.79
+    },
+    {
+      "filename": "asr_calls_2_val/f/96/ec5b052515d5.wav",
+      "reference": "кубиночку приготовила телескопическую для твоей сраки",
+      "duration": 4.57
+    },
+    {
+      "filename": "asr_calls_2_val/f/9a/0aee02090bd0.wav",
+      "reference": "по трезвому",
+      "duration": 0.75
+    },
+    {
+      "filename": "asr_calls_2_val/f/9a/a3733a76434a.wav",
+      "reference": "да я щас в рот тя я тя ебал блять мужик блять",
+      "duration": 2.61
+    },
+    {
+      "filename": "asr_calls_2_val/f/9c/42ca9f77a38a.wav",
+      "reference": "вам было эээ приписано прибытие",
+      "duration": 2.16
+    },
+    {
+      "filename": "asr_calls_2_val/f/9e/0d11a24654e5.wav",
+      "reference": "понятно",
+      "duration": 0.52
+    },
+    {
+      "filename": "asr_calls_2_val/f/9e/49dc3e85a4b2.wav",
+      "reference": "а на поле чудес",
+      "duration": 1.1
+    },
+    {
+      "filename": "asr_calls_2_val/f/a5/cc0cda244243.wav",
+      "reference": "да нет",
+      "duration": 0.69
+    },
+    {
+      "filename": "asr_calls_2_val/f/a9/5bcf64be1d76.wav",
+      "reference": "сюда и вы и выкопай могилу если ты такой крутой блин",
+      "duration": 2.41
+    },
+    {
+      "filename": "asr_calls_2_val/f/ac/23bac6bccc52.wav",
+      "reference": "чегото",
+      "duration": 0.67
+    },
+    {
+      "filename": "asr_calls_2_val/f/ae/bb30ae2ede3e.wav",
+      "reference": "ну попробуй хорошо я прогнусь давай",
+      "duration": 2.35
+    },
+    {
+      "filename": "asr_calls_2_val/f/b0/933bb5c5caa9.wav",
+      "reference": "триста пятьдесят девять",
+      "duration": 1.05
+    },
+    {
+      "filename": "asr_calls_2_val/f/b0/f5bfab9b6f1e.wav",
+      "reference": "волусак андрей",
+      "duration": 1.18
+    },
+    {
+      "filename": "asr_calls_2_val/f/b3/f820e5090812.wav",
+      "reference": "стала диктовать телефонограмму я говорю а вы вообще кто",
+      "duration": 2.62
+    },
+    {
+      "filename": "asr_calls_2_val/f/c5/f6a2380495ab.wav",
+      "reference": "я вам порусски отвечаю что вы звоните в квартиру",
+      "duration": 2.8
+    },
+    {
+      "filename": "asr_calls_2_val/f/cf/f4e0756867e6.wav",
+      "reference": "чувак ты вообще к тты то ты вообще кто я не знаю ккто",
+      "duration": 4.0
+    },
+    {
+      "filename": "asr_calls_2_val/f/d5/89c14c16b294.wav",
+      "reference": "время смотрели сколько",
+      "duration": 1.15
+    },
+    {
+      "filename": "asr_calls_2_val/f/d6/00ba08e8eb21.wav",
+      "reference": "вот именно что ты задал несколько вопросов",
+      "duration": 3.4
+    },
+    {
+      "filename": "asr_calls_2_val/f/d9/6d956443938a.wav",
+      "reference": "сторож сергей",
+      "duration": 1.32
+    },
+    {
+      "filename": "asr_calls_2_val/f/db/73b73e816666.wav",
+      "reference": "очень хорошо",
+      "duration": 0.9
+    },
+    {
+      "filename": "asr_calls_2_val/f/db/77227abfa628.wav",
+      "reference": "ясно всё",
+      "duration": 0.78
+    },
+    {
+      "filename": "asr_calls_2_val/f/df/228763942544.wav",
+      "reference": "что делать",
+      "duration": 0.68
+    },
+    {
+      "filename": "asr_calls_2_val/f/df/6db808aca297.wav",
+      "reference": "призывной пункт октябрьского фрунзенского",
+      "duration": 1.98
+    },
+    {
+      "filename": "asr_calls_2_val/f/df/d8f398bed99f.wav",
+      "reference": "хуйнёй не страдай",
+      "duration": 1.02
+    },
+    {
+      "filename": "asr_calls_2_val/f/e0/ec00ad5c84a5.wav",
+      "reference": "руки дрожат ну",
+      "duration": 1.14
+    },
+    {
+      "filename": "asr_calls_2_val/f/e2/e7a577e8f9a9.wav",
+      "reference": "алло что щас происходит с компанией вашей",
+      "duration": 2.39
+    },
+    {
+      "filename": "asr_calls_2_val/f/e6/bee41756b0a7.wav",
+      "reference": "это город ростовнадону",
+      "duration": 2.34
+    },
+    {
+      "filename": "asr_calls_2_val/f/eb/c3a47156a988.wav",
+      "reference": "начальник училища",
+      "duration": 1.18
+    },
+    {
+      "filename": "asr_calls_2_val/f/f1/de416e18a768.wav",
+      "reference": "а вы кому звоните",
+      "duration": 1.1
+    },
+    {
+      "filename": "asr_calls_2_val/f/f3/db674d9fbaaf.wav",
+      "reference": "записывающее разговор программное обеспечение пизданулось",
+      "duration": 3.61
+    },
+    {
+      "filename": "asr_calls_2_val/f/fc/011c2d705152.wav",
+      "reference": "в восемь в четверг",
+      "duration": 1.16
+    }
+  ]
+}
