@@ -161,6 +161,27 @@ Run the benchmark on the Common Voice slice:
 python benchmark.py --dataset common_voice_ru --max-samples 0
 ```
 
+### OpenSTT phone calls
+
+A **OpenSTT** `asr_calls_2_val` validation slice (1 000 manually-annotated phone-call samples).
+
+- **Source:** snakers4 / OpenSTT
+- **Repository:** https://github.com/snakers4/open_stt
+- **License:** CC BY-NC 4.0 — https://creativecommons.org/licenses/by-nc/4.0/
+
+```bash
+# Prepare a deterministic 1000-sample slice (one-time).
+# The full archive is ~0.8 GB; use --use-unpacked-source to fetch only the
+# selected 1000 wav+txt pairs instead.
+python ../scripts/prepare_openstt_calls.py
+```
+
+Run the benchmark on the OpenSTT phone-calls slice:
+
+```bash
+python benchmark.py --dataset openstt_calls --max-samples 0
+```
+
 If the external dataset is missing, the benchmark falls back to the bundled fixtures (15 samples) from `crates/gigastt/tests/fixtures/`.
 
 ## Output Format
