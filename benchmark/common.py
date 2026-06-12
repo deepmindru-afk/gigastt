@@ -1,6 +1,9 @@
-"""Common utilities for benchmark: text normalization, WER, RTF."""
+"""Common utilities for benchmark: text normalization, WER, RTF, metadata."""
 
+import datetime
+import hashlib
 import json
+import platform
 import re
 import subprocess
 import time
@@ -197,40 +200,6 @@ def compute_wer(reference: str, hypothesis: str) -> tuple[float, int, int]:
     return wer, errors, ref_count
 
 
-_U64_MASK = (1 << 64) - 1
-
-
-def bootstrap_ci(per_sample: list[tuple[int, int]], iterations: int = 1000) -> tuple[float, float]:
-    """Bootstrap 95% confidence interval for WER via resampling with replacement.
-
-    Mirrors the implementation in crates/gigastt/tests/benchmark.rs so that
-    Python and Rust benchmark suites produce comparable intervals.  Each tuple
-    is (ref_word_count, errors) for a single sample; failures are represented
-    as errors == ref_word_count (100% WER for that sample).
-    """
-    n = len(per_sample)
-    if n == 0:
-        return (0.0, 0.0)
-
-    rng: int = 123456789
-    wers: list[float] = []
-    for _ in range(iterations):
-        total_ref = 0
-        total_err = 0
-        for _ in range(n):
-            rng = (rng * 6364136223846793005 + 1) & _U64_MASK
-            idx = (rng >> 32) % n
-            total_ref += per_sample[idx][0]
-            total_err += per_sample[idx][1]
-        wer = (total_err / total_ref * 100.0) if total_ref > 0 else 0.0
-        wers.append(wer)
-
-    wers.sort()
-    lo = wers[(iterations * 25) // 1000]
-    hi = wers[(iterations * 975) // 1000]
-    return (lo, hi)
-
-
 def audio_duration(wav_path: str) -> float:
     """Get duration in seconds using ffprobe or wave module."""
     try:
@@ -250,3 +219,121 @@ def audio_duration(wav_path: str) -> float:
         return float(result.stdout.strip())
     except Exception:
         return 0.0
+
+
+# --- Reproducibility metadata helpers ---
+
+
+def file_sha256(path: str) -> Optional[str]:
+    """Return the SHA-256 hex digest of a file, or None if unavailable."""
+    try:
+        h = hashlib.sha256()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(8192), b""):
+                h.update(chunk)
+        return h.hexdigest()
+    except Exception:
+        return None
+
+
+def collect_host_metadata() -> dict:
+    """Collect host hardware and OS metadata."""
+    ram_bytes: Optional[int] = None
+    try:
+        import psutil
+
+        ram_bytes = psutil.virtual_memory().total
+    except Exception:
+        pass
+
+    return {
+        "cpu": platform.processor() or platform.machine(),
+        "machine": platform.machine(),
+        "ram_bytes": ram_bytes,
+        "os": platform.platform(),
+        "python_version": platform.python_version(),
+    }
+
+
+def collect_dataset_metadata(
+    dataset_name: str = "golos", version: Optional[str] = None
+) -> dict:
+    """Collect dataset source metadata.
+
+    Defaults to the Golos crowd subset by SberDevices.
+    """
+    return {
+        "name": dataset_name,
+        "version": version,
+        "source": "https://github.com/salute-developers/golos",
+        "attribution": "Golos by SberDevices",
+        "license": "CC-BY-4.0",
+        "manifest_path": str(manifest_path()),
+    }
+
+
+def collect_engine_metadata(runner) -> dict:
+    """Collect engine name, binary/model paths, version, and model hashes."""
+    meta: dict[str, object] = {"name": getattr(runner, "name", type(runner).__name__)}
+
+    # Model identifiers
+    for attr in ("model_dir", "model_name", "model_size", "download_dir"):
+        val = getattr(runner, attr, None)
+        if val is not None:
+            meta[attr] = str(val)
+
+    private_model_path = getattr(runner, "_model_path", None)
+    if private_model_path is not None:
+        meta["model_path"] = str(private_model_path)
+
+    # Binary / version
+    binary = getattr(runner, "_binary", None)
+    if binary is not None:
+        meta["binary"] = str(binary)
+        try:
+            result = subprocess.run(
+                [str(binary), "--version"],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=5,
+            )
+            output = (result.stdout + result.stderr).strip()
+            if output:
+                meta["version"] = output.splitlines()[0]
+        except Exception:
+            pass
+
+    # Model hash (file or directory contents)
+    model_path = private_model_path or getattr(runner, "model_dir", None)
+    if model_path is None and hasattr(runner, "model_size"):
+        # faster-whisper stores under cache by model_size
+        model_path = Path.home() / ".cache" / "huggingface" / "hub"
+    if model_path is not None:
+        p = Path(model_path)
+        if p.is_file():
+            meta["model_sha256"] = file_sha256(str(p))
+        elif p.is_dir():
+            meta["model_path"] = str(p)
+            # Hash the first ONNX/bin file found to give a stable fingerprint
+            for candidate in sorted(p.rglob("*")):
+                if candidate.is_file() and candidate.suffix in {".onnx", ".bin", ".pt", ".ckpt"}:
+                    meta["model_sha256"] = file_sha256(str(candidate))
+                    meta["model_hashed_file"] = str(candidate.relative_to(p))
+                    break
+
+    return meta
+
+
+def collect_repro_metadata(
+    runners: list,
+    dataset_name: str = "golos",
+    dataset_version: Optional[str] = None,
+) -> dict:
+    """Aggregate reproducibility metadata for a benchmark run."""
+    return {
+        "collected_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "host": collect_host_metadata(),
+        "dataset": collect_dataset_metadata(dataset_name, dataset_version),
+        "engines": [collect_engine_metadata(r) for r in runners],
+    }
