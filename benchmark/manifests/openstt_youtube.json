@@ -1,0 +1,5011 @@
+{
+  "dataset": "openstt_youtube",
+  "audio_root": "~/.gigastt/benchmarks/openstt_youtube",
+  "slice_seed": 42,
+  "slice_size": 1000,
+  "total_available": 7311,
+  "license": "CC BY-NC 4.0",
+  "source": "https://github.com/snakers4/open_stt",
+  "samples": [
+    {
+      "filename": "public_youtube700_val/0/00/657a49fa1cf2.wav",
+      "reference": "и так сегодня я вам покажу уникальный вариант как позавтракать пообедать или поужинать",
+      "duration": 5.57
+    },
+    {
+      "filename": "public_youtube700_val/0/01/23bc4dcc7edf.wav",
+      "reference": "и вы станете здоровыми абсолютно бесплатно",
+      "duration": 2.16
+    },
+    {
+      "filename": "public_youtube700_val/0/01/2639a21a7f24.wav",
+      "reference": "ноо может быть это и хорошо",
+      "duration": 1.77
+    },
+    {
+      "filename": "public_youtube700_val/0/11/77c7ec8f8893.wav",
+      "reference": "входит удилище трамп",
+      "duration": 1.26
+    },
+    {
+      "filename": "public_youtube700_val/0/14/fd87fbb87431.wav",
+      "reference": "с пижмой как всегда вы уже знаете как это готовить возьмём пару ложек правильно",
+      "duration": 4.56
+    },
+    {
+      "filename": "public_youtube700_val/0/18/c5dee230d2b3.wav",
+      "reference": "сказать что это",
+      "duration": 1.23
+    },
+    {
+      "filename": "public_youtube700_val/0/1b/fcc0d404373e.wav",
+      "reference": "человека до добрые порывы они присутствуют в каждом человеке",
+      "duration": 3.94
+    },
+    {
+      "filename": "public_youtube700_val/0/1e/6a7d1a15c52e.wav",
+      "reference": "не знакомый не известный вот",
+      "duration": 1.3
+    },
+    {
+      "filename": "public_youtube700_val/0/26/497c2fad6fe7.wav",
+      "reference": "это снова лещ",
+      "duration": 1.19
+    },
+    {
+      "filename": "public_youtube700_val/0/27/6f818d0f63ac.wav",
+      "reference": "это вопрос уже тотальности",
+      "duration": 2.22
+    },
+    {
+      "filename": "public_youtube700_val/0/28/97a42cfd04c7.wav",
+      "reference": "теперь нам нужно изменить положение этого стикбота",
+      "duration": 3.37
+    },
+    {
+      "filename": "public_youtube700_val/0/28/b9ba7da70437.wav",
+      "reference": "странность вот то что мы называем ааа шансон даже",
+      "duration": 3.46
+    },
+    {
+      "filename": "public_youtube700_val/0/36/064fb0b70e45.wav",
+      "reference": "девяти садах на девяти гектарах которые были куплены у бельгийского короля а леопольда",
+      "duration": 7.37
+    },
+    {
+      "filename": "public_youtube700_val/0/49/62332016f911.wav",
+      "reference": "ааа вырвать это тело науки ись из эээ пространства культуры",
+      "duration": 5.86
+    },
+    {
+      "filename": "public_youtube700_val/0/4f/ccaf41c29bfd.wav",
+      "reference": "человеческих повествований ну",
+      "duration": 1.33
+    },
+    {
+      "filename": "public_youtube700_val/0/5c/cf055d963d27.wav",
+      "reference": "но разумные вещи сказать",
+      "duration": 1.32
+    },
+    {
+      "filename": "public_youtube700_val/0/63/98638e28b24a.wav",
+      "reference": "не открывал даже эти письма чтобы не смотреть на эту зарплату",
+      "duration": 3.18
+    },
+    {
+      "filename": "public_youtube700_val/0/65/84316afe7457.wav",
+      "reference": "вот он надутый изза этого он у вас выпадает",
+      "duration": 2.74
+    },
+    {
+      "filename": "public_youtube700_val/0/67/1f36b09a26eb.wav",
+      "reference": "но я позволю себе всётаки позанудствовать да",
+      "duration": 2.41
+    },
+    {
+      "filename": "public_youtube700_val/0/67/3a5a072cc8b6.wav",
+      "reference": "никакого запаха",
+      "duration": 0.74
+    },
+    {
+      "filename": "public_youtube700_val/0/6a/c29d2564b385.wav",
+      "reference": "овёс и ничего жареного на сырую пищу",
+      "duration": 2.77
+    },
+    {
+      "filename": "public_youtube700_val/0/72/13c2efdb2cb0.wav",
+      "reference": "вперёд нету там прогноза",
+      "duration": 1.78
+    },
+    {
+      "filename": "public_youtube700_val/0/74/072e4fa85407.wav",
+      "reference": "что было в прошлом",
+      "duration": 1.22
+    },
+    {
+      "filename": "public_youtube700_val/0/8b/33199c07d0c3.wav",
+      "reference": "даст хорошую соединительную ткань",
+      "duration": 1.53
+    },
+    {
+      "filename": "public_youtube700_val/0/8d/3d7aa78809e1.wav",
+      "reference": "люди присылают интересные примеры поиска и анализа единых зёрен",
+      "duration": 3.85
+    },
+    {
+      "filename": "public_youtube700_val/0/8e/a387cb02103c.wav",
+      "reference": "зрелище которое болельщикам",
+      "duration": 1.66
+    },
+    {
+      "filename": "public_youtube700_val/0/90/8da3e07c64b3.wav",
+      "reference": "приближайтесь",
+      "duration": 0.82
+    },
+    {
+      "filename": "public_youtube700_val/0/93/7a2fbcc54864.wav",
+      "reference": "и если я напишу упражнения никто не заходит",
+      "duration": 2.58
+    },
+    {
+      "filename": "public_youtube700_val/0/96/2c5fd9dda4c7.wav",
+      "reference": "ух ты какая свечка",
+      "duration": 1.32
+    },
+    {
+      "filename": "public_youtube700_val/0/9d/fdb51aec687c.wav",
+      "reference": "это язь",
+      "duration": 1.0
+    },
+    {
+      "filename": "public_youtube700_val/0/a1/8b4fc6db18d3.wav",
+      "reference": "по чесноку",
+      "duration": 0.77
+    },
+    {
+      "filename": "public_youtube700_val/0/a1/c22969fd6759.wav",
+      "reference": "и переворачиваем наш робот",
+      "duration": 1.78
+    },
+    {
+      "filename": "public_youtube700_val/0/a3/c131be7936ff.wav",
+      "reference": "колебательных движений пока нее",
+      "duration": 2.08
+    },
+    {
+      "filename": "public_youtube700_val/0/a5/437923a11777.wav",
+      "reference": "многие наказания",
+      "duration": 1.38
+    },
+    {
+      "filename": "public_youtube700_val/0/a6/4b9efe52f408.wav",
+      "reference": "поэт отыщет вдохновенье",
+      "duration": 1.91
+    },
+    {
+      "filename": "public_youtube700_val/0/a6/fe3aa093d9ba.wav",
+      "reference": "и много жира",
+      "duration": 0.96
+    },
+    {
+      "filename": "public_youtube700_val/0/a7/1b4bb298fb50.wav",
+      "reference": "записать",
+      "duration": 0.6
+    },
+    {
+      "filename": "public_youtube700_val/0/a8/b3d91f021236.wav",
+      "reference": "если учесть что информация и энергия между реальными частичками по передаётся мгновенно",
+      "duration": 4.96
+    },
+    {
+      "filename": "public_youtube700_val/0/a8/bc1be6398790.wav",
+      "reference": "от сознания ааа и наблюдатель как личность",
+      "duration": 3.07
+    },
+    {
+      "filename": "public_youtube700_val/0/af/49eac478ab10.wav",
+      "reference": "потому что раз мы все летим в пропасть тоо эээ остановиться на краю пропасти не так уж плохо",
+      "duration": 4.78
+    },
+    {
+      "filename": "public_youtube700_val/0/bc/c08d0539fc2d.wav",
+      "reference": "сделали то есть они",
+      "duration": 0.84
+    },
+    {
+      "filename": "public_youtube700_val/0/c1/26e39f6aacfe.wav",
+      "reference": "то есть купи россия тогда фиджи фиджи сейчас были",
+      "duration": 2.56
+    },
+    {
+      "filename": "public_youtube700_val/0/c4/e58b7f88c1fc.wav",
+      "reference": "особенно всё плохо с улицамии которые мы используем каждый день",
+      "duration": 3.38
+    },
+    {
+      "filename": "public_youtube700_val/0/c4/fa167e587d26.wav",
+      "reference": "тогда они исходят из внутреннего мира человека",
+      "duration": 3.52
+    },
+    {
+      "filename": "public_youtube700_val/0/cc/473e4e021918.wav",
+      "reference": "счастливы и этому надеемся чтоо",
+      "duration": 2.65
+    },
+    {
+      "filename": "public_youtube700_val/0/cd/924c9761f965.wav",
+      "reference": "активированное одной каплей масла чайного дерева",
+      "duration": 5.28
+    },
+    {
+      "filename": "public_youtube700_val/0/cf/192d2b8db923.wav",
+      "reference": "вот это",
+      "duration": 0.42
+    },
+    {
+      "filename": "public_youtube700_val/0/d0/44d9b459f169.wav",
+      "reference": "краснокочанная капуста сильнее чем белокочанная а брокколи ещё сильнее",
+      "duration": 4.38
+    },
+    {
+      "filename": "public_youtube700_val/0/d3/70c7f29f3adc.wav",
+      "reference": "это контент который помогает тебе чтото",
+      "duration": 2.24
+    },
+    {
+      "filename": "public_youtube700_val/0/d4/230eaf4213b9.wav",
+      "reference": "для каких я нормальный",
+      "duration": 1.36
+    },
+    {
+      "filename": "public_youtube700_val/0/d8/5a27a1067d34.wav",
+      "reference": "большего достичь за этот месяц во всех отношениях в профессиональном интеллектуально",
+      "duration": 4.53
+    },
+    {
+      "filename": "public_youtube700_val/0/db/f0bacaf6c3b6.wav",
+      "reference": "как бы",
+      "duration": 0.55
+    },
+    {
+      "filename": "public_youtube700_val/0/dd/ae13d7de92aa.wav",
+      "reference": "перед ванной надо смазать",
+      "duration": 1.25
+    },
+    {
+      "filename": "public_youtube700_val/0/de/6bcae3c87105.wav",
+      "reference": "напомнить нам",
+      "duration": 0.81
+    },
+    {
+      "filename": "public_youtube700_val/0/e1/a1eee75c9a0b.wav",
+      "reference": "пить его надо потихоньку мелкими",
+      "duration": 1.53
+    },
+    {
+      "filename": "public_youtube700_val/0/e1/e1c1ba84d19c.wav",
+      "reference": "которых ей хватало на год",
+      "duration": 1.29
+    },
+    {
+      "filename": "public_youtube700_val/0/e3/d5a2252ea0d4.wav",
+      "reference": "желаал",
+      "duration": 0.72
+    },
+    {
+      "filename": "public_youtube700_val/0/ed/0128bb78d249.wav",
+      "reference": "это сертифицированные эксперты",
+      "duration": 2.28
+    },
+    {
+      "filename": "public_youtube700_val/0/ee/79a9e30dc372.wav",
+      "reference": "сто двадцать восемь тысяч долларов",
+      "duration": 2.52
+    },
+    {
+      "filename": "public_youtube700_val/0/f3/0abcd581c662.wav",
+      "reference": "есть вы встали и пошли к холодильнику",
+      "duration": 2.45
+    },
+    {
+      "filename": "public_youtube700_val/0/f7/05c1f59e60b2.wav",
+      "reference": "а вот между ними как раз и находится",
+      "duration": 2.26
+    },
+    {
+      "filename": "public_youtube700_val/0/f7/f2df083ceee7.wav",
+      "reference": "узкие потоки плазмы которые разносятся на очень большие",
+      "duration": 2.84
+    },
+    {
+      "filename": "public_youtube700_val/0/fe/18faf908bb38.wav",
+      "reference": "даже если на вас",
+      "duration": 0.82
+    },
+    {
+      "filename": "public_youtube700_val/0/fe/cf8c3873cf04.wav",
+      "reference": "мечта о доме она американская новозеландская мечта",
+      "duration": 3.64
+    },
+    {
+      "filename": "public_youtube700_val/1/02/1733ed86d108.wav",
+      "reference": "до еды",
+      "duration": 0.68
+    },
+    {
+      "filename": "public_youtube700_val/1/0b/f4b64f09d198.wav",
+      "reference": "отломит кончик",
+      "duration": 1.04
+    },
+    {
+      "filename": "public_youtube700_val/1/0d/32c476bb66a1.wav",
+      "reference": "даже в духовном подходе проявляется вот этот вот момент рабства что как будто бы людям не нужны какие то инструкции",
+      "duration": 5.95
+    },
+    {
+      "filename": "public_youtube700_val/1/0e/524ce0e52f45.wav",
+      "reference": "он расстёгивается туда можно поставить",
+      "duration": 1.84
+    },
+    {
+      "filename": "public_youtube700_val/1/11/bac149dfe55d.wav",
+      "reference": "не случайно ноль изображался в виде пустого круга",
+      "duration": 3.98
+    },
+    {
+      "filename": "public_youtube700_val/1/16/af279eb576c3.wav",
+      "reference": "нет это акт приобретения иммунной",
+      "duration": 2.67
+    },
+    {
+      "filename": "public_youtube700_val/1/25/17eec83b3ecd.wav",
+      "reference": "а на одном из этих плакатов прямо значилась цитата из канта а именно",
+      "duration": 6.25
+    },
+    {
+      "filename": "public_youtube700_val/1/26/69f3b26b8cd5.wav",
+      "reference": "включить",
+      "duration": 0.64
+    },
+    {
+      "filename": "public_youtube700_val/1/27/213994680e0d.wav",
+      "reference": "о ряде",
+      "duration": 0.47
+    },
+    {
+      "filename": "public_youtube700_val/1/29/72decb21bbee.wav",
+      "reference": "там и железа море понимаете",
+      "duration": 1.67
+    },
+    {
+      "filename": "public_youtube700_val/1/2e/0a51e019f3e8.wav",
+      "reference": "абсолютное цветение",
+      "duration": 1.59
+    },
+    {
+      "filename": "public_youtube700_val/1/31/133912d00713.wav",
+      "reference": "беру триста грамм",
+      "duration": 2.03
+    },
+    {
+      "filename": "public_youtube700_val/1/31/6e409f6341db.wav",
+      "reference": "и новый тип записей некоторый новый вид постов",
+      "duration": 2.85
+    },
+    {
+      "filename": "public_youtube700_val/1/31/79c5f0124893.wav",
+      "reference": "внешним воздействием",
+      "duration": 1.38
+    },
+    {
+      "filename": "public_youtube700_val/1/37/821c4fb2ce19.wav",
+      "reference": "купив билет можно подняться на его смотровую чтобы хорошенько рассмотреть",
+      "duration": 5.52
+    },
+    {
+      "filename": "public_youtube700_val/1/3f/5998b45b0de5.wav",
+      "reference": "и ты больше уже его не ищешь нигде снаружи",
+      "duration": 2.9
+    },
+    {
+      "filename": "public_youtube700_val/1/43/89157d7ebdb2.wav",
+      "reference": "высокой прочности высоких",
+      "duration": 1.57
+    },
+    {
+      "filename": "public_youtube700_val/1/43/df11e92121aa.wav",
+      "reference": "а вот есть бланки которые",
+      "duration": 2.14
+    },
+    {
+      "filename": "public_youtube700_val/1/46/783ba1405f7a.wav",
+      "reference": "определим победителя всем пока",
+      "duration": 1.5
+    },
+    {
+      "filename": "public_youtube700_val/1/52/0cce3d271ac1.wav",
+      "reference": "вот этот белый цвет это амстердамский белый цвет",
+      "duration": 3.02
+    },
+    {
+      "filename": "public_youtube700_val/1/54/3d86d39301f3.wav",
+      "reference": "то есть и оно живое вне слов",
+      "duration": 1.34
+    },
+    {
+      "filename": "public_youtube700_val/1/54/c150f53c98d5.wav",
+      "reference": "ребят от сердца отрываю очень крутой",
+      "duration": 2.17
+    },
+    {
+      "filename": "public_youtube700_val/1/58/d8d648c76f83.wav",
+      "reference": "всё перекручено здесь просто",
+      "duration": 2.27
+    },
+    {
+      "filename": "public_youtube700_val/1/5e/bd43c9b22cd3.wav",
+      "reference": "оно там вээ в регионах очень сильно то есть люди",
+      "duration": 2.6
+    },
+    {
+      "filename": "public_youtube700_val/1/66/25a7f399046a.wav",
+      "reference": "теперь формы и стол необходимо",
+      "duration": 2.51
+    },
+    {
+      "filename": "public_youtube700_val/1/67/88dad0c44cb1.wav",
+      "reference": "для организации общероссийских",
+      "duration": 1.75
+    },
+    {
+      "filename": "public_youtube700_val/1/6b/6db06faac8c6.wav",
+      "reference": "я капнул сюда и так же",
+      "duration": 1.56
+    },
+    {
+      "filename": "public_youtube700_val/1/70/333ff0f4aecb.wav",
+      "reference": "а тут вижу валюха эти часы курочит ну я не выдержал",
+      "duration": 3.19
+    },
+    {
+      "filename": "public_youtube700_val/1/70/56adef9c4e4f.wav",
+      "reference": "инстанция",
+      "duration": 0.88
+    },
+    {
+      "filename": "public_youtube700_val/1/73/8be841570061.wav",
+      "reference": "просто восхитительно",
+      "duration": 2.01
+    },
+    {
+      "filename": "public_youtube700_val/1/7b/9854e176a6f7.wav",
+      "reference": "солнце это антиоксидант",
+      "duration": 1.38
+    },
+    {
+      "filename": "public_youtube700_val/1/7b/bed6bff9fb7a.wav",
+      "reference": "джакузи тропический сад ну и конечно же знаменитый бассейн",
+      "duration": 3.66
+    },
+    {
+      "filename": "public_youtube700_val/1/7b/fdbf9a347ec6.wav",
+      "reference": "так вот если по сути нас к этому призывают только",
+      "duration": 2.74
+    },
+    {
+      "filename": "public_youtube700_val/1/7f/9b5185a83206.wav",
+      "reference": "просто вытащат вас",
+      "duration": 1.33
+    },
+    {
+      "filename": "public_youtube700_val/1/84/70891770d19e.wav",
+      "reference": "а вот слушай",
+      "duration": 0.65
+    },
+    {
+      "filename": "public_youtube700_val/1/84/e89567be4a71.wav",
+      "reference": "по набору базовых ингредиентов этот суп очень скромный",
+      "duration": 3.2
+    },
+    {
+      "filename": "public_youtube700_val/1/87/884288c7021f.wav",
+      "reference": "привёл пример",
+      "duration": 0.59
+    },
+    {
+      "filename": "public_youtube700_val/1/8f/8c9eeead9986.wav",
+      "reference": "ввв записях телеграмм",
+      "duration": 1.54
+    },
+    {
+      "filename": "public_youtube700_val/1/91/73addedef694.wav",
+      "reference": "вредит и усваиванию",
+      "duration": 1.32
+    },
+    {
+      "filename": "public_youtube700_val/1/95/92d1a627cb4a.wav",
+      "reference": "вот крем",
+      "duration": 1.04
+    },
+    {
+      "filename": "public_youtube700_val/1/9e/9f9047ad4e5f.wav",
+      "reference": "заблуждаться",
+      "duration": 1.19
+    },
+    {
+      "filename": "public_youtube700_val/1/a7/f80fa205e776.wav",
+      "reference": "ааа так чтоо",
+      "duration": 1.35
+    },
+    {
+      "filename": "public_youtube700_val/1/a9/16db256bcb6f.wav",
+      "reference": "легко забрасываться",
+      "duration": 1.11
+    },
+    {
+      "filename": "public_youtube700_val/1/aa/3e00da4131de.wav",
+      "reference": "он думает вот так",
+      "duration": 1.04
+    },
+    {
+      "filename": "public_youtube700_val/1/ab/cc0959c2dfb2.wav",
+      "reference": "любят молоко и сахар и мёд",
+      "duration": 1.61
+    },
+    {
+      "filename": "public_youtube700_val/1/ac/598d19136063.wav",
+      "reference": "семь элементов чегото там",
+      "duration": 1.81
+    },
+    {
+      "filename": "public_youtube700_val/1/ad/371b19ab5147.wav",
+      "reference": "метрономически медленно потихонечку осторожно",
+      "duration": 3.33
+    },
+    {
+      "filename": "public_youtube700_val/1/b1/eb0ead56026d.wav",
+      "reference": "духовно развить себя с помощью глубинных чувств",
+      "duration": 2.9
+    },
+    {
+      "filename": "public_youtube700_val/1/b2/0cc28a817272.wav",
+      "reference": "нничего такого не делает а а муж ааа",
+      "duration": 2.91
+    },
+    {
+      "filename": "public_youtube700_val/1/b8/827de3629fef.wav",
+      "reference": "когда все ушли остались шаманов и валя",
+      "duration": 3.17
+    },
+    {
+      "filename": "public_youtube700_val/1/b9/16604fa43308.wav",
+      "reference": "ну что доказывать",
+      "duration": 0.73
+    },
+    {
+      "filename": "public_youtube700_val/1/ba/9d440ecaa29b.wav",
+      "reference": "противоречащий ей факт",
+      "duration": 1.18
+    },
+    {
+      "filename": "public_youtube700_val/1/bf/c94c77d0a191.wav",
+      "reference": "также я бы пропил отвар осины",
+      "duration": 2.34
+    },
+    {
+      "filename": "public_youtube700_val/1/c4/70bb266db874.wav",
+      "reference": "что на сегодня при данных обстоятельствах могу сделать я и помочь ребёнку",
+      "duration": 3.59
+    },
+    {
+      "filename": "public_youtube700_val/1/c4/87c22665010e.wav",
+      "reference": "мы добиваемся того",
+      "duration": 1.15
+    },
+    {
+      "filename": "public_youtube700_val/1/c5/930947861db7.wav",
+      "reference": "повар может приготовить что то хорошее в таких условиях да никак невозможно это",
+      "duration": 4.34
+    },
+    {
+      "filename": "public_youtube700_val/1/c5/d530e43f2057.wav",
+      "reference": "является верующим и подобного рода хадисов",
+      "duration": 3.07
+    },
+    {
+      "filename": "public_youtube700_val/1/ca/69e001f0707c.wav",
+      "reference": "и ещё одна какаято есть",
+      "duration": 1.21
+    },
+    {
+      "filename": "public_youtube700_val/1/d7/6a3b48265d12.wav",
+      "reference": "до новых встреч",
+      "duration": 0.68
+    },
+    {
+      "filename": "public_youtube700_val/1/da/fbb1c03f53c0.wav",
+      "reference": "и бежали из деревни падала",
+      "duration": 1.23
+    },
+    {
+      "filename": "public_youtube700_val/1/dd/f99f1a758d3f.wav",
+      "reference": "сто миллиграмм",
+      "duration": 0.64
+    },
+    {
+      "filename": "public_youtube700_val/1/df/046d0095d751.wav",
+      "reference": "и сейчас вы поймёте почему антистресс",
+      "duration": 2.42
+    },
+    {
+      "filename": "public_youtube700_val/1/e4/b4151b286534.wav",
+      "reference": "эксплуатируем да",
+      "duration": 1.01
+    },
+    {
+      "filename": "public_youtube700_val/1/e5/a4f9098f620a.wav",
+      "reference": "передаю слово нашему коллеге",
+      "duration": 1.56
+    },
+    {
+      "filename": "public_youtube700_val/1/e6/0b5d1f8d3e0f.wav",
+      "reference": "поэтому",
+      "duration": 0.46
+    },
+    {
+      "filename": "public_youtube700_val/1/eb/8dbd0e692671.wav",
+      "reference": "мы сейчас проверим",
+      "duration": 0.7
+    },
+    {
+      "filename": "public_youtube700_val/1/ec/90517ed93238.wav",
+      "reference": "то есть сразу у вас в одном билете киев амстердам и амстердам нью йорк",
+      "duration": 3.87
+    },
+    {
+      "filename": "public_youtube700_val/1/f0/808c4a81938b.wav",
+      "reference": "это очень удобное блюдо",
+      "duration": 1.78
+    },
+    {
+      "filename": "public_youtube700_val/1/f1/761940c32f90.wav",
+      "reference": "глоточку сделал лоточек всё",
+      "duration": 2.28
+    },
+    {
+      "filename": "public_youtube700_val/1/fd/e317288413df.wav",
+      "reference": "я гворю как бы ну",
+      "duration": 1.04
+    },
+    {
+      "filename": "public_youtube700_val/1/fe/6b5a88fbfd21.wav",
+      "reference": "известная пальценосовая проба",
+      "duration": 1.96
+    },
+    {
+      "filename": "public_youtube700_val/2/02/c3082ffca2d4.wav",
+      "reference": "возьмите свой телефон и найдите там телефон адвоката",
+      "duration": 3.13
+    },
+    {
+      "filename": "public_youtube700_val/2/05/539629fdc59c.wav",
+      "reference": "интерес этот сводится к следующему",
+      "duration": 1.92
+    },
+    {
+      "filename": "public_youtube700_val/2/07/d138df7e7aa1.wav",
+      "reference": "или поменяем местами две части нашего высказывания",
+      "duration": 3.59
+    },
+    {
+      "filename": "public_youtube700_val/2/08/a69f15976d70.wav",
+      "reference": "это те сигналы которые идут сверху из коры больших полушарий",
+      "duration": 3.23
+    },
+    {
+      "filename": "public_youtube700_val/2/0d/f99dc64bb854.wav",
+      "reference": "постоянно пожизненно у вас будет тогда хорошее",
+      "duration": 2.61
+    },
+    {
+      "filename": "public_youtube700_val/2/0f/4bac3a43cfdc.wav",
+      "reference": "наши следующие но",
+      "duration": 1.08
+    },
+    {
+      "filename": "public_youtube700_val/2/11/e7c032cd8040.wav",
+      "reference": "первая оденет русский",
+      "duration": 1.02
+    },
+    {
+      "filename": "public_youtube700_val/2/15/78dce32fc3e9.wav",
+      "reference": "и есть возможность духу соприкоснуться с духом скажем так",
+      "duration": 3.59
+    },
+    {
+      "filename": "public_youtube700_val/2/16/61b5919a2c18.wav",
+      "reference": "в транзитной торговле с российской империей",
+      "duration": 2.45
+    },
+    {
+      "filename": "public_youtube700_val/2/16/b618b4bf9081.wav",
+      "reference": "отверстия всё",
+      "duration": 1.0
+    },
+    {
+      "filename": "public_youtube700_val/2/17/10b1af20c622.wav",
+      "reference": "а если ещё мы запускаем искривление",
+      "duration": 3.01
+    },
+    {
+      "filename": "public_youtube700_val/2/1b/e0c7d428201b.wav",
+      "reference": "замачивать ножки на самом деле желательно",
+      "duration": 2.83
+    },
+    {
+      "filename": "public_youtube700_val/2/1c/1f572792ed9b.wav",
+      "reference": "но просто",
+      "duration": 0.48
+    },
+    {
+      "filename": "public_youtube700_val/2/1f/8274e8ebe12c.wav",
+      "reference": "вообще у меняя всего наверное семь камер",
+      "duration": 2.27
+    },
+    {
+      "filename": "public_youtube700_val/2/23/71c02d840b99.wav",
+      "reference": "а в пегасах здесь семьдесят два пегаса под капотом",
+      "duration": 2.66
+    },
+    {
+      "filename": "public_youtube700_val/2/23/d030b067f715.wav",
+      "reference": "и такого много очень много",
+      "duration": 1.8
+    },
+    {
+      "filename": "public_youtube700_val/2/25/a52efcb36eab.wav",
+      "reference": "да там не обозвал его",
+      "duration": 1.35
+    },
+    {
+      "filename": "public_youtube700_val/2/26/a30ad8cc65aa.wav",
+      "reference": "я должен передвигаться в пространстве",
+      "duration": 1.79
+    },
+    {
+      "filename": "public_youtube700_val/2/37/5fbcb1d040ca.wav",
+      "reference": "сегодня вот яяя",
+      "duration": 1.28
+    },
+    {
+      "filename": "public_youtube700_val/2/43/070a179942b4.wav",
+      "reference": "пишет здравствуйте благодарю вас за советы и позитив который даёт",
+      "duration": 3.53
+    },
+    {
+      "filename": "public_youtube700_val/2/4b/089657b74fb7.wav",
+      "reference": "в любом случае слышу что",
+      "duration": 1.0
+    },
+    {
+      "filename": "public_youtube700_val/2/4d/a3e072498ac6.wav",
+      "reference": "куран и хадисы шире начинаем понимать",
+      "duration": 2.33
+    },
+    {
+      "filename": "public_youtube700_val/2/54/04386fcc80e9.wav",
+      "reference": "которые находились в войсках",
+      "duration": 2.3
+    },
+    {
+      "filename": "public_youtube700_val/2/55/6b664acd6532.wav",
+      "reference": "будущее это уже потом",
+      "duration": 1.45
+    },
+    {
+      "filename": "public_youtube700_val/2/5b/a157f045470a.wav",
+      "reference": "и ваш жёлчный пузырь и никогда не заявит",
+      "duration": 2.68
+    },
+    {
+      "filename": "public_youtube700_val/2/5e/24201b693188.wav",
+      "reference": "женщина делает колебательные движения ногами",
+      "duration": 2.42
+    },
+    {
+      "filename": "public_youtube700_val/2/62/91c6dfe6df89.wav",
+      "reference": "на овощное питание и боли сразу же уйдут",
+      "duration": 2.89
+    },
+    {
+      "filename": "public_youtube700_val/2/67/b0d8adbf9d19.wav",
+      "reference": "где содержатся",
+      "duration": 0.88
+    },
+    {
+      "filename": "public_youtube700_val/2/68/b33925b3d7ff.wav",
+      "reference": "если вам приходится выбрасывать какойто проду",
+      "duration": 2.77
+    },
+    {
+      "filename": "public_youtube700_val/2/6a/f9b831cde9ff.wav",
+      "reference": "кстати егора назначили на место хабалкина",
+      "duration": 2.9
+    },
+    {
+      "filename": "public_youtube700_val/2/6c/3c28057a335a.wav",
+      "reference": "там есть разноцветные вкрапления",
+      "duration": 1.91
+    },
+    {
+      "filename": "public_youtube700_val/2/6d/db0155928e20.wav",
+      "reference": "они не рассказывали конечно подробностей",
+      "duration": 1.74
+    },
+    {
+      "filename": "public_youtube700_val/2/73/697db93c1541.wav",
+      "reference": "управлять игрой воблера и справиться не только",
+      "duration": 2.6
+    },
+    {
+      "filename": "public_youtube700_val/2/77/85e5a57bf4ae.wav",
+      "reference": "этот уголь сгорая",
+      "duration": 1.21
+    },
+    {
+      "filename": "public_youtube700_val/2/7c/2a467b8f1b04.wav",
+      "reference": "и это самое высокое здание в старой части города",
+      "duration": 3.44
+    },
+    {
+      "filename": "public_youtube700_val/2/80/c80a3145203f.wav",
+      "reference": "сформировалась скрутка длиной",
+      "duration": 2.38
+    },
+    {
+      "filename": "public_youtube700_val/2/85/45960708e7e5.wav",
+      "reference": "уст в уши невозможно",
+      "duration": 1.83
+    },
+    {
+      "filename": "public_youtube700_val/2/8b/8c31ec941ee3.wav",
+      "reference": "колонизации подвергали не по",
+      "duration": 1.96
+    },
+    {
+      "filename": "public_youtube700_val/2/8f/0e062cd5a244.wav",
+      "reference": "а ты залезь к нему в голову к нему приходят такие же мысли как и к",
+      "duration": 2.91
+    },
+    {
+      "filename": "public_youtube700_val/2/92/697d4cb9d70b.wav",
+      "reference": "но вот здесь происходит синтез",
+      "duration": 1.98
+    },
+    {
+      "filename": "public_youtube700_val/2/9e/a4d793bfd820.wav",
+      "reference": "ну и других наук попытаться доказать",
+      "duration": 2.09
+    },
+    {
+      "filename": "public_youtube700_val/2/9f/e7811345eb5c.wav",
+      "reference": "на газ ну там полчаса может быть у вас",
+      "duration": 1.89
+    },
+    {
+      "filename": "public_youtube700_val/2/a0/44c47c7893e5.wav",
+      "reference": "колени",
+      "duration": 0.44
+    },
+    {
+      "filename": "public_youtube700_val/2/a5/ab3fea061920.wav",
+      "reference": "первое очищает печень великолепно",
+      "duration": 1.75
+    },
+    {
+      "filename": "public_youtube700_val/2/ab/fb96a8cd6276.wav",
+      "reference": "ну не нужно о своих проблемах рассказывать както",
+      "duration": 2.28
+    },
+    {
+      "filename": "public_youtube700_val/2/ac/bd042ba6c8d1.wav",
+      "reference": "как зачем почему",
+      "duration": 1.09
+    },
+    {
+      "filename": "public_youtube700_val/2/b4/89ee43f85d5d.wav",
+      "reference": "и к кланьке зайдёшь",
+      "duration": 1.36
+    },
+    {
+      "filename": "public_youtube700_val/2/b5/6ce5f9b3ffca.wav",
+      "reference": "благодати",
+      "duration": 0.87
+    },
+    {
+      "filename": "public_youtube700_val/2/bb/de3c542ad63b.wav",
+      "reference": "по ним ещё и проходит воздух",
+      "duration": 1.67
+    },
+    {
+      "filename": "public_youtube700_val/2/bd/cbd6b817f062.wav",
+      "reference": "китайской философии льва толстова льва николаевича толстого кстати и к индийской его известная переписка с",
+      "duration": 5.7
+    },
+    {
+      "filename": "public_youtube700_val/2/be/c0370061c1bf.wav",
+      "reference": "это будет два стаканчика",
+      "duration": 1.47
+    },
+    {
+      "filename": "public_youtube700_val/2/c3/1c4edf45a22f.wav",
+      "reference": "друзья мы с вами в казино монте карло",
+      "duration": 2.96
+    },
+    {
+      "filename": "public_youtube700_val/2/c7/893594356654.wav",
+      "reference": "то вирус не может",
+      "duration": 2.18
+    },
+    {
+      "filename": "public_youtube700_val/2/d2/3b00de87a92f.wav",
+      "reference": "такой топ историографичексий уже оформи",
+      "duration": 2.19
+    },
+    {
+      "filename": "public_youtube700_val/2/d3/57b10f5aebc1.wav",
+      "reference": "самое время их попробовать",
+      "duration": 2.01
+    },
+    {
+      "filename": "public_youtube700_val/2/d6/0587d7bf9a7f.wav",
+      "reference": "из жаростойкого материала такую вот крышку",
+      "duration": 2.72
+    },
+    {
+      "filename": "public_youtube700_val/2/da/9a78d32abdaf.wav",
+      "reference": "мы тут сталкиваемся сразу с первой трудностью",
+      "duration": 2.49
+    },
+    {
+      "filename": "public_youtube700_val/2/e0/c2cc4d1acf2f.wav",
+      "reference": "и в принципе повлиял на становление израиля как независимого",
+      "duration": 3.44
+    },
+    {
+      "filename": "public_youtube700_val/2/e2/684fbafc47e6.wav",
+      "reference": "таким божьим светом",
+      "duration": 1.26
+    },
+    {
+      "filename": "public_youtube700_val/2/e2/dcb69eaffaa7.wav",
+      "reference": "помогает обнаружить и взрастить в себе тот дух единства дружбы и взаимопонимания",
+      "duration": 5.58
+    },
+    {
+      "filename": "public_youtube700_val/2/f4/c40290375fba.wav",
+      "reference": "до новых встреч",
+      "duration": 0.78
+    },
+    {
+      "filename": "public_youtube700_val/2/f7/4db385c4b7a8.wav",
+      "reference": "и вот граф миних",
+      "duration": 1.24
+    },
+    {
+      "filename": "public_youtube700_val/2/fa/18cdd67555a6.wav",
+      "reference": "второй курс университета иии начинала свою американскую специализацию и заявила что я хочу заниматься",
+      "duration": 5.39
+    },
+    {
+      "filename": "public_youtube700_val/3/05/195903ed883e.wav",
+      "reference": "организм насытясь",
+      "duration": 1.68
+    },
+    {
+      "filename": "public_youtube700_val/3/06/030603b2f655.wav",
+      "reference": "если это часть меня как мне это принять",
+      "duration": 2.08
+    },
+    {
+      "filename": "public_youtube700_val/3/07/dcad906b5458.wav",
+      "reference": "она может",
+      "duration": 0.74
+    },
+    {
+      "filename": "public_youtube700_val/3/16/8f1568d26f18.wav",
+      "reference": "вспоминать тоже придётся потому что никуда мы не денемся",
+      "duration": 2.88
+    },
+    {
+      "filename": "public_youtube700_val/3/18/779ad928f8af.wav",
+      "reference": "вы стресс мне нанесли",
+      "duration": 0.97
+    },
+    {
+      "filename": "public_youtube700_val/3/1b/f89febf912c4.wav",
+      "reference": "поэтомуу делитесь пожалуйста друзьям",
+      "duration": 2.75
+    },
+    {
+      "filename": "public_youtube700_val/3/1d/6adabb75f9b9.wav",
+      "reference": "прошлых фильмов",
+      "duration": 0.85
+    },
+    {
+      "filename": "public_youtube700_val/3/1f/9df518eaaf12.wav",
+      "reference": "за шесть долларов это победа",
+      "duration": 1.98
+    },
+    {
+      "filename": "public_youtube700_val/3/22/968987830999.wav",
+      "reference": "но они этого не сделали не навели порядок с вывесками",
+      "duration": 2.32
+    },
+    {
+      "filename": "public_youtube700_val/3/24/8b12ae61950a.wav",
+      "reference": "и всё чт всё что там было просто взяли всё и залили асфальтом",
+      "duration": 2.65
+    },
+    {
+      "filename": "public_youtube700_val/3/25/3d4dec4eeb06.wav",
+      "reference": "ну и подключу двухлитровую бутылку",
+      "duration": 2.4
+    },
+    {
+      "filename": "public_youtube700_val/3/25/84f89132a806.wav",
+      "reference": "оставайтесь подождите здесь",
+      "duration": 1.99
+    },
+    {
+      "filename": "public_youtube700_val/3/29/894dcdd5206b.wav",
+      "reference": "движение приманки то приманка",
+      "duration": 1.88
+    },
+    {
+      "filename": "public_youtube700_val/3/2c/6aaa59251dd5.wav",
+      "reference": "ну а что вы хотели это же варанасс здесь всё выглядит как гараж",
+      "duration": 3.1
+    },
+    {
+      "filename": "public_youtube700_val/3/32/baa04907eff4.wav",
+      "reference": "такие на склоне",
+      "duration": 1.45
+    },
+    {
+      "filename": "public_youtube700_val/3/32/ce3242d0ba0f.wav",
+      "reference": "европы",
+      "duration": 0.64
+    },
+    {
+      "filename": "public_youtube700_val/3/3c/206c49ffc442.wav",
+      "reference": "тома эталон",
+      "duration": 1.26
+    },
+    {
+      "filename": "public_youtube700_val/3/3c/71d8a0539c4f.wav",
+      "reference": "подразогнуться иии",
+      "duration": 1.74
+    },
+    {
+      "filename": "public_youtube700_val/3/40/5daa9274a59a.wav",
+      "reference": "готово",
+      "duration": 0.61
+    },
+    {
+      "filename": "public_youtube700_val/3/41/4a75bff9f287.wav",
+      "reference": "где же богомол",
+      "duration": 0.86
+    },
+    {
+      "filename": "public_youtube700_val/3/4f/aa6ba467fe38.wav",
+      "reference": "посланника божьего",
+      "duration": 1.17
+    },
+    {
+      "filename": "public_youtube700_val/3/59/f47b20a086c0.wav",
+      "reference": "у начинающего автора очень много вызовов",
+      "duration": 2.4
+    },
+    {
+      "filename": "public_youtube700_val/3/62/6bc26c556fbf.wav",
+      "reference": "и вот этот опыт он не похож на тот что был в привычной жизни",
+      "duration": 4.7
+    },
+    {
+      "filename": "public_youtube700_val/3/71/1a93f6c61918.wav",
+      "reference": "шёпота сознания без крика сознания",
+      "duration": 3.24
+    },
+    {
+      "filename": "public_youtube700_val/3/73/b75f78e7af79.wav",
+      "reference": "давай саня",
+      "duration": 0.83
+    },
+    {
+      "filename": "public_youtube700_val/3/76/52cc20f26d9f.wav",
+      "reference": "не видели вы капусты что ли",
+      "duration": 1.77
+    },
+    {
+      "filename": "public_youtube700_val/3/79/dc40e133953c.wav",
+      "reference": "например про подарок",
+      "duration": 1.14
+    },
+    {
+      "filename": "public_youtube700_val/3/80/330a50af0391.wav",
+      "reference": "выработке йода в организме",
+      "duration": 1.36
+    },
+    {
+      "filename": "public_youtube700_val/3/82/086b97006d72.wav",
+      "reference": "в данном сегменте конечно же основными являются характеристики",
+      "duration": 4.41
+    },
+    {
+      "filename": "public_youtube700_val/3/87/60d3b3031186.wav",
+      "reference": "на парковке либо созваниваться очень неудобно",
+      "duration": 2.16
+    },
+    {
+      "filename": "public_youtube700_val/3/87/e3eba235fa55.wav",
+      "reference": "при том не потому чтобыы сделать комуто",
+      "duration": 2.24
+    },
+    {
+      "filename": "public_youtube700_val/3/90/6cfff5177a25.wav",
+      "reference": "распада накопилась за время существования объекта",
+      "duration": 2.95
+    },
+    {
+      "filename": "public_youtube700_val/3/91/9b62c5827422.wav",
+      "reference": "не отвлекать вас шесть",
+      "duration": 1.51
+    },
+    {
+      "filename": "public_youtube700_val/3/93/cb07d72d785e.wav",
+      "reference": "ссвою знаменитую брошюру розанов",
+      "duration": 2.08
+    },
+    {
+      "filename": "public_youtube700_val/3/95/3eff31be63cd.wav",
+      "reference": "купаться вы можете моржеваться",
+      "duration": 2.02
+    },
+    {
+      "filename": "public_youtube700_val/3/96/939c1e2536ab.wav",
+      "reference": "конечно у вас не будет никакой",
+      "duration": 1.66
+    },
+    {
+      "filename": "public_youtube700_val/3/98/d9a1d671dd3c.wav",
+      "reference": "на верный путь и где",
+      "duration": 1.25
+    },
+    {
+      "filename": "public_youtube700_val/3/9a/259f90972ed1.wav",
+      "reference": "конечно надо сделать",
+      "duration": 1.21
+    },
+    {
+      "filename": "public_youtube700_val/3/a5/6a7abde0b1f0.wav",
+      "reference": "примет решение",
+      "duration": 1.04
+    },
+    {
+      "filename": "public_youtube700_val/3/a6/e801b65c60c7.wav",
+      "reference": "кто он что он его намерения и тому подобное",
+      "duration": 2.85
+    },
+    {
+      "filename": "public_youtube700_val/3/ad/40e25f5039a9.wav",
+      "reference": "лунка засвечивается",
+      "duration": 0.94
+    },
+    {
+      "filename": "public_youtube700_val/3/ad/5779eb0cef48.wav",
+      "reference": "и это каждый год так",
+      "duration": 0.9
+    },
+    {
+      "filename": "public_youtube700_val/3/b2/0fe5460760e0.wav",
+      "reference": "самосуд в исламе категорически изначально",
+      "duration": 3.21
+    },
+    {
+      "filename": "public_youtube700_val/3/b7/be5152dc035d.wav",
+      "reference": "и пусть этот год для вас будет удачным",
+      "duration": 3.07
+    },
+    {
+      "filename": "public_youtube700_val/3/b7/d623979559ed.wav",
+      "reference": "манхэттан это остров для тех кто не знает и вот на западном берегу нашего острова",
+      "duration": 4.09
+    },
+    {
+      "filename": "public_youtube700_val/3/be/88aa753f59bb.wav",
+      "reference": "что я делаю",
+      "duration": 0.67
+    },
+    {
+      "filename": "public_youtube700_val/3/c0/e464a31430d0.wav",
+      "reference": "лук приготовится лучше",
+      "duration": 1.38
+    },
+    {
+      "filename": "public_youtube700_val/3/cf/1cc6db894778.wav",
+      "reference": "есть отдельные такие институты гражданского общества которые особенно важны именно для демократии",
+      "duration": 4.87
+    },
+    {
+      "filename": "public_youtube700_val/3/cf/fe850640d1b5.wav",
+      "reference": "но я же отвечал отвечаю на ваш вопрос",
+      "duration": 2.47
+    },
+    {
+      "filename": "public_youtube700_val/3/d2/17b49c405148.wav",
+      "reference": "так афанасий забирай сюда с собой этот кремний марсиана повезём",
+      "duration": 5.0
+    },
+    {
+      "filename": "public_youtube700_val/3/d7/a5f645c05828.wav",
+      "reference": "есть поэтому наши дела об этом говорится и в куране",
+      "duration": 5.32
+    },
+    {
+      "filename": "public_youtube700_val/3/d7/f242d2fcede5.wav",
+      "reference": "нее ммм воздушный шарик",
+      "duration": 2.35
+    },
+    {
+      "filename": "public_youtube700_val/3/db/fe8b272a93e5.wav",
+      "reference": "телый урок",
+      "duration": 0.7
+    },
+    {
+      "filename": "public_youtube700_val/3/de/3c1d687a80fb.wav",
+      "reference": "который поступает",
+      "duration": 0.88
+    },
+    {
+      "filename": "public_youtube700_val/3/e5/c765782cc231.wav",
+      "reference": "например гемоглобин транспортирует кислород белки сыворотки крови переносят гормоны",
+      "duration": 4.96
+    },
+    {
+      "filename": "public_youtube700_val/3/e9/adf1ed82fbb1.wav",
+      "reference": "виталий семёнович помогите или потому что у меня сейчас с деньгами проблемы",
+      "duration": 3.96
+    },
+    {
+      "filename": "public_youtube700_val/3/f3/936bfffa6689.wav",
+      "reference": "это самолечебник страница",
+      "duration": 1.86
+    },
+    {
+      "filename": "public_youtube700_val/3/f6/c233d3cbe2dd.wav",
+      "reference": "художественной литературы",
+      "duration": 1.06
+    },
+    {
+      "filename": "public_youtube700_val/3/fb/de9ef1721039.wav",
+      "reference": "что фильм",
+      "duration": 1.03
+    },
+    {
+      "filename": "public_youtube700_val/4/02/dbd6f7e3cf25.wav",
+      "reference": "наш дорогой шеф михал иваныч",
+      "duration": 1.85
+    },
+    {
+      "filename": "public_youtube700_val/4/08/6306bf797f5b.wav",
+      "reference": "фуко это то что структурный анализ позволяет вскрыть важные сущностные свойства в разных социальных институтах",
+      "duration": 9.04
+    },
+    {
+      "filename": "public_youtube700_val/4/0a/20253222d75f.wav",
+      "reference": "это страшный я",
+      "duration": 1.18
+    },
+    {
+      "filename": "public_youtube700_val/4/0d/2c716a94b14d.wav",
+      "reference": "причём все компоненты согласованы и нуждаются",
+      "duration": 2.59
+    },
+    {
+      "filename": "public_youtube700_val/4/0e/234473dbf5d6.wav",
+      "reference": "учёные продолжают наблюдение за разломами вокруг маунт",
+      "duration": 3.4
+    },
+    {
+      "filename": "public_youtube700_val/4/0e/28dc29e008d9.wav",
+      "reference": "несмотря на то что ей шестьсот лет она не утратила своего шарма",
+      "duration": 4.99
+    },
+    {
+      "filename": "public_youtube700_val/4/1a/bb56a270286c.wav",
+      "reference": "всегда говорю если заболел сначала к батюшке к врачу травнику",
+      "duration": 3.32
+    },
+    {
+      "filename": "public_youtube700_val/4/1b/4db6d0a8c19e.wav",
+      "reference": "чувствовать веса кормушки",
+      "duration": 1.72
+    },
+    {
+      "filename": "public_youtube700_val/4/25/767c9d21ea9a.wav",
+      "reference": "мы должны использовать все инструменты которыми мы располагаем систему мониторинга",
+      "duration": 5.08
+    },
+    {
+      "filename": "public_youtube700_val/4/2a/017d2e3dc1e3.wav",
+      "reference": "не клеится у них разговор",
+      "duration": 1.65
+    },
+    {
+      "filename": "public_youtube700_val/4/2a/677cd4671b87.wav",
+      "reference": "в последний момент я себе давно уже эту книгу открыл",
+      "duration": 2.91
+    },
+    {
+      "filename": "public_youtube700_val/4/2e/a675848cd2a3.wav",
+      "reference": "читать дуа и понять что ты хочешь во время ифтара",
+      "duration": 3.37
+    },
+    {
+      "filename": "public_youtube700_val/4/2e/a922ef14de00.wav",
+      "reference": "вены ноют болят",
+      "duration": 1.43
+    },
+    {
+      "filename": "public_youtube700_val/4/2f/901301cc09a6.wav",
+      "reference": "поздно утренний намаз они постоянно движутся",
+      "duration": 2.21
+    },
+    {
+      "filename": "public_youtube700_val/4/30/917e468fa26a.wav",
+      "reference": "вы уверены чтоо",
+      "duration": 1.07
+    },
+    {
+      "filename": "public_youtube700_val/4/32/e7805b937df0.wav",
+      "reference": "прийти задать все вопросы на вопросы будут получены",
+      "duration": 3.13
+    },
+    {
+      "filename": "public_youtube700_val/4/3b/39e6a8079254.wav",
+      "reference": "мне приходят сотни писем помогите",
+      "duration": 1.91
+    },
+    {
+      "filename": "public_youtube700_val/4/3c/8836d656d3b4.wav",
+      "reference": "хорооший",
+      "duration": 0.84
+    },
+    {
+      "filename": "public_youtube700_val/4/40/a4da706bd142.wav",
+      "reference": "очень прошу вас помогите с уважением ливан",
+      "duration": 2.29
+    },
+    {
+      "filename": "public_youtube700_val/4/44/0abeb986e78d.wav",
+      "reference": "давайте будем дружить давайте будем",
+      "duration": 1.71
+    },
+    {
+      "filename": "public_youtube700_val/4/46/3447ea1cf4f8.wav",
+      "reference": "они создают банально чтоб не работать лень работать",
+      "duration": 3.62
+    },
+    {
+      "filename": "public_youtube700_val/4/48/281c793e9599.wav",
+      "reference": "всего доброго",
+      "duration": 0.68
+    },
+    {
+      "filename": "public_youtube700_val/4/53/2bd43a742c6f.wav",
+      "reference": "вы растеряетесь и то же самое для опухоль",
+      "duration": 1.98
+    },
+    {
+      "filename": "public_youtube700_val/4/53/3e035f5391a2.wav",
+      "reference": "рабочий но уменьшать ребята и без того самый маленький",
+      "duration": 3.7
+    },
+    {
+      "filename": "public_youtube700_val/4/58/668083caa761.wav",
+      "reference": "способствовать к выделению вашего",
+      "duration": 1.34
+    },
+    {
+      "filename": "public_youtube700_val/4/58/9f7b211baf1c.wav",
+      "reference": "плясала пела песни выступала",
+      "duration": 1.99
+    },
+    {
+      "filename": "public_youtube700_val/4/58/c6afef391334.wav",
+      "reference": "нажмите",
+      "duration": 0.75
+    },
+    {
+      "filename": "public_youtube700_val/4/60/ef22b2affd4c.wav",
+      "reference": "движения аллатра",
+      "duration": 1.27
+    },
+    {
+      "filename": "public_youtube700_val/4/65/bf04d1103dcc.wav",
+      "reference": "надо будет попробовать да",
+      "duration": 1.13
+    },
+    {
+      "filename": "public_youtube700_val/4/68/beaf7c0d1b10.wav",
+      "reference": "но он не уступает он даже превосходит",
+      "duration": 1.94
+    },
+    {
+      "filename": "public_youtube700_val/4/6b/64349a5a05bd.wav",
+      "reference": "ааа познание через",
+      "duration": 1.85
+    },
+    {
+      "filename": "public_youtube700_val/4/72/47c33221fa29.wav",
+      "reference": "и шаг за шагом шаг",
+      "duration": 1.46
+    },
+    {
+      "filename": "public_youtube700_val/4/74/04b87d445669.wav",
+      "reference": "оно у вас не может",
+      "duration": 0.74
+    },
+    {
+      "filename": "public_youtube700_val/4/79/dd1a253047aa.wav",
+      "reference": "когда ты знаешь вот я там сейчас с тобой в голове разговариваю и рассказываю тебе тото тото то",
+      "duration": 4.58
+    },
+    {
+      "filename": "public_youtube700_val/4/7a/ce0c577c30fd.wav",
+      "reference": "эта марионетка",
+      "duration": 0.92
+    },
+    {
+      "filename": "public_youtube700_val/4/7a/f29b7b1ee237.wav",
+      "reference": "такого пиететаа",
+      "duration": 1.08
+    },
+    {
+      "filename": "public_youtube700_val/4/7e/f4dfb80a8e36.wav",
+      "reference": "но когда их скопилось слишком много тела погибших начали убирать бульдозеры",
+      "duration": 3.67
+    },
+    {
+      "filename": "public_youtube700_val/4/7f/9642ea1abb9f.wav",
+      "reference": "настоящий противораковый коктеейль",
+      "duration": 2.17
+    },
+    {
+      "filename": "public_youtube700_val/4/82/9347fd435028.wav",
+      "reference": "деле неважно в любой сфере и неважно что",
+      "duration": 2.92
+    },
+    {
+      "filename": "public_youtube700_val/4/84/01b5439a0848.wav",
+      "reference": "чтоо а все действия которые ммм производились а с бумажками с выбором знака",
+      "duration": 6.05
+    },
+    {
+      "filename": "public_youtube700_val/4/84/469bfc40a3c5.wav",
+      "reference": "да и вообще нудно было в чевенгуре люди ничем не занимались",
+      "duration": 5.35
+    },
+    {
+      "filename": "public_youtube700_val/4/86/38594bee2f17.wav",
+      "reference": "необходимые для преобразования человека",
+      "duration": 2.83
+    },
+    {
+      "filename": "public_youtube700_val/4/88/5025acde3b54.wav",
+      "reference": "я естественно пошёл сразу же на пост почему",
+      "duration": 2.61
+    },
+    {
+      "filename": "public_youtube700_val/4/8f/07a16ac03c67.wav",
+      "reference": "не вытворяет чего только не может там самое разное",
+      "duration": 3.24
+    },
+    {
+      "filename": "public_youtube700_val/4/9b/14f339c87bff.wav",
+      "reference": "теперь задали вопрос",
+      "duration": 0.93
+    },
+    {
+      "filename": "public_youtube700_val/4/9c/72c1f3e12b5e.wav",
+      "reference": "это место здесь есть желчная",
+      "duration": 1.8
+    },
+    {
+      "filename": "public_youtube700_val/4/a2/1362fb591e99.wav",
+      "reference": "хорошо и с эти этим останусь",
+      "duration": 1.72
+    },
+    {
+      "filename": "public_youtube700_val/4/a5/70602e10e98f.wav",
+      "reference": "сердце плохо работает потому что там всё тромбировано",
+      "duration": 2.52
+    },
+    {
+      "filename": "public_youtube700_val/4/a8/cf00f3c177ac.wav",
+      "reference": "значит",
+      "duration": 0.37
+    },
+    {
+      "filename": "public_youtube700_val/4/a9/25938c49a1c7.wav",
+      "reference": "который работает",
+      "duration": 1.26
+    },
+    {
+      "filename": "public_youtube700_val/4/ab/f3076f6c8ad1.wav",
+      "reference": "меня ожидал сюрприз",
+      "duration": 1.1
+    },
+    {
+      "filename": "public_youtube700_val/4/b5/d7b592094d02.wav",
+      "reference": "то исчезнет всё и смысла жизни",
+      "duration": 2.29
+    },
+    {
+      "filename": "public_youtube700_val/4/bb/4565c766b391.wav",
+      "reference": "самому себе совершать определённые поступки",
+      "duration": 3.22
+    },
+    {
+      "filename": "public_youtube700_val/4/bd/188b8728e032.wav",
+      "reference": "выходите на улицу или наоборот следуй",
+      "duration": 2.93
+    },
+    {
+      "filename": "public_youtube700_val/4/c0/76eaa48399ef.wav",
+      "reference": "вот только",
+      "duration": 0.61
+    },
+    {
+      "filename": "public_youtube700_val/4/c0/a67b630b222d.wav",
+      "reference": "аластер славный парень я бы сказал даже замечательный парень",
+      "duration": 3.2
+    },
+    {
+      "filename": "public_youtube700_val/4/c4/8950119911f9.wav",
+      "reference": "если вы плохо одеты оденьтесь хорошо наденьте свою лучшую одежду",
+      "duration": 4.42
+    },
+    {
+      "filename": "public_youtube700_val/4/c5/93613efbc7be.wav",
+      "reference": "и полного распада его костей обвислых",
+      "duration": 3.2
+    },
+    {
+      "filename": "public_youtube700_val/4/c6/a2b3395e91f8.wav",
+      "reference": "когда организм окрепнет а начните прямо с одной капли две капли три капли",
+      "duration": 3.97
+    },
+    {
+      "filename": "public_youtube700_val/4/c6/b98c01a07d38.wav",
+      "reference": "чаще обращать внимание",
+      "duration": 1.3
+    },
+    {
+      "filename": "public_youtube700_val/4/c8/b070aafdc508.wav",
+      "reference": "ходящий под вот эту трубочку",
+      "duration": 2.0
+    },
+    {
+      "filename": "public_youtube700_val/4/cd/5a4a33a13410.wav",
+      "reference": "никого не осталось",
+      "duration": 1.05
+    },
+    {
+      "filename": "public_youtube700_val/4/cd/a03d0ac9e3df.wav",
+      "reference": "но в то же бы студентам и вот",
+      "duration": 1.97
+    },
+    {
+      "filename": "public_youtube700_val/4/ce/152fffce1e57.wav",
+      "reference": "тридцать восемь долларов основные затраты на этом этапе пошли",
+      "duration": 3.46
+    },
+    {
+      "filename": "public_youtube700_val/4/d1/0b5493f106f5.wav",
+      "reference": "но для этого вам э важно показывать эээ что вы реально можете стать",
+      "duration": 6.2
+    },
+    {
+      "filename": "public_youtube700_val/4/d5/12fcf843244b.wav",
+      "reference": "всётаки они какие там интересные вещи мне",
+      "duration": 2.18
+    },
+    {
+      "filename": "public_youtube700_val/4/d8/5d82971eea36.wav",
+      "reference": "трактуя",
+      "duration": 0.64
+    },
+    {
+      "filename": "public_youtube700_val/4/da/41fb4029471e.wav",
+      "reference": "по современным представлениям электрон двигается вокруг ядра атома",
+      "duration": 3.42
+    },
+    {
+      "filename": "public_youtube700_val/4/df/c42174288636.wav",
+      "reference": "сейсмологи во всём мире зафиксировали подземные толчки неизвестного происхождения",
+      "duration": 3.9
+    },
+    {
+      "filename": "public_youtube700_val/4/e5/f35f5fef3453.wav",
+      "reference": "человеческая является ни что иное как душа",
+      "duration": 2.22
+    },
+    {
+      "filename": "public_youtube700_val/4/e8/c9a50da1023f.wav",
+      "reference": "две копейки сто рублей пятьсот рублей тыща рублей",
+      "duration": 2.91
+    },
+    {
+      "filename": "public_youtube700_val/4/eb/0e2b456c7749.wav",
+      "reference": "нельзя было просто левые адреса написать",
+      "duration": 2.49
+    },
+    {
+      "filename": "public_youtube700_val/4/f0/be1edcb6a6d7.wav",
+      "reference": "здесь подразумевается именно как бы воспитанность то есть воспитанный",
+      "duration": 2.99
+    },
+    {
+      "filename": "public_youtube700_val/4/f1/d30ef5b91937.wav",
+      "reference": "зеленоватый цвет это капуста крестоцветные это очень серьёзный цвет помидор этот огурец и капуста правильно какой ещё может быть цве",
+      "duration": 7.99
+    },
+    {
+      "filename": "public_youtube700_val/4/f2/c1523d9b128b.wav",
+      "reference": "хорошо",
+      "duration": 0.42
+    },
+    {
+      "filename": "public_youtube700_val/4/f3/1860b5780e97.wav",
+      "reference": "писать содержание скажем такого",
+      "duration": 1.5
+    },
+    {
+      "filename": "public_youtube700_val/4/f5/d5bb659e2845.wav",
+      "reference": "какието д дополнительные возможности возникают",
+      "duration": 2.67
+    },
+    {
+      "filename": "public_youtube700_val/4/fe/5a817b7c9b5f.wav",
+      "reference": "то не работает",
+      "duration": 0.98
+    },
+    {
+      "filename": "public_youtube700_val/5/00/c0cc00e46641.wav",
+      "reference": "сказал коню кого нужно искать и тот сам пошёл куда считал нужным",
+      "duration": 5.52
+    },
+    {
+      "filename": "public_youtube700_val/5/03/0a1c744b9583.wav",
+      "reference": "проблема соотношения",
+      "duration": 1.49
+    },
+    {
+      "filename": "public_youtube700_val/5/0a/479a149d5573.wav",
+      "reference": "лучший по своему воспитанию",
+      "duration": 2.01
+    },
+    {
+      "filename": "public_youtube700_val/5/12/113a4ba3ac1f.wav",
+      "reference": "это сложно",
+      "duration": 0.76
+    },
+    {
+      "filename": "public_youtube700_val/5/12/2c8f3193309d.wav",
+      "reference": "очень удобно",
+      "duration": 0.84
+    },
+    {
+      "filename": "public_youtube700_val/5/12/63d36fdc6d5c.wav",
+      "reference": "проходить мусульман мусульманам в разных  угол уголках мира",
+      "duration": 3.77
+    },
+    {
+      "filename": "public_youtube700_val/5/15/a476ee28f911.wav",
+      "reference": "если мы сами его дразним",
+      "duration": 1.47
+    },
+    {
+      "filename": "public_youtube700_val/5/1b/e80c40a762d2.wav",
+      "reference": "и наш организм начнёт",
+      "duration": 0.96
+    },
+    {
+      "filename": "public_youtube700_val/5/24/ef184a65b5a5.wav",
+      "reference": "отвечает человеку иии что только бог может ответить",
+      "duration": 5.15
+    },
+    {
+      "filename": "public_youtube700_val/5/26/4fc23857a8c3.wav",
+      "reference": "она не имеет причины",
+      "duration": 1.29
+    },
+    {
+      "filename": "public_youtube700_val/5/28/5cc3267bbcd8.wav",
+      "reference": "какие планы",
+      "duration": 0.67
+    },
+    {
+      "filename": "public_youtube700_val/5/2d/39e4b73646eb.wav",
+      "reference": "сделать для тебя сюрприз",
+      "duration": 1.08
+    },
+    {
+      "filename": "public_youtube700_val/5/2e/a407fd347506.wav",
+      "reference": "то есть там какието сумасшедшие миллионы долларов было",
+      "duration": 2.54
+    },
+    {
+      "filename": "public_youtube700_val/5/2f/3f4c59c2daa0.wav",
+      "reference": "такого успешного действию в некоторой сфере да",
+      "duration": 2.87
+    },
+    {
+      "filename": "public_youtube700_val/5/2f/5093d54892aa.wav",
+      "reference": "ходят по берегу со стульчиками",
+      "duration": 1.63
+    },
+    {
+      "filename": "public_youtube700_val/5/31/75c39bebc1a0.wav",
+      "reference": "и проверить самого себя чего он достоин",
+      "duration": 2.87
+    },
+    {
+      "filename": "public_youtube700_val/5/41/b63c1b86c1e7.wav",
+      "reference": "весом кормушки",
+      "duration": 0.82
+    },
+    {
+      "filename": "public_youtube700_val/5/4b/bf711ca1f956.wav",
+      "reference": "это в принципе всё всё очень",
+      "duration": 1.63
+    },
+    {
+      "filename": "public_youtube700_val/5/55/5e2c7e98f717.wav",
+      "reference": "лактобактерии у взрослых они обитают а бифидо у детей в основном",
+      "duration": 4.4
+    },
+    {
+      "filename": "public_youtube700_val/5/5f/716b51873146.wav",
+      "reference": "пожалуйста не просите меня чтоб я",
+      "duration": 2.56
+    },
+    {
+      "filename": "public_youtube700_val/5/64/84dda41049a2.wav",
+      "reference": "которые вытекают из этой",
+      "duration": 1.62
+    },
+    {
+      "filename": "public_youtube700_val/5/65/892b59d989a3.wav",
+      "reference": "что я не смогу на него ответить тут и делать нечего если че",
+      "duration": 2.91
+    },
+    {
+      "filename": "public_youtube700_val/5/66/c49baa2ec981.wav",
+      "reference": "прославить своё имя",
+      "duration": 2.19
+    },
+    {
+      "filename": "public_youtube700_val/5/6d/7b62c6586642.wav",
+      "reference": "человек который критикует когото",
+      "duration": 1.87
+    },
+    {
+      "filename": "public_youtube700_val/5/6f/653dd4633b23.wav",
+      "reference": "деревушка расположилась в горах тродос",
+      "duration": 2.31
+    },
+    {
+      "filename": "public_youtube700_val/5/6f/e0f7f14b3260.wav",
+      "reference": "вот вся эта нация она именно такая",
+      "duration": 2.2
+    },
+    {
+      "filename": "public_youtube700_val/5/73/f82eb0317b65.wav",
+      "reference": "себе подобным",
+      "duration": 0.74
+    },
+    {
+      "filename": "public_youtube700_val/5/76/185939cb3fca.wav",
+      "reference": "те сенсорные сигналы которые вот сейчас",
+      "duration": 2.25
+    },
+    {
+      "filename": "public_youtube700_val/5/76/dac0e772a743.wav",
+      "reference": "да это моча",
+      "duration": 1.29
+    },
+    {
+      "filename": "public_youtube700_val/5/7c/c2c5a7dde281.wav",
+      "reference": "тут требуется приманка отзывчивая и достаточно",
+      "duration": 2.82
+    },
+    {
+      "filename": "public_youtube700_val/5/7e/e640d6bf9e1d.wav",
+      "reference": "вот все наши рецепты они",
+      "duration": 1.63
+    },
+    {
+      "filename": "public_youtube700_val/5/7f/7fc72fe8393f.wav",
+      "reference": "делам куда то слетать он спокойно там платит за частный",
+      "duration": 3.27
+    },
+    {
+      "filename": "public_youtube700_val/5/90/9aad50b0ddf9.wav",
+      "reference": "из группы не был знаком в общем всё впервые",
+      "duration": 3.45
+    },
+    {
+      "filename": "public_youtube700_val/5/91/c464b559e86b.wav",
+      "reference": "имейте в виду питание играет огромную роль",
+      "duration": 2.75
+    },
+    {
+      "filename": "public_youtube700_val/5/a9/c76486de457f.wav",
+      "reference": "у нас не было ничего",
+      "duration": 1.16
+    },
+    {
+      "filename": "public_youtube700_val/5/a9/cd6b72275018.wav",
+      "reference": "может быть уже пораа",
+      "duration": 1.19
+    },
+    {
+      "filename": "public_youtube700_val/5/ab/e86b8e847822.wav",
+      "reference": "жесткий кейс здесь две книги вот а а очищение организма дарами природы",
+      "duration": 4.8
+    },
+    {
+      "filename": "public_youtube700_val/5/b1/35c266aae59a.wav",
+      "reference": "пациент приходит к доктору",
+      "duration": 0.98
+    },
+    {
+      "filename": "public_youtube700_val/5/b6/075fccf74e2b.wav",
+      "reference": "был да и след простыл словно тебя ветром сдунуло с лица земли",
+      "duration": 3.2
+    },
+    {
+      "filename": "public_youtube700_val/5/b8/1cff7abdf0d4.wav",
+      "reference": "жизнь такая штука что про неё очень даже много известно",
+      "duration": 3.38
+    },
+    {
+      "filename": "public_youtube700_val/5/c0/4acafe684357.wav",
+      "reference": "начинает втирать",
+      "duration": 0.87
+    },
+    {
+      "filename": "public_youtube700_val/5/c0/fc5a7dfe70cf.wav",
+      "reference": "и все забросы шли от системы",
+      "duration": 1.7
+    },
+    {
+      "filename": "public_youtube700_val/5/c3/c49059436c72.wav",
+      "reference": "эти таинственные силы могли и покидать их обладателя",
+      "duration": 3.12
+    },
+    {
+      "filename": "public_youtube700_val/5/c9/27ea063e5007.wav",
+      "reference": "игру я оставил в описании",
+      "duration": 1.51
+    },
+    {
+      "filename": "public_youtube700_val/5/cb/488f440d0b36.wav",
+      "reference": "растительными препаратами растительного происхождения",
+      "duration": 2.73
+    },
+    {
+      "filename": "public_youtube700_val/5/cc/98c699862053.wav",
+      "reference": "итак на столе у вас должно быть очень много овощей",
+      "duration": 2.17
+    },
+    {
+      "filename": "public_youtube700_val/5/d0/d20cafb45009.wav",
+      "reference": "воды похож на отца",
+      "duration": 1.21
+    },
+    {
+      "filename": "public_youtube700_val/5/d2/c38340237cd1.wav",
+      "reference": "один из самых известных таких э уже положительных обыгрышей этого",
+      "duration": 5.05
+    },
+    {
+      "filename": "public_youtube700_val/5/d5/87459ea19f03.wav",
+      "reference": "я сюда опускаю водоросли которые у меня есть под рукой",
+      "duration": 2.54
+    },
+    {
+      "filename": "public_youtube700_val/5/d6/9c65e1de7c19.wav",
+      "reference": "и в холле который сделан в духе античности находятся предметы ааа средних веков и эээ ренессанса",
+      "duration": 9.04
+    },
+    {
+      "filename": "public_youtube700_val/5/d8/82b9fbae275c.wav",
+      "reference": "который вы можете употреблять",
+      "duration": 1.4
+    },
+    {
+      "filename": "public_youtube700_val/5/da/889389d7c8b7.wav",
+      "reference": "так вот мы приехали сюда чтоб просто погулять по улочкам",
+      "duration": 2.84
+    },
+    {
+      "filename": "public_youtube700_val/5/db/c488685aa9c2.wav",
+      "reference": "знаю насколько он",
+      "duration": 0.93
+    },
+    {
+      "filename": "public_youtube700_val/5/e0/293a13887923.wav",
+      "reference": "мне не нужна такая мысль я не буду осуждать этого человека",
+      "duration": 3.71
+    },
+    {
+      "filename": "public_youtube700_val/5/e5/1fcceee4cbaa.wav",
+      "reference": "вот моя знакомая вылила случайно себе разлила вот наступила на ковшик кипятком ошпарила всё лицо",
+      "duration": 6.35
+    },
+    {
+      "filename": "public_youtube700_val/5/ef/7c610b4379f2.wav",
+      "reference": "она щас уже пуганая",
+      "duration": 1.18
+    },
+    {
+      "filename": "public_youtube700_val/5/f5/2597eda4cee2.wav",
+      "reference": "нужно делать",
+      "duration": 0.72
+    },
+    {
+      "filename": "public_youtube700_val/5/fc/be649c27cc98.wav",
+      "reference": "дело здесь абсолютно не в этом",
+      "duration": 1.61
+    },
+    {
+      "filename": "public_youtube700_val/6/08/496b155ccfc4.wav",
+      "reference": "да или заходить в храм а я ведь я допустим знаю своих",
+      "duration": 3.66
+    },
+    {
+      "filename": "public_youtube700_val/6/0e/048e58645dff.wav",
+      "reference": "то станет понятно что",
+      "duration": 1.57
+    },
+    {
+      "filename": "public_youtube700_val/6/0f/aa3487b35874.wav",
+      "reference": "фактурой",
+      "duration": 0.54
+    },
+    {
+      "filename": "public_youtube700_val/6/13/20d53c04ffc9.wav",
+      "reference": "это вот легендарный кмд два с половиной",
+      "duration": 2.59
+    },
+    {
+      "filename": "public_youtube700_val/6/19/6d7802e266c2.wav",
+      "reference": "результативно лечат",
+      "duration": 1.12
+    },
+    {
+      "filename": "public_youtube700_val/6/1d/8956e5c12738.wav",
+      "reference": "вот так бы поставили два сока",
+      "duration": 1.3
+    },
+    {
+      "filename": "public_youtube700_val/6/24/0717a027d49c.wav",
+      "reference": "духовной реальностью надо просто жить внутри себя",
+      "duration": 3.95
+    },
+    {
+      "filename": "public_youtube700_val/6/25/791abb39e949.wav",
+      "reference": "до еды ну за полчаса",
+      "duration": 1.24
+    },
+    {
+      "filename": "public_youtube700_val/6/26/29b7e95c208e.wav",
+      "reference": "как это называют щас",
+      "duration": 0.78
+    },
+    {
+      "filename": "public_youtube700_val/6/28/bee174b32d3b.wav",
+      "reference": "значит он должен сразу что",
+      "duration": 2.24
+    },
+    {
+      "filename": "public_youtube700_val/6/2a/79e50076cd8a.wav",
+      "reference": "зарабатывает",
+      "duration": 0.66
+    },
+    {
+      "filename": "public_youtube700_val/6/2b/a2fd6876b1ec.wav",
+      "reference": "вот можете делать велосипед",
+      "duration": 1.64
+    },
+    {
+      "filename": "public_youtube700_val/6/32/76ded878d89a.wav",
+      "reference": "я не знаю с какой скоростью они ездят",
+      "duration": 1.93
+    },
+    {
+      "filename": "public_youtube700_val/6/36/b498cc547a33.wav",
+      "reference": "это както странно опа",
+      "duration": 2.41
+    },
+    {
+      "filename": "public_youtube700_val/6/3b/b8ea1bda8359.wav",
+      "reference": "который ну по меньшей мере",
+      "duration": 1.4
+    },
+    {
+      "filename": "public_youtube700_val/6/3b/d3942ba7b018.wav",
+      "reference": "в каких частях глаза происходят патологические",
+      "duration": 3.28
+    },
+    {
+      "filename": "public_youtube700_val/6/3f/dd209d382bfd.wav",
+      "reference": "матвей сергеич спросил альку зачем он этого дебила слушал",
+      "duration": 3.22
+    },
+    {
+      "filename": "public_youtube700_val/6/45/7d6366beb88d.wav",
+      "reference": "у него не хватило сил",
+      "duration": 1.73
+    },
+    {
+      "filename": "public_youtube700_val/6/4a/7bde82600f64.wav",
+      "reference": "необходимо оставить только льняное масло в минимальном",
+      "duration": 3.28
+    },
+    {
+      "filename": "public_youtube700_val/6/4e/d23a701a4fda.wav",
+      "reference": "с ребятами по поговорим как кто выступил",
+      "duration": 2.49
+    },
+    {
+      "filename": "public_youtube700_val/6/56/5bdeb0e2b2b2.wav",
+      "reference": "нужно было учить мои уроки",
+      "duration": 1.15
+    },
+    {
+      "filename": "public_youtube700_val/6/57/d62d4b633ccb.wav",
+      "reference": "взял там две ложки разжевал",
+      "duration": 1.73
+    },
+    {
+      "filename": "public_youtube700_val/6/58/cb8686b7f15a.wav",
+      "reference": "онкологом травником эээ лицензированным чело",
+      "duration": 3.21
+    },
+    {
+      "filename": "public_youtube700_val/6/5a/1b4352c279be.wav",
+      "reference": "и что сила миропомазания",
+      "duration": 1.88
+    },
+    {
+      "filename": "public_youtube700_val/6/5b/73622fba26d9.wav",
+      "reference": "в общем даже вот в этом нашемм таком вроде бы простом и коротком примере",
+      "duration": 3.56
+    },
+    {
+      "filename": "public_youtube700_val/6/5d/aad7b6db0ded.wav",
+      "reference": "прошлый раз специально",
+      "duration": 0.75
+    },
+    {
+      "filename": "public_youtube700_val/6/5e/68578f8b07cc.wav",
+      "reference": "и те или иные ситуации они",
+      "duration": 2.02
+    },
+    {
+      "filename": "public_youtube700_val/6/63/d39c86901203.wav",
+      "reference": "поиспытывать поэкспериментировать",
+      "duration": 1.5
+    },
+    {
+      "filename": "public_youtube700_val/6/6e/cb2b1ad328bb.wav",
+      "reference": "створки которых",
+      "duration": 0.95
+    },
+    {
+      "filename": "public_youtube700_val/6/72/8dfedb1f0cb4.wav",
+      "reference": "пенсия маленькая умираю с голода и так далее и тому подобное деньги деньги деньги деньги",
+      "duration": 4.85
+    },
+    {
+      "filename": "public_youtube700_val/6/75/f6c923da4d0d.wav",
+      "reference": "но когда ты понимаешь что это свойство",
+      "duration": 1.72
+    },
+    {
+      "filename": "public_youtube700_val/6/7a/db5275508b2a.wav",
+      "reference": "пройдёт через это",
+      "duration": 0.82
+    },
+    {
+      "filename": "public_youtube700_val/6/7f/f1f1348b48d9.wav",
+      "reference": "но они умирают их родственники",
+      "duration": 1.99
+    },
+    {
+      "filename": "public_youtube700_val/6/82/7490dd14ee1e.wav",
+      "reference": "потом я изготовил стальную триногу",
+      "duration": 2.37
+    },
+    {
+      "filename": "public_youtube700_val/6/85/21f3ab9fcf2d.wav",
+      "reference": "получаешь вид на жительство",
+      "duration": 1.33
+    },
+    {
+      "filename": "public_youtube700_val/6/8b/495f038ac3c5.wav",
+      "reference": "вот одна из тех женщин чей вклад в философию в политическую",
+      "duration": 3.83
+    },
+    {
+      "filename": "public_youtube700_val/6/8b/bce4ca077e90.wav",
+      "reference": "в результате которого по сообщению мчс гомельской области",
+      "duration": 3.34
+    },
+    {
+      "filename": "public_youtube700_val/6/8c/5f8a4b92fa7f.wav",
+      "reference": "а если напополам его разделить",
+      "duration": 1.55
+    },
+    {
+      "filename": "public_youtube700_val/6/8e/de3676903a8a.wav",
+      "reference": "для чего предназначались такие космодромы",
+      "duration": 2.07
+    },
+    {
+      "filename": "public_youtube700_val/6/8f/93d43927301c.wav",
+      "reference": "хотелось мне",
+      "duration": 1.23
+    },
+    {
+      "filename": "public_youtube700_val/6/8f/f094bf9292cc.wav",
+      "reference": "и надел если ты гражданин",
+      "duration": 1.59
+    },
+    {
+      "filename": "public_youtube700_val/6/95/3e18f1643355.wav",
+      "reference": "мне сказал",
+      "duration": 0.57
+    },
+    {
+      "filename": "public_youtube700_val/6/97/273af9594070.wav",
+      "reference": "главное что сигналы были",
+      "duration": 1.25
+    },
+    {
+      "filename": "public_youtube700_val/6/9f/2cd057afbcee.wav",
+      "reference": "итак диаметр флюорокарбона должен быть",
+      "duration": 2.0
+    },
+    {
+      "filename": "public_youtube700_val/6/a3/4c9e5687f64f.wav",
+      "reference": "семейство этих блёсен",
+      "duration": 1.5
+    },
+    {
+      "filename": "public_youtube700_val/6/aa/21f83782ffce.wav",
+      "reference": "приключения",
+      "duration": 1.05
+    },
+    {
+      "filename": "public_youtube700_val/6/b8/31e951fc0a0b.wav",
+      "reference": "эээ был очень умным но при этом вам от него",
+      "duration": 2.65
+    },
+    {
+      "filename": "public_youtube700_val/6/bb/ee4ce4d37bcd.wav",
+      "reference": "читать и вдохновляться",
+      "duration": 1.27
+    },
+    {
+      "filename": "public_youtube700_val/6/be/c216dd6a651d.wav",
+      "reference": "рекорд гиннеса по изготовлению хлеба за одного мину",
+      "duration": 2.86
+    },
+    {
+      "filename": "public_youtube700_val/6/c0/8ea2b3d42c0d.wav",
+      "reference": "то есть они между собой не могут договориться",
+      "duration": 1.86
+    },
+    {
+      "filename": "public_youtube700_val/6/c1/032df03f5ec4.wav",
+      "reference": "тококо потому",
+      "duration": 0.89
+    },
+    {
+      "filename": "public_youtube700_val/6/c1/5d50046e57a4.wav",
+      "reference": "можно сказать",
+      "duration": 0.72
+    },
+    {
+      "filename": "public_youtube700_val/6/c6/2a46d1d05451.wav",
+      "reference": "некоторые пили нефть очищенную по ложечке",
+      "duration": 2.57
+    },
+    {
+      "filename": "public_youtube700_val/6/cc/40c2055fdd66.wav",
+      "reference": "это потребитель",
+      "duration": 0.92
+    },
+    {
+      "filename": "public_youtube700_val/6/cf/c50c3b94b9c3.wav",
+      "reference": "и весь этот негатив он постоянно крутится в головах людей",
+      "duration": 2.97
+    },
+    {
+      "filename": "public_youtube700_val/6/d3/ab99b38c34bb.wav",
+      "reference": "вместе в синергии это будет лучший",
+      "duration": 1.94
+    },
+    {
+      "filename": "public_youtube700_val/6/dc/eee5421c19ad.wav",
+      "reference": "дело в том что",
+      "duration": 0.85
+    },
+    {
+      "filename": "public_youtube700_val/6/dd/3c4fd6a68351.wav",
+      "reference": "но и тоже",
+      "duration": 0.57
+    },
+    {
+      "filename": "public_youtube700_val/6/df/ea1f9e6bf499.wav",
+      "reference": "сверстниками они там всее пузатые страшные",
+      "duration": 2.46
+    },
+    {
+      "filename": "public_youtube700_val/6/eb/ac9a0c53e622.wav",
+      "reference": "и начинаете на них ловить",
+      "duration": 1.24
+    },
+    {
+      "filename": "public_youtube700_val/6/ee/2ebf5c2c4d47.wav",
+      "reference": "ааа попыткуу ооо понять",
+      "duration": 2.28
+    },
+    {
+      "filename": "public_youtube700_val/6/f0/418ad7960514.wav",
+      "reference": "на моём питании",
+      "duration": 1.04
+    },
+    {
+      "filename": "public_youtube700_val/6/f0/a9560b01f8f2.wav",
+      "reference": "еслии эээ кеплера часто именуют мистиком",
+      "duration": 3.73
+    },
+    {
+      "filename": "public_youtube700_val/6/f4/2dbe84dbf8a8.wav",
+      "reference": "то есть когда мы учимся писать играть на музыкальных инструментах",
+      "duration": 4.78
+    },
+    {
+      "filename": "public_youtube700_val/7/03/87e0809fcda4.wav",
+      "reference": "а представляете что будет если взорвать в микроволновке вот это петардище",
+      "duration": 4.75
+    },
+    {
+      "filename": "public_youtube700_val/7/07/58f75bd8e6bb.wav",
+      "reference": "ивяятая сура",
+      "duration": 0.93
+    },
+    {
+      "filename": "public_youtube700_val/7/15/cd061e2c60ed.wav",
+      "reference": "как бы омолаживает я уж",
+      "duration": 1.38
+    },
+    {
+      "filename": "public_youtube700_val/7/16/6bc5a4a0ab5a.wav",
+      "reference": "школа повлияет на развитие кстати естествознания практик в данном случае и наиболее ярко будут представлена",
+      "duration": 8.1
+    },
+    {
+      "filename": "public_youtube700_val/7/19/8f1e0574517b.wav",
+      "reference": "ведь иблис только обольщает",
+      "duration": 1.81
+    },
+    {
+      "filename": "public_youtube700_val/7/20/ba3940bf81a3.wav",
+      "reference": "всех разобрали всех всех всех",
+      "duration": 1.92
+    },
+    {
+      "filename": "public_youtube700_val/7/2f/b631ce919c1a.wav",
+      "reference": "показываю как без кухонного термометра",
+      "duration": 2.39
+    },
+    {
+      "filename": "public_youtube700_val/7/3b/bb9ca59cb128.wav",
+      "reference": "ролик мой подтягивание внутренних",
+      "duration": 2.35
+    },
+    {
+      "filename": "public_youtube700_val/7/3d/c34badfd7b35.wav",
+      "reference": "не будет но там больше я как напиток",
+      "duration": 2.21
+    },
+    {
+      "filename": "public_youtube700_val/7/42/8babbf9eb421.wav",
+      "reference": "начали печь такой хлеб",
+      "duration": 1.21
+    },
+    {
+      "filename": "public_youtube700_val/7/4c/f147017930c5.wav",
+      "reference": "также можно сказать о том что",
+      "duration": 1.45
+    },
+    {
+      "filename": "public_youtube700_val/7/4e/33de794679f5.wav",
+      "reference": "один из мужиков козлов задолбался копать котлован сказал всем что он уходит на пенсию",
+      "duration": 6.11
+    },
+    {
+      "filename": "public_youtube700_val/7/4f/fbeeeef8556a.wav",
+      "reference": "перегородки",
+      "duration": 0.7
+    },
+    {
+      "filename": "public_youtube700_val/7/55/71d6ae29f388.wav",
+      "reference": "а всё потому что постоянно промываются волнами которые разбиваются о скалы",
+      "duration": 4.71
+    },
+    {
+      "filename": "public_youtube700_val/7/56/e6cf754c2f4d.wav",
+      "reference": "и вот с этим тоже надо прорабатывать",
+      "duration": 2.25
+    },
+    {
+      "filename": "public_youtube700_val/7/5a/7c0797a2cae9.wav",
+      "reference": "переключалось",
+      "duration": 0.71
+    },
+    {
+      "filename": "public_youtube700_val/7/5a/8e79614a361f.wav",
+      "reference": "и в результате синергии то есть объединения вот этих веще",
+      "duration": 3.47
+    },
+    {
+      "filename": "public_youtube700_val/7/5a/b91a00696345.wav",
+      "reference": "обычно же",
+      "duration": 0.51
+    },
+    {
+      "filename": "public_youtube700_val/7/5e/f8f8ba6a161d.wav",
+      "reference": "последний вопрос который очень краткий но на который невозможно наверноо",
+      "duration": 2.72
+    },
+    {
+      "filename": "public_youtube700_val/7/61/237c1b617dc8.wav",
+      "reference": "о том что сложное суждение состоит из",
+      "duration": 2.3
+    },
+    {
+      "filename": "public_youtube700_val/7/65/003c05db37a9.wav",
+      "reference": "но и считается что в общемто",
+      "duration": 1.53
+    },
+    {
+      "filename": "public_youtube700_val/7/6a/52e0a79cbef7.wav",
+      "reference": "я был готов",
+      "duration": 0.74
+    },
+    {
+      "filename": "public_youtube700_val/7/6a/63cc5d248467.wav",
+      "reference": "изначально давить эту ситуацию",
+      "duration": 2.25
+    },
+    {
+      "filename": "public_youtube700_val/7/74/65f6454fa4a9.wav",
+      "reference": "поворотник и сразу ввв в левом",
+      "duration": 2.71
+    },
+    {
+      "filename": "public_youtube700_val/7/77/c65d08b10105.wav",
+      "reference": "прошлые выходные со второго по четвёртого ноября",
+      "duration": 2.3
+    },
+    {
+      "filename": "public_youtube700_val/7/7d/b5cc56a9e16f.wav",
+      "reference": "систематическоой",
+      "duration": 1.34
+    },
+    {
+      "filename": "public_youtube700_val/7/7f/9a913a880b53.wav",
+      "reference": "полученные ими при столкновении а не какоето редкое заболевание",
+      "duration": 3.04
+    },
+    {
+      "filename": "public_youtube700_val/7/84/c5c7807eeff3.wav",
+      "reference": "специалистов других дисциплинах",
+      "duration": 1.38
+    },
+    {
+      "filename": "public_youtube700_val/7/87/f01be2b35c2d.wav",
+      "reference": "использует это слово называется новая",
+      "duration": 1.9
+    },
+    {
+      "filename": "public_youtube700_val/7/88/99f804b69b97.wav",
+      "reference": "но бывает исключение",
+      "duration": 1.76
+    },
+    {
+      "filename": "public_youtube700_val/7/93/960edac8ce4b.wav",
+      "reference": "останавливает своё движение",
+      "duration": 1.66
+    },
+    {
+      "filename": "public_youtube700_val/7/9c/b40df3741ca5.wav",
+      "reference": "это то что даёт энергию",
+      "duration": 1.54
+    },
+    {
+      "filename": "public_youtube700_val/7/a4/7a20d83ec7a2.wav",
+      "reference": "ну что творится в самом человеке",
+      "duration": 1.72
+    },
+    {
+      "filename": "public_youtube700_val/7/ae/f92dafd79b62.wav",
+      "reference": "таты самых разных книг",
+      "duration": 1.29
+    },
+    {
+      "filename": "public_youtube700_val/7/af/7f15ea37bddc.wav",
+      "reference": "семечки тыквы жуйте вот так потихонечку",
+      "duration": 2.0
+    },
+    {
+      "filename": "public_youtube700_val/7/b7/6ab5ae3a2140.wav",
+      "reference": "они действительно должны показать что они это хотят",
+      "duration": 2.16
+    },
+    {
+      "filename": "public_youtube700_val/7/c2/1fda0d70ca1d.wav",
+      "reference": "когда вы видите продавца лепёшек или продавца",
+      "duration": 2.16
+    },
+    {
+      "filename": "public_youtube700_val/7/c6/3f876449790b.wav",
+      "reference": "делать",
+      "duration": 0.35
+    },
+    {
+      "filename": "public_youtube700_val/7/cb/9bd9f60ec3e0.wav",
+      "reference": "очень понравилось ну",
+      "duration": 1.23
+    },
+    {
+      "filename": "public_youtube700_val/7/cc/feac20204a03.wav",
+      "reference": "мужчина",
+      "duration": 0.58
+    },
+    {
+      "filename": "public_youtube700_val/7/d0/3a6ffff49a53.wav",
+      "reference": "и остатки вертолета какогото самолёта",
+      "duration": 2.47
+    },
+    {
+      "filename": "public_youtube700_val/7/d1/53935bc318a8.wav",
+      "reference": "нас вызывали",
+      "duration": 0.77
+    },
+    {
+      "filename": "public_youtube700_val/7/d2/850ff25938d8.wav",
+      "reference": "это уровень собственно инфраструктурный",
+      "duration": 1.98
+    },
+    {
+      "filename": "public_youtube700_val/7/d9/512a1d6295f1.wav",
+      "reference": "до конца",
+      "duration": 0.52
+    },
+    {
+      "filename": "public_youtube700_val/7/da/fc5023102e9f.wav",
+      "reference": "есть божественно наставление",
+      "duration": 1.44
+    },
+    {
+      "filename": "public_youtube700_val/7/dd/016df04dbd6d.wav",
+      "reference": "всем нам нужна любовь",
+      "duration": 1.57
+    },
+    {
+      "filename": "public_youtube700_val/7/e5/95bb63ca7593.wav",
+      "reference": "немножко может быть сложно это понять",
+      "duration": 1.55
+    },
+    {
+      "filename": "public_youtube700_val/7/e6/1b4fa3ac23f8.wav",
+      "reference": "в ванной всё тульк",
+      "duration": 1.28
+    },
+    {
+      "filename": "public_youtube700_val/7/e9/c2af7fc14ab4.wav",
+      "reference": "вот с таким хлебчиком вы будете кушать",
+      "duration": 2.29
+    },
+    {
+      "filename": "public_youtube700_val/7/f0/04dfbe752364.wav",
+      "reference": "даже вот это само представление о последнем суде",
+      "duration": 3.09
+    },
+    {
+      "filename": "public_youtube700_val/7/f3/4c25dcbe70a8.wav",
+      "reference": "было бы хорошо",
+      "duration": 0.55
+    },
+    {
+      "filename": "public_youtube700_val/7/f7/646800e49f79.wav",
+      "reference": "и с другими так же достоверными хадисы и действиями самого",
+      "duration": 4.43
+    },
+    {
+      "filename": "public_youtube700_val/7/fd/63557e5361a7.wav",
+      "reference": "вот такой рассказ друзья",
+      "duration": 1.8
+    },
+    {
+      "filename": "public_youtube700_val/8/00/5042bb8893f1.wav",
+      "reference": "хорошо",
+      "duration": 0.58
+    },
+    {
+      "filename": "public_youtube700_val/8/01/a57c06fdaba2.wav",
+      "reference": "прорвались вернулись через боевые свои боевые порядки в тыл со своих войск",
+      "duration": 5.7
+    },
+    {
+      "filename": "public_youtube700_val/8/08/12197a5ea67c.wav",
+      "reference": "а лагман обещает быть очень вкусным",
+      "duration": 2.56
+    },
+    {
+      "filename": "public_youtube700_val/8/0a/f1babd501165.wav",
+      "reference": "пределы родной планетной системы",
+      "duration": 1.85
+    },
+    {
+      "filename": "public_youtube700_val/8/16/d58bf4f44623.wav",
+      "reference": "резина о видно что она уже рыхлая ааа разбилась надо",
+      "duration": 3.75
+    },
+    {
+      "filename": "public_youtube700_val/8/19/11195bddea1f.wav",
+      "reference": "че так вот всё время страдать что ли",
+      "duration": 2.07
+    },
+    {
+      "filename": "public_youtube700_val/8/1c/9363987d6100.wav",
+      "reference": "поэтому в хорватии алина не смогла справиться",
+      "duration": 3.07
+    },
+    {
+      "filename": "public_youtube700_val/8/25/f9c14cb809af.wav",
+      "reference": "блин как у вас круто можно по крыше полазить",
+      "duration": 2.35
+    },
+    {
+      "filename": "public_youtube700_val/8/2c/eb4696fa0fbd.wav",
+      "reference": "и в неживой",
+      "duration": 0.78
+    },
+    {
+      "filename": "public_youtube700_val/8/2e/d28cfff79492.wav",
+      "reference": "но самое важное проходя в потоке этих обстоятельств",
+      "duration": 3.32
+    },
+    {
+      "filename": "public_youtube700_val/8/38/78aadfb430a9.wav",
+      "reference": "вот это аппендицит",
+      "duration": 0.94
+    },
+    {
+      "filename": "public_youtube700_val/8/3a/92279a7a5a05.wav",
+      "reference": "в действительности человек стремится",
+      "duration": 1.6
+    },
+    {
+      "filename": "public_youtube700_val/8/40/a86193426ca2.wav",
+      "reference": "я имею в виду вообще в целом ловлю и джигом и воблерами",
+      "duration": 3.03
+    },
+    {
+      "filename": "public_youtube700_val/8/46/087bd506241a.wav",
+      "reference": "атечества и дальше к истории человечества",
+      "duration": 2.91
+    },
+    {
+      "filename": "public_youtube700_val/8/46/e7b260197035.wav",
+      "reference": "итак кушайте крем из пророщенной пшеницы",
+      "duration": 2.65
+    },
+    {
+      "filename": "public_youtube700_val/8/47/5289a6e823bc.wav",
+      "reference": "с понятием нейропластичности что есть",
+      "duration": 2.28
+    },
+    {
+      "filename": "public_youtube700_val/8/48/cad765f75197.wav",
+      "reference": "людей здесь практически нет но плаваешь ты тут не один",
+      "duration": 4.73
+    },
+    {
+      "filename": "public_youtube700_val/8/51/53159a058832.wav",
+      "reference": "в вас жизнь что бы они нас эти смыслы оживляли",
+      "duration": 3.45
+    },
+    {
+      "filename": "public_youtube700_val/8/58/a7d458466339.wav",
+      "reference": "или прополис",
+      "duration": 0.91
+    },
+    {
+      "filename": "public_youtube700_val/8/5a/5c5af7b121ab.wav",
+      "reference": "вот эти",
+      "duration": 0.68
+    },
+    {
+      "filename": "public_youtube700_val/8/5d/8164f17b610b.wav",
+      "reference": "оказываются совершенно не таковыми",
+      "duration": 1.58
+    },
+    {
+      "filename": "public_youtube700_val/8/61/d96594e0fab4.wav",
+      "reference": "всё будет нормально сейчас",
+      "duration": 1.74
+    },
+    {
+      "filename": "public_youtube700_val/8/65/b97dd7bcd13a.wav",
+      "reference": "отрезки соединены между собой три точки",
+      "duration": 2.37
+    },
+    {
+      "filename": "public_youtube700_val/8/65/dc4fd858b6e3.wav",
+      "reference": "он разъясняет этот момент",
+      "duration": 1.41
+    },
+    {
+      "filename": "public_youtube700_val/8/6b/0a00e29cc7ae.wav",
+      "reference": "к истории роодины",
+      "duration": 1.72
+    },
+    {
+      "filename": "public_youtube700_val/8/6b/81231f30c806.wav",
+      "reference": "соответствовать вашим",
+      "duration": 1.97
+    },
+    {
+      "filename": "public_youtube700_val/8/70/e0a04834715d.wav",
+      "reference": "постоянно",
+      "duration": 0.7
+    },
+    {
+      "filename": "public_youtube700_val/8/73/bdfa85423a31.wav",
+      "reference": "потому что это очень болезненно для головы",
+      "duration": 1.92
+    },
+    {
+      "filename": "public_youtube700_val/8/73/e4f4cf86b880.wav",
+      "reference": "секс секс секс секс секс секс секс секс",
+      "duration": 2.42
+    },
+    {
+      "filename": "public_youtube700_val/8/7b/7824feee7c8a.wav",
+      "reference": "а я думаю чтоо скоро вы с мужиками выйдите из своего гаража и поймёте чтоо",
+      "duration": 5.72
+    },
+    {
+      "filename": "public_youtube700_val/8/7c/aaa666a92aff.wav",
+      "reference": "только твоя душа знает что ты делаешь",
+      "duration": 3.01
+    },
+    {
+      "filename": "public_youtube700_val/8/7e/bbc1e0c6bd10.wav",
+      "reference": "когда человек соприкасается с этой духовной силой он получает шанс",
+      "duration": 4.91
+    },
+    {
+      "filename": "public_youtube700_val/8/81/4785d047c03e.wav",
+      "reference": "я вам объясню одну вещь",
+      "duration": 1.25
+    },
+    {
+      "filename": "public_youtube700_val/8/86/57c4ac75e501.wav",
+      "reference": "регина захаживает тополова я не пускаю он остаётся там в эконом",
+      "duration": 3.46
+    },
+    {
+      "filename": "public_youtube700_val/8/86/fb86d9f41aca.wav",
+      "reference": "плохое",
+      "duration": 0.84
+    },
+    {
+      "filename": "public_youtube700_val/8/8e/8f51677ebeb7.wav",
+      "reference": "она объединяет людей",
+      "duration": 1.57
+    },
+    {
+      "filename": "public_youtube700_val/8/91/a494c6feb9b0.wav",
+      "reference": "и нашего головного мозга так называемый третий желудочек и четвертый",
+      "duration": 4.1
+    },
+    {
+      "filename": "public_youtube700_val/8/96/929475a3efa4.wav",
+      "reference": "приходили тут люди",
+      "duration": 0.98
+    },
+    {
+      "filename": "public_youtube700_val/8/9b/e7d1f500348f.wav",
+      "reference": "в германии но эт",
+      "duration": 0.8
+    },
+    {
+      "filename": "public_youtube700_val/8/a8/23f00589d7ef.wav",
+      "reference": "одним нажатием руки без каких",
+      "duration": 1.89
+    },
+    {
+      "filename": "public_youtube700_val/8/a8/af16c1dba5f5.wav",
+      "reference": "сто тысяч евро картина с которой мы начинали",
+      "duration": 3.17
+    },
+    {
+      "filename": "public_youtube700_val/8/a9/a821c4014cea.wav",
+      "reference": "в том числе в религиозной практике да мы с вами",
+      "duration": 2.38
+    },
+    {
+      "filename": "public_youtube700_val/8/aa/8fe6d0a71f4d.wav",
+      "reference": "для всех",
+      "duration": 0.68
+    },
+    {
+      "filename": "public_youtube700_val/8/ad/cd32f448ab2d.wav",
+      "reference": "с комфорта то теперь только на более высоких версиях обогрев лобового стекла",
+      "duration": 3.54
+    },
+    {
+      "filename": "public_youtube700_val/8/b0/11e221bd437f.wav",
+      "reference": "убеждает личность в том",
+      "duration": 1.85
+    },
+    {
+      "filename": "public_youtube700_val/8/b6/9b90935eb0b8.wav",
+      "reference": "именно для этого человека именно его индивидуальный сценарий",
+      "duration": 5.08
+    },
+    {
+      "filename": "public_youtube700_val/8/b9/043f7a1507be.wav",
+      "reference": "огромное количество стрептококка всякая",
+      "duration": 1.69
+    },
+    {
+      "filename": "public_youtube700_val/8/c1/1b0f92bcf925.wav",
+      "reference": "он агрессивен потому что он рычит бегает чтото там",
+      "duration": 2.67
+    },
+    {
+      "filename": "public_youtube700_val/8/c3/375febef2539.wav",
+      "reference": "нам нужно просить спасеения наашей бессмертной души",
+      "duration": 4.41
+    },
+    {
+      "filename": "public_youtube700_val/8/c4/88d8afe53620.wav",
+      "reference": "и спокойная что она что отец",
+      "duration": 2.63
+    },
+    {
+      "filename": "public_youtube700_val/8/c8/443848b687ca.wav",
+      "reference": "известный факт что тело человека это целый химический завод",
+      "duration": 3.45
+    },
+    {
+      "filename": "public_youtube700_val/8/c9/edcda088b01a.wav",
+      "reference": "здесь говориться то есть там постоянно это именно",
+      "duration": 2.86
+    },
+    {
+      "filename": "public_youtube700_val/8/cd/7799352ab378.wav",
+      "reference": "валерий александрович",
+      "duration": 0.99
+    },
+    {
+      "filename": "public_youtube700_val/8/d2/b3d55dad5fb4.wav",
+      "reference": "людям потому что",
+      "duration": 0.88
+    },
+    {
+      "filename": "public_youtube700_val/8/df/bc9bae28ce7a.wav",
+      "reference": "сказал софичке снять туфли и носки и ступить на кнопки",
+      "duration": 4.94
+    },
+    {
+      "filename": "public_youtube700_val/8/df/fcb566a51282.wav",
+      "reference": "о ребята так это же получается мини пылесос",
+      "duration": 3.72
+    },
+    {
+      "filename": "public_youtube700_val/8/e0/73c3f46c1da0.wav",
+      "reference": "поможет рыболову её",
+      "duration": 1.63
+    },
+    {
+      "filename": "public_youtube700_val/8/e2/2c74b4cd419a.wav",
+      "reference": "да это то что принято называть корреспондентной теорией истинности",
+      "duration": 3.72
+    },
+    {
+      "filename": "public_youtube700_val/8/e2/3a65ba045e23.wav",
+      "reference": "это уже происходит после того",
+      "duration": 2.49
+    },
+    {
+      "filename": "public_youtube700_val/8/e6/468a8c1bfdcc.wav",
+      "reference": "придут к осознаю того",
+      "duration": 1.79
+    },
+    {
+      "filename": "public_youtube700_val/8/e8/dc4d9a01a042.wav",
+      "reference": "а вам полезно",
+      "duration": 1.12
+    },
+    {
+      "filename": "public_youtube700_val/8/ef/9b973b907a80.wav",
+      "reference": "мода и красота",
+      "duration": 1.43
+    },
+    {
+      "filename": "public_youtube700_val/8/ef/f65eac6c8e55.wav",
+      "reference": "это очень нравилось материалистической традиции но очень мало что объясняло",
+      "duration": 4.33
+    },
+    {
+      "filename": "public_youtube700_val/8/fb/89ad513dda01.wav",
+      "reference": "какие вирусы какие паразиты какой",
+      "duration": 2.11
+    },
+    {
+      "filename": "public_youtube700_val/8/fd/57a0f9b42314.wav",
+      "reference": "ссылаться там на другие фамилии не стоит потому что мы все",
+      "duration": 3.97
+    },
+    {
+      "filename": "public_youtube700_val/9/08/5f6cf6166cfc.wav",
+      "reference": "исполнить",
+      "duration": 0.57
+    },
+    {
+      "filename": "public_youtube700_val/9/0c/148374e3f6d1.wav",
+      "reference": "а я взял и залил водой",
+      "duration": 1.38
+    },
+    {
+      "filename": "public_youtube700_val/9/0d/4fd260b4b898.wav",
+      "reference": "отлично",
+      "duration": 0.86
+    },
+    {
+      "filename": "public_youtube700_val/9/11/4825ec0894e4.wav",
+      "reference": "более всего благочестия к богу",
+      "duration": 2.93
+    },
+    {
+      "filename": "public_youtube700_val/9/14/648563db3937.wav",
+      "reference": "красивый розовый цвет",
+      "duration": 1.99
+    },
+    {
+      "filename": "public_youtube700_val/9/1b/e467a90e198a.wav",
+      "reference": "знаете как вот куры сидят на насесте",
+      "duration": 2.52
+    },
+    {
+      "filename": "public_youtube700_val/9/20/2c8745d20131.wav",
+      "reference": "вы иногда бормочите про себя",
+      "duration": 1.52
+    },
+    {
+      "filename": "public_youtube700_val/9/25/698624ed9569.wav",
+      "reference": "это труд",
+      "duration": 0.92
+    },
+    {
+      "filename": "public_youtube700_val/9/27/6f4e88d60fdd.wav",
+      "reference": "и среди них марио матьяшич бессменный",
+      "duration": 2.9
+    },
+    {
+      "filename": "public_youtube700_val/9/27/dad6c1c0d224.wav",
+      "reference": "после двух идёт э отдых организм",
+      "duration": 2.32
+    },
+    {
+      "filename": "public_youtube700_val/9/29/f7e156f44003.wav",
+      "reference": "радиатора рельефный капот",
+      "duration": 1.81
+    },
+    {
+      "filename": "public_youtube700_val/9/2c/160255a4b5b8.wav",
+      "reference": "выбирать что то и вставлять",
+      "duration": 1.5
+    },
+    {
+      "filename": "public_youtube700_val/9/2e/7451dce34ac4.wav",
+      "reference": "метра полтора",
+      "duration": 0.82
+    },
+    {
+      "filename": "public_youtube700_val/9/39/b349ed7d050a.wav",
+      "reference": "прямо руками возьмите вот вот вот вот вот",
+      "duration": 2.11
+    },
+    {
+      "filename": "public_youtube700_val/9/43/ceefbb22480a.wav",
+      "reference": "давала на них никому напасть не давала в них ничего кидать",
+      "duration": 2.72
+    },
+    {
+      "filename": "public_youtube700_val/9/47/858ad3f5a1e9.wav",
+      "reference": "и она и остаётся этой целью основной",
+      "duration": 1.78
+    },
+    {
+      "filename": "public_youtube700_val/9/4a/78d1d65ded4b.wav",
+      "reference": "у нас ме ме медицина бесплатная и",
+      "duration": 2.09
+    },
+    {
+      "filename": "public_youtube700_val/9/4d/165d44f7ba5e.wav",
+      "reference": "ножом тебе",
+      "duration": 0.58
+    },
+    {
+      "filename": "public_youtube700_val/9/52/ef74cffabd66.wav",
+      "reference": "хотя система и понимает свою конечность",
+      "duration": 2.76
+    },
+    {
+      "filename": "public_youtube700_val/9/5a/46b05ca8b37f.wav",
+      "reference": "и быть не может",
+      "duration": 0.66
+    },
+    {
+      "filename": "public_youtube700_val/9/69/1a16ccabea29.wav",
+      "reference": "какова природа вселенной",
+      "duration": 1.45
+    },
+    {
+      "filename": "public_youtube700_val/9/6b/c2782bfa97e0.wav",
+      "reference": "мистер картошка",
+      "duration": 1.28
+    },
+    {
+      "filename": "public_youtube700_val/9/70/dc1056dea67c.wav",
+      "reference": "всевышний пост предписал людям не для того чтобы они себя",
+      "duration": 3.66
+    },
+    {
+      "filename": "public_youtube700_val/9/72/bba1dc41620d.wav",
+      "reference": "батя так далеко жил",
+      "duration": 1.36
+    },
+    {
+      "filename": "public_youtube700_val/9/78/20d0a47dce31.wav",
+      "reference": "вне зависимости от",
+      "duration": 1.21
+    },
+    {
+      "filename": "public_youtube700_val/9/7a/918337c5f436.wav",
+      "reference": "и так трудно подъёмный",
+      "duration": 1.21
+    },
+    {
+      "filename": "public_youtube700_val/9/8b/2130262258c4.wav",
+      "reference": "многие и так знают или догадываются поэтому не нужно это использовать не по назначению",
+      "duration": 4.21
+    },
+    {
+      "filename": "public_youtube700_val/9/8b/5858a0e47826.wav",
+      "reference": "отступает на второй план",
+      "duration": 1.21
+    },
+    {
+      "filename": "public_youtube700_val/9/8c/731a79e8b6b0.wav",
+      "reference": "и я обязательно попробую",
+      "duration": 1.0
+    },
+    {
+      "filename": "public_youtube700_val/9/90/482ca27b6745.wav",
+      "reference": "если ему мало заставь изучать язык который не знаешь",
+      "duration": 2.94
+    },
+    {
+      "filename": "public_youtube700_val/9/96/0a13c3062a79.wav",
+      "reference": "на похоронах чувствовал себя хорошо",
+      "duration": 3.33
+    },
+    {
+      "filename": "public_youtube700_val/9/96/553a881c2da9.wav",
+      "reference": "и взбил в блендере",
+      "duration": 1.12
+    },
+    {
+      "filename": "public_youtube700_val/9/b5/f57b8e4b6671.wav",
+      "reference": "и застёжки нну",
+      "duration": 1.13
+    },
+    {
+      "filename": "public_youtube700_val/9/b6/611c3854a586.wav",
+      "reference": "единственное что масло должно быть х льняное холодного отжима",
+      "duration": 3.02
+    },
+    {
+      "filename": "public_youtube700_val/9/b7/f5b4693f08d2.wav",
+      "reference": "тот кто перемещается в пространстве двигается тот кто совершает какоето действие",
+      "duration": 5.62
+    },
+    {
+      "filename": "public_youtube700_val/9/bc/08fa377943f7.wav",
+      "reference": "да и насколько вот круто даже трансформаторная будка сделана",
+      "duration": 3.71
+    },
+    {
+      "filename": "public_youtube700_val/9/c2/6eaa1e15a1d9.wav",
+      "reference": "графы князья толкутся и жужжат там как шмели",
+      "duration": 4.01
+    },
+    {
+      "filename": "public_youtube700_val/9/c3/1b8e52ec5185.wav",
+      "reference": "у вас будет очень много омега три кислоты и кровь эээ перестанет воспалена быть",
+      "duration": 4.59
+    },
+    {
+      "filename": "public_youtube700_val/9/c8/301c9b3618c0.wav",
+      "reference": "почему нельзя так как в детстве что ты спишь мама тебя будит",
+      "duration": 3.1
+    },
+    {
+      "filename": "public_youtube700_val/9/c9/5b6d9820e6a0.wav",
+      "reference": "ключевое слово как расписание",
+      "duration": 2.4
+    },
+    {
+      "filename": "public_youtube700_val/9/cd/14bbae538bcb.wav",
+      "reference": "далеко не отходи",
+      "duration": 1.33
+    },
+    {
+      "filename": "public_youtube700_val/9/cf/559cb35c1bf8.wav",
+      "reference": "потому что по моему мнению это просто не заменимая вещь",
+      "duration": 3.03
+    },
+    {
+      "filename": "public_youtube700_val/9/d5/07214eac22fc.wav",
+      "reference": "те непаарные конструкции из которых",
+      "duration": 2.85
+    },
+    {
+      "filename": "public_youtube700_val/9/d9/49e7f3d45470.wav",
+      "reference": "самоубийство",
+      "duration": 1.07
+    },
+    {
+      "filename": "public_youtube700_val/9/e3/519150d0c87c.wav",
+      "reference": "доля этой энергии уменьшаем размер",
+      "duration": 1.96
+    },
+    {
+      "filename": "public_youtube700_val/9/e8/b0c3bc2880d1.wav",
+      "reference": "на целых семьдесят восемь миллиметров",
+      "duration": 2.23
+    },
+    {
+      "filename": "public_youtube700_val/9/ea/e50f202dec72.wav",
+      "reference": "в центре в москве в центре изучения культуры культурного",
+      "duration": 3.74
+    },
+    {
+      "filename": "public_youtube700_val/9/ed/99c5642122df.wav",
+      "reference": "стал ближе к вам",
+      "duration": 1.21
+    },
+    {
+      "filename": "public_youtube700_val/9/ed/cc27a80a5a27.wav",
+      "reference": "это отдельная тема то что людей заряжают на",
+      "duration": 2.64
+    },
+    {
+      "filename": "public_youtube700_val/9/ed/e9c91190db25.wav",
+      "reference": "подготовил корпус",
+      "duration": 1.13
+    },
+    {
+      "filename": "public_youtube700_val/9/f2/39a5ccdd63ad.wav",
+      "reference": "вливаю сюда",
+      "duration": 1.15
+    },
+    {
+      "filename": "public_youtube700_val/9/f2/3c697de8942c.wav",
+      "reference": "считалось что с потерей своего божества защитника",
+      "duration": 3.08
+    },
+    {
+      "filename": "public_youtube700_val/9/f3/0525ce0d2b86.wav",
+      "reference": "или ставьте лайки если вам видео понравилось",
+      "duration": 2.57
+    },
+    {
+      "filename": "public_youtube700_val/9/f3/48cea7a74c10.wav",
+      "reference": "виталий там камни можно мне вот это",
+      "duration": 1.8
+    },
+    {
+      "filename": "public_youtube700_val/9/f7/72bf6d179c3e.wav",
+      "reference": "ну она актуальна и сегодня в том числе вот эти тематики",
+      "duration": 2.28
+    },
+    {
+      "filename": "public_youtube700_val/9/fd/cbf1480510f9.wav",
+      "reference": "ну я просто подошёл посмотрел на химический",
+      "duration": 2.08
+    },
+    {
+      "filename": "public_youtube700_val/9/fe/8b4cc76c4904.wav",
+      "reference": "там говорят",
+      "duration": 0.65
+    },
+    {
+      "filename": "public_youtube700_val/9/ff/de04e909ba74.wav",
+      "reference": "реально дёшево",
+      "duration": 0.79
+    },
+    {
+      "filename": "public_youtube700_val/a/01/932739208718.wav",
+      "reference": "напомним что сам эксперимент проходил двадцать восьмого апреля две тысячи восемнадцатого года",
+      "duration": 4.53
+    },
+    {
+      "filename": "public_youtube700_val/a/09/ddb24764c4be.wav",
+      "reference": "текстов они",
+      "duration": 1.02
+    },
+    {
+      "filename": "public_youtube700_val/a/0b/74b90dd8c3ea.wav",
+      "reference": "так вот смотрите возвращаясь к этому рецепту он очень прост",
+      "duration": 3.13
+    },
+    {
+      "filename": "public_youtube700_val/a/0c/182d76b47692.wav",
+      "reference": "философия наууки философия техники философия истории философия",
+      "duration": 4.71
+    },
+    {
+      "filename": "public_youtube700_val/a/10/1ec6ecb3be71.wav",
+      "reference": "социальная интеграция как мы помним связана с взаимодействием",
+      "duration": 3.11
+    },
+    {
+      "filename": "public_youtube700_val/a/15/93bdbe28187d.wav",
+      "reference": "надо иметь",
+      "duration": 0.59
+    },
+    {
+      "filename": "public_youtube700_val/a/15/b03cfd276acb.wav",
+      "reference": "ааа к этому",
+      "duration": 1.0
+    },
+    {
+      "filename": "public_youtube700_val/a/18/a138a3e822a6.wav",
+      "reference": "таким образом у вас струи горячего воздуха",
+      "duration": 2.88
+    },
+    {
+      "filename": "public_youtube700_val/a/1a/dbd6e6aa192f.wav",
+      "reference": "льна ложку",
+      "duration": 0.92
+    },
+    {
+      "filename": "public_youtube700_val/a/20/28666f5778ba.wav",
+      "reference": "критерии размеры",
+      "duration": 1.37
+    },
+    {
+      "filename": "public_youtube700_val/a/2c/61c6e0441656.wav",
+      "reference": "попробовать нахлыст",
+      "duration": 1.19
+    },
+    {
+      "filename": "public_youtube700_val/a/2d/7c2bb4a072ca.wav",
+      "reference": "тогда получается что нет небольшой лакуны между тем как вы",
+      "duration": 3.5
+    },
+    {
+      "filename": "public_youtube700_val/a/30/67eb934ffbe6.wav",
+      "reference": "были исключения например эээ немецкий ученый карл мёбиус",
+      "duration": 5.06
+    },
+    {
+      "filename": "public_youtube700_val/a/31/e9711a661539.wav",
+      "reference": "дешевле если вам интересны наши видео подписывайтесь на канал",
+      "duration": 3.99
+    },
+    {
+      "filename": "public_youtube700_val/a/36/820eadf74753.wav",
+      "reference": "ложь это элемент системы",
+      "duration": 2.4
+    },
+    {
+      "filename": "public_youtube700_val/a/3b/b9153881d101.wav",
+      "reference": "такая теневая сторона",
+      "duration": 1.28
+    },
+    {
+      "filename": "public_youtube700_val/a/3d/a957214f4cfe.wav",
+      "reference": "в семье моя",
+      "duration": 0.83
+    },
+    {
+      "filename": "public_youtube700_val/a/4d/9450985079ef.wav",
+      "reference": "как неплохо а знаем друг друга",
+      "duration": 2.09
+    },
+    {
+      "filename": "public_youtube700_val/a/51/83c7dcdbd5eb.wav",
+      "reference": "не нужно думать что на",
+      "duration": 1.0
+    },
+    {
+      "filename": "public_youtube700_val/a/61/bedf42f6cb59.wav",
+      "reference": "это автоматически помогает запомнить идею",
+      "duration": 2.02
+    },
+    {
+      "filename": "public_youtube700_val/a/6a/94215d949238.wav",
+      "reference": "подчёркиваю максимально позитивное воздействие",
+      "duration": 3.38
+    },
+    {
+      "filename": "public_youtube700_val/a/6e/2c70e4c2f0b0.wav",
+      "reference": "видео обращениям",
+      "duration": 1.7
+    },
+    {
+      "filename": "public_youtube700_val/a/6e/49499e47afbd.wav",
+      "reference": "очень плохо для ловли",
+      "duration": 1.58
+    },
+    {
+      "filename": "public_youtube700_val/a/73/51c6d45230ea.wav",
+      "reference": "я рис от риса на лицо отличаю",
+      "duration": 2.82
+    },
+    {
+      "filename": "public_youtube700_val/a/78/78e8973d5a1f.wav",
+      "reference": "так немножко не хватило нам до полного",
+      "duration": 2.08
+    },
+    {
+      "filename": "public_youtube700_val/a/78/a8f1a1ffc858.wav",
+      "reference": "потому что больше внимания",
+      "duration": 1.03
+    },
+    {
+      "filename": "public_youtube700_val/a/82/a23394a15e2b.wav",
+      "reference": "здесь вот эти горечи они стимулируют выброс и выработку инсулина",
+      "duration": 4.18
+    },
+    {
+      "filename": "public_youtube700_val/a/85/2235689d8859.wav",
+      "reference": "вы можете сидеть только на этих овощах и фруктах тоже боле",
+      "duration": 3.29
+    },
+    {
+      "filename": "public_youtube700_val/a/86/27bf4400fe04.wav",
+      "reference": "психологический да ракурс",
+      "duration": 1.96
+    },
+    {
+      "filename": "public_youtube700_val/a/89/20b7d4663fb3.wav",
+      "reference": "есть водоросли",
+      "duration": 0.88
+    },
+    {
+      "filename": "public_youtube700_val/a/8c/4ec2e3024307.wav",
+      "reference": "ааа вопрос",
+      "duration": 1.22
+    },
+    {
+      "filename": "public_youtube700_val/a/96/c167b9f61b16.wav",
+      "reference": "гостинице",
+      "duration": 0.66
+    },
+    {
+      "filename": "public_youtube700_val/a/9c/221f6067f131.wav",
+      "reference": "то есть проигравшие это жители города которые получают визуально захламлённый",
+      "duration": 3.43
+    },
+    {
+      "filename": "public_youtube700_val/a/9d/3cfd4498f844.wav",
+      "reference": "теперь давайте подведем такой",
+      "duration": 1.26
+    },
+    {
+      "filename": "public_youtube700_val/a/a3/85565be8c1e1.wav",
+      "reference": "в чём же их разница вопервых",
+      "duration": 1.72
+    },
+    {
+      "filename": "public_youtube700_val/a/a5/0937686dfc21.wav",
+      "reference": "повторить как одну историю так и другую",
+      "duration": 1.83
+    },
+    {
+      "filename": "public_youtube700_val/a/a6/bb3fb61e6d30.wav",
+      "reference": "потому что как сказано в библии а в библии сказано так",
+      "duration": 3.6
+    },
+    {
+      "filename": "public_youtube700_val/a/b8/088b21c371ce.wav",
+      "reference": "хребтов быстрых и чистых рек",
+      "duration": 2.54
+    },
+    {
+      "filename": "public_youtube700_val/a/bb/4d5eaef42b49.wav",
+      "reference": "однозначно хочется чемто помочь в принципе нащупал для себя несколько направлений",
+      "duration": 4.44
+    },
+    {
+      "filename": "public_youtube700_val/a/bf/31cc0b9025a3.wav",
+      "reference": "и знаете что интесно вот это десять аятов коротки",
+      "duration": 3.22
+    },
+    {
+      "filename": "public_youtube700_val/a/c0/3f8e7749da7b.wav",
+      "reference": "и разнообразие и вообще сами сами ка чес тва как таковы",
+      "duration": 3.53
+    },
+    {
+      "filename": "public_youtube700_val/a/c2/200be16ea29e.wav",
+      "reference": "любили бы друг друга",
+      "duration": 1.21
+    },
+    {
+      "filename": "public_youtube700_val/a/c4/05abde985c39.wav",
+      "reference": "ааа ну а касательно маскинонга да тамм конечно снасти очень мощные ааа используются удилищ",
+      "duration": 7.08
+    },
+    {
+      "filename": "public_youtube700_val/a/c8/0b07c109cdad.wav",
+      "reference": "которую вы будете для нас",
+      "duration": 1.61
+    },
+    {
+      "filename": "public_youtube700_val/a/cd/621ff2dcdc6e.wav",
+      "reference": "он как бы поднимался над",
+      "duration": 1.81
+    },
+    {
+      "filename": "public_youtube700_val/a/ce/93d6fb2639ec.wav",
+      "reference": "десять слов по тайски не могут связать",
+      "duration": 1.45
+    },
+    {
+      "filename": "public_youtube700_val/a/db/8d0f5fe58c14.wav",
+      "reference": "я там показываю как готовить",
+      "duration": 1.54
+    },
+    {
+      "filename": "public_youtube700_val/a/dd/155758cff723.wav",
+      "reference": "то есть он видит",
+      "duration": 0.74
+    },
+    {
+      "filename": "public_youtube700_val/a/e3/d85aeafddba3.wav",
+      "reference": "здесь есть большое количество специй перца",
+      "duration": 2.54
+    },
+    {
+      "filename": "public_youtube700_val/a/e6/ec1eb2840810.wav",
+      "reference": "а потом",
+      "duration": 0.69
+    },
+    {
+      "filename": "public_youtube700_val/a/e9/857423d7c5c1.wav",
+      "reference": "его как дикого зверя себе разве нет",
+      "duration": 2.17
+    },
+    {
+      "filename": "public_youtube700_val/a/eb/568603271e3c.wav",
+      "reference": "потому что у них впереди карьера",
+      "duration": 1.64
+    },
+    {
+      "filename": "public_youtube700_val/a/f6/9e53ef241694.wav",
+      "reference": "то есть эти все пути подземные",
+      "duration": 1.55
+    },
+    {
+      "filename": "public_youtube700_val/a/f9/ba98836519bd.wav",
+      "reference": "или же заканчивали жизнь",
+      "duration": 1.89
+    },
+    {
+      "filename": "public_youtube700_val/a/fb/3519ce8c7955.wav",
+      "reference": "феминистской эпистемологии",
+      "duration": 1.42
+    },
+    {
+      "filename": "public_youtube700_val/a/fc/3d6767ab6586.wav",
+      "reference": "спустя пять часов мы с вами возьмём это мясо",
+      "duration": 2.78
+    },
+    {
+      "filename": "public_youtube700_val/b/04/e11cf305766c.wav",
+      "reference": "документальная ф эээ книга которая основана и наа беседах с самим билли",
+      "duration": 4.99
+    },
+    {
+      "filename": "public_youtube700_val/b/05/5fe52f17cfcb.wav",
+      "reference": "колличестваа заинтересованных лиц но тем не менее",
+      "duration": 2.79
+    },
+    {
+      "filename": "public_youtube700_val/b/0a/a34b85203f1f.wav",
+      "reference": "с мужем с женой с детьмии с людьмии и так далее",
+      "duration": 4.35
+    },
+    {
+      "filename": "public_youtube700_val/b/18/cfa1cfe30076.wav",
+      "reference": "аксиома",
+      "duration": 0.61
+    },
+    {
+      "filename": "public_youtube700_val/b/20/67f9fb7ab023.wav",
+      "reference": "Александр Петрович вы идиот",
+      "duration": 1.59
+    },
+    {
+      "filename": "public_youtube700_val/b/20/c08da72e64f5.wav",
+      "reference": "тоо это стало основой их мировоззрения их идеологи",
+      "duration": 2.66
+    },
+    {
+      "filename": "public_youtube700_val/b/22/3274bf99cfbd.wav",
+      "reference": "массой различной информационной нагрузки которую она должна перерабатывать",
+      "duration": 4.35
+    },
+    {
+      "filename": "public_youtube700_val/b/27/370fc02d133b.wav",
+      "reference": "а переговоры пожалуй наиболее важными",
+      "duration": 2.52
+    },
+    {
+      "filename": "public_youtube700_val/b/27/4e1778ebea1a.wav",
+      "reference": "мы пьём два полных вот таких бокала для того",
+      "duration": 2.8
+    },
+    {
+      "filename": "public_youtube700_val/b/28/41c489578f7c.wav",
+      "reference": "после этого вышкуривается",
+      "duration": 1.38
+    },
+    {
+      "filename": "public_youtube700_val/b/28/a4a34bee65ce.wav",
+      "reference": "эндометриоз да допустим к примеру",
+      "duration": 1.99
+    },
+    {
+      "filename": "public_youtube700_val/b/31/387c077aabfc.wav",
+      "reference": "центре мода латра регулярно проходят международные встречи и интервью",
+      "duration": 5.07
+    },
+    {
+      "filename": "public_youtube700_val/b/33/ca22c19f1be4.wav",
+      "reference": "я лучше тогда повешусь чтобы тебя совесть всю жизнь мучила",
+      "duration": 4.39
+    },
+    {
+      "filename": "public_youtube700_val/b/34/d8f460d4a66f.wav",
+      "reference": "вот и интеллект",
+      "duration": 1.48
+    },
+    {
+      "filename": "public_youtube700_val/b/36/e910142458ca.wav",
+      "reference": "он пойдёт на физкультуру утром с полным желудком",
+      "duration": 2.49
+    },
+    {
+      "filename": "public_youtube700_val/b/3d/8d0485d98779.wav",
+      "reference": "я вот так не дышу вот ваша соседка она поднимается на четвёртый этаж",
+      "duration": 2.99
+    },
+    {
+      "filename": "public_youtube700_val/b/43/92a02262d08c.wav",
+      "reference": "иисуса христа",
+      "duration": 0.94
+    },
+    {
+      "filename": "public_youtube700_val/b/45/d5823fb440fb.wav",
+      "reference": "сделает так что паразиты в крови начнут",
+      "duration": 3.58
+    },
+    {
+      "filename": "public_youtube700_val/b/47/b4dac9635557.wav",
+      "reference": "вперёд ребята",
+      "duration": 0.8
+    },
+    {
+      "filename": "public_youtube700_val/b/49/4323867a108e.wav",
+      "reference": "плетёнку",
+      "duration": 0.5
+    },
+    {
+      "filename": "public_youtube700_val/b/52/de7f8735f37f.wav",
+      "reference": "накрываем крышкой",
+      "duration": 0.86
+    },
+    {
+      "filename": "public_youtube700_val/b/54/21b167368bab.wav",
+      "reference": "а в уставе кооператива может быть написано например нельзя стеклить балконы",
+      "duration": 3.43
+    },
+    {
+      "filename": "public_youtube700_val/b/63/ba5e61c362fa.wav",
+      "reference": "которые действительно познавали мир мир духовный",
+      "duration": 2.97
+    },
+    {
+      "filename": "public_youtube700_val/b/6f/7120d274e121.wav",
+      "reference": "не глухой чё вы кричите",
+      "duration": 1.53
+    },
+    {
+      "filename": "public_youtube700_val/b/71/af0f8fa76a4b.wav",
+      "reference": "мы имеем дело с постоянной сменой да",
+      "duration": 2.73
+    },
+    {
+      "filename": "public_youtube700_val/b/73/b2d7af9334de.wav",
+      "reference": "скорее всего именно из неё вылезет первая бабочка",
+      "duration": 3.63
+    },
+    {
+      "filename": "public_youtube700_val/b/77/1068f98dc00d.wav",
+      "reference": "будут офисные центры будет хорошо продуманный общественный транспорт",
+      "duration": 3.19
+    },
+    {
+      "filename": "public_youtube700_val/b/7b/f059b7d385bb.wav",
+      "reference": "видите они зеленого цвета",
+      "duration": 1.56
+    },
+    {
+      "filename": "public_youtube700_val/b/7b/fcfb55a5906f.wav",
+      "reference": "такая хорошая инвестиция в земное и в вечное",
+      "duration": 2.27
+    },
+    {
+      "filename": "public_youtube700_val/b/7f/8ddaa7e8f57b.wav",
+      "reference": "к чему это заблуждение",
+      "duration": 0.74
+    },
+    {
+      "filename": "public_youtube700_val/b/80/504b4073f7a0.wav",
+      "reference": "в три раза дешевле яблоч",
+      "duration": 1.46
+    },
+    {
+      "filename": "public_youtube700_val/b/80/5b8d578aa44c.wav",
+      "reference": "возьми рукой зажми нос и всё",
+      "duration": 1.68
+    },
+    {
+      "filename": "public_youtube700_val/b/80/6afa64c4d144.wav",
+      "reference": "имеет значение сам по себе",
+      "duration": 1.6
+    },
+    {
+      "filename": "public_youtube700_val/b/80/986bbd90445a.wav",
+      "reference": "не совместимая со святостью религиозной",
+      "duration": 3.05
+    },
+    {
+      "filename": "public_youtube700_val/b/81/5eeb47194b6e.wav",
+      "reference": "плохо реагируют оо ты что",
+      "duration": 1.52
+    },
+    {
+      "filename": "public_youtube700_val/b/83/63131a5ba98f.wav",
+      "reference": "приманка покажет себя у камыша",
+      "duration": 1.83
+    },
+    {
+      "filename": "public_youtube700_val/b/84/433e74f2c2b7.wav",
+      "reference": "вот я выпил сок брокколи теперь через полчаса я поем это плов",
+      "duration": 3.32
+    },
+    {
+      "filename": "public_youtube700_val/b/8b/4f96976e5837.wav",
+      "reference": "там вега какаято шмега это вы же не машина",
+      "duration": 2.03
+    },
+    {
+      "filename": "public_youtube700_val/b/8d/09defaeb5c72.wav",
+      "reference": "ааа за вечер мы поймали десять хвостов десять рыб",
+      "duration": 2.88
+    },
+    {
+      "filename": "public_youtube700_val/b/8e/973f27a90fc8.wav",
+      "reference": "ну что само понимание",
+      "duration": 1.34
+    },
+    {
+      "filename": "public_youtube700_val/b/a0/bdb70cebfe78.wav",
+      "reference": "красном исполнении",
+      "duration": 1.27
+    },
+    {
+      "filename": "public_youtube700_val/b/a1/e290598d8537.wav",
+      "reference": "есть ли у меня гордыня",
+      "duration": 1.57
+    },
+    {
+      "filename": "public_youtube700_val/b/aa/73d575064f49.wav",
+      "reference": "стали появляться эээ специалисты по творчеству канта гегеля да",
+      "duration": 4.65
+    },
+    {
+      "filename": "public_youtube700_val/b/aa/bfb6f1cc2c34.wav",
+      "reference": "какаято вечеринка просто на улице",
+      "duration": 2.05
+    },
+    {
+      "filename": "public_youtube700_val/b/ba/5c9fcb16c626.wav",
+      "reference": "шестьдесят два",
+      "duration": 0.7
+    },
+    {
+      "filename": "public_youtube700_val/b/ba/f8b6590e23e8.wav",
+      "reference": "то есть этого достаточно в науке",
+      "duration": 1.67
+    },
+    {
+      "filename": "public_youtube700_val/b/be/1007d435aa78.wav",
+      "reference": "определили что чеснок является аликаментом номер один",
+      "duration": 3.48
+    },
+    {
+      "filename": "public_youtube700_val/b/c1/3e2122e23425.wav",
+      "reference": "но абсолютно сырое мясо",
+      "duration": 1.28
+    },
+    {
+      "filename": "public_youtube700_val/b/cd/ad7b949f141c.wav",
+      "reference": "ещё их включает",
+      "duration": 0.85
+    },
+    {
+      "filename": "public_youtube700_val/b/ce/a57121f133c9.wav",
+      "reference": "связанные с учением о бытии",
+      "duration": 2.04
+    },
+    {
+      "filename": "public_youtube700_val/b/d0/7e701c0936d7.wav",
+      "reference": "ограничивающим фактором становится",
+      "duration": 1.68
+    },
+    {
+      "filename": "public_youtube700_val/b/d1/0cbc6fe0db82.wav",
+      "reference": "чтобы режим тепловой не менялся",
+      "duration": 2.04
+    },
+    {
+      "filename": "public_youtube700_val/b/da/93fb80d6d43c.wav",
+      "reference": "не служит",
+      "duration": 0.46
+    },
+    {
+      "filename": "public_youtube700_val/b/de/a5cb7ab2289c.wav",
+      "reference": "поздно ночью изза неудачно отданного приказа дежурным генералом сомом",
+      "duration": 3.87
+    },
+    {
+      "filename": "public_youtube700_val/b/e1/c18c3e6cd5b5.wav",
+      "reference": "и не забывайте там черви там море",
+      "duration": 2.04
+    },
+    {
+      "filename": "public_youtube700_val/b/e6/33838f382003.wav",
+      "reference": "я думаю что этот сверх супер рецепт который я хо вам подарил",
+      "duration": 3.76
+    },
+    {
+      "filename": "public_youtube700_val/b/e8/f7edf7943e12.wav",
+      "reference": "иначе внутри органы",
+      "duration": 1.2
+    },
+    {
+      "filename": "public_youtube700_val/b/ef/627f3dbc3e23.wav",
+      "reference": "необычный маркерный груз",
+      "duration": 1.58
+    },
+    {
+      "filename": "public_youtube700_val/b/f1/860e8825bade.wav",
+      "reference": "сто пятнадцать миллиграмм на один литр воды",
+      "duration": 2.82
+    },
+    {
+      "filename": "public_youtube700_val/b/f6/a4ae70154dca.wav",
+      "reference": "великолепная вещь которая насыщает",
+      "duration": 1.87
+    },
+    {
+      "filename": "public_youtube700_val/b/fa/4721383ab69d.wav",
+      "reference": "периодически меняя их можно добиваться",
+      "duration": 2.59
+    },
+    {
+      "filename": "public_youtube700_val/b/fd/9e05c0c3b53d.wav",
+      "reference": "образовались из",
+      "duration": 1.12
+    },
+    {
+      "filename": "public_youtube700_val/c/02/342b04180967.wav",
+      "reference": "после зимы ещё",
+      "duration": 0.59
+    },
+    {
+      "filename": "public_youtube700_val/c/06/310bc272706d.wav",
+      "reference": "умер в санктпетербурге",
+      "duration": 1.2
+    },
+    {
+      "filename": "public_youtube700_val/c/12/9b6f45fd7113.wav",
+      "reference": "и словарь баранова никак",
+      "duration": 1.5
+    },
+    {
+      "filename": "public_youtube700_val/c/15/270c2e84c8cd.wav",
+      "reference": "оно оказывается доминирует в людях",
+      "duration": 1.87
+    },
+    {
+      "filename": "public_youtube700_val/c/15/5d1547a57111.wav",
+      "reference": "штуки немного изюма изюма туда ну вот",
+      "duration": 2.87
+    },
+    {
+      "filename": "public_youtube700_val/c/19/f154a0bebb19.wav",
+      "reference": "и приглашаю вас на",
+      "duration": 1.78
+    },
+    {
+      "filename": "public_youtube700_val/c/26/9354decb9df7.wav",
+      "reference": "пойдём посмотрим индийские трущобы",
+      "duration": 2.42
+    },
+    {
+      "filename": "public_youtube700_val/c/2d/c4d84a84bec1.wav",
+      "reference": "такой мужчина он ценит",
+      "duration": 2.15
+    },
+    {
+      "filename": "public_youtube700_val/c/33/0db438cd8f2e.wav",
+      "reference": "давным давно",
+      "duration": 0.76
+    },
+    {
+      "filename": "public_youtube700_val/c/48/a246669ad42e.wav",
+      "reference": "я для себя лично опускаю сюда один зубчик чеснока",
+      "duration": 2.97
+    },
+    {
+      "filename": "public_youtube700_val/c/4a/636fcfde30d6.wav",
+      "reference": "любая еда которую вы начнёте готовить",
+      "duration": 1.93
+    },
+    {
+      "filename": "public_youtube700_val/c/4f/1bd056272b33.wav",
+      "reference": "в судный день",
+      "duration": 0.75
+    },
+    {
+      "filename": "public_youtube700_val/c/4f/28f1a3b46627.wav",
+      "reference": "то есть в правильном месте нужно не просто быть",
+      "duration": 1.91
+    },
+    {
+      "filename": "public_youtube700_val/c/50/ce48a9b282e6.wav",
+      "reference": "из за этого",
+      "duration": 0.74
+    },
+    {
+      "filename": "public_youtube700_val/c/57/26312191d321.wav",
+      "reference": "ну причина какаято",
+      "duration": 1.58
+    },
+    {
+      "filename": "public_youtube700_val/c/5c/8532ee48a880.wav",
+      "reference": "здесь всё американское белое",
+      "duration": 1.62
+    },
+    {
+      "filename": "public_youtube700_val/c/60/0c0044873303.wav",
+      "reference": "это тот самый боярышник",
+      "duration": 1.81
+    },
+    {
+      "filename": "public_youtube700_val/c/61/dc26895ab039.wav",
+      "reference": "конечно было бы дешевле сесть на автобус и доехать до города на нём",
+      "duration": 3.33
+    },
+    {
+      "filename": "public_youtube700_val/c/62/dd1a1a1356b3.wav",
+      "reference": "вы справитесь с заданием",
+      "duration": 1.25
+    },
+    {
+      "filename": "public_youtube700_val/c/64/e890ea968e89.wav",
+      "reference": "даруй свет и тьма исчезнет сама собой",
+      "duration": 3.28
+    },
+    {
+      "filename": "public_youtube700_val/c/6a/d713a67e92c2.wav",
+      "reference": "нуу босяки что",
+      "duration": 1.87
+    },
+    {
+      "filename": "public_youtube700_val/c/6c/0931609f0b20.wav",
+      "reference": "отец из заграничных командировок привозит он с иностранцами работает",
+      "duration": 5.16
+    },
+    {
+      "filename": "public_youtube700_val/c/6d/f182c1a9d076.wav",
+      "reference": "разное",
+      "duration": 0.48
+    },
+    {
+      "filename": "public_youtube700_val/c/6e/c5b88bb7b11b.wav",
+      "reference": "все эти агрегаты буду",
+      "duration": 1.21
+    },
+    {
+      "filename": "public_youtube700_val/c/6f/5c60790de3fa.wav",
+      "reference": "в общем бразильцы очень справедливые ребята",
+      "duration": 2.61
+    },
+    {
+      "filename": "public_youtube700_val/c/73/9c11c66e798a.wav",
+      "reference": "не смыслов",
+      "duration": 0.82
+    },
+    {
+      "filename": "public_youtube700_val/c/74/28cc67173253.wav",
+      "reference": "какието механизмы какието нюанс",
+      "duration": 2.69
+    },
+    {
+      "filename": "public_youtube700_val/c/79/d6ec17d1c7d5.wav",
+      "reference": "и гидротрансформатора на третей на четвёртых передачах то есть фактически",
+      "duration": 3.98
+    },
+    {
+      "filename": "public_youtube700_val/c/7c/43c264660a27.wav",
+      "reference": "только парень справа становится богаче ведь его бизнес растёт",
+      "duration": 3.84
+    },
+    {
+      "filename": "public_youtube700_val/c/82/0bfeb46681de.wav",
+      "reference": "подписываемся на канал и погнали знакомиться с Парижем",
+      "duration": 4.11
+    },
+    {
+      "filename": "public_youtube700_val/c/8b/fadface1fd50.wav",
+      "reference": "он рассказывает что трагедия сплотила многих людей",
+      "duration": 3.12
+    },
+    {
+      "filename": "public_youtube700_val/c/8d/9f928e7d8ee7.wav",
+      "reference": "человек который когдато был ааа главой деревни а теперь",
+      "duration": 3.85
+    },
+    {
+      "filename": "public_youtube700_val/c/92/226bb706562c.wav",
+      "reference": "что теперь ему точно никто не помешает",
+      "duration": 3.14
+    },
+    {
+      "filename": "public_youtube700_val/c/93/415548022c34.wav",
+      "reference": "операция опровержения",
+      "duration": 1.15
+    },
+    {
+      "filename": "public_youtube700_val/c/94/2e5ce4b6e8e7.wav",
+      "reference": "пять тяшечек в день",
+      "duration": 1.09
+    },
+    {
+      "filename": "public_youtube700_val/c/95/6aefbb59089c.wav",
+      "reference": "правильно понимать",
+      "duration": 1.02
+    },
+    {
+      "filename": "public_youtube700_val/c/96/dfc129220daf.wav",
+      "reference": "да ннаверное есть смысл ещё упот уупомянуть о гадамере",
+      "duration": 4.72
+    },
+    {
+      "filename": "public_youtube700_val/c/9a/742287a3f37f.wav",
+      "reference": "значит это",
+      "duration": 0.73
+    },
+    {
+      "filename": "public_youtube700_val/c/a3/7f48842a1a6e.wav",
+      "reference": "как системаа в эти моменты работает",
+      "duration": 2.36
+    },
+    {
+      "filename": "public_youtube700_val/c/a5/eb7c0591d60a.wav",
+      "reference": "отзывается на",
+      "duration": 0.7
+    },
+    {
+      "filename": "public_youtube700_val/c/aa/5f2e4c6b42bc.wav",
+      "reference": "за грибами и желательно несъедобными",
+      "duration": 2.04
+    },
+    {
+      "filename": "public_youtube700_val/c/ab/b79609c2909f.wav",
+      "reference": "повтораться не буду",
+      "duration": 0.92
+    },
+    {
+      "filename": "public_youtube700_val/c/ae/28bc84c4583e.wav",
+      "reference": "и посмотрите",
+      "duration": 0.62
+    },
+    {
+      "filename": "public_youtube700_val/c/ba/18a27c4793a6.wav",
+      "reference": "ааа у нас нет таких",
+      "duration": 1.35
+    },
+    {
+      "filename": "public_youtube700_val/c/c6/98bf5ce6b677.wav",
+      "reference": "классификациях выделяются",
+      "duration": 1.51
+    },
+    {
+      "filename": "public_youtube700_val/c/cb/f91e58b7e984.wav",
+      "reference": "внутренним",
+      "duration": 0.79
+    },
+    {
+      "filename": "public_youtube700_val/c/cc/7ef1f6d02a38.wav",
+      "reference": "когда хотите тогда вы можете употреблять эээ употреблять эту пищу",
+      "duration": 3.6
+    },
+    {
+      "filename": "public_youtube700_val/c/cc/dc1dcc5d2fda.wav",
+      "reference": "поэтому для того чтобы его поймать судно должно всё время находится в движении",
+      "duration": 4.99
+    },
+    {
+      "filename": "public_youtube700_val/c/cf/7c505e814343.wav",
+      "reference": "мне както странно у них",
+      "duration": 1.13
+    },
+    {
+      "filename": "public_youtube700_val/c/d3/e7d8617b98d6.wav",
+      "reference": "как раз участие в таких мероприятиях оно позволяет как раз обогатиться именно этим самым",
+      "duration": 5.86
+    },
+    {
+      "filename": "public_youtube700_val/c/d6/1654205cc179.wav",
+      "reference": "говорить",
+      "duration": 0.45
+    },
+    {
+      "filename": "public_youtube700_val/c/d6/edde55d97516.wav",
+      "reference": "в несколько раз его старшими",
+      "duration": 2.45
+    },
+    {
+      "filename": "public_youtube700_val/c/d8/835ed6f82c2f.wav",
+      "reference": "вышла зашла вышла",
+      "duration": 1.44
+    },
+    {
+      "filename": "public_youtube700_val/c/da/9621ee586573.wav",
+      "reference": "там уже третьей волной бабьего лета",
+      "duration": 2.01
+    },
+    {
+      "filename": "public_youtube700_val/c/db/47485ab635e1.wav",
+      "reference": "синергия он катехины выпускает это очень хорошие вещества",
+      "duration": 4.38
+    },
+    {
+      "filename": "public_youtube700_val/c/dc/38387d4f9b92.wav",
+      "reference": "если говорить об экономической жизни",
+      "duration": 1.73
+    },
+    {
+      "filename": "public_youtube700_val/c/de/6ec77e0519fb.wav",
+      "reference": "кольца на некоторых приманках",
+      "duration": 1.4
+    },
+    {
+      "filename": "public_youtube700_val/c/de/76b822a2bba9.wav",
+      "reference": "пусть мы вытащили одну частицу один электрон",
+      "duration": 3.0
+    },
+    {
+      "filename": "public_youtube700_val/c/e5/9619ca26e30a.wav",
+      "reference": "и я прекрасно себя",
+      "duration": 1.16
+    },
+    {
+      "filename": "public_youtube700_val/c/e5/f80c4f359e8f.wav",
+      "reference": "и конечно это первое время эти первые",
+      "duration": 1.78
+    },
+    {
+      "filename": "public_youtube700_val/c/f7/252a762890dd.wav",
+      "reference": "считают что чебуреки там прямо самые лучший",
+      "duration": 2.82
+    },
+    {
+      "filename": "public_youtube700_val/c/fd/5c89a09933ad.wav",
+      "reference": "сегодня двадцать девятого сентября две тысячи восемнадцатого года",
+      "duration": 2.94
+    },
+    {
+      "filename": "public_youtube700_val/c/ff/8b40ba733085.wav",
+      "reference": "теперь закусываем яблоком сразу же",
+      "duration": 2.36
+    },
+    {
+      "filename": "public_youtube700_val/d/04/dfa6e384cdab.wav",
+      "reference": "можно перевести в нём напоминание дикор тоже как напоминание людям о том что полезно",
+      "duration": 5.89
+    },
+    {
+      "filename": "public_youtube700_val/d/06/07574713289c.wav",
+      "reference": "а тут ещё ещё ещё ещё ещё",
+      "duration": 2.72
+    },
+    {
+      "filename": "public_youtube700_val/d/06/31691d7a7e6a.wav",
+      "reference": "а потом занимайтесь делами",
+      "duration": 1.36
+    },
+    {
+      "filename": "public_youtube700_val/d/0d/6c2f966cd47b.wav",
+      "reference": "она ещё руководствуется скандинавскими нормами",
+      "duration": 2.88
+    },
+    {
+      "filename": "public_youtube700_val/d/10/ebed158acde2.wav",
+      "reference": "я специально поднял спиннинг вверх чтобы не дать ему",
+      "duration": 2.84
+    },
+    {
+      "filename": "public_youtube700_val/d/12/d6657723918b.wav",
+      "reference": "из любой страны",
+      "duration": 0.94
+    },
+    {
+      "filename": "public_youtube700_val/d/1c/2b281de0c07a.wav",
+      "reference": "итак посмотрите это корень девясила",
+      "duration": 2.38
+    },
+    {
+      "filename": "public_youtube700_val/d/24/7fa848c13d30.wav",
+      "reference": "теперь смотрите я взял отсюда розочку",
+      "duration": 1.69
+    },
+    {
+      "filename": "public_youtube700_val/d/32/a461def00337.wav",
+      "reference": "что потанзански привет друзья прячу для вас здесь вот эти",
+      "duration": 3.6
+    },
+    {
+      "filename": "public_youtube700_val/d/37/6d934c3cbba4.wav",
+      "reference": "таз вниз",
+      "duration": 0.76
+    },
+    {
+      "filename": "public_youtube700_val/d/3c/18af39aa2aca.wav",
+      "reference": "пацанам удалось уйти",
+      "duration": 1.19
+    },
+    {
+      "filename": "public_youtube700_val/d/3d/212bc32a6abe.wav",
+      "reference": "то всё равно остался бы у вас в долгу",
+      "duration": 3.45
+    },
+    {
+      "filename": "public_youtube700_val/d/3d/cf76d82cdc79.wav",
+      "reference": "введение такого пессария с абортивным веществом эээ это опасная процедура",
+      "duration": 4.74
+    },
+    {
+      "filename": "public_youtube700_val/d/3e/1c74f42b622a.wav",
+      "reference": "но это уже другой",
+      "duration": 1.33
+    },
+    {
+      "filename": "public_youtube700_val/d/40/20ca233643a6.wav",
+      "reference": "с утра и до вечера они будут славить всевышнего аллаха",
+      "duration": 3.68
+    },
+    {
+      "filename": "public_youtube700_val/d/45/ddc4d15751b5.wav",
+      "reference": "так афанасий сегодня что у нас на завтрак",
+      "duration": 2.13
+    },
+    {
+      "filename": "public_youtube700_val/d/4d/a9228bc80e8c.wav",
+      "reference": "а также мы распакуем вот такие вот яйца",
+      "duration": 3.81
+    },
+    {
+      "filename": "public_youtube700_val/d/50/70653736f4a6.wav",
+      "reference": "и когда ты входишь в поток уже вошёл сначала войти",
+      "duration": 3.06
+    },
+    {
+      "filename": "public_youtube700_val/d/55/26bb7bba56c1.wav",
+      "reference": "и вы не",
+      "duration": 0.4
+    },
+    {
+      "filename": "public_youtube700_val/d/57/d2512399bf2e.wav",
+      "reference": "опубликовал ещё одну модель",
+      "duration": 1.76
+    },
+    {
+      "filename": "public_youtube700_val/d/5f/126b088673ff.wav",
+      "reference": "домашняя сцена",
+      "duration": 0.69
+    },
+    {
+      "filename": "public_youtube700_val/d/63/f43703d885be.wav",
+      "reference": "называлось прованс от слова провинция",
+      "duration": 2.47
+    },
+    {
+      "filename": "public_youtube700_val/d/67/e202376817a7.wav",
+      "reference": "мы намеренно сделали кровле не большие свесы и скаты с низким уклоном",
+      "duration": 3.97
+    },
+    {
+      "filename": "public_youtube700_val/d/68/98d2af5963a7.wav",
+      "reference": "можете менять руки",
+      "duration": 1.13
+    },
+    {
+      "filename": "public_youtube700_val/d/6f/0774ee89ff21.wav",
+      "reference": "из эээ в основном источников махаянского буддизма",
+      "duration": 3.29
+    },
+    {
+      "filename": "public_youtube700_val/d/70/0ae2f893ef9e.wav",
+      "reference": "примером образ такого оратора",
+      "duration": 1.86
+    },
+    {
+      "filename": "public_youtube700_val/d/70/26c006acf0e6.wav",
+      "reference": "и тогда всё будет",
+      "duration": 1.2
+    },
+    {
+      "filename": "public_youtube700_val/d/7a/efdd910baa0e.wav",
+      "reference": "мы взбили всё это",
+      "duration": 1.18
+    },
+    {
+      "filename": "public_youtube700_val/d/7d/01a1898c1b86.wav",
+      "reference": "то недоволен у него проблемы какието он ннн тухнет он гаснет",
+      "duration": 4.69
+    },
+    {
+      "filename": "public_youtube700_val/d/7d/ad5c4d25bd4b.wav",
+      "reference": "начинают с эмпирического уровня и двигаются по поо ступеням усложнения",
+      "duration": 4.72
+    },
+    {
+      "filename": "public_youtube700_val/d/7f/44a2ca227fa4.wav",
+      "reference": "и не нужно ему отказывать что нет я к этому не готова ты знаешь",
+      "duration": 3.62
+    },
+    {
+      "filename": "public_youtube700_val/d/7f/bc344ba9cf15.wav",
+      "reference": "твои рекомендац",
+      "duration": 0.84
+    },
+    {
+      "filename": "public_youtube700_val/d/80/1c9b8f918822.wav",
+      "reference": "вот эту вот яичничку на воде жареную чутьчуть жаре",
+      "duration": 2.71
+    },
+    {
+      "filename": "public_youtube700_val/d/81/2e3621a931e4.wav",
+      "reference": "которые передавали его решения правителям и героям в людском",
+      "duration": 4.13
+    },
+    {
+      "filename": "public_youtube700_val/d/85/6124ad3b9562.wav",
+      "reference": "это замечательно так должно быть",
+      "duration": 1.77
+    },
+    {
+      "filename": "public_youtube700_val/d/88/1da99da44a7f.wav",
+      "reference": "дорант опятьтаки повторяюсь самый лучший это перекись водорода",
+      "duration": 3.4
+    },
+    {
+      "filename": "public_youtube700_val/d/88/d37de64a0e86.wav",
+      "reference": "мне обошлось это",
+      "duration": 0.78
+    },
+    {
+      "filename": "public_youtube700_val/d/89/1f8ba2d7de85.wav",
+      "reference": "или добавить к ним ещё и требуху",
+      "duration": 2.6
+    },
+    {
+      "filename": "public_youtube700_val/d/9f/b9681d98273a.wav",
+      "reference": "того что",
+      "duration": 0.58
+    },
+    {
+      "filename": "public_youtube700_val/d/a1/d355bb663e1f.wav",
+      "reference": "с гримировачной грязью и кровью",
+      "duration": 2.51
+    },
+    {
+      "filename": "public_youtube700_val/d/a6/45ce1c49758f.wav",
+      "reference": "в которых и являлось а результатом процесса ассимиляци",
+      "duration": 4.93
+    },
+    {
+      "filename": "public_youtube700_val/d/a8/31322b7282ae.wav",
+      "reference": "к жизни стремление к миру духовному и он готов",
+      "duration": 3.28
+    },
+    {
+      "filename": "public_youtube700_val/d/a8/6fa4d8e94f4f.wav",
+      "reference": "знания имам ахмэда чтобы они не утерялись",
+      "duration": 2.46
+    },
+    {
+      "filename": "public_youtube700_val/d/ad/792e21b1678b.wav",
+      "reference": "по всей видимости и читающая",
+      "duration": 1.93
+    },
+    {
+      "filename": "public_youtube700_val/d/c6/9da6bcf5b9fe.wav",
+      "reference": "железным крестом",
+      "duration": 1.91
+    },
+    {
+      "filename": "public_youtube700_val/d/c8/f58bf246484a.wav",
+      "reference": "теперь смотрите вы встаёте в пять",
+      "duration": 1.99
+    },
+    {
+      "filename": "public_youtube700_val/d/cc/bff3dd9719d6.wav",
+      "reference": "негативные ожидания от эээ свиданий",
+      "duration": 3.0
+    },
+    {
+      "filename": "public_youtube700_val/d/cd/c90d8369a510.wav",
+      "reference": "потому что ты прах её в прах и возратися",
+      "duration": 2.47
+    },
+    {
+      "filename": "public_youtube700_val/d/ce/c7ead7979c2b.wav",
+      "reference": "с женой и дочкой",
+      "duration": 1.08
+    },
+    {
+      "filename": "public_youtube700_val/d/cf/ffe45a83184d.wav",
+      "reference": "то есть вы хотите стать другим вы это уже чувствуете",
+      "duration": 2.67
+    },
+    {
+      "filename": "public_youtube700_val/d/d1/08203ae6d1db.wav",
+      "reference": "ааа реализовать себя в том числе",
+      "duration": 2.31
+    },
+    {
+      "filename": "public_youtube700_val/d/d4/d75151dee985.wav",
+      "reference": "скоро ваше сознание позволит вам делать гигантские шаги в вашем оздоровлении",
+      "duration": 6.42
+    },
+    {
+      "filename": "public_youtube700_val/d/d6/d32cf05eb2ed.wav",
+      "reference": "его и пришлём",
+      "duration": 0.71
+    },
+    {
+      "filename": "public_youtube700_val/d/db/0e5cf00523f0.wav",
+      "reference": "точнее даже в философии",
+      "duration": 1.01
+    },
+    {
+      "filename": "public_youtube700_val/d/df/e8f9756ba7af.wav",
+      "reference": "а тут они не идут один за",
+      "duration": 1.34
+    },
+    {
+      "filename": "public_youtube700_val/d/e1/73688d8e29b2.wav",
+      "reference": "иии соответственно",
+      "duration": 0.83
+    },
+    {
+      "filename": "public_youtube700_val/d/e5/97d43569d4c1.wav",
+      "reference": "давайте посмотрим",
+      "duration": 1.02
+    },
+    {
+      "filename": "public_youtube700_val/d/e6/fc0748df9ce2.wav",
+      "reference": "там очень глобальные преобразования они",
+      "duration": 2.04
+    },
+    {
+      "filename": "public_youtube700_val/d/e8/09b445c9157c.wav",
+      "reference": "видите чистыми",
+      "duration": 1.19
+    },
+    {
+      "filename": "public_youtube700_val/d/f3/bedbce2e7278.wav",
+      "reference": "конкретность чтобы мы вот упаковали какуюто свою",
+      "duration": 3.29
+    },
+    {
+      "filename": "public_youtube700_val/d/f5/a05a184cbf98.wav",
+      "reference": "а ещё купила кровать",
+      "duration": 1.19
+    },
+    {
+      "filename": "public_youtube700_val/d/fa/d99e7334670b.wav",
+      "reference": "да вообще ничего",
+      "duration": 0.85
+    },
+    {
+      "filename": "public_youtube700_val/d/fe/f0f9e0df08e1.wav",
+      "reference": "не то что ругал не то что я его стукнул да ну чтото я там или жвачку взял",
+      "duration": 3.62
+    },
+    {
+      "filename": "public_youtube700_val/e/00/f325554d417d.wav",
+      "reference": "это объединение людей я понимаю чтоо ну вот моя",
+      "duration": 4.99
+    },
+    {
+      "filename": "public_youtube700_val/e/0d/aeee742c4421.wav",
+      "reference": "моя мама при смерти её только что привезли из института онкологии",
+      "duration": 3.3
+    },
+    {
+      "filename": "public_youtube700_val/e/0e/dadb54a2a6c3.wav",
+      "reference": "то есть всё таки поддаются скажем страстям земным да чем духовным вещам это",
+      "duration": 8.31
+    },
+    {
+      "filename": "public_youtube700_val/e/15/58e291bb6f3f.wav",
+      "reference": "вот почему здесь пиперин очень ценная вещь",
+      "duration": 2.51
+    },
+    {
+      "filename": "public_youtube700_val/e/15/f1f9eb9822dc.wav",
+      "reference": "чтобы постоянно был у вас был йод в организме потому что это необходимо",
+      "duration": 3.91
+    },
+    {
+      "filename": "public_youtube700_val/e/19/f1b1bc29f5c5.wav",
+      "reference": "здравствуйте дорогие друзья",
+      "duration": 1.15
+    },
+    {
+      "filename": "public_youtube700_val/e/1a/a24eec677d27.wav",
+      "reference": "порой ребята берутся за какойто",
+      "duration": 1.82
+    },
+    {
+      "filename": "public_youtube700_val/e/1c/737e12078d53.wav",
+      "reference": "когда появились персональные компьютеры ну",
+      "duration": 1.91
+    },
+    {
+      "filename": "public_youtube700_val/e/1d/7446aee8e1c7.wav",
+      "reference": "ктоо уверовал в ниспосланное тебе о мухаммед",
+      "duration": 4.44
+    },
+    {
+      "filename": "public_youtube700_val/e/1e/82e4d1e4b27b.wav",
+      "reference": "гречка гречка содержит",
+      "duration": 2.05
+    },
+    {
+      "filename": "public_youtube700_val/e/20/58f88337a77c.wav",
+      "reference": "в мире существует множество религий течений конфессий направлений веровани",
+      "duration": 4.11
+    },
+    {
+      "filename": "public_youtube700_val/e/21/4371e1c6f6af.wav",
+      "reference": "поклявшись воздвигнуть в их честь храм",
+      "duration": 2.36
+    },
+    {
+      "filename": "public_youtube700_val/e/22/b6442037047d.wav",
+      "reference": "и если вы там ещё нажмете на колокольчик то тем самым",
+      "duration": 2.69
+    },
+    {
+      "filename": "public_youtube700_val/e/22/cd488c06ca7d.wav",
+      "reference": "тем кто знает",
+      "duration": 0.64
+    },
+    {
+      "filename": "public_youtube700_val/e/24/a0e4558db491.wav",
+      "reference": "который",
+      "duration": 0.56
+    },
+    {
+      "filename": "public_youtube700_val/e/25/4e8dfbc8ce98.wav",
+      "reference": "важный",
+      "duration": 0.55
+    },
+    {
+      "filename": "public_youtube700_val/e/28/7801e8e157e2.wav",
+      "reference": "и здесь тут именно коперника бруно галилея хотя",
+      "duration": 3.52
+    },
+    {
+      "filename": "public_youtube700_val/e/2a/4ee4bb2c8674.wav",
+      "reference": "находятся на максимально близком расстоянии ра",
+      "duration": 3.0
+    },
+    {
+      "filename": "public_youtube700_val/e/2d/0226153c9f4b.wav",
+      "reference": "название то какое",
+      "duration": 1.08
+    },
+    {
+      "filename": "public_youtube700_val/e/37/c088085976f7.wav",
+      "reference": "и начинаются вот эти боли",
+      "duration": 1.35
+    },
+    {
+      "filename": "public_youtube700_val/e/3d/98c7db46dc1e.wav",
+      "reference": "растения",
+      "duration": 0.75
+    },
+    {
+      "filename": "public_youtube700_val/e/49/8966bccf9979.wav",
+      "reference": "они стали перехватывать все",
+      "duration": 1.29
+    },
+    {
+      "filename": "public_youtube700_val/e/52/662f480255b3.wav",
+      "reference": "пошли быстро выйдем",
+      "duration": 0.9
+    },
+    {
+      "filename": "public_youtube700_val/e/53/61f776895d3a.wav",
+      "reference": "ты устал духовно конкретно напряги себя интеллектуально",
+      "duration": 2.95
+    },
+    {
+      "filename": "public_youtube700_val/e/55/bda41842b6e0.wav",
+      "reference": "кто об этом не говорил",
+      "duration": 1.29
+    },
+    {
+      "filename": "public_youtube700_val/e/5c/0097cdc5d9cc.wav",
+      "reference": "и наслаждаться красотой мира",
+      "duration": 1.89
+    },
+    {
+      "filename": "public_youtube700_val/e/5d/1a5cad916c57.wav",
+      "reference": "первым способом жёстко взять и отрезать",
+      "duration": 1.49
+    },
+    {
+      "filename": "public_youtube700_val/e/60/bf71ce9c845d.wav",
+      "reference": "где септоны являются молекулами воздуха",
+      "duration": 2.48
+    },
+    {
+      "filename": "public_youtube700_val/e/6b/64de90ebd850.wav",
+      "reference": "развитию",
+      "duration": 0.76
+    },
+    {
+      "filename": "public_youtube700_val/e/6c/56d6b7746f83.wav",
+      "reference": "сахар соль начинаются отеки же сдоба маргарин",
+      "duration": 3.45
+    },
+    {
+      "filename": "public_youtube700_val/e/6e/c4a9beb5c0c1.wav",
+      "reference": "химии и физики",
+      "duration": 1.34
+    },
+    {
+      "filename": "public_youtube700_val/e/70/70b81414c462.wav",
+      "reference": "появился миф о том что нужно найти свою половину",
+      "duration": 2.8
+    },
+    {
+      "filename": "public_youtube700_val/e/74/fac0a84df2a1.wav",
+      "reference": "это говорит о том что он высокого",
+      "duration": 1.82
+    },
+    {
+      "filename": "public_youtube700_val/e/76/7d7bcadb9f5b.wav",
+      "reference": "то есть",
+      "duration": 0.39
+    },
+    {
+      "filename": "public_youtube700_val/e/7f/c0f02ee11082.wav",
+      "reference": "как будто ты просто в разных городах в разных",
+      "duration": 2.38
+    },
+    {
+      "filename": "public_youtube700_val/e/82/aff8bc5dfb8b.wav",
+      "reference": "находите в каждом то что вам нравится",
+      "duration": 3.89
+    },
+    {
+      "filename": "public_youtube700_val/e/85/bdaeb82444f7.wav",
+      "reference": "и найти свою рыбу",
+      "duration": 1.4
+    },
+    {
+      "filename": "public_youtube700_val/e/8c/b4d2fb6a37db.wav",
+      "reference": "вовторых друзья чтоб вам показать что это такое",
+      "duration": 3.47
+    },
+    {
+      "filename": "public_youtube700_val/e/8f/c0a60b3ef239.wav",
+      "reference": "у нас фермента для переваривания мясной",
+      "duration": 2.34
+    },
+    {
+      "filename": "public_youtube700_val/e/a3/89951575cbaf.wav",
+      "reference": "и существенно меньше вероятность инсульта повторного",
+      "duration": 3.43
+    },
+    {
+      "filename": "public_youtube700_val/e/ad/01af4e31ec96.wav",
+      "reference": "ноо какихто",
+      "duration": 1.49
+    },
+    {
+      "filename": "public_youtube700_val/e/af/81195f0c1545.wav",
+      "reference": "падает образование образование",
+      "duration": 2.31
+    },
+    {
+      "filename": "public_youtube700_val/e/b6/c2cb0b846616.wav",
+      "reference": "пять главных",
+      "duration": 1.02
+    },
+    {
+      "filename": "public_youtube700_val/e/bc/0fbd88d446d6.wav",
+      "reference": "да идеи",
+      "duration": 0.6
+    },
+    {
+      "filename": "public_youtube700_val/e/bc/2222f3495793.wav",
+      "reference": "является основополагающим",
+      "duration": 1.86
+    },
+    {
+      "filename": "public_youtube700_val/e/c0/4290a285104f.wav",
+      "reference": "так вот мы берём семя льна",
+      "duration": 1.38
+    },
+    {
+      "filename": "public_youtube700_val/e/c4/b39eedb8f04b.wav",
+      "reference": "тем светлым чистым чувством",
+      "duration": 2.54
+    },
+    {
+      "filename": "public_youtube700_val/e/ca/a461c332bc8d.wav",
+      "reference": "ну а что касается соединения двух вот этих основных агрегатов",
+      "duration": 3.95
+    },
+    {
+      "filename": "public_youtube700_val/e/cc/0bbf345ba15e.wav",
+      "reference": "портянки какие",
+      "duration": 0.86
+    },
+    {
+      "filename": "public_youtube700_val/e/cf/8aae1e607da3.wav",
+      "reference": "И что им пришлось придумать аж тридцать девять с новых букв чтобы обозначить все звуки своей речи",
+      "duration": 6.24
+    },
+    {
+      "filename": "public_youtube700_val/e/cf/978c5b205ece.wav",
+      "reference": "макрофаги начинают работать в две тысячи раз сильнее чем они",
+      "duration": 4.15
+    },
+    {
+      "filename": "public_youtube700_val/e/d5/2db4321ddd51.wav",
+      "reference": "но она не так чтобы",
+      "duration": 1.0
+    },
+    {
+      "filename": "public_youtube700_val/e/d6/b9049e9f9ccc.wav",
+      "reference": "и удар такая вот рыбка",
+      "duration": 1.46
+    },
+    {
+      "filename": "public_youtube700_val/e/d7/4c25cb0e19bd.wav",
+      "reference": "пол смещён сюда это смещено сюда как бы",
+      "duration": 2.82
+    },
+    {
+      "filename": "public_youtube700_val/e/d8/b7a9a8bc1ce4.wav",
+      "reference": "на соляную кислоту в желудке",
+      "duration": 1.31
+    },
+    {
+      "filename": "public_youtube700_val/e/dc/3d6218dc479b.wav",
+      "reference": "люди понимаете они не могут между собой дого",
+      "duration": 2.33
+    },
+    {
+      "filename": "public_youtube700_val/e/dc/f739257f4e71.wav",
+      "reference": "то вы эээ создали такую ситуацию при которой ваша болезнь стала хронической",
+      "duration": 5.4
+    },
+    {
+      "filename": "public_youtube700_val/e/de/ecea87238417.wav",
+      "reference": "вопросы как обычно в комментарии лайки под видео подписка",
+      "duration": 3.89
+    },
+    {
+      "filename": "public_youtube700_val/e/e3/66c6a8af12ef.wav",
+      "reference": "а вы понюхайте",
+      "duration": 0.8
+    },
+    {
+      "filename": "public_youtube700_val/e/e6/1870f6b07707.wav",
+      "reference": "на подсознательном уровне находится да но",
+      "duration": 2.04
+    },
+    {
+      "filename": "public_youtube700_val/e/e9/0676cff1c13e.wav",
+      "reference": "опять вот третий раз посидели минуточку",
+      "duration": 2.63
+    },
+    {
+      "filename": "public_youtube700_val/e/e9/3aaa3232471b.wav",
+      "reference": "в современном гуманитарном познании",
+      "duration": 2.01
+    },
+    {
+      "filename": "public_youtube700_val/e/ec/ec27baeecb8c.wav",
+      "reference": "мы даже эээ часто спрашивает про",
+      "duration": 1.91
+    },
+    {
+      "filename": "public_youtube700_val/e/ee/0ef01d69fbdd.wav",
+      "reference": "разговор окажется слишком слишком длинным",
+      "duration": 2.09
+    },
+    {
+      "filename": "public_youtube700_val/e/f2/a3de797d024e.wav",
+      "reference": "не обывателей",
+      "duration": 0.74
+    },
+    {
+      "filename": "public_youtube700_val/e/f3/65044d09381b.wav",
+      "reference": "а стремится к нему чтоб опять таки взять и использовать на",
+      "duration": 4.2
+    },
+    {
+      "filename": "public_youtube700_val/e/f4/b962d3a8487a.wav",
+      "reference": "но они уже три дня в ессентуках я сама их провожала",
+      "duration": 1.86
+    },
+    {
+      "filename": "public_youtube700_val/e/f6/908b97c15ca6.wav",
+      "reference": "там у меня короче кухня",
+      "duration": 1.18
+    },
+    {
+      "filename": "public_youtube700_val/e/f7/225d21d7db09.wav",
+      "reference": "сегодня будем говорить о позвоночнике",
+      "duration": 1.95
+    },
+    {
+      "filename": "public_youtube700_val/e/fa/3eadb05fde41.wav",
+      "reference": "и это тоже наставничество",
+      "duration": 1.55
+    },
+    {
+      "filename": "public_youtube700_val/e/fc/32cdf838430a.wav",
+      "reference": "то есть можешь ничего не бояться",
+      "duration": 1.34
+    },
+    {
+      "filename": "public_youtube700_val/f/02/68ce87a30317.wav",
+      "reference": "на самом деле это",
+      "duration": 0.79
+    },
+    {
+      "filename": "public_youtube700_val/f/09/cadafe350fb5.wav",
+      "reference": "редкаая вещь",
+      "duration": 1.02
+    },
+    {
+      "filename": "public_youtube700_val/f/10/39d38d3f6868.wav",
+      "reference": "да да да",
+      "duration": 0.58
+    },
+    {
+      "filename": "public_youtube700_val/f/10/9c3aba56a06e.wav",
+      "reference": "глобальных природных катаклизмов указывает на то",
+      "duration": 2.38
+    },
+    {
+      "filename": "public_youtube700_val/f/18/6a788aa56db3.wav",
+      "reference": "небеса станут совершенно",
+      "duration": 1.18
+    },
+    {
+      "filename": "public_youtube700_val/f/19/ecc7a7283a5e.wav",
+      "reference": "весть этот полёт",
+      "duration": 0.75
+    },
+    {
+      "filename": "public_youtube700_val/f/1a/f9eb23149cd4.wav",
+      "reference": "намм не нести ответ за вас как и вамм за нас",
+      "duration": 4.89
+    },
+    {
+      "filename": "public_youtube700_val/f/1c/29b5dadce1d2.wav",
+      "reference": "восхищаюсь верующим человеком",
+      "duration": 2.59
+    },
+    {
+      "filename": "public_youtube700_val/f/20/261da59dd701.wav",
+      "reference": "и смотрите как мы очень интересно рассматривали мы начинали с пускового механизма с мысли",
+      "duration": 5.79
+    },
+    {
+      "filename": "public_youtube700_val/f/30/c1d3668f9978.wav",
+      "reference": "твоё тело подобно ране а сам ты подобен сумасшедшему",
+      "duration": 4.97
+    },
+    {
+      "filename": "public_youtube700_val/f/33/ed77ca897905.wav",
+      "reference": "и присоединялся",
+      "duration": 0.96
+    },
+    {
+      "filename": "public_youtube700_val/f/35/121b596c7ef5.wav",
+      "reference": "науки с эээ ааа",
+      "duration": 2.54
+    },
+    {
+      "filename": "public_youtube700_val/f/39/c26849f88c04.wav",
+      "reference": "красиво да",
+      "duration": 0.84
+    },
+    {
+      "filename": "public_youtube700_val/f/3c/561f080911cf.wav",
+      "reference": "при понимании драгоценными",
+      "duration": 1.72
+    },
+    {
+      "filename": "public_youtube700_val/f/3c/79e519fdbd02.wav",
+      "reference": "с пылающим жаром",
+      "duration": 1.15
+    },
+    {
+      "filename": "public_youtube700_val/f/47/6bff3cd47fde.wav",
+      "reference": "чтобы найти наш стодолларовый привет на паракасе сперва отыщите яхт клуб лим",
+      "duration": 4.76
+    },
+    {
+      "filename": "public_youtube700_val/f/47/a5f5eec97491.wav",
+      "reference": "тёти какието там тёти какието",
+      "duration": 2.15
+    },
+    {
+      "filename": "public_youtube700_val/f/49/bb91044c87c6.wav",
+      "reference": "партии виднее",
+      "duration": 0.75
+    },
+    {
+      "filename": "public_youtube700_val/f/50/71560e3c443d.wav",
+      "reference": "получу обыкновенный клей",
+      "duration": 1.29
+    },
+    {
+      "filename": "public_youtube700_val/f/53/fb950ed2c888.wav",
+      "reference": "хорошо и богатство и дети",
+      "duration": 1.91
+    },
+    {
+      "filename": "public_youtube700_val/f/65/21f122be3761.wav",
+      "reference": "есть вот есть",
+      "duration": 0.87
+    },
+    {
+      "filename": "public_youtube700_val/f/66/48debb85870d.wav",
+      "reference": "прогрев немножечко вот это место вы можете снять",
+      "duration": 2.25
+    },
+    {
+      "filename": "public_youtube700_val/f/68/e1ddb6f54767.wav",
+      "reference": "обличить систему в себе",
+      "duration": 1.34
+    },
+    {
+      "filename": "public_youtube700_val/f/6d/8e533357133e.wav",
+      "reference": "и отправлялся на следующее",
+      "duration": 1.28
+    },
+    {
+      "filename": "public_youtube700_val/f/73/928059438693.wav",
+      "reference": "нутротерапия является химиотерапией растительного происхождения",
+      "duration": 4.27
+    },
+    {
+      "filename": "public_youtube700_val/f/7e/c23cf3ebba5b.wav",
+      "reference": "и будет прекрасная настоечка значит эээ плоды каштана обладают таким свойством и цветы",
+      "duration": 5.76
+    },
+    {
+      "filename": "public_youtube700_val/f/85/2c6b0cadbc30.wav",
+      "reference": "абхазским коллегам за возможность побывать",
+      "duration": 2.65
+    },
+    {
+      "filename": "public_youtube700_val/f/86/784eaab867dd.wav",
+      "reference": "как вы относитесь к продуктам продлевающим жизнь",
+      "duration": 2.2
+    },
+    {
+      "filename": "public_youtube700_val/f/8f/48ae5b430263.wav",
+      "reference": "сопротивление качению",
+      "duration": 1.37
+    },
+    {
+      "filename": "public_youtube700_val/f/90/15d7a4251760.wav",
+      "reference": "не верьте просто",
+      "duration": 0.84
+    },
+    {
+      "filename": "public_youtube700_val/f/91/481e8b01468e.wav",
+      "reference": "собственно говоря в тот момент когда ты позиционируешь себя как западника ты надеваешь пробковый шлем",
+      "duration": 4.02
+    },
+    {
+      "filename": "public_youtube700_val/f/93/99ec9dc252f9.wav",
+      "reference": "а теперь теперь скалка",
+      "duration": 1.51
+    },
+    {
+      "filename": "public_youtube700_val/f/95/17ec91782624.wav",
+      "reference": "порадует",
+      "duration": 0.83
+    },
+    {
+      "filename": "public_youtube700_val/f/99/0a603f0ea342.wav",
+      "reference": "а это у нас",
+      "duration": 0.66
+    },
+    {
+      "filename": "public_youtube700_val/f/a5/57520f95cd92.wav",
+      "reference": "на всё подряд а стоит вот именно внизу бровки мне необходимо",
+      "duration": 4.51
+    },
+    {
+      "filename": "public_youtube700_val/f/a7/3db5080fb2ef.wav",
+      "reference": "то есть он не в этом мазахизм",
+      "duration": 1.19
+    },
+    {
+      "filename": "public_youtube700_val/f/aa/e36d7ce2d0a5.wav",
+      "reference": "раз в десять дней как в два раза в десять дней это можно сделать",
+      "duration": 3.56
+    },
+    {
+      "filename": "public_youtube700_val/f/af/7dc2de2f4d2e.wav",
+      "reference": "сердца людей",
+      "duration": 1.15
+    },
+    {
+      "filename": "public_youtube700_val/f/b4/b6a0c9b1c7ba.wav",
+      "reference": "дядя будет рад",
+      "duration": 0.91
+    },
+    {
+      "filename": "public_youtube700_val/f/b6/0bee63295e47.wav",
+      "reference": "почему это изначально это же генетически наверное ещё",
+      "duration": 2.91
+    },
+    {
+      "filename": "public_youtube700_val/f/ba/de1d57475ee9.wav",
+      "reference": "инжир урюк чернослив",
+      "duration": 1.54
+    },
+    {
+      "filename": "public_youtube700_val/f/cd/8830bd797ec3.wav",
+      "reference": "напрямую обращаться к богу нужно",
+      "duration": 2.04
+    },
+    {
+      "filename": "public_youtube700_val/f/cd/f0db79aa10ca.wav",
+      "reference": "в тбилиси либо в грозный",
+      "duration": 1.38
+    },
+    {
+      "filename": "public_youtube700_val/f/d0/a67c47976fc5.wav",
+      "reference": "эпицентр находился в восьми километрах от города суонси",
+      "duration": 3.99
+    },
+    {
+      "filename": "public_youtube700_val/f/d7/ac07999b0678.wav",
+      "reference": "и говорить на русском языке",
+      "duration": 1.48
+    },
+    {
+      "filename": "public_youtube700_val/f/dc/5da36762d407.wav",
+      "reference": "эти ребята клёвые",
+      "duration": 1.29
+    },
+    {
+      "filename": "public_youtube700_val/f/e9/dbc582747836.wav",
+      "reference": "французский фотограф",
+      "duration": 1.29
+    },
+    {
+      "filename": "public_youtube700_val/f/ee/269c865a6e80.wav",
+      "reference": "благодаря этой информации я обратила внимание",
+      "duration": 2.49
+    },
+    {
+      "filename": "public_youtube700_val/f/ee/f1d2350961f6.wav",
+      "reference": "зависти системы",
+      "duration": 1.23
+    },
+    {
+      "filename": "public_youtube700_val/f/f2/032770ade4dc.wav",
+      "reference": "маслом которые изготов из двух частей олифы",
+      "duration": 3.1
+    },
+    {
+      "filename": "public_youtube700_val/f/f3/061e63a0f10c.wav",
+      "reference": "вот и будет у вас сила",
+      "duration": 1.39
+    },
+    {
+      "filename": "public_youtube700_val/f/fc/d63b017dc0cf.wav",
+      "reference": "всё выглядит воот так вот ребят",
+      "duration": 1.9
+    }
+  ]
+}
