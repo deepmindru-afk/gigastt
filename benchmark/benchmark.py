@@ -17,6 +17,7 @@ from typing import Optional
 
 from common import (
     audio_duration,
+    bootstrap_ci,
     compute_wer,
     load_manifest,
 )
@@ -37,25 +38,35 @@ def run_benchmark(runner, manifest: list[dict], max_samples: Optional[int] = Non
     total_errors = 0
     total_audio_sec = 0.0
     total_proc_sec = 0.0
+    failures = 0
     details = []
+    per_sample = []
 
     print(f"\n=== {runner.name} ===")
     for idx, sample in enumerate(manifest):
         wav_path = sample["filename"]
         ref = sample["reference"]
+        dur = audio_duration(wav_path)
+
         try:
             hyp, proc_time = runner.transcribe(wav_path)
+            success = True
         except Exception as e:
             print(f"  [{idx + 1}/{len(manifest)}] ERROR: {e}")
-            continue
+            hyp = ""
+            proc_time = 0.0
+            success = False
+            failures += 1
 
-        dur = audio_duration(wav_path)
         wer, errors, ref_count = compute_wer(ref, hyp)
 
         total_ref_words += ref_count
         total_errors += errors
-        total_audio_sec += dur
-        total_proc_sec += proc_time
+        per_sample.append((ref_count, errors))
+
+        if success:
+            total_audio_sec += dur
+            total_proc_sec += proc_time
 
         details.append({
             "file": wav_path,
@@ -66,18 +77,24 @@ def run_benchmark(runner, manifest: list[dict], max_samples: Optional[int] = Non
             "ref_words": ref_count,
             "audio_sec": round(dur, 2),
             "proc_sec": round(proc_time, 2),
+            "failed": not success,
         })
 
         if (idx + 1) % 10 == 0 or idx + 1 == len(manifest):
-            print(f"  [{idx + 1}/{len(manifest)}] WER={wer:.1f}%  RTF={proc_time / dur:.2f}x  {Path(wav_path).name}")
+            rtf = proc_time / dur if dur > 0 and success else 0.0
+            print(f"  [{idx + 1}/{len(manifest)}] WER={wer:.1f}%  RTF={rtf:.2f}x  {Path(wav_path).name}")
 
     overall_wer = (total_errors / total_ref_words * 100.0) if total_ref_words > 0 else 0.0
     overall_rtf = total_proc_sec / total_audio_sec if total_audio_sec > 0 else 0.0
+    ci_low, ci_high = bootstrap_ci(per_sample, iterations=1000)
 
     return {
         "name": runner.name,
         "samples": len(details),
+        "failures": failures,
         "wer": round(overall_wer, 2),
+        "ci_low": round(ci_low, 2),
+        "ci_high": round(ci_high, 2),
         "total_errors": total_errors,
         "total_ref_words": total_ref_words,
         "total_audio_sec": round(total_audio_sec, 2),
@@ -88,19 +105,25 @@ def run_benchmark(runner, manifest: list[dict], max_samples: Optional[int] = Non
 
 
 def print_results_table(results: list[dict]):
-    print("\n" + "=" * 80)
-    print(f"{'Engine':<20} {'Samples':>8} {'WER %':>8} {'RTF':>8} {'Errors':>10} {'Words':>10}")
-    print("-" * 80)
+    print("\n" + "=" * 90)
+    print(
+        f"{'Engine':<20} {'Samples':>8} {'Failures':>9} {'WER %':>8} "
+        f"{'95% CI':>16} {'RTF':>8} {'Errors':>10} {'Words':>10}"
+    )
+    print("-" * 90)
     for r in results:
+        ci = f"[{r['ci_low']:.1f}, {r['ci_high']:.1f}]"
         print(
             f"{r['name']:<20} "
             f"{r['samples']:>8} "
+            f"{r['failures']:>9} "
             f"{r['wer']:>8.2f} "
+            f"{ci:>16} "
             f"{r['rtf']:>8.3f} "
             f"{r['total_errors']:>10} "
             f"{r['total_ref_words']:>10}"
         )
-    print("=" * 80)
+    print("=" * 90)
 
 
 def main():
@@ -147,8 +170,10 @@ def main():
     print_results_table(results)
 
     # Write JSON
+    total_failures = sum(r["failures"] for r in results)
     output = {
         "manifest_samples": len(manifest),
+        "total_failures": total_failures,
         "runners": results,
     }
     with open(args.output, "w", encoding="utf-8") as f:
