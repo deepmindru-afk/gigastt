@@ -1,14 +1,18 @@
 #!/bin/bash
 # Monitor all 4 benchmark processes and finalize results when all complete.
+# Paths are parameterized via environment variables with sensible defaults.
+
+RESULTS_DIR="${BENCHMARK_RESULTS_DIR:-/tmp}"
+LOG="${BENCHMARK_MONITOR_LOG:-$RESULTS_DIR/bench_monitor.log}"
+REPORT="${BENCHMARK_MONITOR_REPORT:-$RESULTS_DIR/bench_final_report.txt}"
+REPO_DIR="${BENCHMARK_REPO_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
 
 RESULTS=(
-  "/tmp/results_full_gigastt.json"
-  "/tmp/results_full_whisper.json"
-  "/tmp/results_full_faster.json"
-  "/tmp/results_full_vosk.json"
+  "$RESULTS_DIR/results_full_gigastt.json"
+  "$RESULTS_DIR/results_full_whisper.json"
+  "$RESULTS_DIR/results_full_faster.json"
+  "$RESULTS_DIR/results_full_vosk.json"
 )
-LOG="/tmp/bench_monitor.log"
-REPORT="/tmp/bench_final_report.txt"
 
 echo "[$(date)] Monitor started" >> "$LOG"
 
@@ -25,27 +29,27 @@ while true; do
     echo "[$(date)] All results ready" >> "$LOG"
     break
   fi
-  
+
   # Log current progress
   echo "[$(date)] Progress:" >> "$LOG"
   for f in gigastt whisper faster vosk; do
-    tail -1 "/tmp/bench_full_${f}.log" 2>/dev/null >> "$LOG"
+    tail -1 "$RESULTS_DIR/bench_full_${f}.log" 2>/dev/null >> "$LOG"
   done
   echo "" >> "$LOG"
-  
+
   sleep 300
 done
 
 # Build final results
-cd /Users/ekhodzitsky/Documents/personal/gigastt
-python3 << 'PY'
+cd "$REPO_DIR"
+python3 << PY
 import json, os
 results = {"manifest_samples": 0, "runners": []}
 files = [
-    ("/tmp/results_full_gigastt.json", "gigastt"),
-    ("/tmp/results_full_whisper.json", "whisper.cpp"),
-    ("/tmp/results_full_faster.json", "faster-whisper"),
-    ("/tmp/results_full_vosk.json", "vosk"),
+    ("$RESULTS_DIR/results_full_gigastt.json", "gigastt"),
+    ("$RESULTS_DIR/results_full_whisper.json", "whisper.cpp"),
+    ("$RESULTS_DIR/results_full_faster.json", "faster-whisper"),
+    ("$RESULTS_DIR/results_full_vosk.json", "vosk"),
 ]
 for path, name in files:
     try:
@@ -69,7 +73,7 @@ for r in results["runners"]:
     )
 report.append("=" * 90)
 
-with open("/tmp/bench_final_report.txt", "w") as f:
+with open("$REPORT", "w") as f:
     f.write("\n".join(report) + "\n")
 
 print("\n".join(report))
