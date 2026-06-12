@@ -15,7 +15,7 @@ for dataset in "${DATASETS[@]}"; do
     out="$RESULTS_DIR/${dataset}_${runner}.json"
     log="$LOG_DIR/${dataset}_${runner}.log"
     echo "[$(date -Iseconds)] Starting $dataset / $runner"
-    python benchmark.py \
+    "$(dirname "$0")/.venv/bin/python" benchmark.py \
       --dataset "$dataset" \
       --runners "$runner" \
       --max-samples 0 \
