@@ -18,6 +18,8 @@ Reproducible benchmark comparing **gigastt** against popular open-source ASR eng
 
 ## Methodology
 
+### Timing
+
 RTF is measured against a **pre-warmed engine** so that model-load time is not unfairly charged to any runner:
 
 - **gigastt** is measured via HTTP calls to a `gigastt serve` process that stays up for the whole benchmark.
@@ -25,6 +27,25 @@ RTF is measured against a **pre-warmed engine** so that model-load time is not u
 - **whisper.cpp** runs in **server mode** (`whisper-server`). The model is loaded once when the server starts; each sample is sent as an HTTP POST to `/inference` and the wall-clock request latency is used as `processing_time`. This replaces the previous per-sample `whisper-cli` invocation that re-loaded the ~3 GB model on every file and produced an artificially high RTF.
 
 WER is unchanged by this switch: whisper.cpp still uses the same `large-v3` Russian model and the same text normalization pipeline as the other engines.
+
+### Decode parameters
+
+The following decode parameters are used so readers can reproduce the comparison exactly:
+
+| Engine | Parameter | Value | Notes |
+|---|---|---|---|
+| gigastt | greedy beam search | beam width 1 | RNN-T greedy decode via ONNX Runtime |
+| whisper.cpp | default CLI/server defaults | — | temperature 0, prompt none, language `ru` |
+| faster-whisper | `beam_size` | 5 | CTranslate2, `language="ru"`, `compute_type="int8"` |
+| Vosk | default Kaldi graph | — | `SetWords(False)`, 16 kHz mono 16-bit input |
+
+### Failure handling
+
+If a runner crashes or fails on a sample, that sample is counted as a 100% WER deletion of the reference (all reference words marked as errors). The per-runner `failures` counter and the top-level `total_failures` field in `results.json` make these cases visible instead of silently dropping them from the denominator.
+
+### Confidence intervals
+
+WER is reported with a bootstrap 95% confidence interval computed by resampling per-sample `(ref_words, errors)` pairs with replacement 1 000 times and taking the 2.5th and 97.5th percentiles. This mirrors the Rust CI implementation in `crates/gigastt/tests/benchmark.rs`.
 
 ## Quick Start
 
@@ -100,22 +121,32 @@ If the external dataset is missing, the benchmark falls back to the bundled fixt
 
 ## Output Format
 
-`results.json` contains per-engine summaries and per-sample details:
+`results.json` contains run metadata, per-engine summaries with failures and 95% CI, and per-sample details:
 
 ```json
 {
   "manifest_samples": 100,
+  "total_failures": 0,
   "runners": [
     {
       "name": "gigastt",
       "samples": 100,
+      "failures": 0,
       "wer": 11.40,
+      "ci_low": 10.9,
+      "ci_high": 11.9,
       "rtf": 0.045,
       "total_errors": 57,
       "total_ref_words": 500,
       "details": [...]
     }
-  ]
+  ],
+  "metadata": {
+    "collected_at": "2026-06-12T14:32:00+00:00",
+    "host": { "cpu": "...", "ram_bytes": ..., "os": "...", "python_version": "..." },
+    "dataset": { "name": "golos", "source": "...", "license": "...", "manifest_path": "..." },
+    "engines": [ { "name": "gigastt", "version": "...", "model_sha256": "..." }, ... ]
+  }
 }
 ```
 

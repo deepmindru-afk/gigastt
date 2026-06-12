@@ -189,5 +189,10 @@ class WhisperCppRunner:
         text = " ".join(text.split())
         return text, elapsed
 
-    def __del__(self):
+    def __enter__(self):
+        self._start_server()
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
         self._stop_server()
+        return False
