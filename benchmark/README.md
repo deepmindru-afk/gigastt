@@ -141,6 +141,26 @@ Run the benchmark on the farfield slice:
 python benchmark.py --dataset golos_farfield --max-samples 0
 ```
 
+### Common Voice Russian
+
+An alternative benchmark slice can be prepared from **Mozilla Common Voice** Russian (`ru`) test split.
+
+- **Source:** Mozilla Common Voice contributors
+- **Dataset:** https://huggingface.co/datasets/mozilla-foundation/common_voice_16_1
+- **Project page:** https://commonvoice.mozilla.org/ru
+- **License:** CC0-1.0
+
+```bash
+# Prepare a deterministic 1000-sample slice (one-time)
+python ../scripts/prepare_common_voice_ru.py
+```
+
+Run the benchmark on the Common Voice slice:
+
+```bash
+python benchmark.py --dataset common_voice_ru --max-samples 0
+```
+
 If the external dataset is missing, the benchmark falls back to the bundled fixtures (15 samples) from `crates/gigastt/tests/fixtures/`.
 
 ## Output Format
