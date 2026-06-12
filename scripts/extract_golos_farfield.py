@@ -22,21 +22,46 @@ and writes two manifests:
     seed 42, relative filenames)
 """
 
+import io
 import json
 import os
 import random
 import sys
+import wave
 from pathlib import Path
 
+import numpy as np
 import pyarrow.parquet as pq
+import soundfile as sf
 
 
 SRC_DIR = Path("~/.gigastt/benchmarks/golos/farfield").expanduser()
 DST_DIR = Path("~/.gigastt/benchmarks/golos_farfield_wav").expanduser()
 SLICE_SIZE = 1000
 SLICE_SEED = 42
+SAMPLE_RATE = 16000
 REPO_ROOT = Path(__file__).parent.parent
 SLICE_MANIFEST_PATH = REPO_ROOT / "benchmark" / "manifests" / "golos_farfield.json"
+
+
+def _write_pcm16_wav(path: Path, audio_bytes: bytes) -> float:
+    """Decode any WAV/PCM source and write a 16 kHz mono PCM16 WAV.
+
+    The Golos farfield parquet stores float32 WAVs, which some runners (e.g.
+    Vosk) cannot consume. We normalize to PCM16 to keep the benchmark uniform.
+    """
+    data, sr = sf.read(io.BytesIO(audio_bytes), dtype="float32")
+    if data.ndim > 1:
+        data = data.mean(axis=1)
+
+    pcm = (np.clip(data, -1.0, 1.0) * 32767.0).astype(np.int16)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(SAMPLE_RATE)
+        wav.writeframes(pcm.tobytes())
+    return len(pcm) / SAMPLE_RATE
 
 
 def main():
@@ -58,17 +83,14 @@ def main():
         audio_col = table["audio"]
         text_col = table["text"]
         id_col = table["id"]
-        duration_col = table["duration"]
 
         for i in range(n_rows):
             sample_id = id_col[i].as_py()
             text = text_col[i].as_py()
             audio_bytes = audio_col[i]["bytes"].as_py()
-            duration = float(duration_col[i].as_py())
 
             wav_path = DST_DIR / f"{sample_id}.wav"
-            with open(wav_path, "wb") as f:
-                f.write(audio_bytes)
+            duration = _write_pcm16_wav(wav_path, audio_bytes)
 
             full_samples.append({
                 "filename": str(wav_path),
