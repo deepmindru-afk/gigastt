@@ -103,9 +103,13 @@ GIGASTT_BENCHMARK_MAX_SAMPLES=100 docker-compose up
 
 > **Note:** On macOS, Docker Desktop must be running. On Linux with NVIDIA GPUs, add `runtime: nvidia` to `docker-compose.yml` and use `--gpus all` with `docker run`.
 
-## Dataset
+## Datasets
 
-The benchmark uses the **Golos crowd** test set (9 994 samples of Russian speech).
+The benchmark supports multiple Russian speech datasets. Use `--dataset <name>` to select one (default: `golos_crowd`).
+
+### Golos crowd
+
+The default **Golos crowd** test set (9 994 samples of Russian speech).
 
 - **Source:** SberDevices
 - **Repository:** https://github.com/sberdevices/golos
@@ -115,6 +119,26 @@ The benchmark uses the **Golos crowd** test set (9 994 samples of Russian speech
 ```bash
 # Download and extract (one-time)
 python ../scripts/extract_golos.py
+```
+
+### Golos farfield
+
+The **Golos farfield** test set (1 916 samples) recorded at a distance from the microphone.
+
+- **Source:** SberDevices
+- **Repository:** https://github.com/sberdevices/golos
+- **Paper:** Karpov et al., *Golos: Russian Dataset for Speech Research*, arXiv:2106.10161 (2021)
+- **License:** Sber Public License (attribution/non-commercial/share-alike) — https://github.com/sberdevices/golos/blob/master/license/en_us.pdf
+
+```bash
+# Download and extract (one-time), then create the committed 1 000-sample manifest
+python ../scripts/extract_golos_farfield.py
+```
+
+Run the benchmark on the farfield slice:
+
+```bash
+python benchmark.py --dataset golos_farfield --max-samples 0
 ```
 
 If the external dataset is missing, the benchmark falls back to the bundled fixtures (15 samples) from `crates/gigastt/tests/fixtures/`.
