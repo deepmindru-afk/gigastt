@@ -15,20 +15,82 @@ def home_dir() -> Path:
     return Path.home()
 
 
-def manifest_path() -> Path:
+# Registry of committed benchmark manifests.
+# Paths are relative to the repository root.
+DATASETS: dict[str, str] = {
+    "golos_crowd": "benchmark/manifests/golos_crowd.json",
+    "golos_farfield": "benchmark/manifests/golos_farfield.json",
+}
+
+
+def manifest_path(dataset: str = "golos_crowd") -> Path:
+    """Resolve the manifest path for a dataset.
+
+    Defaults to ``golos_crowd`` for backward compatibility. If the committed
+    manifest does not exist, falls back to the legacy crowd manifest or the
+    bundled fixtures.
+    """
+    repo_root = Path(__file__).parent.parent
+
+    if dataset in DATASETS:
+        p = repo_root / DATASETS[dataset]
+        if p.exists():
+            return p
+
+    # Legacy crowd manifest fallback.
+    if dataset == "golos_crowd":
+        legacy = home_dir() / ".gigastt/benchmarks/golos_wav/manifest.json"
+        if legacy.exists():
+            return legacy
+
     p = home_dir() / ".gigastt/benchmarks/golos_wav/manifest.json"
     if p.exists():
         return p
-    # fallback to bundled fixtures
-    return Path(__file__).parent.parent / "crates/gigastt/tests/fixtures/manifest.json"
+
+    return repo_root / "crates/gigastt/tests/fixtures/manifest.json"
 
 
-def load_manifest(max_samples: Optional[int] = None):
-    with open(manifest_path(), encoding="utf-8") as f:
+def load_manifest(max_samples: Optional[int] = None, dataset: str = "golos_crowd"):
+    """Load a benchmark manifest.
+
+    Supports both the new registry format (JSON object with ``audio_root`` and
+    ``samples``) and the legacy list format (list of ``{"filename", "reference"}``).
+    Filenames are resolved to absolute paths. If ``duration`` is absent it is
+    computed from the WAV file.
+    """
+    path = manifest_path(dataset)
+    with open(path, encoding="utf-8") as f:
         data = json.load(f)
+
+    if isinstance(data, list):
+        # Legacy manifest: absolute filenames.
+        samples = data
+        audio_root: Optional[Path] = None
+    else:
+        audio_root = Path(data.get("audio_root", "~")).expanduser().resolve()
+        samples = data.get("samples", [])
+
+    result = []
+    for s in samples:
+        filename = s["filename"]
+        if audio_root is not None and not Path(filename).is_absolute():
+            wav_path = str(audio_root / filename)
+        else:
+            wav_path = str(Path(filename).expanduser().resolve())
+
+        duration = s.get("duration")
+        if duration is None:
+            duration = audio_duration(wav_path)
+
+        result.append({
+            "filename": wav_path,
+            "reference": s["reference"],
+            "duration": duration,
+        })
+
     if max_samples and max_samples > 0:
-        data = data[:max_samples]
-    return data
+        result = result[:max_samples]
+    return result
 
 
 # --- Russian number-to-words (simplified, matching Rust logic) ---
@@ -290,19 +352,40 @@ def collect_host_metadata() -> dict:
 
 
 def collect_dataset_metadata(
-    dataset_name: str = "golos", version: Optional[str] = None
+    dataset_name: str = "golos_crowd", version: Optional[str] = None
 ) -> dict:
-    """Collect dataset source metadata.
+    """Collect dataset source metadata from the manifest.
 
     Defaults to the Golos crowd subset by SberDevices.
     """
+    path = manifest_path(dataset_name)
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        data = {}
+
+    if isinstance(data, list):
+        # Legacy crowd manifest.
+        return {
+            "name": dataset_name,
+            "version": version,
+            "source": "https://github.com/sberdevices/golos",
+            "attribution": "Golos by SberDevices",
+            "license": "Sber Public License (attribution/non-commercial/share-alike)",
+            "manifest_path": str(path),
+        }
+
     return {
-        "name": dataset_name,
+        "name": data.get("dataset", dataset_name),
         "version": version,
-        "source": "https://github.com/salute-developers/golos",
-        "attribution": "Golos by SberDevices",
-        "license": "CC-BY-4.0",
-        "manifest_path": str(manifest_path()),
+        "source": data.get("source", ""),
+        "attribution": data.get("attribution", ""),
+        "license": data.get("license", ""),
+        "manifest_path": str(path),
+        "slice_seed": data.get("slice_seed"),
+        "slice_size": data.get("slice_size"),
+        "total_available": data.get("total_available"),
     }
 
 
