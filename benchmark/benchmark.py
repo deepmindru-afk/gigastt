@@ -47,7 +47,7 @@ def run_benchmark(runner, manifest: list[dict], max_samples: Optional[int] = Non
     for idx, sample in enumerate(manifest):
         wav_path = sample["filename"]
         ref = sample["reference"]
-        dur = audio_duration(wav_path)
+        dur = sample.get("duration") or audio_duration(wav_path)
 
         try:
             hyp, proc_time = runner.transcribe(wav_path)
@@ -134,11 +134,13 @@ def main():
     parser.add_argument("--output", type=str, default="results.json", help="Output JSON path")
     parser.add_argument("--runners", type=str, default="all",
                         help="Comma-separated list: gigastt,whisper_cpp,faster_whisper,vosk (or 'all')")
+    parser.add_argument("--dataset", type=str, default=os.environ.get("GIGASTT_BENCHMARK_DATASET", "golos_crowd"),
+                        help="Dataset manifest name (e.g. golos_crowd, golos_farfield)")
     args = parser.parse_args()
 
     max_samples = args.max_samples if args.max_samples > 0 else None
-    manifest = load_manifest(max_samples)
-    print(f"Loaded {len(manifest)} samples from manifest")
+    manifest = load_manifest(max_samples=max_samples, dataset=args.dataset)
+    print(f"Loaded {len(manifest)} samples from dataset '{args.dataset}'")
 
     requested = set(args.runners.split(",")) if args.runners != "all" else {"all"}
     all_runners = [
@@ -178,10 +180,11 @@ def main():
     # Write JSON
     total_failures = sum(r["failures"] for r in results)
     output = {
+        "dataset": args.dataset,
         "manifest_samples": len(manifest),
         "total_failures": total_failures,
         "runners": results,
-        "metadata": collect_repro_metadata(active_runners, dataset_name="golos"),
+        "metadata": collect_repro_metadata(active_runners, dataset_name=args.dataset),
     }
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump(output, f, ensure_ascii=False, indent=2)
