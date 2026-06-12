@@ -138,3 +138,25 @@ def test_wer_zero_for_identical_transcriptions():
     assert wer == 0.0
     assert errors == 0
     assert ref_count == 2
+
+
+def test_accusative_thousand():
+    assert normalize_for_wer("сбер переведи тысячу андрею") == [
+        "сбер", "переведи", "1000", "андрею"
+    ]
+
+
+def test_ordinal_suffix_dropped():
+    assert normalize_for_wer("36-я серия") == ["36", "серия"]
+
+
+def test_latin_number_abbreviation_no():
+    assert normalize_for_wer("No 755") == ["755"]
+
+
+def test_percent_keeps_adjacent_numbers_separate():
+    assert normalize_for_wer("15% 180") == ["15", "180"]
+
+
+def test_chunked_thousands_merge():
+    assert normalize_for_wer("3 000 ₽") == ["3000"]
