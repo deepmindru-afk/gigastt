@@ -263,7 +263,7 @@ If the external dataset is missing, the benchmark falls back to the bundled fixt
 
 ## Renormalized WER results
 
-The benchmark was re-run with the new symmetric words-to-digits normalization. The table below covers `golos_crowd_1k` and `golos_farfield` for the engines that had been run at the time of writing; the remaining `openstt_calls` and `openstt_youtube` pairs are still in progress.
+Existing result files were recomputed with the new symmetric words-to-digits normalization (`benchmark/recompute_wer.py`). The table below covers `golos_crowd_1k` and `golos_farfield` for the engines that had been run at the time of writing; the remaining `openstt_calls` and `openstt_youtube` pairs are being generated with the new normalization.
 
 | Dataset | Engine | Old WER | Old CI | New WER | New CI | Δ WER |
 |---|---|---|---|---|---|---|
