@@ -1,5 +1,20 @@
 #!/usr/bin/env python3
-"""Extract WAV files and manifest from Golos crowd parquet."""
+"""Extract WAV files and manifest from the Golos crowd test parquet.
+
+Dataset provenance:
+  - Name: Golos (Russian speech corpus)
+  - Authors: Alexander Denisenko, Angelina Kovalenko, Fedor Minkin, Nikolay Karpov
+    (SberDevices)
+  - Paper: Karpov et al., "Golos: Russian Dataset for Speech Research",
+    arXiv:2106.10161 (2021)
+  - Repository: https://github.com/sberdevices/golos
+  - License: Sber Public License (attribution/non-commercial/share-alike)
+    https://github.com/sberdevices/golos/blob/master/license/en_us.pdf
+
+This script expects the crowd-domain parquet files to be placed in
+~/.gigastt/benchmarks/golos/crowd/ (e.g. downloaded from the HuggingFace
+mirror at bond005/sberdevices_golos_10h_crowd).
+"""
 
 import json
 import os
