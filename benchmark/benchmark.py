@@ -18,6 +18,7 @@ from typing import Optional
 from common import (
     audio_duration,
     bootstrap_ci,
+    collect_repro_metadata,
     compute_wer,
     load_manifest,
 )
@@ -164,7 +165,12 @@ def main():
 
     results = []
     for runner in active_runners:
-        result = run_benchmark(runner, manifest, max_samples=None)  # already truncated
+        # Use explicit context manager lifecycle for runners that support it
+        if hasattr(runner, "__enter__"):
+            with runner:
+                result = run_benchmark(runner, manifest, max_samples=None)  # already truncated
+        else:
+            result = run_benchmark(runner, manifest, max_samples=None)
         results.append(result)
 
     print_results_table(results)
@@ -175,6 +181,7 @@ def main():
         "manifest_samples": len(manifest),
         "total_failures": total_failures,
         "runners": results,
+        "metadata": collect_repro_metadata(active_runners, dataset_name="golos"),
     }
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump(output, f, ensure_ascii=False, indent=2)
