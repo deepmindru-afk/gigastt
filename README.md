@@ -254,7 +254,38 @@ java -jar client.jar recording.wav
 | whisper.cpp | Large v3 | 14.96% | 1.108x | ~3 GB |
 | faster-whisper | Large v3 (INT8) | 15.73% | 1.224x | ~3 GB |
 
-> **Note:** Vosk leads on this clean-speech subset (Golos crowd) with excellent accuracy, but requires 1.3 GB. gigastt targets **streaming real-time** use-cases with sub-200ms latency, hardware acceleration (CoreML/CUDA/NNAPI), and a 6× smaller model footprint. Full reproducible benchmark: [`benchmark/README.md`](benchmark/README.md). Raw results: [`benchmark-results-local`](https://github.com/ekhodzitsky/gigastt/tree/benchmark-results-local).
+> **Note:** Vosk leads on this clean-speech subset (Golos crowd) with excellent accuracy, but requires 1.3 GB. gigastt targets **streaming real-time** use-cases with sub-200ms latency, hardware acceleration (CoreML/CUDA/NNAPI), and a 6× smaller model footprint.
+
+### Cross-Domain Comparison (1 000-sample slices, CPU)
+
+A single clean-speech dataset does not tell the whole story. The benchmark now
+runs on four contrasting Russian domains:
+
+| Domain | Dataset | Conditions | License |
+|---|---|---|---|
+| Clean read speech | `golos_crowd_1k` | studio/crowdsourced close-mic | Sber Public License |
+| Far-field commands | `golos_farfield` | smart-device commands at distance | Sber Public License |
+| Telephone calls | `openstt_calls` | noisy phone audio | CC BY-NC 4.0 |
+| YouTube speech | `openstt_youtube` | spontaneous online video | CC BY-NC 4.0 |
+
+The WER table below is populated by the reproducible benchmark suite
+(`benchmark/run_full_suite.sh`) and published to the
+[`benchmark-results-local`](https://github.com/ekhodzitsky/gigastt/tree/benchmark-results-local)
+branch. Results are measured with failures counted as 100% WER and 95%
+bootstrap confidence intervals.
+
+| Engine | Model | Clean read | Far-field | Phone calls | YouTube | Size |
+|---|---|---|---|---|---|---|
+| gigastt | GigaAM v3 (INT8) | *pending* | *pending* | *pending* | *pending* | 230 MB |
+| whisper.cpp | Whisper Large v3 | *pending* | *pending* | *pending* | *pending* | ~3 GB |
+| faster-whisper | Whisper Large v3 (INT8) | *pending* | *pending* | *pending* | *pending* | ~3 GB |
+| Vosk | vosk-model-ru-0.42 | *pending* | *pending* | *pending* | *pending* | 1.3 GB |
+
+> **Expected narrative:** smoke runs already show Vosk dominating clean read
+> speech, gigastt leading on far-field commands, and Whisper-based engines
+> becoming competitive on spontaneous/noisy domains. The full-run numbers will
+> replace the placeholders above. Full methodology and dataset preparation:
+> [`benchmark/README.md`](benchmark/README.md).
 
 ### Hardware Acceleration
 
