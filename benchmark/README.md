@@ -284,7 +284,7 @@ On `golos_crowd_1k` gigastt reaches ~8.6% WER after renormalization (down from 1
 - **Date/year format mismatches**, e.g. "двадцатый год" vs "2020". A small share (~1–2%).
 - **Decimal/fraction numbers** not normalized, e.g. "три и два" vs "3,2". A small share (<1%).
 
-No further normalization rules were added specifically to tailor results to gigastt; the pipeline remains symmetric across all engines.
+No further normalization rules were added specifically to tailor results to gigastt; the pipeline remains symmetric across all engines. Concrete examples of the top residual errors are in [`results_full/residual_errors_gigastt_crowd.md`](results_full/residual_errors_gigastt_crowd.md).
 
 ## Output Format
 
