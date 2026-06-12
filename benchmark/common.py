@@ -197,6 +197,40 @@ def compute_wer(reference: str, hypothesis: str) -> tuple[float, int, int]:
     return wer, errors, ref_count
 
 
+_U64_MASK = (1 << 64) - 1
+
+
+def bootstrap_ci(per_sample: list[tuple[int, int]], iterations: int = 1000) -> tuple[float, float]:
+    """Bootstrap 95% confidence interval for WER via resampling with replacement.
+
+    Mirrors the implementation in crates/gigastt/tests/benchmark.rs so that
+    Python and Rust benchmark suites produce comparable intervals.  Each tuple
+    is (ref_word_count, errors) for a single sample; failures are represented
+    as errors == ref_word_count (100% WER for that sample).
+    """
+    n = len(per_sample)
+    if n == 0:
+        return (0.0, 0.0)
+
+    rng: int = 123456789
+    wers: list[float] = []
+    for _ in range(iterations):
+        total_ref = 0
+        total_err = 0
+        for _ in range(n):
+            rng = (rng * 6364136223846793005 + 1) & _U64_MASK
+            idx = (rng >> 32) % n
+            total_ref += per_sample[idx][0]
+            total_err += per_sample[idx][1]
+        wer = (total_err / total_ref * 100.0) if total_ref > 0 else 0.0
+        wers.append(wer)
+
+    wers.sort()
+    lo = wers[(iterations * 25) // 1000]
+    hi = wers[(iterations * 975) // 1000]
+    return (lo, hi)
+
+
 def audio_duration(wav_path: str) -> float:
     """Get duration in seconds using ffprobe or wave module."""
     try:
