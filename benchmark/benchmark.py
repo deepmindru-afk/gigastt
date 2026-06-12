@@ -139,8 +139,13 @@ def main():
     args = parser.parse_args()
 
     max_samples = args.max_samples if args.max_samples > 0 else None
-    manifest = load_manifest(max_samples=max_samples, dataset=args.dataset)
-    print(f"Loaded {len(manifest)} samples from dataset '{args.dataset}'")
+    manifest_data = load_manifest(max_samples=max_samples, dataset=args.dataset)
+    manifest = manifest_data["samples"]
+    skipped_empty_refs = manifest_data["skipped_empty_refs"]
+    print(
+        f"Loaded {len(manifest)} samples from dataset '{args.dataset}' "
+        f"({skipped_empty_refs} skipped with empty reference)"
+    )
 
     requested = set(args.runners.split(",")) if args.runners != "all" else {"all"}
     all_runners = [
@@ -181,7 +186,8 @@ def main():
     total_failures = sum(r["failures"] for r in results)
     output = {
         "dataset": args.dataset,
-        "manifest_samples": len(manifest),
+        "manifest_samples": len(manifest) + skipped_empty_refs,
+        "skipped_empty_refs": skipped_empty_refs,
         "total_failures": total_failures,
         "runners": results,
         "metadata": collect_repro_metadata(active_runners, dataset_name=args.dataset),

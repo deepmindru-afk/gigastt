@@ -58,13 +58,16 @@ def manifest_path(dataset: str = "golos_crowd") -> Path:
     raise ValueError(f"Unknown dataset {dataset!r}. Known datasets: {known}")
 
 
-def load_manifest(max_samples: Optional[int] = None, dataset: str = "golos_crowd") -> list[dict]:
+def load_manifest(max_samples: Optional[int] = None, dataset: str = "golos_crowd") -> dict:
     """Load a benchmark manifest.
 
     Supports both the new registry format (JSON object with ``audio_root`` and
     ``samples``) and the legacy list format (list of ``{"filename", "reference"}``).
-    Filenames are resolved to absolute paths. If ``duration`` is present it is
-    preserved; otherwise callers should fall back to ``audio_duration()``.
+    Filenames are resolved to absolute paths. Samples whose ``reference`` is empty
+    or whitespace-only are skipped and counted.
+
+    Returns a dict with ``samples`` (list of non-empty samples with resolved paths)
+    and ``skipped_empty_refs`` (int).
     """
     path = manifest_path(dataset)
     with open(path, encoding="utf-8") as f:
@@ -81,7 +84,13 @@ def load_manifest(max_samples: Optional[int] = None, dataset: str = "golos_crowd
         raise ValueError(f"Manifest {path} must be a JSON object or list")
 
     result = []
+    skipped_empty_refs = 0
     for s in raw_samples:
+        reference = s.get("reference", "")
+        if not reference.strip():
+            skipped_empty_refs += 1
+            continue
+
         filename = s["filename"]
         fp = Path(filename)
         if not fp.is_absolute():
@@ -90,7 +99,7 @@ def load_manifest(max_samples: Optional[int] = None, dataset: str = "golos_crowd
 
         sample = {
             "filename": wav_path,
-            "reference": s["reference"],
+            "reference": reference,
         }
         if "duration" in s:
             sample["duration"] = s["duration"]
@@ -98,86 +107,156 @@ def load_manifest(max_samples: Optional[int] = None, dataset: str = "golos_crowd
 
     if max_samples and max_samples > 0:
         result = result[:max_samples]
-    return result
+    return {"samples": result, "skipped_empty_refs": skipped_empty_refs}
 
 
-# --- Russian number-to-words (simplified, matching Rust logic) ---
+# --- Russian words-to-digits ITN for symmetric WER normalization ---
 
-ONES = ["", "один", "два", "три", "четыре", "пять", "шесть", "семь", "восемь", "девять"]
-TEENS = ["десять", "одиннадцать", "двенадцать", "тринадцать", "четырнадцать",
-         "пятнадцать", "шестнадцать", "семнадцать", "восемнадцать", "девятнадцать"]
-TENS = ["", "", "двадцать", "тридцать", "сорок", "пятьдесят", "шестьдесят",
-        "семьдесят", "восемьдесят", "девяносто"]
-HUNDREDS = ["", "сто", "двести", "триста", "четыреста", "пятьсот",
-            "шестьсот", "семьсот", "восемьсот", "девятьсот"]
+_UNIT = 1
+_TEEN = 10
+_TEN = 10
+_HUNDRED = 100
+_THOUSAND = 1000
+_MILLION = 1_000_000
 
-
-def number_to_words(n: int) -> str:
-    if n == 0:
-        return "ноль"
-    if n > 999_999:
-        return str(n)
-    parts = []
-    rem = n
-
-    if rem >= 1000:
-        thousands = rem // 1000
-        rem %= 1000
-        if thousands >= 100:
-            parts.append(HUNDREDS[thousands // 100])
-        t = thousands % 100
-        if t >= 20:
-            parts.append(TENS[t // 10])
-            o = t % 10
-            if o == 1:
-                parts.append("одна")
-            elif o == 2:
-                parts.append("две")
-            elif 3 <= o <= 9:
-                parts.append(ONES[o])
-        elif t >= 10:
-            parts.append(TEENS[t - 10])
-        elif t > 0:
-            if t == 1:
-                parts.append("одна")
-            elif t == 2:
-                parts.append("две")
-            else:
-                parts.append(ONES[t])
-
-        last_two = thousands % 100
-        last_one = thousands % 10
-        if 11 <= last_two <= 19:
-            parts.append("тысяч")
-        elif last_one == 1:
-            parts.append("тысяча")
-        elif 2 <= last_one <= 4:
-            parts.append("тысячи")
-        else:
-            parts.append("тысяч")
-
-    r = rem
-    if r >= 100:
-        parts.append(HUNDREDS[r // 100])
-    t = r % 100
-    if t >= 20:
-        parts.append(TENS[t // 10])
-        if t % 10 != 0:
-            parts.append(ONES[t % 10])
-    elif t >= 10:
-        parts.append(TEENS[t - 10])
-    elif t > 0:
-        parts.append(ONES[t])
-
-    return " ".join(parts)
+_NUMBER_WORDS: dict[str, tuple[int, int]] = {}
 
 
-ORDINALS = {
-    1: "первый", 2: "второй", 3: "третий", 4: "четвертый", 5: "пятый",
-    6: "шестой", 7: "седьмой", 8: "восьмой", 9: "девятый", 10: "десятый",
-    11: "одиннадцатый", 12: "двенадцатый", 13: "тринадцатый", 14: "четырнадцатый",
-    15: "пятнадцатый", 16: "шестнадцатый", 17: "семнадцатый", 18: "восемнадцатый",
-    19: "девятнадцатый", 20: "двадцатый",
+def _add_num(value: int, scale: int, forms: list[str]) -> None:
+    for form in forms:
+        _NUMBER_WORDS[form] = (value, scale)
+
+
+# Cardinals 0-9 with common case/gender forms.
+_add_num(0, _UNIT, ["ноль", "ноля", "нолю", "нолем", "нолём", "ноле"])
+_add_num(1, _UNIT, [
+    "один", "одна", "одно", "одного", "одной", "одному", "одном", "одним",
+])
+_add_num(2, _UNIT, ["два", "две", "двух", "двум", "двумя"])
+_add_num(3, _UNIT, ["три", "трех", "трёх", "трем", "трём", "тремя"])
+_add_num(4, _UNIT, ["четыре", "четырёх", "четырех", "четырём", "четырем", "четырьмя"])
+_add_num(5, _UNIT, ["пять", "пяти", "пятью"])
+_add_num(6, _UNIT, ["шесть", "шести", "шестью"])
+_add_num(7, _UNIT, ["семь", "семи", "семью"])
+_add_num(8, _UNIT, ["восемь", "восьми", "восьмью"])
+_add_num(9, _UNIT, ["девять", "девяти", "девятью"])
+
+# Teens 10-19.
+for _v, _forms in [
+    (10, ["десять", "десяти", "десятью"]),
+    (11, ["одиннадцать", "одиннадцати"]),
+    (12, ["двенадцать", "двенадцати"]),
+    (13, ["тринадцать", "тринадцати"]),
+    (14, ["четырнадцать", "четырнадцати"]),
+    (15, ["пятнадцать", "пятнадцати"]),
+    (16, ["шестнадцать", "шестнадцати"]),
+    (17, ["семнадцать", "семнадцати"]),
+    (18, ["восемнадцать", "восемнадцати"]),
+    (19, ["девятнадцать", "девятнадцати"]),
+]:
+    _add_num(_v, _TEEN, _forms)
+
+# Tens 20-90.
+for _v, _forms in [
+    (20, ["двадцать", "двадцати"]),
+    (30, ["тридцать", "тридцати"]),
+    (40, ["сорок", "сорока"]),
+    (50, ["пятьдесят", "пятидесяти"]),
+    (60, ["шестьдесят", "шестидесяти"]),
+    (70, ["семьдесят", "семидесяти"]),
+    (80, ["восемьдесят", "восьмидесяти"]),
+    (90, ["девяносто", "девяноста"]),
+]:
+    _add_num(_v, _TEN, _forms)
+
+# Hundreds 100-900.
+for _v, _forms in [
+    (100, ["сто", "ста"]),
+    (200, ["двести", "двухсот"]),
+    (300, ["триста", "трехсот", "трёхсот"]),
+    (400, ["четыреста", "четырёхсот"]),
+    (500, ["пятьсот", "пятисот"]),
+    (600, ["шестьсот", "шестисот"]),
+    (700, ["семьсот", "семисот"]),
+    (800, ["восемьсот", "восьмисот"]),
+    (900, ["девятьсот", "девятисот"]),
+]:
+    _add_num(_v, _HUNDRED, _forms)
+
+# Scale words.
+_add_num(1000, _THOUSAND, ["тысяча", "тысячи", "тысяч"])
+_add_num(1_000_000, _MILLION, ["миллион", "миллиона", "миллионов"])
+
+# Ordinals 1-9 (nominative and common case forms).
+_ORDINAL_UNIT_FORMS: dict[int, list[str]] = {
+    1: ["первый", "первая", "первое", "первого", "первой", "первому", "первом", "первым"],
+    2: ["второй", "вторая", "второе", "второго", "второй", "второму", "втором", "вторым"],
+    3: ["третий", "третья", "третье", "третьего", "третьей", "третьему", "третьем", "третьим"],
+    4: ["четвертый", "четвертая", "четвертое", "четвертого", "четвертой", "четвертому", "четвертом", "четвертым"],
+    5: ["пятый", "пятая", "пятое", "пятого", "пятой", "пятому", "пятом", "пятым"],
+    6: ["шестой", "шестая", "шестое", "шестого", "шестой", "шестому", "шестом", "шестым"],
+    7: ["седьмой", "седьмая", "седьмое", "седьмого", "седьмой", "седьмому", "седьмом", "седьмым"],
+    8: ["восьмой", "восьмая", "восьмое", "восьмого", "восьмой", "восьмому", "восьмом", "восьмым"],
+    9: ["девятый", "девятая", "девятое", "девятого", "девятой", "девятому", "девятым"],
+}
+for _v, _forms in _ORDINAL_UNIT_FORMS.items():
+    _add_num(_v, _UNIT, _forms)
+
+# Ordinal teens 11-19.
+_ORDINAL_TEEN_BASES = {
+    11: "одиннадцат", 12: "двенадцат", 13: "тринадцат", 14: "четырнадцат",
+    15: "пятнадцат", 16: "шестнадцат", 17: "семнадцат", 18: "восемнадцат", 19: "девятнадцат",
+}
+for _v, _base in _ORDINAL_TEEN_BASES.items():
+    _add_num(_v, _TEEN, [
+        f"{_base}ый", f"{_base}ая", f"{_base}ое", f"{_base}ого",
+        f"{_base}ой", f"{_base}ому", f"{_base}ом", f"{_base}ым",
+    ])
+
+# Ordinal tens 20-90.
+_ORDINAL_TEN_BASES = {
+    20: "двадцат", 30: "тридцат", 40: "сороков", 50: "пятидесят",
+    60: "шестидесят", 70: "семидесят", 80: "восьмидесят", 90: "девяност",
+}
+for _v, _base in _ORDINAL_TEN_BASES.items():
+    _add_num(_v, _TEN, [
+        f"{_base}ый", f"{_base}ая", f"{_base}ое", f"{_base}ого",
+        f"{_base}ой", f"{_base}ому", f"{_base}ом", f"{_base}ым",
+    ])
+
+# Ordinal hundreds.
+_ORDINAL_HUNDRED_FORMS = {
+    100: ["сотый", "сотая", "сотое", "сотого", "сотой", "сотому", "сотом", "сотым"],
+    200: ["двухсотый", "двухсотая", "двухсотое", "двухсотого", "двухсотой", "двухсотому", "двухсотом", "двухсотым"],
+    300: ["трёхсотый", "трехсотый", "трёхсотая", "трехсотая", "трёхсотое", "трехсотое"],
+    400: ["четырёхсотый", "четырехсотый", "четырёхсотая", "четырехсотая", "четырёхсотое", "четырехсотое"],
+    500: ["пятисотый", "пятисотая", "пятисотое"],
+    600: ["шестисотый", "шестисотая", "шестисотое"],
+    700: ["семисотый", "семисотая", "семисотое"],
+    800: ["восьмисотый", "восьмисотая", "восьмисотое"],
+    900: ["девятисотый", "девятисотая", "девятисотое"],
+}
+for _v, _forms in _ORDINAL_HUNDRED_FORMS.items():
+    _add_num(_v, _HUNDRED, _forms)
+
+
+_SYMBOL_STRIP = "+№%-€₽"
+_EMPTY_TOKENS = {
+    "плюс", "плюса", "плюсу", "плюсом", "плюсе",
+    "минус", "минуса", "минусу", "минусом", "минусе",
+    "номер", "номера", "номеру", "номером", "номере",
+    "процент", "процента", "процентов", "проценту", "процентом", "проценте", "процентами",
+    # Currency words commonly adjacent to digits.
+    "рубль", "рубля", "рублей", "рубли", "рублём", "рублями",
+    "доллар", "доллара", "долларов", "доллары", "долларом", "долларами",
+    "американский", "американского", "американскому", "американским", "американском",
+    "американская", "американской", "американскую",
+    "американские", "американских", "американскими",
+    "евро",
+    "цент", "цента", "центов", "центы", "центами",
+    "копейка", "копейки", "копеек", "копейками",
+    # Wake-word / assistant-name artifacts present in the benchmark corpus.
+    "джой",
 }
 
 ANGLICISMS = {
@@ -189,59 +268,135 @@ ANGLICISMS = {
 }
 
 
+def _drop_bare_thousand_after_minus(tokens: list[str]) -> list[str]:
+    """Drop a bare 'тысяча' scale word immediately following 'минус'.
+
+    This aligns spoken subtrahends like 'минус тысяча девятьсот семьдесят два'
+    with the digit form '-972' after the minus sign is stripped.
+    """
+    result: list[str] = []
+    skip_next = False
+    for i, token in enumerate(tokens):
+        if skip_next:
+            skip_next = False
+            continue
+        if (
+            token == "минус"
+            and i + 1 < len(tokens)
+            and tokens[i + 1] in ("тысяча", "тысячи", "тысяч")
+        ):
+            # Drop the minus sign (handled later as empty) and the bare thousand.
+            skip_next = True
+            continue
+        result.append(token)
+    return result
+
+
+def _words_to_numbers(tokens: list[str]) -> list[str]:
+    """Convert Russian number-word sequences into Arabic digit tokens.
+
+    Compound numbers such as "две тысячи двадцать" become a single token
+    "2020", while independent digit groups (e.g. phone-number chunks) are
+    emitted separately based on scale-order jumps.
+    """
+    result: list[str] = []
+    current = 0
+    running_total = 0
+    prev_scale = 0
+    in_number = False
+
+    def flush() -> None:
+        nonlocal current, running_total, prev_scale, in_number
+        total = running_total + current
+        if in_number:
+            result.append(str(total))
+        current = 0
+        running_total = 0
+        prev_scale = 0
+        in_number = False
+
+    for token in tokens:
+        num = _NUMBER_WORDS.get(token)
+        if num is not None:
+            in_number = True
+            value, scale = num
+            if scale in (_THOUSAND, _MILLION):
+                if current == 0:
+                    current = 1
+                running_total += current * scale
+                current = 0
+                prev_scale = scale
+            else:
+                if current > 0 and scale > prev_scale:
+                    flush()
+                    current = value
+                    in_number = True
+                else:
+                    current += value
+                prev_scale = scale
+        else:
+            flush()
+            result.append(token)
+
+    flush()
+    return result
+
+
+def _merge_digit_groups(tokens: list[str]) -> list[str]:
+    """Merge adjacent digit tokens when every token has length <= 3."""
+    result: list[str] = []
+    i = 0
+    n = len(tokens)
+    while i < n:
+        if tokens[i].isdigit():
+            j = i
+            group: list[str] = []
+            while j < n and tokens[j].isdigit():
+                group.append(tokens[j])
+                j += 1
+            if group and all(len(t) <= 3 for t in group):
+                result.append("".join(group))
+            else:
+                result.extend(group)
+            i = j
+        else:
+            result.append(tokens[i])
+            i += 1
+    return result
+
+
+def _strip_empty_tokens(tokens: list[str]) -> list[str]:
+    """Drop symbol tokens and their Russian word equivalents."""
+    result: list[str] = []
+    for token in tokens:
+        stripped = token.strip(_SYMBOL_STRIP)
+        if stripped in _EMPTY_TOKENS:
+            continue
+        if stripped:
+            result.append(stripped)
+    return result
+
+
 def normalize_for_wer(text: str) -> list[str]:
     """Normalize text to word list for WER computation.
 
-    Mirrors the logic in crates/gigastt/tests/benchmark.rs as closely as
-    possible so cross-tool numbers are comparable.
+    Performs symmetric words-to-digits ITN on both reference and hypothesis,
+    so Russian number words and Arabic digits become comparable tokens.
     """
     text = text.lower()
     text = text.replace("ё", "е")
-    text = text.replace("-", " ")
-    # keep only alphanumerics and whitespace
+    # Normalize various dash characters to spaces.
+    text = re.sub(r"[-\u2010-\u2015\u2212]", " ", text)
+    # Keep only alphanumerics and whitespace.
     text = "".join(c for c in text if c.isalnum() or c.isspace())
 
-    words = text.split()
-
-    # Merge digit groups: "60 000" -> "60000"
-    merged = []
-    i = 0
-    while i < len(words):
-        w = words[i]
-        if w.isdigit():
-            m = w
-            while i + 1 < len(words) and words[i + 1].isdigit() and len(words[i + 1]) == 3:
-                i += 1
-                m += words[i]
-            merged.append(m)
-        else:
-            merged.append(w)
-        i += 1
-
-    # Resolve ordinals: "5 й" -> "пятый"
-    resolved = []
-    i = 0
-    while i < len(merged):
-        if i + 1 < len(merged) and merged[i + 1] == "й" and merged[i].isdigit():
-            n = int(merged[i])
-            if n in ORDINALS:
-                resolved.append(ORDINALS[n])
-                i += 2
-                continue
-        resolved.append(merged[i])
-        i += 1
-
-    # Convert cardinal numbers to words
-    converted = []
-    for w in resolved:
-        if w.isdigit():
-            converted.extend(number_to_words(int(w)).split())
-        else:
-            converted.append(w)
-
-    # Transliterate anglicisms
-    final = [ANGLICISMS.get(w, w) for w in converted]
-    return final
+    tokens = text.split()
+    tokens = _drop_bare_thousand_after_minus(tokens)
+    tokens = _words_to_numbers(tokens)
+    tokens = _merge_digit_groups(tokens)
+    tokens = _strip_empty_tokens(tokens)
+    tokens = [ANGLICISMS.get(w, w) for w in tokens]
+    return tokens
 
 
 def word_edit_distance(reference: list[str], hypothesis: list[str]) -> int:
