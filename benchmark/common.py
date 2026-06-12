@@ -183,9 +183,15 @@ for _v, _forms in [
 ]:
     _add_num(_v, _HUNDRED, _forms)
 
-# Scale words.
-_add_num(1000, _THOUSAND, ["тысяча", "тысячи", "тысяч"])
-_add_num(1_000_000, _MILLION, ["миллион", "миллиона", "миллионов"])
+# Scale words (all common case forms).
+_add_num(1000, _THOUSAND, [
+    "тысяча", "тысячи", "тысяч", "тысяче", "тысячу", "тысячей",
+    "тысячам", "тысячами", "тысячах",
+])
+_add_num(1_000_000, _MILLION, [
+    "миллион", "миллиона", "миллионов", "миллиону", "миллионе",
+    "миллионам", "миллионами", "миллионах",
+])
 
 # Ordinals 1-9 (nominative and common case forms).
 _ORDINAL_UNIT_FORMS: dict[int, list[str]] = {
@@ -240,22 +246,23 @@ for _v, _forms in _ORDINAL_HUNDRED_FORMS.items():
     _add_num(_v, _HUNDRED, _forms)
 
 
-_SYMBOL_STRIP = "+№%-€₽"
+# Symbols and punctuation that are removed after digit-group merging.  Keeping
+# them as separate tokens during merging prevents "15% 180" from collapsing
+# into "15180" just because the percent sign was stripped too early.
+_SYMBOL_STRIP = '+№%-€₽.,!?;:"'"'"'()[]{}«»—…'
+
 _EMPTY_TOKENS = {
     "плюс", "плюса", "плюсу", "плюсом", "плюсе",
     "минус", "минуса", "минусу", "минусом", "минусе",
     "номер", "номера", "номеру", "номером", "номере",
     "процент", "процента", "процентов", "проценту", "процентом", "проценте", "процентами",
-    # Currency words commonly adjacent to digits.
-    "рубль", "рубля", "рублей", "рубли", "рублём", "рублями",
+    # Spoken equivalents of currency symbols listed in the normalization spec.
+    "рубль", "рубля", "рублей", "рубли", "рублем", "рублями",
     "доллар", "доллара", "долларов", "доллары", "долларом", "долларами",
-    "американский", "американского", "американскому", "американским", "американском",
-    "американская", "американской", "американскую",
-    "американские", "американских", "американскими",
     "евро",
-    "цент", "цента", "центов", "центы", "центами",
-    "копейка", "копейки", "копеек", "копейками",
-    # Wake-word / assistant-name artifacts present in the benchmark corpus.
+    # Latin abbreviation for "номер" often output by engines.
+    "no",
+    # Wake-word artifacts that are inconsistently transcribed across engines.
     "джой",
 }
 
@@ -327,7 +334,7 @@ def _words_to_numbers(tokens: list[str]) -> list[str]:
                 current = 0
                 prev_scale = scale
             else:
-                if current > 0 and scale > prev_scale:
+                if current > 0 and scale >= prev_scale:
                     flush()
                     current = value
                     in_number = True
@@ -365,6 +372,22 @@ def _merge_digit_groups(tokens: list[str]) -> list[str]:
     return result
 
 
+# Short ordinal suffixes that commonly follow a digit ("36-я", "5-й", "3-го").
+_ORDINAL_SUFFIXES = {
+    "я", "й", "е", "го", "му", "ми", "ом", "ым", "их", "ыми",
+}
+
+
+def _drop_ordinal_suffixes(tokens: list[str]) -> list[str]:
+    """Drop short ordinal suffixes that stand immediately after a digit token."""
+    result: list[str] = []
+    for i, token in enumerate(tokens):
+        if i > 0 and tokens[i - 1].isdigit() and token in _ORDINAL_SUFFIXES:
+            continue
+        result.append(token)
+    return result
+
+
 def _strip_empty_tokens(tokens: list[str]) -> list[str]:
     """Drop symbol tokens and their Russian word equivalents."""
     result: list[str] = []
@@ -377,6 +400,11 @@ def _strip_empty_tokens(tokens: list[str]) -> list[str]:
     return result
 
 
+# Matches letter sequences (Latin or Cyrillic), digit sequences, or any
+# single non-whitespace character (punctuation / symbol) as its own token.
+_TOKEN_RE = re.compile(r"[a-zа-яё]+|\d+|[^a-zа-яё\d\s]", re.UNICODE)
+
+
 def normalize_for_wer(text: str) -> list[str]:
     """Normalize text to word list for WER computation.
 
@@ -387,13 +415,15 @@ def normalize_for_wer(text: str) -> list[str]:
     text = text.replace("ё", "е")
     # Normalize various dash characters to spaces.
     text = re.sub(r"[-\u2010-\u2015\u2212]", " ", text)
-    # Keep only alphanumerics and whitespace.
-    text = "".join(c for c in text if c.isalnum() or c.isspace())
 
-    tokens = text.split()
+    # Split letters, digits, and symbols/punctuation into separate tokens.
+    # This keeps symbols as explicit separators during digit-group merging.
+    tokens = _TOKEN_RE.findall(text)
+
     tokens = _drop_bare_thousand_after_minus(tokens)
     tokens = _words_to_numbers(tokens)
     tokens = _merge_digit_groups(tokens)
+    tokens = _drop_ordinal_suffixes(tokens)
     tokens = _strip_empty_tokens(tokens)
     tokens = [ANGLICISMS.get(w, w) for w in tokens]
     return tokens
