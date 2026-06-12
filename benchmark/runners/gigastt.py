@@ -17,8 +17,10 @@ class GigasttRunner:
         self._binary: str | None = None
         self._proc: subprocess.Popen | None = None
 
-    def is_available(self) -> bool:
-        # Try cargo-built release binary first, then PATH
+    def _find_binary(self) -> bool:
+        """Locate the gigastt binary and cache the path."""
+        if self._binary:
+            return True
         candidates = [
             str(Path(__file__).parent.parent.parent / "target/release/gigastt"),
             "gigastt",
@@ -27,17 +29,23 @@ class GigasttRunner:
             try:
                 subprocess.run([c, "--version"], capture_output=True, check=True)
                 self._binary = c
-                break
+                return True
             except Exception:
                 continue
-        if not self._binary:
-            return False
+        return False
 
+    def is_available(self) -> bool:
+        if not self._find_binary():
+            return False
         self._start_server()
         return True
 
     def _start_server(self):
-        cmd = [self._binary, "serve", "--port", str(self.port), "--bind-all"]
+        if self._proc is not None:
+            return
+        if not self._binary and not self._find_binary():
+            raise RuntimeError("gigastt binary not found")
+        cmd = [self._binary, "serve", "--port", str(self.port)]
         if self.model_dir:
             cmd.extend(["--model-dir", self.model_dir])
         # Suppress server logs for clean benchmark output
@@ -88,5 +96,10 @@ class GigasttRunner:
         text = result.get("text", "").strip()
         return text, elapsed
 
-    def __del__(self):
+    def __enter__(self):
+        self._start_server()
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
         self._stop_server()
+        return False
