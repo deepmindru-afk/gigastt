@@ -121,6 +121,16 @@ The default **Golos crowd** test set (9 994 samples of Russian speech).
 python ../scripts/extract_golos.py
 ```
 
+### Golos crowd 1k
+
+A deterministic 1 000-sample slice (`random.seed(42)`) of the Golos crowd test
+set. Use this for cross-dataset comparisons so all domains have the same sample
+size and comparable confidence intervals.
+
+```bash
+python benchmark.py --dataset golos_crowd_1k --max-samples 0
+```
+
 ### Golos farfield
 
 The **Golos farfield** test set (1 916 samples) recorded at a distance from the microphone.
