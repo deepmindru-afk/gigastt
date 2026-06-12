@@ -15,12 +15,23 @@ def home_dir() -> Path:
     return Path.home()
 
 
-# Registry of committed benchmark manifests.
-# Paths are relative to the repository root.
-DATASETS: dict[str, str] = {
-    "golos_crowd": "benchmark/manifests/golos_crowd.json",
-    "golos_farfield": "benchmark/manifests/golos_farfield.json",
+_MANIFESTS_DIR = Path(__file__).parent / "manifests"
+
+
+DATASETS: dict[str, Path] = {
+    "golos_crowd": _MANIFESTS_DIR / "golos_crowd.json",
 }
+
+
+def _register_committed_datasets() -> None:
+    """Auto-register any JSON manifests found in benchmark/manifests/."""
+    if _MANIFESTS_DIR.exists():
+        for path in sorted(_MANIFESTS_DIR.glob("*.json")):
+            DATASETS[path.stem] = path
+
+
+def _legacy_crowd_path() -> Path:
+    return home_dir() / ".gigastt/benchmarks/golos_wav/manifest.json"
 
 
 def manifest_path(dataset: str = "golos_crowd") -> Path:
@@ -28,65 +39,62 @@ def manifest_path(dataset: str = "golos_crowd") -> Path:
 
     Defaults to ``golos_crowd`` for backward compatibility. If the committed
     manifest does not exist, falls back to the legacy crowd manifest or the
-    bundled fixtures.
+    bundled fixtures. Unknown datasets raise ``ValueError``.
     """
-    repo_root = Path(__file__).parent.parent
+    _register_committed_datasets()
 
     if dataset in DATASETS:
-        p = repo_root / DATASETS[dataset]
+        p = DATASETS[dataset]
         if p.exists():
             return p
 
-    # Legacy crowd manifest fallback.
     if dataset == "golos_crowd":
-        legacy = home_dir() / ".gigastt/benchmarks/golos_wav/manifest.json"
+        legacy = _legacy_crowd_path()
         if legacy.exists():
             return legacy
+        return Path(__file__).parent.parent / "crates/gigastt/tests/fixtures/manifest.json"
 
-    p = home_dir() / ".gigastt/benchmarks/golos_wav/manifest.json"
-    if p.exists():
-        return p
-
-    return repo_root / "crates/gigastt/tests/fixtures/manifest.json"
+    known = ", ".join(sorted(DATASETS))
+    raise ValueError(f"Unknown dataset {dataset!r}. Known datasets: {known}")
 
 
-def load_manifest(max_samples: Optional[int] = None, dataset: str = "golos_crowd"):
+def load_manifest(max_samples: Optional[int] = None, dataset: str = "golos_crowd") -> list[dict]:
     """Load a benchmark manifest.
 
     Supports both the new registry format (JSON object with ``audio_root`` and
     ``samples``) and the legacy list format (list of ``{"filename", "reference"}``).
-    Filenames are resolved to absolute paths. If ``duration`` is absent it is
-    computed from the WAV file.
+    Filenames are resolved to absolute paths. If ``duration`` is present it is
+    preserved; otherwise callers should fall back to ``audio_duration()``.
     """
     path = manifest_path(dataset)
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
 
-    if isinstance(data, list):
-        # Legacy manifest: absolute filenames.
-        samples = data
-        audio_root: Optional[Path] = None
-    else:
+    if isinstance(data, dict):
         audio_root = Path(data.get("audio_root", "~")).expanduser().resolve()
-        samples = data.get("samples", [])
+        raw_samples = data.get("samples", [])
+        base_dir = audio_root
+    elif isinstance(data, list):
+        raw_samples = data
+        base_dir = path.parent
+    else:
+        raise ValueError(f"Manifest {path} must be a JSON object or list")
 
     result = []
-    for s in samples:
+    for s in raw_samples:
         filename = s["filename"]
-        if audio_root is not None and not Path(filename).is_absolute():
-            wav_path = str(audio_root / filename)
-        else:
-            wav_path = str(Path(filename).expanduser().resolve())
+        fp = Path(filename)
+        if not fp.is_absolute():
+            fp = base_dir / fp
+        wav_path = str(fp.expanduser().resolve())
 
-        duration = s.get("duration")
-        if duration is None:
-            duration = audio_duration(wav_path)
-
-        result.append({
+        sample = {
             "filename": wav_path,
             "reference": s["reference"],
-            "duration": duration,
-        })
+        }
+        if "duration" in s:
+            sample["duration"] = s["duration"]
+        result.append(sample)
 
     if max_samples and max_samples > 0:
         result = result[:max_samples]
@@ -444,7 +452,7 @@ def collect_engine_metadata(runner) -> dict:
 
 def collect_repro_metadata(
     runners: list,
-    dataset_name: str = "golos",
+    dataset_name: str = "golos_crowd",
     dataset_version: Optional[str] = None,
 ) -> dict:
     """Aggregate reproducibility metadata for a benchmark run."""
