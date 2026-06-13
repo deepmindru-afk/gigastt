@@ -999,7 +999,10 @@ mod tests {
         let silence: Vec<i16> = vec![0; 16]; // tiny payload — the header is the attack
         // Just above the ceiling: a well-formed header that the clamp must reject.
         let result = decode_audio_bytes(&make_wav_bytes(&silence, MAX_SAMPLE_RATE + 1));
-        assert!(result.is_err(), "sample_rate above MAX_SAMPLE_RATE must be rejected");
+        assert!(
+            result.is_err(),
+            "sample_rate above MAX_SAMPLE_RATE must be rejected"
+        );
         // A grossly inflated rate must also be rejected (not panic / not allocate).
         let result = decode_audio_bytes(&make_wav_bytes(&silence, 1_000_000_000));
         assert!(result.is_err(), "absurd sample_rate must be rejected");
@@ -1008,8 +1011,8 @@ mod tests {
 
 #[cfg(test)]
 mod proptests {
-    use super::*;
     use super::tests::make_wav_bytes;
+    use super::*;
     use proptest::prelude::*;
 
     proptest! {

@@ -315,7 +315,11 @@ async fn stream_to_partial_then_finalize(
         .redirect(reqwest::redirect::Policy::limited(5))
         .build()
         .context("Failed to build HTTP client")?;
-    let response = client.get(url).send().await.context("HTTP request failed")?;
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .context("HTTP request failed")?;
     let status = response.status();
     if !status.is_success() {
         anyhow::bail!("Download failed for {label}: HTTP {status}");

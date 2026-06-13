@@ -1322,9 +1322,7 @@ impl Engine {
         triplet: &mut SessionTriplet,
     ) -> Option<TranscriptSegment> {
         let has_pending = state.pending_samples > 0 && state.audio_buffer.len() >= N_FFT;
-        if has_pending
-            && let Err(e) = self.decode_window(state, triplet)
-        {
+        if has_pending && let Err(e) = self.decode_window(state, triplet) {
             tracing::warn!("finish_stream decode failed: {e:#}");
         }
         self.flush_state(state)
