@@ -2,3 +2,5 @@ __pycache__/
 *.pyc
 results.json
 results_*.json
+results_full/
+logs/
