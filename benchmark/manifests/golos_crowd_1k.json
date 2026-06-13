@@ -1,0 +1,4012 @@
+{
+  "dataset": "golos_crowd_1k",
+  "audio_root": "~/.gigastt/benchmarks/golos_wav",
+  "slice_seed": 42,
+  "slice_size": 1000,
+  "total_available": 9994,
+  "license": "Sber Public License (attribution/non-commercial/share-alike)",
+  "source": "https://github.com/sberdevices/golos",
+  "attribution": "Golos by SberDevices",
+  "samples": [
+    {
+      "filename": "e8469687438d14833b7b282a1a0192e7.wav",
+      "reference": "мидлсбро"
+    },
+    {
+      "filename": "ebce154f9d0c19abe06bf18d0b521e76.wav",
+      "reference": "посоветуй мне сериал отчаянные домохозяйки"
+    },
+    {
+      "filename": "8b614e680adac55fc31b145ba662598d.wav",
+      "reference": "сбер здравствуйте я забыл пароль защиты карты"
+    },
+    {
+      "filename": "9f79b7d96d6bb27cb9a8aa04fc96955d.wav",
+      "reference": "сбер найди ближайший банкомат в навигаторе"
+    },
+    {
+      "filename": "f107bfbf8fd16a92e68d16df4a775153.wav",
+      "reference": "афина как увидеть личные данные"
+    },
+    {
+      "filename": "9adf350ece0118212fe99b740098787f.wav",
+      "reference": "ноль шестьсот шесть девятьсот семьдесят два двадцать один одиннадцать"
+    },
+    {
+      "filename": "9323ab65c0e0e3440b432e3598af69b6.wav",
+      "reference": "покажи фильм тайный мир анны"
+    },
+    {
+      "filename": "ee2247353548967a31113f437709fcf8.wav",
+      "reference": "новости первый канал свежий выпуск"
+    },
+    {
+      "filename": "1530b697b17ad0ab7fd5dd19e39da6e5.wav",
+      "reference": "слепая"
+    },
+    {
+      "filename": "a9fb31a8e23e89698c80c7e7747ea53f.wav",
+      "reference": "выжить в арктике хочу смотреть сейчас"
+    },
+    {
+      "filename": "a660f244bc2e55685984398dd57fa7f8.wav",
+      "reference": "ты можешь показать на смотрешке передачу фэшн ти ви четыре ка"
+    },
+    {
+      "filename": "2832ed9c28db6000057f5b0334529e81.wav",
+      "reference": "салют в какой части света находится полоцкое княжество"
+    },
+    {
+      "filename": "a9565f473c6ebfc843064344ff0a2c4e.wav",
+      "reference": "у тебя есть фильм бруно"
+    },
+    {
+      "filename": "780444990ad6e61154e1687b5a037e29.wav",
+      "reference": "закажи мне пятилитровый шишкин лес десять бутылок"
+    },
+    {
+      "filename": "f07f838b41b0bac93d54f66bebd3ebc8.wav",
+      "reference": "сбер найди мне пожалуйста банкомат по пути"
+    },
+    {
+      "filename": "2bd6567fae0210c89720f8e74291bb30.wav",
+      "reference": "перезвонить просьба в консьерж сервис"
+    },
+    {
+      "filename": "b78ab2b39fb22973154ba05994316426.wav",
+      "reference": "максим константинович"
+    },
+    {
+      "filename": "ee30b1383ebfa054e42315357c00c901.wav",
+      "reference": "лучший эпизод дженнифер лопес"
+    },
+    {
+      "filename": "b78c279d0b7031f4d7c94c0fe24da95c.wav",
+      "reference": "открой мне убить"
+    },
+    {
+      "filename": "73e815313656dbb8208f4528629c622a.wav",
+      "reference": "пар"
+    },
+    {
+      "filename": "782e92e435adea9625a7b444e97330dd.wav",
+      "reference": "эпизод двадцать три пятый сезон красивая жизнь"
+    },
+    {
+      "filename": "9ade472e0238220099c2bb982dee0cbe.wav",
+      "reference": "афина ты проведи дмитрию сообщением вкусный ужин на двоих"
+    },
+    {
+      "filename": "a2424c1f663f440810244139a7d551ad.wav",
+      "reference": "запускай футурама в дикую зеленую даль аш дэ"
+    },
+    {
+      "filename": "3eba97702eceda35db4ab5798be88c9b.wav",
+      "reference": "пламя и цитрон загрузи ка"
+    },
+    {
+      "filename": "cfc6426f9080df60230534e04b40b39e.wav",
+      "reference": "сколько людей участвовало в чемпионате мира по борьбе в две тысячи девятнадцатом году"
+    },
+    {
+      "filename": "4a84526cc5f65d74a8e43091db58e8db.wav",
+      "reference": "поставь нам челси лестер"
+    },
+    {
+      "filename": "b37797785e122ff642351e84138a300c.wav",
+      "reference": "мир без конца сезон три эпизод тридцать пять"
+    },
+    {
+      "filename": "6b2e298c7db89e80bb57fe90bd99e265.wav",
+      "reference": "сбер перевод пятьсот рублей елена юрьевна по номеру телефона сбербанк онлайн"
+    },
+    {
+      "filename": "bd22b3effb0bdbdc02eee00f3d47fa02.wav",
+      "reference": "решала"
+    },
+    {
+      "filename": "f208f5c553edb0fabc2eb485a4912aa6.wav",
+      "reference": "имеется ли у тебя песенки летающих зверей"
+    },
+    {
+      "filename": "ce133cb5aebc281220edd63e08f47f90.wav",
+      "reference": "поставь бешеных псов александра котта"
+    },
+    {
+      "filename": "244c12b72a2c66225001787275183cf4.wav",
+      "reference": "посещает ли кинотеатр рафаловский давид"
+    },
+    {
+      "filename": "7edc59497b981631dad5f82c18fdb3c2.wav",
+      "reference": "сосновку"
+    },
+    {
+      "filename": "1fde5bb67dfa702d2685ec3a71fc6290.wav",
+      "reference": "киношка окко смарт бокс на окко"
+    },
+    {
+      "filename": "4d1c13a53346ec03cd1c4a6476e3dd20.wav",
+      "reference": "хочу смотреть сейчас осевшие"
+    },
+    {
+      "filename": "bd870600abd8aa00237553ff09e55dfc.wav",
+      "reference": "все авто билет"
+    },
+    {
+      "filename": "ea6673d36b92dd508c5e77ba399c1562.wav",
+      "reference": "джой запиши меня к терапевту на понедельник"
+    },
+    {
+      "filename": "ec910252e164f6a25a71584dc8b6e12c.wav",
+      "reference": "штрафбат алексея учителя"
+    },
+    {
+      "filename": "573a6bdf173d77c35ff6894f725c3c8b.wav",
+      "reference": "порто ново"
+    },
+    {
+      "filename": "046c3ef6b59f5ce7cc3df460a253fadb.wav",
+      "reference": "пополнить баланс коллеги мтс"
+    },
+    {
+      "filename": "6b452de91ca25882b0642809e657bd11.wav",
+      "reference": "ливерпуль манчестер сити тоттенхэм"
+    },
+    {
+      "filename": "ab4363883779ec3d657205ee2eb47d58.wav",
+      "reference": "запусти все работы вермеера в нью йорке"
+    },
+    {
+      "filename": "54ab7ce0b710e0b017686ad3fa6d77ee.wav",
+      "reference": "включи песню памяти сергея наговицына"
+    },
+    {
+      "filename": "b9ab69647a02480961be4d0fb2f905c9.wav",
+      "reference": "включи лучший выпуск бона джови"
+    },
+    {
+      "filename": "e2b0ee49d9e8be05d06490991d57d223.wav",
+      "reference": "сбер установи таймер пять минут"
+    },
+    {
+      "filename": "3725942d43dc5e7ee03bc8d17c3d8205.wav",
+      "reference": "огонек"
+    },
+    {
+      "filename": "65cb15b457579aa4f37cfcd8a3612351.wav",
+      "reference": "привет алиса время работы парка в отеле"
+    },
+    {
+      "filename": "0830a193675f60699bff4a830fa8bbeb.wav",
+      "reference": "кольцова"
+    },
+    {
+      "filename": "ac03634b431cb246b7913ccf0bd6c6cf.wav",
+      "reference": "какие крупнейшие сражения ознаменовали коренной перелом в ходе великой отечественной войны"
+    },
+    {
+      "filename": "2123acf88dcbc1035cd08cbb1f1a738e.wav",
+      "reference": "испанский английский ты можешь включить"
+    },
+    {
+      "filename": "1be41b47b0f8372f3ff3226643610a8c.wav",
+      "reference": "открой кто есть кто на смотрешке"
+    },
+    {
+      "filename": "428d56819b45c11e09cc0fc65dfe4a46.wav",
+      "reference": "ассистент закажи пожалуйста крем для стеклокерамики санита"
+    },
+    {
+      "filename": "32543df0c5cc476ed44268adfc1ae3ce.wav",
+      "reference": "сири включи ани"
+    },
+    {
+      "filename": "cfda193707c8bb60fec149e31c9837b3.wav",
+      "reference": "анатолий иванович показаньев"
+    },
+    {
+      "filename": "de6bb1bdce7d39310238260b5e774630.wav",
+      "reference": "поехали санкт петербургский горный университет"
+    },
+    {
+      "filename": "532c1bdf1a115806dd48ed0909634740.wav",
+      "reference": "закажи один килограмм апельсинов"
+    },
+    {
+      "filename": "b0ac478116c7497b56a9e87a83ef65c3.wav",
+      "reference": "положить денежку другу на телефон"
+    },
+    {
+      "filename": "38dd2cb56bcdd471989a6927a5fece7a.wav",
+      "reference": "ко мне пришла девушка включи канал с мелодрамами"
+    },
+    {
+      "filename": "3fb721c2678138308ffb721a46b569ac.wav",
+      "reference": "нового уренгоя"
+    },
+    {
+      "filename": "f2ea09d187a57efe4c0c55006e119a59.wav",
+      "reference": "загрузи сериал колобанга только для пользователей интернета первый сезон"
+    },
+    {
+      "filename": "ea1d7a748df69f1feda921b017d96f31.wav",
+      "reference": "в среднем течении реки днепр жило племя"
+    },
+    {
+      "filename": "2fc9fa9278f41d1ad62629d20b683fe9.wav",
+      "reference": "матч боец на смотрешке"
+    },
+    {
+      "filename": "5d538e47eb954388f8dbe912f7423457.wav",
+      "reference": "найди скрытая угроза"
+    },
+    {
+      "filename": "ec6a98f5e4d0c6d6a3233f4dbdc2ae25.wav",
+      "reference": "сибая"
+    },
+    {
+      "filename": "292c5bf13da60c9e4ffdf9bbb988f9cb.wav",
+      "reference": "киноработа переменная облачность поставь"
+    },
+    {
+      "filename": "53fc1299e1e3a8458e051b910f4b40da.wav",
+      "reference": "папины дочки последний сезон часть шесть"
+    },
+    {
+      "filename": "3a590e6e73dc00869f1829700dc95da8.wav",
+      "reference": "ролл филадельфия"
+    },
+    {
+      "filename": "da68e4c12728d730e0189a9b09680cab.wav",
+      "reference": "сметана простоквашино пятнадцать процентов сто восемьдесят грамм"
+    },
+    {
+      "filename": "e5c7526fdfd2a64a42cf2c7e0d539e0c.wav",
+      "reference": "мишки буни тайны цирка поставь"
+    },
+    {
+      "filename": "8a6528d3323630b1b86894d814fcb535.wav",
+      "reference": "серия тридцать восемь четвертый сезон селфи"
+    },
+    {
+      "filename": "756b015a73a499494704eab5e67581fe.wav",
+      "reference": "дай мне посмотреть мульт физрук серия тринадцать"
+    },
+    {
+      "filename": "1286be06c90555003cd7fd5dff85ac4d.wav",
+      "reference": "заказать один килограмм апельсинов"
+    },
+    {
+      "filename": "bbdc2088ebb73b36aabce22a9589cc96.wav",
+      "reference": "юлии семеновне"
+    },
+    {
+      "filename": "466a71c362e103aada022fb0024a68d2.wav",
+      "reference": "салют запусти телеканал живи"
+    },
+    {
+      "filename": "9a6ecf9405decf7b1a68433648de2272.wav",
+      "reference": "салют в четверг в волхов будет дождь"
+    },
+    {
+      "filename": "9a1e4460aee5efe9e62aa85e8141e3a3.wav",
+      "reference": "агат"
+    },
+    {
+      "filename": "ddbdb790773e4dc6a29ef11371aed22f.wav",
+      "reference": "сбер какая валюта в ходу в бангладеше"
+    },
+    {
+      "filename": "07c2b5dafb29f774df215e90676263eb.wav",
+      "reference": "подпольная империя второй сезон"
+    },
+    {
+      "filename": "8a32544139470c697a3f5c4d9235d2bb.wav",
+      "reference": "вчера сколько стоил американский доллар"
+    },
+    {
+      "filename": "4dfde70aeb8e51aae0336b7efea27936.wav",
+      "reference": "каникулы в каньоне"
+    },
+    {
+      "filename": "8f002a6cee4d96387981df8c597837c6.wav",
+      "reference": "салют нора джонс"
+    },
+    {
+      "filename": "fc308ff0954962293789a79cf532d13c.wav",
+      "reference": "закачай даблюджиси на ютубе"
+    },
+    {
+      "filename": "cfa7fee2b54befd0eaf5e8dc5ecacf7e.wav",
+      "reference": "покажи на смотрешке бридж тв"
+    },
+    {
+      "filename": "44a274fc8245e4ef4dd20defccaee82b.wav",
+      "reference": "открой на тв канал авто двадцать четыре"
+    },
+    {
+      "filename": "fc36175e69333a153300af0b8d5f9582.wav",
+      "reference": "афина кто написал музыку к навсикая из долины ветров"
+    },
+    {
+      "filename": "1d8f7baad5e7beb9bafbfcbc5a7ee270.wav",
+      "reference": "сергей эльдарович"
+    },
+    {
+      "filename": "c0a2015459294237076a344d40fff533.wav",
+      "reference": "тише"
+    },
+    {
+      "filename": "822fcb5e552a61d581393e504bcd8b32.wav",
+      "reference": "нарой дон кихот"
+    },
+    {
+      "filename": "b632503aa30224cc1e685ceeaf67b2e4.wav",
+      "reference": "у тебя есть тора кэт"
+    },
+    {
+      "filename": "95c67be9d2e9d41a437ab177e9dc17d6.wav",
+      "reference": "камеди бойз первый выпуск"
+    },
+    {
+      "filename": "40f527f8abd20f615c43f474a5cf5adc.wav",
+      "reference": "афина добрый день я могу через вас закрыть карту заканчивается"
+    },
+    {
+      "filename": "36d4f32f5a87e8a3b7aef49d978cdeb1.wav",
+      "reference": "включи интарса бусулиса"
+    },
+    {
+      "filename": "ecf843e5781dc711e402dee03cd0b933.wav",
+      "reference": "игра ливерпуль манчестер сити"
+    },
+    {
+      "filename": "2d72c3ad226d065fc5eacc068d33e6e9.wav",
+      "reference": "лабиринт страха подключи"
+    },
+    {
+      "filename": "a790301a15650756451d359ecf48a4a0.wav",
+      "reference": "покажи на смотрешке телеканал фэшн ти ви четыре ка"
+    },
+    {
+      "filename": "dc8b68fdc32e8a6f6c8244c232a1dc11.wav",
+      "reference": "включи капкан"
+    },
+    {
+      "filename": "f64b26b619a1e7572b74d2f761d5a195.wav",
+      "reference": "отель вавилон"
+    },
+    {
+      "filename": "74eb57891be9503b6b52025556b8ab90.wav",
+      "reference": "врубай фильм в жанре ужасы"
+    },
+    {
+      "filename": "914d706fa9151dd667561414ec24639a.wav",
+      "reference": "сериал барри зонненфельда призрачная красота"
+    },
+    {
+      "filename": "b31d4b93ffa9b713fd57260cf5807b37.wav",
+      "reference": "сколько стоит две японская корейская вона по отношению к фунту стерлингов"
+    },
+    {
+      "filename": "69be8b1c9e8160c81df74ee315270ebf.wav",
+      "reference": "закажи йогурт эпика гранатовый"
+    },
+    {
+      "filename": "5f706c17b816e3396c13e37c2a1db74e.wav",
+      "reference": "ок"
+    },
+    {
+      "filename": "8eb1b68f37c78d8327a57c97736e3fce.wav",
+      "reference": "кинь деньги на мой номер"
+    },
+    {
+      "filename": "c752112c3554dec0d6a9032836eab1c0.wav",
+      "reference": "врубай на тв канал сарафан"
+    },
+    {
+      "filename": "283c1433135d2b8001291b7ca6bf3f08.wav",
+      "reference": "поставь космос"
+    },
+    {
+      "filename": "4fc0161ab27dfecb567c47214f1588a8.wav",
+      "reference": "есть ли у тебя на что способна любовь"
+    },
+    {
+      "filename": "fba92ff0e7591bfadd63bd8a61fabe81.wav",
+      "reference": "покажи чародеи с актером джоном си райли"
+    },
+    {
+      "filename": "1bc06042db8810e56844959ff2dc62e4.wav",
+      "reference": "ты можешь включить фильм помни меня"
+    },
+    {
+      "filename": "9f02cded23b0322e1c3b2a4b9b7c15c8.wav",
+      "reference": "какой курс фунта к доллару сегодня"
+    },
+    {
+      "filename": "d1682013443fb4820f80417b40ecabec.wav",
+      "reference": "игра престолов"
+    },
+    {
+      "filename": "56d639ed03bea59a3cf7e92a3432a186.wav",
+      "reference": "искры из глаз аш ди"
+    },
+    {
+      "filename": "d978d6c4cf164e6a16c49befe32cdb12.wav",
+      "reference": "десятый сезон сериала обмани меня"
+    },
+    {
+      "filename": "598d20758ae368bd5fad1df4687328af.wav",
+      "reference": "включить канал киносад через тридцать минут"
+    },
+    {
+      "filename": "d70491222e864951391aec3a940afbb5.wav",
+      "reference": "покушать дешево"
+    },
+    {
+      "filename": "756f9f5a27ae05cc5f1f653c32e36036.wav",
+      "reference": "помоги нам найти футбольную игру между арсеналом и ньюкаслом"
+    },
+    {
+      "filename": "b270770d4feeea2be99593f83f3164f4.wav",
+      "reference": "есть ли у тебя яблочный вор"
+    },
+    {
+      "filename": "43762729aca5dd20d2a4dc0acb449ef6.wav",
+      "reference": "салют"
+    },
+    {
+      "filename": "b4e56a7ed2c33498aec9f4e5c41cee80.wav",
+      "reference": "дроидер"
+    },
+    {
+      "filename": "fa4a5e409d1290c532c460b8967895c4.wav",
+      "reference": "двадцатая шестая часть сезон двенадцать доктор хаус"
+    },
+    {
+      "filename": "749d44524f6311855e82312ebf93dde5.wav",
+      "reference": "заказать продукты из магазина домой"
+    },
+    {
+      "filename": "5b536129eef1ba44b87a48d4b24b593d.wav",
+      "reference": "покажи космические яйца"
+    },
+    {
+      "filename": "5dfe8e6f8c1ec8cb8add944fbafcf69d.wav",
+      "reference": "можешь найти нам матч английской премьер лиги манчестер сити тоттенхэм"
+    },
+    {
+      "filename": "6953e8c7151de64609058fc95014c664.wav",
+      "reference": "включи мне побег из тюрьмы даннемора"
+    },
+    {
+      "filename": "1f497778651d03b68d0d88c7a69b15af.wav",
+      "reference": "альбион"
+    },
+    {
+      "filename": "8648ea295abd97c01af3a30b1115f2c5.wav",
+      "reference": "найти мир увлечений на тиви"
+    },
+    {
+      "filename": "3f7d079b4ef2dc069a51608ccaa1bcf8.wav",
+      "reference": "масло подсолнечное олейна один литр две штуки"
+    },
+    {
+      "filename": "e25ba00e034571e5f488d3bd74b4cac2.wav",
+      "reference": "артем николаевич завойских"
+    },
+    {
+      "filename": "5f920efea584b6c2cfabeffbbfcfcea4.wav",
+      "reference": " "
+    },
+    {
+      "filename": "9150a51cef0bf44410264097b40325f3.wav",
+      "reference": " "
+    },
+    {
+      "filename": "ec803088b948a60733e229ea55622394.wav",
+      "reference": "сбер какая валюта эксплуатируется в стране мьянма"
+    },
+    {
+      "filename": "f9a83f6d30eb18dbc494fababb0f8c7f.wav",
+      "reference": "про бизнес"
+    },
+    {
+      "filename": "c4b1a4e0bd8a84589dd7761da53953cb.wav",
+      "reference": "иване витальевиче"
+    },
+    {
+      "filename": "faf356b8b3da7da825a79defcc332de7.wav",
+      "reference": "открой стс на телевизоре"
+    },
+    {
+      "filename": "725503e8094f9b295d233f17c00fb5c0.wav",
+      "reference": "надежде николаевне зюзиной"
+    },
+    {
+      "filename": "f792d9682d832a38819107fdaf6b75bb.wav",
+      "reference": "хочу посмотреть на смотрешке передачу малыш тв"
+    },
+    {
+      "filename": "afadce59faf19f29495a8f7eefd779b0.wav",
+      "reference": "салют как провести оплату страхование жизни по ипотеке"
+    },
+    {
+      "filename": "8baad10d7d96572a39bcbd6032572d73.wav",
+      "reference": "салют поставь будильник на завтра"
+    },
+    {
+      "filename": "0aa7317352e4e7a10dce65c340007949.wav",
+      "reference": "грань будущего"
+    },
+    {
+      "filename": "29ce93d35c978a83c37c55ec4873affe.wav",
+      "reference": "пошукай сериальчик струны души"
+    },
+    {
+      "filename": "9f16ae42728ba8473578f53a0282962c.wav",
+      "reference": "закажи пиццу без грибов в достависта"
+    },
+    {
+      "filename": "52126ebf56ba8f7b98646b5b28d247f6.wav",
+      "reference": "перевод на счет телефона двести сорок пять семьсот шестнадцать двадцать два девятнадцать сто рублей"
+    },
+    {
+      "filename": "99e1c072c355831e29d578edcad570e6.wav",
+      "reference": "кино служба новостей одиннадцатый сезон часть двадцать"
+    },
+    {
+      "filename": "790abcbb93f219c171a774706b762efe.wav",
+      "reference": "нелли"
+    },
+    {
+      "filename": "fe09ede5609501af914264d21bcd0869.wav",
+      "reference": "алиса закажи молоко вятушка один литр жирность три и два"
+    },
+    {
+      "filename": "70f0e9d7c3ddbade6fdf54017e2eb10d.wav",
+      "reference": "салют какое число было в прошлый вторник"
+    },
+    {
+      "filename": "4d6365d01c5882877981a3b14220bc16.wav",
+      "reference": "посмотреть те фильмы которые снял орсон уэллс"
+    },
+    {
+      "filename": "aad28b893b9b711d4a389b970e2b7b7a.wav",
+      "reference": "стоимость обмена фунта к корейской воне"
+    },
+    {
+      "filename": "74ffcbc2a092bc34649a9296c665a6a3.wav",
+      "reference": "среднеуральске"
+    },
+    {
+      "filename": "10d3630913ed3ddebefb2ecfe079b7f4.wav",
+      "reference": "что такое вино"
+    },
+    {
+      "filename": "5ea401f368a3cd97bef363202f8902db.wav",
+      "reference": "железный рыцарь"
+    },
+    {
+      "filename": "38bf4f3c89e0507ee921a669fec12e9d.wav",
+      "reference": "ноль триста восемь триста восемнадцать триста четыре шестьдесят девять"
+    },
+    {
+      "filename": "c9efe6e33210a38f08b45ab2377632a0.wav",
+      "reference": "у тебя найдется последняя часть зе гейминг лемон"
+    },
+    {
+      "filename": "a46a701e58f005b5a62e413480a844f1.wav",
+      "reference": "как избавиться от плесени в ванной"
+    },
+    {
+      "filename": "ea8a847008c5a00e04bf0c5a69e0ff8c.wav",
+      "reference": "тарко сале"
+    },
+    {
+      "filename": "186541cd2860315388974b5ba7e902ab.wav",
+      "reference": "илья казаков"
+    },
+    {
+      "filename": "7a1acd2059407548e7a30d8074f37399.wav",
+      "reference": "можешь показать сериал звездный путь энтерпрайз последний сезон девятый эпизод"
+    },
+    {
+      "filename": "0157bebdfcbb4e2ae582779c73dbe828.wav",
+      "reference": "поставь на смотрешке телеканал кхл тв"
+    },
+    {
+      "filename": "a84221f986991e052501f45f3cd1f4f1.wav",
+      "reference": "найди канал нтв сериал"
+    },
+    {
+      "filename": "de9895a52134194bdca5e0b673138408.wav",
+      "reference": "играй бруно марс"
+    },
+    {
+      "filename": "7f9e6a78e2ba2bee74e7e8534a7a5671.wav",
+      "reference": "октябрьске"
+    },
+    {
+      "filename": "114c9dbd041aa39c923d94c38b5c6236.wav",
+      "reference": "дай я посмотрю нокдаун эйч ди"
+    },
+    {
+      "filename": "f7ae7e6b771f3a9eeed7b94fa274d484.wav",
+      "reference": "включи бра"
+    },
+    {
+      "filename": "4d222afe5dcd740a089328035653ae18.wav",
+      "reference": "афина что поощряет китай в настоящее время"
+    },
+    {
+      "filename": "5c7feb404dfae2bd197367cac338e3bd.wav",
+      "reference": "в ютьюбе даринелка детский канал"
+    },
+    {
+      "filename": "212a677551c8cc936ea121b77c5fa48d.wav",
+      "reference": "фильм уилфреда джексона великолепная семерка"
+    },
+    {
+      "filename": "99421e8638a0e85675492d2c3fce05b6.wav",
+      "reference": "громче"
+    },
+    {
+      "filename": "62bc8aa5b15e2b5f0f7cd2ddcf5183e6.wav",
+      "reference": "включи передачу тнт на тв"
+    },
+    {
+      "filename": "449c11b2b55605cf30ec0ae5d2504ffd.wav",
+      "reference": "покажи кино возвращение джафара"
+    },
+    {
+      "filename": "de85bcc8444df60b1a75abb344de8afe.wav",
+      "reference": "джой поставь металл"
+    },
+    {
+      "filename": "8e14cc196139228afcc0a94b7684acd0.wav",
+      "reference": "хочу посмотреть на смотрешке телеканал рубль ти ви"
+    },
+    {
+      "filename": "c802acbf267fd1ce7cf97caa4ae96d0a.wav",
+      "reference": "открытый мир на смотрешке"
+    },
+    {
+      "filename": "b2e7fab0ffbf2c3afdc363153e711930.wav",
+      "reference": "навык сомелье давай играть в"
+    },
+    {
+      "filename": "83dc5cd26f76ce1badebaaa724f31c38.wav",
+      "reference": "рядом местиа бар"
+    },
+    {
+      "filename": "6690cb6a9c1419bc2fb05c8f50a05ccf.wav",
+      "reference": "серия тридцать девять сезон двенадцать кино вечность"
+    },
+    {
+      "filename": "1bcb96b248006e437fe29f2f87fbfb3a.wav",
+      "reference": "фильм кухня открой"
+    },
+    {
+      "filename": "66e1338e68bd181e483243fb9d9d9106.wav",
+      "reference": "джой чем платить в армении"
+    },
+    {
+      "filename": "bea46ac241f60a517f02c29200c37017.wav",
+      "reference": "у тебя в списке есть киношка с актрисой дженнифер лоуренс"
+    },
+    {
+      "filename": "e36e34e0addc8cb75c2156e0ffb65160.wav",
+      "reference": "мария анатольевна арзамасцева"
+    },
+    {
+      "filename": "e044c045caa42e986e3cdc5e605c79bd.wav",
+      "reference": "швеллер на ютуб"
+    },
+    {
+      "filename": "67ee5fbfeea13b8e82d2c84eb8fd5acc.wav",
+      "reference": "в какой усадьбе родился тютчев"
+    },
+    {
+      "filename": "b374c977d6bd7c6ea2ff1f251ef70ccc.wav",
+      "reference": "моделей серова кто изображен на портретах архив запускай"
+    },
+    {
+      "filename": "5cd3e9faa0a4f25593f522565ec79083.wav",
+      "reference": "фильм башня из слоновой кости"
+    },
+    {
+      "filename": "623b04191e2416fbac0aca0522397e3a.wav",
+      "reference": "хочу посмотреть киносерия на тв"
+    },
+    {
+      "filename": "d701b032b8655c795951f94129d83dec.wav",
+      "reference": "деньги за границу"
+    },
+    {
+      "filename": "977af7038816817c1ec24e92e9011015.wav",
+      "reference": "пропавший рысенок"
+    },
+    {
+      "filename": "7270f3fb3b22ce4042becfc150062708.wav",
+      "reference": "салют какая валюта используется в стране сальвадор"
+    },
+    {
+      "filename": "dcc7745018dcf3a5e729fe888293cc78.wav",
+      "reference": "включи тахмину умалатову"
+    },
+    {
+      "filename": "bfb63d9c64fd7c934b95f6b77a0b273d.wav",
+      "reference": "агат"
+    },
+    {
+      "filename": "7f2ad4a52fc87d7e4b8fb381760a6263.wav",
+      "reference": "фильм с шерон стоун с названием гарри поттер и философский камень"
+    },
+    {
+      "filename": "cd0b79b06fa6bf4f1ca90bbe8781e18b.wav",
+      "reference": "сколько стоит австралийский доллар для обмена"
+    },
+    {
+      "filename": "de198dbb3462608b32b2fd218c728b24.wav",
+      "reference": "песика на смотрешке"
+    },
+    {
+      "filename": "03f82988ce5c98b7e7f24683d6c08d22.wav",
+      "reference": "европейский берег маршрут"
+    },
+    {
+      "filename": "d401bc7b06232e6acabcce990163ad4c.wav",
+      "reference": "последнюю серию найди простоквашино"
+    },
+    {
+      "filename": "7ee59c8d59acec97f0a40651794cd0a1.wav",
+      "reference": "латыпов"
+    },
+    {
+      "filename": "8c405e0a1bc73c96b67375fe08ff18ba.wav",
+      "reference": "найти фильм внутри моей памяти"
+    },
+    {
+      "filename": "13853d75cda00101ad9c91b63a38729c.wav",
+      "reference": "макс барских"
+    },
+    {
+      "filename": "f14bd0dc3262b10b24f7baeb4de78a2d.wav",
+      "reference": "заводи картину мой сын мой сын что ты наделал"
+    },
+    {
+      "filename": "31750bfa82d5a859a6368aa84e815143.wav",
+      "reference": "сколько будет пятьдесят канадских долларов в тенге"
+    },
+    {
+      "filename": "e92298dafc6e049f68455935065beedd.wav",
+      "reference": "открой мне мульт вечеринка мертвых истязаемые души часть десять"
+    },
+    {
+      "filename": "65e6d9191ea9fa23684bac560b371f67.wav",
+      "reference": "лидия петровна прядченко"
+    },
+    {
+      "filename": "2d76f706ac01780fa5ecd2cbeeb02fa6.wav",
+      "reference": "сергей вьюнов"
+    },
+    {
+      "filename": "98456ce25d118cd1b89939eee60800f8.wav",
+      "reference": "покажи мне ленту африканское сафари"
+    },
+    {
+      "filename": "76d9ebbfb9febff02e04c953b46e7d0e.wav",
+      "reference": "джой здравствуйте как можно подключить спасибо от сбербанка"
+    },
+    {
+      "filename": "9f344a5c5dfe3ce1f660733c4067de9f.wav",
+      "reference": "где можно сохранить вещи до заезда в отель"
+    },
+    {
+      "filename": "72371b1b65ad7faa3c9c75a6d3f31a91.wav",
+      "reference": "синьбэй"
+    },
+    {
+      "filename": "54dbfe18ac2e8ba64a7673782fc8db9f.wav",
+      "reference": "джой мне нужно знать"
+    },
+    {
+      "filename": "aa4c9530f4695ca6ae93d7b56b33750b.wav",
+      "reference": "сезон двенадцать сериальчик дюрарара"
+    },
+    {
+      "filename": "0c2f1ea3612cbda80e0683dc64522878.wav",
+      "reference": "максим иванович качурин"
+    },
+    {
+      "filename": "6e7ae8880e6141fb7919149207cc899f.wav",
+      "reference": "вруби фишки деньги адвокаты"
+    },
+    {
+      "filename": "e7be2fa7089e175adef6e292e8f6bb49.wav",
+      "reference": "первый выпуск тейлор свифт"
+    },
+    {
+      "filename": "589eb0e80cbf565390b2be816a3da55c.wav",
+      "reference": "ставь прямой эфир английской премьер лиги арсенал против тоттенхэм"
+    },
+    {
+      "filename": "f3d7135e1c43dfcbff6c30efff2c2c34.wav",
+      "reference": "алиса привет расскажи мне пожалуйста про полеты на вертолете в этом отеле"
+    },
+    {
+      "filename": "bdcef7031622a13f8d243b12f253ac06.wav",
+      "reference": "давай посмотрим телесериал полицейский с рублевки на канале тнт"
+    },
+    {
+      "filename": "f9d506ef637f59e434f0408f5634476a.wav",
+      "reference": "оксана немцева"
+    },
+    {
+      "filename": "7884ea3e08a7707ca32ddaff43b3452a.wav",
+      "reference": "фильм сонная лощина показывай"
+    },
+    {
+      "filename": "570c9ebe4c07bfe4352de88c85a910c1.wav",
+      "reference": "гудвин поехали"
+    },
+    {
+      "filename": "65f4a49d8e65e8fd9e9edd975c6aac22.wav",
+      "reference": "бронь ооо снс сервис"
+    },
+    {
+      "filename": "4d168937bb9b0d0d8fd3c312880452a2.wav",
+      "reference": "стеклянный замок четыре ка"
+    },
+    {
+      "filename": "dff883c425f7ee91693743841df13323.wav",
+      "reference": "заводи фильм жанра киноальманах"
+    },
+    {
+      "filename": "f9c5a4a4f90878b49409c85db56ebeab.wav",
+      "reference": "открой люди икс дни минувшего будущего с актрисой хелен миррен"
+    },
+    {
+      "filename": "af71a7cc1303724f8584097fbbde97de.wav",
+      "reference": "поищи кино мы монстры"
+    },
+    {
+      "filename": "34371783b3aa87c7ca5c95259f8b100c.wav",
+      "reference": "что такое калкулляция процентов"
+    },
+    {
+      "filename": "d02255a418f380d83f0f9131ec017e92.wav",
+      "reference": "джой включить группу тремонти"
+    },
+    {
+      "filename": "9711d227dad4bdcecf7a05040a4f94e4.wav",
+      "reference": "ищи сериал видоизмененный углерод"
+    },
+    {
+      "filename": "5fa863c8179e1f0270b7800699c95e85.wav",
+      "reference": "пополнить свой телефон"
+    },
+    {
+      "filename": "6bba261c910af26cd0c4f9cbe2410259.wav",
+      "reference": "детектив инаба сезон три тридцать шестая серия"
+    },
+    {
+      "filename": "2ce429343b31ec64f1fa334947aeb129.wav",
+      "reference": "найди ближайший банкомат сбербанк"
+    },
+    {
+      "filename": "68376b906004944584cd43471527a7b3.wav",
+      "reference": "прямой эфир матча ливерпуль против норвича"
+    },
+    {
+      "filename": "d82ded7261940e241ac32ecafa179338.wav",
+      "reference": "ильшата"
+    },
+    {
+      "filename": "64c91a8ed53570dd548b36906e0d225f.wav",
+      "reference": "шарк дуду"
+    },
+    {
+      "filename": "46290b4af5ce02f46086bf1c74ab0b8f.wav",
+      "reference": "хочу пострелять из лука в отеле"
+    },
+    {
+      "filename": "cab3bd9e83f3b7a7cb288d9bb750ce85.wav",
+      "reference": "вонсан"
+    },
+    {
+      "filename": "77e0fd8a750b2688dc7513f18a7b3d17.wav",
+      "reference": "сбер пополни мобильный счет контакта любимый на триста рублей с карты сбербанк"
+    },
+    {
+      "filename": "78ee0d29facc6137eeaa3162c07f9293.wav",
+      "reference": "часть четыре сезон один германия восемьдесят шесть"
+    },
+    {
+      "filename": "9ccd9440c4207465994f508aae22f465.wav",
+      "reference": "запускай эпизод тридцать три десятого сезона однажды в сказке"
+    },
+    {
+      "filename": "0500c76114740f4c605fda0b806ac091.wav",
+      "reference": "добавь в корзину сахар виктория"
+    },
+    {
+      "filename": "10c13ca445e8ee3558e8a10d287f4a96.wav",
+      "reference": "квн тиви на смотрешке"
+    },
+    {
+      "filename": "fb014d768747e6640748bc4a52ddd22e.wav",
+      "reference": "у тебя есть одиннадцатая серия разъяснение"
+    },
+    {
+      "filename": "065706612e36a715561d08382470fe54.wav",
+      "reference": "модели подиума включай"
+    },
+    {
+      "filename": "cb6850643d8a34e2deafb8acc1fc9e75.wav",
+      "reference": "у тебя есть сериал мистер робот сезон один"
+    },
+    {
+      "filename": "cc2cd82ef585638957891bd240308221.wav",
+      "reference": "ок"
+    },
+    {
+      "filename": "d29cbf67291d17cb34404190508c247c.wav",
+      "reference": "николае геннадьевиче тихонове"
+    },
+    {
+      "filename": "f870da20ef434cac6bf55c50e43cc40c.wav",
+      "reference": "ишима"
+    },
+    {
+      "filename": "c5baf1689fcbcca9cd6282d9b84d9d9f.wav",
+      "reference": "обитель зла"
+    },
+    {
+      "filename": "c22839d94743e1fd3b74f5139aa38853.wav",
+      "reference": "елену андреевну"
+    },
+    {
+      "filename": "72cb68a84892475dfe2a36efc87c30d8.wav",
+      "reference": "уолт дисней про девочку и семь коротышек"
+    },
+    {
+      "filename": "02ef1cbe2d153429d6130f94b134ba50.wav",
+      "reference": "расскажи мне пожалуйста все предложения о сотрудничестве в отеле"
+    },
+    {
+      "filename": "8eb2c903b2b39ce2eb54ff7683114c3c.wav",
+      "reference": "эпизод двадцать шесть пятого сезона ганнибал"
+    },
+    {
+      "filename": "dd3eefa1b2e4c908b5671e8ff0333ecb.wav",
+      "reference": "есть ли у тебя сериал жан клод ван дамм гримм"
+    },
+    {
+      "filename": "34812029de1a4029a475a87410a232a1.wav",
+      "reference": "нств на смотрешке"
+    },
+    {
+      "filename": "f158e4df80c9fe20a3506038666562b9.wav",
+      "reference": "афина какая комиссия на перевод карты"
+    },
+    {
+      "filename": "7aaf6d9753c002dc0c4ea0e6e14cc9ac.wav",
+      "reference": "ольге карпенко"
+    },
+    {
+      "filename": "3b0ddc0f0a2e7bba3983e6a83c067639.wav",
+      "reference": "афина предлагаю тебе стать моей избранницей"
+    },
+    {
+      "filename": "b94131f8c2de7d61268081ecb2fd21b8.wav",
+      "reference": "четыре возраста любви"
+    },
+    {
+      "filename": "da178359df56f30d1bc1ef4890a26d76.wav",
+      "reference": "у тебя найдется давнее свидание"
+    },
+    {
+      "filename": "fce0040756e5d84593a3f32dd7c3aeee.wav",
+      "reference": "пограничный пес алый включи ка"
+    },
+    {
+      "filename": "4e8155207c4de1475fbda2ac21b59336.wav",
+      "reference": "ты можешь включить фильм острые козырьки третья серия"
+    },
+    {
+      "filename": "16e88e03b6c5960f5d229f54cf43316b.wav",
+      "reference": "пит и поль"
+    },
+    {
+      "filename": "fae81e8ebf51b52b95a76dacb6a1f0f0.wav",
+      "reference": "включай прямой эфир матча челси и манчестер юнайтед"
+    },
+    {
+      "filename": "1996f4ab66ba642032bfc0736e855a27.wav",
+      "reference": "истребители"
+    },
+    {
+      "filename": "ead94ecd7c5e243bfd41d7eabdedfa4c.wav",
+      "reference": "сбер мне нужен банкомат поехали"
+    },
+    {
+      "filename": "1132c5afd53f939933cb066ff0b154c6.wav",
+      "reference": "набери диксиленд"
+    },
+    {
+      "filename": "13a91b493c8272508c4df084e51b23f0.wav",
+      "reference": "включи путешествия"
+    },
+    {
+      "filename": "214ce27a2ea2aed0a80d1a3172b04c51.wav",
+      "reference": "добрый вечер как подключить бонусную программу спасибо от сбербанка"
+    },
+    {
+      "filename": "f0b3ac562916b432e7a3190e31d7ae97.wav",
+      "reference": "николая григорьева"
+    },
+    {
+      "filename": "61aaa2e3152a9e9aa1a3fd313a1c4ec7.wav",
+      "reference": "что ты можешь сказать о размещении гостей с ограниченными возможностями в этом отеле"
+    },
+    {
+      "filename": "7186b5be14fad21d7313ede932b136b7.wav",
+      "reference": "елена лапина"
+    },
+    {
+      "filename": "fb4fb932a639c45ce32fe61d835d179c.wav",
+      "reference": "купи чай тесс с апельсином"
+    },
+    {
+      "filename": "e503b173722332ef75e85371357e1a39.wav",
+      "reference": "найди список где играл том уилкинсон"
+    },
+    {
+      "filename": "30904284a751c69c6be77d0a030a12bc.wav",
+      "reference": "включи ева искусственный разум аш ди"
+    },
+    {
+      "filename": "7b5ec614dfd9a334cbbe9f387b50b153.wav",
+      "reference": "поищи на смотрешке телеканал наше тв"
+    },
+    {
+      "filename": "4edb7fea64b49b6e785e8b521378959b.wav",
+      "reference": "принеси пожалуйста лимонад буратино"
+    },
+    {
+      "filename": "35c0c9236aadd0858cc3034049cb46be.wav",
+      "reference": "поставь ка киношку открой глаза"
+    },
+    {
+      "filename": "45366366a69c1fdcad1592beaed5ed1f.wav",
+      "reference": "тысяча песо сколько это будет в австралийских долларах"
+    },
+    {
+      "filename": "1573172e48de1de09062dd45a8337dbe.wav",
+      "reference": "адрес отдел по вопросам миграции в западном административном округе"
+    },
+    {
+      "filename": "9d901ea90dc0e685b88cea25a30f0895.wav",
+      "reference": "сколько стоит двадцать одна американских долларов перевести в гуарани курс тринадцатое июня двадцатый год"
+    },
+    {
+      "filename": "162345a934e4d9ccaa7deca9e327f431.wav",
+      "reference": "хочу посмотреть канал в гостях у сказки на тв"
+    },
+    {
+      "filename": "5878c7d828451b4dbec60955d84dfdbd.wav",
+      "reference": "люди как мы можешь включить"
+    },
+    {
+      "filename": "09bed67c5b9fbd617384b3a55b52f6a6.wav",
+      "reference": "перевод на имя друг дмитрий три тысячи рублей"
+    },
+    {
+      "filename": "94f976731205a79b8aa1127c9b345080.wav",
+      "reference": "срочно переведи пятьдесят пять рублей бабушке"
+    },
+    {
+      "filename": "0af30efda577776e745a4c720579e5a6.wav",
+      "reference": "ржака до слез"
+    },
+    {
+      "filename": "0e06e632b3ea3502e1eeb1584c859581.wav",
+      "reference": "орлан билет"
+    },
+    {
+      "filename": "602fbe41b471f3f1ea03d861bafd3b78.wav",
+      "reference": "посоветуй мне детектив"
+    },
+    {
+      "filename": "e63decc492a465e9c4533b47c1d23f3f.wav",
+      "reference": "салют мальчишник в вегасе смотреть онлайн"
+    },
+    {
+      "filename": "c82889c624f5c866d9410a060bb21734.wav",
+      "reference": "смотреть челси манчестер сити"
+    },
+    {
+      "filename": "3af43ff6afced0e4bb29f5270266e2d0.wav",
+      "reference": "у тебя есть шесть потерянных часов"
+    },
+    {
+      "filename": "9ff718d30b33a7ddb1fb6d7e654ca947.wav",
+      "reference": "включи передачу тнв на телевизоре"
+    },
+    {
+      "filename": "4a185214c28c01a94dc5a20aebea3a59.wav",
+      "reference": "печорах"
+    },
+    {
+      "filename": "74359c4692998b4ec9de72163e9276e1.wav",
+      "reference": "можешь включить футбол на телевизоре"
+    },
+    {
+      "filename": "53acf7cb19220f9ccb2524b74e0ff682.wav",
+      "reference": "перевести деньги на номер натальи"
+    },
+    {
+      "filename": "0658fe1e52149fd2b5c61201df9839f7.wav",
+      "reference": "сочи лайф на смотрешке"
+    },
+    {
+      "filename": "3ecd79e8c1f3eefa05cf207d6cac4564.wav",
+      "reference": "отзывы югкабель"
+    },
+    {
+      "filename": "c93a45feb8abd98955c7aaf5f77c8a5e.wav",
+      "reference": "ассистент закажи сыр"
+    },
+    {
+      "filename": "803e5c75a0e68c2093d4e337edbdd967.wav",
+      "reference": "в твоем каталоге есть элли история современной золушки"
+    },
+    {
+      "filename": "dd65492262fdf3fb57ca2d1a63b868e7.wav",
+      "reference": "доктор хаус сезон один вторая часть"
+    },
+    {
+      "filename": "947abb562b5ebdb60a183f9bc10d0229.wav",
+      "reference": "галина эдуардовна"
+    },
+    {
+      "filename": "ad514d5ba149688fd0ae61cee6b9e843.wav",
+      "reference": "пятая серия седьмого сезона сериала блудный сын"
+    },
+    {
+      "filename": "c8f880af7f1be88ba25873bd3623bc77.wav",
+      "reference": "включай на тв канал люксори"
+    },
+    {
+      "filename": "83259bb96e2aaf2ecd70460fe5fd50b8.wav",
+      "reference": "перекресток миров"
+    },
+    {
+      "filename": "705e2c2553317dafb96db326e65b24e8.wav",
+      "reference": "положи деньги на номер мобильного счета плюс семь девятьсот девятнадцать триста тридцать пять восемьсот девяносто три ноль один"
+    },
+    {
+      "filename": "ef20997780394b8c11fa235fb7c47a67.wav",
+      "reference": "найди пранки"
+    },
+    {
+      "filename": "ebf70616c4af613633ef5276b7533ca8.wav",
+      "reference": "что найдется из видеокомпиляций вани мани кидс"
+    },
+    {
+      "filename": "917d47c1ce4a43468441aedf0378fdc1.wav",
+      "reference": "петрозаводск"
+    },
+    {
+      "filename": "7779b285994c60d3775bf3a793f73c04.wav",
+      "reference": "встреча апл манчестер сити тоттенхэм"
+    },
+    {
+      "filename": "4d76aa3e171648cfb49791823a207008.wav",
+      "reference": "салют хочу опять эту песню"
+    },
+    {
+      "filename": "cc3425c668ddd6b1c86325b12d45ebde.wav",
+      "reference": "сделай пополнение телефона яны на пятьсот рублей"
+    },
+    {
+      "filename": "d42a207adacd484e89770f8e7a6d9b14.wav",
+      "reference": "у тебя в каталоге есть американские боги"
+    },
+    {
+      "filename": "1ca53339397c79f46876f4c14faf23cd.wav",
+      "reference": "включи хот инна"
+    },
+    {
+      "filename": "c5881337a3574eea3bf8aad3b7012687.wav",
+      "reference": "включи муз тв"
+    },
+    {
+      "filename": "150a672ec7ec44dedc6d9592f79830e8.wav",
+      "reference": "сбер когда империя тимуридов прекратил свое существование"
+    },
+    {
+      "filename": "8be592f0dfa0d1c9f829d40e31a901b5.wav",
+      "reference": "положи деньги маме на телефон"
+    },
+    {
+      "filename": "7a7acb3d0d8681d276eb9ac38292da2c.wav",
+      "reference": "сваты два"
+    },
+    {
+      "filename": "6f0c2d17d041f7aebbe33db54c8b34e1.wav",
+      "reference": "без мужчин включи"
+    },
+    {
+      "filename": "ac11689a485556a009af6d16730f660d.wav",
+      "reference": "афина помоги мне записаться на коррекцию бровей"
+    },
+    {
+      "filename": "3966b43318c2d8c72ff84320ce5361fa.wav",
+      "reference": "найди кино служили два товарища"
+    },
+    {
+      "filename": "8eb23f1c3277d19887afe3cadf3fda0b.wav",
+      "reference": "сбер я тебя очень люблю обнимать"
+    },
+    {
+      "filename": "ba4d83766b1ab53fd6e239c113d56ac8.wav",
+      "reference": "евгений викторович самсонов"
+    },
+    {
+      "filename": "7bd37f84ef79f32d41c3719e0818a4f8.wav",
+      "reference": "двадцать восьмая часть пятый сезон настоящий детектив"
+    },
+    {
+      "filename": "862f6772d8826bc9601127fa0b765bb1.wav",
+      "reference": "афина подскажите пожалуйста ближайшее отделение банка"
+    },
+    {
+      "filename": "b0e0ef1aabea90af535d7544f11c4f22.wav",
+      "reference": "включи лавлэйс"
+    },
+    {
+      "filename": "b55f484b2b63bc62cbeed163aa71716e.wav",
+      "reference": "курс обмена рубля на сингапурские доллары"
+    },
+    {
+      "filename": "9ed99564bc68c5001f8ed9e053925cac.wav",
+      "reference": "джой две тысячи двадцать минус тысяча девятьсот семьдесят два"
+    },
+    {
+      "filename": "c4de56a2ce1f313b59e85e655bde03da.wav",
+      "reference": "что получали на олимпийских играх в древней греции"
+    },
+    {
+      "filename": "26feacf0838716a66b9a37677d66ffb3.wav",
+      "reference": "средняя общеобразовательная школа номер тридцать два с углубленным изучением предметов физико математического профиля"
+    },
+    {
+      "filename": "2e12b49783e3e5e46cfdc46b5c8cd0d3.wav",
+      "reference": "ты можешь показать фильм жанра драма"
+    },
+    {
+      "filename": "e80b9702e08b75d09b84485905efc060.wav",
+      "reference": "ассистент закажи пожалуйста в магазине литр молока"
+    },
+    {
+      "filename": "3219a3573839a51a9233197bb18fca56.wav",
+      "reference": "включи восьмая часть молокососы"
+    },
+    {
+      "filename": "5c2d0431372fc16c3bcdac08c0bc174e.wav",
+      "reference": "салют включи телевизионный канал че"
+    },
+    {
+      "filename": "9d267228837155d7d57341b940ceb6cb.wav",
+      "reference": "часть тридцать семь восьмой сезон сериал кремниевая долина"
+    },
+    {
+      "filename": "4d16f91f1128485a1d252c05077b258e.wav",
+      "reference": "ип жмыхов га билет"
+    },
+    {
+      "filename": "a8a195e0017ca229bfc5bfb8da6de42a.wav",
+      "reference": "салют поставь еще раз"
+    },
+    {
+      "filename": "8175e30a8ff6d2db27affc30a214490a.wav",
+      "reference": "у тебя в списке есть пелагия и белый бульдог"
+    },
+    {
+      "filename": "75e9bea16acdf4576b70a70bb5a13cfb.wav",
+      "reference": "салют за сколько можно купить в тинькофф банке евро"
+    },
+    {
+      "filename": "220c38f5cd8a6977683119adf018169a.wav",
+      "reference": "включи гранж"
+    },
+    {
+      "filename": "bb24603c1b27754a931dc934218b4beb.wav",
+      "reference": "никитой геннадьевичем кабировым"
+    },
+    {
+      "filename": "c890d4b707d7fe5406226c451b505e75.wav",
+      "reference": "один литр молоко кубанская буренка три процента жирности заказать домой с бесплатной доставкой"
+    },
+    {
+      "filename": "63515f2484f132e6aa688ec704edbc3c.wav",
+      "reference": "скилл съедобное несъедобное на английском сыграть в"
+    },
+    {
+      "filename": "4dbd1e7970c1102f8829aac436fe835b.wav",
+      "reference": "стоимость обмена российского рубля в реал"
+    },
+    {
+      "filename": "9550f63c3ff2baf74a99435e2485f37a.wav",
+      "reference": "загрузи на смотрешке канал малыш тв"
+    },
+    {
+      "filename": "4aa1d649e3c2dcf6251965483a3b25cf.wav",
+      "reference": "включай картину алиби"
+    },
+    {
+      "filename": "f4ef4fb46b04312d2ac4e109028052be.wav",
+      "reference": "есть ли у тебя мэтр или призрачный свет"
+    },
+    {
+      "filename": "51c49c3138ccef8699bf521c836a6778.wav",
+      "reference": "десятый сезон сериал игра престолов"
+    },
+    {
+      "filename": "db3551e4c169c741272b36b1d6e26ff4.wav",
+      "reference": "врубай темное фэнтези"
+    },
+    {
+      "filename": "d8df61573109a8e43b1a42b662e08359.wav",
+      "reference": "купить швейцарские франки в норвегии почем"
+    },
+    {
+      "filename": "83c2fd5c1a2905dc02906c71dff730e4.wav",
+      "reference": "сбер переведи тысячу андрею"
+    },
+    {
+      "filename": "cd221d8bce84831202d1110846a15ecb.wav",
+      "reference": "спайдермен двадцать девятнадцать"
+    },
+    {
+      "filename": "7964c5be7579fcf5d79eaa42b6ea110b.wav",
+      "reference": "азамат смирнов"
+    },
+    {
+      "filename": "998f85e1297fa15566ea0997a49e673e.wav",
+      "reference": "у тебя есть все равно ты будешь мой"
+    },
+    {
+      "filename": "b19776d279286363cbfac82e1e8c657c.wav",
+      "reference": "включи мистер мерседес"
+    },
+    {
+      "filename": "a59e5c37992addd0ab244f43e352e6c5.wav",
+      "reference": "посоветуй мне на смотрешке телеканал фэшн тиви"
+    },
+    {
+      "filename": "26c6e61841536280174b459095bbf17e.wav",
+      "reference": "маршрут аварийный комиссар кузов салон"
+    },
+    {
+      "filename": "13f2f9aeef2c5d1ed8b9fddba5588388.wav",
+      "reference": "включай футбольную игру манчестер сити нью касл"
+    },
+    {
+      "filename": "da06ed0870e679b823bf775ae2270530.wav",
+      "reference": "четыреста девяносто четыре сорок восемь семьсот пятнадцать четырнадцать"
+    },
+    {
+      "filename": "c063f38a766eb89d73ecec34873f6b9c.wav",
+      "reference": "красиковой"
+    },
+    {
+      "filename": "0263c7fec974ee99c4cc8cc720483f6c.wav",
+      "reference": "перейди в игра впуть"
+    },
+    {
+      "filename": "b3519c2acf26e8716462d01eb2c18d71.wav",
+      "reference": "сбер какие виды д сорок девять ты знаешь"
+    },
+    {
+      "filename": "f2049defe2705310dbeb76ae52ff587b.wav",
+      "reference": "стоян"
+    },
+    {
+      "filename": "7b1a7369ed305d2d22210e40794f8989.wav",
+      "reference": "лечить живых"
+    },
+    {
+      "filename": "abdc7913d37d846b9e90a8e0e23e0125.wav",
+      "reference": "сбер какие нации сформировались первыми"
+    },
+    {
+      "filename": "2e5b765fe39f77a0c0ff458085e3fc83.wav",
+      "reference": "тичинг менс фэшэн ютюб"
+    },
+    {
+      "filename": "eec70a3ae5f71b7855194380dee34c15.wav",
+      "reference": "найди киноху тройной форсаж токийский дрифт"
+    },
+    {
+      "filename": "e20000c824f0458b26c8fe13de37cfc6.wav",
+      "reference": "ниночку васильеву"
+    },
+    {
+      "filename": "28c7ed8747d33772ba86beffbb363f6e.wav",
+      "reference": "салют включи канал телевидения майдан"
+    },
+    {
+      "filename": "2020f93f8fbeb8324bd3433a7276b720.wav",
+      "reference": "сбер как красиво и компактно мять алюминиевые банки от напитков"
+    },
+    {
+      "filename": "05bbff3929688c7ce99a7509ac80666b.wav",
+      "reference": "запись манчестер и тоттенхэм"
+    },
+    {
+      "filename": "edce9b87d9e1bdcbe59f8f321097be2c.wav",
+      "reference": "врата штейна серия три"
+    },
+    {
+      "filename": "d10200d2ab05650d8bc03a436aefda8c.wav",
+      "reference": "покажи видеофильм безжалостное солнце"
+    },
+    {
+      "filename": "b0aa315a1daea9d0decf3e2dd89d58d1.wav",
+      "reference": "адрес жемчуг"
+    },
+    {
+      "filename": "4ac546c47834ce2b4d2a636d485c07dd.wav",
+      "reference": "сбер ты сукин сын"
+    },
+    {
+      "filename": "78338677639eff80a340d4dc56118ae4.wav",
+      "reference": "уилл смит"
+    },
+    {
+      "filename": "caf17582f0261025bbbab8006529c21d.wav",
+      "reference": "а поставь мне фильм гюльчатай"
+    },
+    {
+      "filename": "d10ae49bacc3c8694bfec584ada80bc6.wav",
+      "reference": "как правильно сделать затирку кафеля"
+    },
+    {
+      "filename": "a3a2d2fe39193e59d162acf7e2e3e2fc.wav",
+      "reference": "популярные фильмы в жанре мелодрама"
+    },
+    {
+      "filename": "4bbbde615acc4b98cfcdf700d2238b52.wav",
+      "reference": " "
+    },
+    {
+      "filename": "de16f6b9da624a2466e0661e5c1f915e.wav",
+      "reference": "афина включи романа бурова"
+    },
+    {
+      "filename": "f3185315bdaacf5d6ac0d4261113e7b0.wav",
+      "reference": "если можешь прости можешь включить"
+    },
+    {
+      "filename": "dc7898ccbe69f71f9c01b5e712a2bcbf.wav",
+      "reference": "пополнить мобильный баланс"
+    },
+    {
+      "filename": "2d914d098efabc91253d7d33f88d5903.wav",
+      "reference": "у тебя в запасе есть выдуманная жизнь эбботов"
+    },
+    {
+      "filename": "a0c396d0bd7022379dc8f1362f72a446.wav",
+      "reference": "в ютьюбе сираластор"
+    },
+    {
+      "filename": "7db426cc16ae571c898430d7127dd2cb.wav",
+      "reference": "ты можешь показать киношедевр в стиле мелодрама"
+    },
+    {
+      "filename": "dbcb82e89bb6f96b8b57bd10a6d448b5.wav",
+      "reference": "ларисы михайловны пановой"
+    },
+    {
+      "filename": "47cec8c6edafbe5491b892a7c7d0706f.wav",
+      "reference": "салют где применяется сетевой эффект"
+    },
+    {
+      "filename": "ed10a4eeb42a32f2f1adee4247268698.wav",
+      "reference": "включи райд ит"
+    },
+    {
+      "filename": "82e19193270fad7988e56d1d560fc598.wav",
+      "reference": "купить семнадцать гуарани стоимость"
+    },
+    {
+      "filename": "d97df0e6ebf52e434112d71443a6cc09.wav",
+      "reference": "какую валюту брать с собой в шри ланку"
+    },
+    {
+      "filename": "e81c07ee234a5eb28c91d5368a29cab5.wav",
+      "reference": "как забронировать стол"
+    },
+    {
+      "filename": "73d10ca29ac43245cd6ca0fddd0cd571.wav",
+      "reference": "сериал флэш последний сезон часть четырнадцать"
+    },
+    {
+      "filename": "1f03ee7b34314f07e4b50d7d415079fa.wav",
+      "reference": "включи мне на тв передачу мир"
+    },
+    {
+      "filename": "dbe488f494ee8a1f2a316c2ff520b1f9.wav",
+      "reference": "шоу эмбер вулф гэйм ютьюб"
+    },
+    {
+      "filename": "f6e193c03f6d742326edd17a2da053e0.wav",
+      "reference": "афина включи лаки люк"
+    },
+    {
+      "filename": "3e5ca68b39997c9581675a760a865eda.wav",
+      "reference": "данил рубан"
+    },
+    {
+      "filename": "9890936fedc43483e0a18976d0b31f4b.wav",
+      "reference": "маленький школьный оркестр найти"
+    },
+    {
+      "filename": "90d4db4951c6fa096f125fec9b465b6b.wav",
+      "reference": "сергею константиновичу"
+    },
+    {
+      "filename": "79417f5ec57ecaa7da0458ba9d831ead.wav",
+      "reference": "у тебя есть сериал штам"
+    },
+    {
+      "filename": "8fdfd53ddc71160fa829db33028240ca.wav",
+      "reference": "найти на смотрешке передачу квн тв"
+    },
+    {
+      "filename": "e6a55a0c52334663738b2ab7ac8ed6ed.wav",
+      "reference": "смотреть сериал онлайн не прощенный"
+    },
+    {
+      "filename": "41f587a2fb8345baad7d327fec46f878.wav",
+      "reference": "ооо ветком запись"
+    },
+    {
+      "filename": "9ad33d0646b14a212bc952f4ebbdb541.wav",
+      "reference": "фильм"
+    },
+    {
+      "filename": "2ed4ff85fb18137500b4be320bd4163d.wav",
+      "reference": "алиса закажи мне чипсы лейс со вкусом бекона по адресу"
+    },
+    {
+      "filename": "222a31fc703ad8550cffc23b07baf16b.wav",
+      "reference": "афина вот мне нужно подключить уведомления по моей карте на мой телефон"
+    },
+    {
+      "filename": "96973c4064cf004a51d33f057185dfc3.wav",
+      "reference": "хочу посмотреть киноработу мир юрского периода"
+    },
+    {
+      "filename": "a11beb21b7ff6e3321e1158de30bc9ff.wav",
+      "reference": "посоветуй мне телеканал муз тв на смотрешке"
+    },
+    {
+      "filename": "a398924f402fd60d9698860eb6b960cf.wav",
+      "reference": "элизиум снегири и драконы"
+    },
+    {
+      "filename": "26ebbefad77d099372b512a8d8f089ca.wav",
+      "reference": "салют рособоронэкспорт индустрия"
+    },
+    {
+      "filename": "b118cbde18733e6dc2a01e4cf7dcbf38.wav",
+      "reference": "игра на смотрешке"
+    },
+    {
+      "filename": "1882b301484068e08d8cba33a6b771a7.wav",
+      "reference": "открой на смотрешке бридж тв русский хит"
+    },
+    {
+      "filename": "5d6463bd6ea145cae43c0bc85d6cc992.wav",
+      "reference": "джой расскажи шутку про ипотеку"
+    },
+    {
+      "filename": "be4c84d97f2d9e6d26c8cc8d5f80a11c.wav",
+      "reference": "трансляция апл манчестер с бернли"
+    },
+    {
+      "filename": "054054a0b38db8e72385d9f889f87280.wav",
+      "reference": "смотреть интерны"
+    },
+    {
+      "filename": "91c49d5864b8b05c723fc8071f954c4b.wav",
+      "reference": "давай прямой эфир апл астон вилла и манчестер сити"
+    },
+    {
+      "filename": "d52a6e98e55b340692d71b1cd21281c9.wav",
+      "reference": "салют заверши работу через пятнадцать минут"
+    },
+    {
+      "filename": "ed4ace3090dbe14933bf7d2635376ce6.wav",
+      "reference": "есть ли у тебя мультфильм лучше звоните солу часть два"
+    },
+    {
+      "filename": "7bb82a462f958fc3b4fa2b4a04890711.wav",
+      "reference": "вердикт за деньги открой мне"
+    },
+    {
+      "filename": "bebcfa02c08774bb3fc8484a668b61c9.wav",
+      "reference": "купить пятьдесят тенге стоимость"
+    },
+    {
+      "filename": "54b979886c0fcf796288f39aa3eedfec.wav",
+      "reference": "страшные сказки смотреть онлайн"
+    },
+    {
+      "filename": "bd5fdd650742af069393431f69dfc8e0.wav",
+      "reference": "часть двадцать шесть сезона один тюдоры"
+    },
+    {
+      "filename": "28aca102106d008314e35959774babcd.wav",
+      "reference": "первый канал ургант вечерний"
+    },
+    {
+      "filename": "8935412f339e01ea8d0b27d76f66f52b.wav",
+      "reference": "приложение чем занимается петр мартюк сыграть в"
+    },
+    {
+      "filename": "daea7f03b1b942d0b9e9897911092138.wav",
+      "reference": "из чего можно пострелять в тире в отеле"
+    },
+    {
+      "filename": "171390102aaf3e1e9aec472bee3c2d1d.wav",
+      "reference": "республика вьетнам"
+    },
+    {
+      "filename": "1758c165c535355700db22b806611a41.wav",
+      "reference": "салют алиса тупица"
+    },
+    {
+      "filename": "a7e6cc4c01ecc8600dd9fefc71eaba01.wav",
+      "reference": "есть ли у тебя кинчик питера сигала"
+    },
+    {
+      "filename": "45bc9d6239899d7269d9ad81fe7d3a88.wav",
+      "reference": "искать кино человек который убил гитлера и затем снежного человека"
+    },
+    {
+      "filename": "b1a9b888e308588d850cb2aa03d5bcdf.wav",
+      "reference": "включай внезапная удача"
+    },
+    {
+      "filename": "db57b4160d84d5accceec5a6f4277d84.wav",
+      "reference": "четвертый сезон фильм нэшвилл"
+    },
+    {
+      "filename": "9c48add25953b672fd241c8c2834d428.wav",
+      "reference": "доверие на смотрешке"
+    },
+    {
+      "filename": "0f96651aa797fb474d2ece48045bd31e.wav",
+      "reference": "пиво жигулевское светлое полтора литра"
+    },
+    {
+      "filename": "9454aece7f445bc37590c7fc566dbc51.wav",
+      "reference": "гум гагаринский"
+    },
+    {
+      "filename": "6185f98a0ec0f755d5355c0d4f2ff60d.wav",
+      "reference": "у тебя есть последняя часть хикок сорок пять"
+    },
+    {
+      "filename": "05035127bdda12529fc89a403ce4c801.wav",
+      "reference": "у тебя будет кинолента дед мороз битва магов"
+    },
+    {
+      "filename": "2b74574171c9600c283318544b27e762.wav",
+      "reference": "у тебя есть никогда не забуду тебя"
+    },
+    {
+      "filename": "5cd8cf78e1f435acdc008c41648584a6.wav",
+      "reference": "закажи пожалуйста пепси два с половиной литра"
+    },
+    {
+      "filename": "fedcb6a494764bc519f8ef4fc513cd18.wav",
+      "reference": "забудь и вспомни сезон один"
+    },
+    {
+      "filename": "219ab949cadf3682c0028423141552c2.wav",
+      "reference": "скачай воровка"
+    },
+    {
+      "filename": "cc2dd2322a7e32b984e5379be45be5c3.wav",
+      "reference": "фабрика"
+    },
+    {
+      "filename": "c73fbee593ebdbac31c8ee7ed221522b.wav",
+      "reference": "включай на телевизоре передачу айди инвестигейшн"
+    },
+    {
+      "filename": "0dbd4eb0c7413677e59d494de4697dee.wav",
+      "reference": "что найдется из киношек с актрисой сьюзан сарандон"
+    },
+    {
+      "filename": "308d3d3f49a456a61558fb4e5131da6c.wav",
+      "reference": "синпин"
+    },
+    {
+      "filename": "6c45ef1f0e91ec3863caedd9bcc9c6f3.wav",
+      "reference": "салют какие координаты у план астраханского кремля"
+    },
+    {
+      "filename": "422bd1765c86228c215ef03e5ed96cdd.wav",
+      "reference": "врубай весь я"
+    },
+    {
+      "filename": "fe465d6e83e6bfc0bd221b0499864c0e.wav",
+      "reference": "майонез"
+    },
+    {
+      "filename": "e93a365b34d3e812c9f29e107cc711b6.wav",
+      "reference": "морковка"
+    },
+    {
+      "filename": "b8506e54f26623d1c73f9fcfea605f55.wav",
+      "reference": "приколы с животными"
+    },
+    {
+      "filename": "31690eb69212d5c04da78481ece6ee0c.wav",
+      "reference": "найди туман мнишек"
+    },
+    {
+      "filename": "201e72ddfa0ae0d871b0ed955b44bec6.wav",
+      "reference": "сергей александрович мартынов"
+    },
+    {
+      "filename": "d73d1952ab3f56a1b351cade2d79b972.wav",
+      "reference": "окей гугл включи какую нибудь передачу"
+    },
+    {
+      "filename": "5b099474f82d34de44c87d2c3678e8eb.wav",
+      "reference": "запускай сериал убивая еву"
+    },
+    {
+      "filename": "1ade9e8601b432f53e9d28bb10159f6e.wav",
+      "reference": "включи сериал отбросы тридцать вторая серия"
+    },
+    {
+      "filename": "b2dfc34e225c003fac6cf25a4333577a.wav",
+      "reference": "мадина васильевна"
+    },
+    {
+      "filename": "1f351be39ab0180d50b2c1f6a639fcc3.wav",
+      "reference": "рошалю"
+    },
+    {
+      "filename": "fb0b65b3e9918ed5aea28f1f239b4712.wav",
+      "reference": "открой настоящая кровь"
+    },
+    {
+      "filename": "b2e4e1afa72bda84d9b10c41246e94b5.wav",
+      "reference": "ужасы две тысячи девятнадцатого года"
+    },
+    {
+      "filename": "859633282a5c7b2ed1c88c42bf98c8bb.wav",
+      "reference": "маршрут граф орлов"
+    },
+    {
+      "filename": "3789928bd92d8ac6ef46c5130ab6a7b5.wav",
+      "reference": "сезон три сериал красные браслеты"
+    },
+    {
+      "filename": "3e48cf277b0e0da570489a1cbd3a468d.wav",
+      "reference": "найти фильм жизнь моя опера тысяча девятьсот семьдесят девятый год"
+    },
+    {
+      "filename": "33f5a11a03a087164594203a756ecb8c.wav",
+      "reference": "айтэч где находится"
+    },
+    {
+      "filename": "45fe126b691224b73ec4570162e465aa.wav",
+      "reference": "вруби калейдоскоп на телевизоре"
+    },
+    {
+      "filename": "42b866f19e6e839d3bff00b61105c500.wav",
+      "reference": "запускай киноработу жанра советский кинематограф"
+    },
+    {
+      "filename": "767a3f98cc05a69656ba9b9bc367ba66.wav",
+      "reference": "часы работы рум сервиса"
+    },
+    {
+      "filename": "2b426a2fdca44fb5d12b0bb08e170bf1.wav",
+      "reference": "включи мне на смотрешке канал бокс тв плюс"
+    },
+    {
+      "filename": "c9a9821b81098ca485bc42894e932b72.wav",
+      "reference": "джой помощник мой ассистент включи мне песню сеньорита зарубежная"
+    },
+    {
+      "filename": "7f4d3071e953508d377ce09e771fb425.wav",
+      "reference": "ооо россо моторс фото"
+    },
+    {
+      "filename": "6bee33672b95a4d14c4493176d9ab526.wav",
+      "reference": "перевести сто рублей на номер телефона марины"
+    },
+    {
+      "filename": "c0f049234aad64c73c5accb02c5db6d4.wav",
+      "reference": "салют я в этом месяце много звонил надо номер свой пополнить давай пятьсот рублей положим"
+    },
+    {
+      "filename": "623756e6bb689acfda6672e45208aaf5.wav",
+      "reference": "два сто восемьдесят два шестьсот семь пятьдесят семь семь четыре"
+    },
+    {
+      "filename": "0d7522a4a0fa809e5adf7ad6fc460d74.wav",
+      "reference": "сколько баксов стоит реал"
+    },
+    {
+      "filename": "4a02c6fcdddacc80542273e186eb376e.wav",
+      "reference": "сбер как называется валюта в египте"
+    },
+    {
+      "filename": "840bafde488d210d98243cc2d3b6dd0e.wav",
+      "reference": "поищи кинематографический фильм маугли"
+    },
+    {
+      "filename": "c35deaf94921ca67be23c19580a13397.wav",
+      "reference": "найти фильм плохие парни первую часть"
+    },
+    {
+      "filename": "d58c4c3984e68771f4e0d665642a8766.wav",
+      "reference": "сергей есаев"
+    },
+    {
+      "filename": "e9b050515cea48e1a60e39ad1512b110.wav",
+      "reference": "фильм джона ву с названием игра престолов"
+    },
+    {
+      "filename": "4f35b35d5af5376e90890572b433d9e6.wav",
+      "reference": "дочь посла"
+    },
+    {
+      "filename": "b58cb6de0e8990c06be847af3d0bdb0e.wav",
+      "reference": "лента занимательная химия можешь включить"
+    },
+    {
+      "filename": "5d2b22d26bbc2ffeb5d08d091f0bdbf9.wav",
+      "reference": "давида новикова"
+    },
+    {
+      "filename": "7428ca4bc91837055e32eeceeea6f39b.wav",
+      "reference": " "
+    },
+    {
+      "filename": "769a034f48e93fedaf1f70e7f210c23f.wav",
+      "reference": "старшая сестра покажи"
+    },
+    {
+      "filename": "602288de2a2696a0af38b472936af9d6.wav",
+      "reference": "неуклюжая сезон два"
+    },
+    {
+      "filename": "73199bddd8c833d581952f3bf1f796ca.wav",
+      "reference": "лидия валентиновна"
+    },
+    {
+      "filename": "f0ccb899889279e977b8cfdef5ea6b86.wav",
+      "reference": "информатор точка уа лучшая серия"
+    },
+    {
+      "filename": "fa6ebeb3ac07b1ac8f8620722c6245e0.wav",
+      "reference": "запусти мир двадцать четыре на телевизоре"
+    },
+    {
+      "filename": "ef6631e548e312c5ac85225e19e7c857.wav",
+      "reference": "салют запиши на стрижку на завтра"
+    },
+    {
+      "filename": "20593d3ff5843870bcd5f7c178f70aac.wav",
+      "reference": "джой у меня все в порядке"
+    },
+    {
+      "filename": "cef16b676c2dd4033878940cf24b626c.wav",
+      "reference": "джой какие виды иверская богородица ты знаешь"
+    },
+    {
+      "filename": "bc5974373d0d945ddaa85d8655a3379e.wav",
+      "reference": "кино смертельная гонка"
+    },
+    {
+      "filename": "28f3de1bd791e397023336694821366a.wav",
+      "reference": "включи канал о три на тв"
+    },
+    {
+      "filename": "c5c094843bb997e61dc4dbe5058f5f73.wav",
+      "reference": "афина включай россия к"
+    },
+    {
+      "filename": "1e9bd951309c090034004f2fc3367d5a.wav",
+      "reference": "чай тесс"
+    },
+    {
+      "filename": "a6c6f40f45662248a5acc57c829ce2be.wav",
+      "reference": "поставь на смотрешке телеканал лдпр тв"
+    },
+    {
+      "filename": "3e08565fa28b01e57a94863f78c43b06.wav",
+      "reference": "у тебя в каталоге есть библиотекари"
+    },
+    {
+      "filename": "75db29fe2a74b401766c9ed3f16568c2.wav",
+      "reference": "сбер ваша маленькая суперспособность"
+    },
+    {
+      "filename": "ad77622208097a6c568f175deee57dcc.wav",
+      "reference": "елена быканова"
+    },
+    {
+      "filename": "900fdfe041168b0026fc86c84ceba1a5.wav",
+      "reference": "сбер семь метров над уровнем неба онлайн"
+    },
+    {
+      "filename": "8f10a67d55e8cd7f60fb0f92ea7e4289.wav",
+      "reference": "в метре друг от друга"
+    },
+    {
+      "filename": "d3e85b70e49120d38b2c6a6cd7f3922d.wav",
+      "reference": "азу булгакова"
+    },
+    {
+      "filename": "6e77ec652322c67bd14bbdf1f29cd458.wav",
+      "reference": "найти лучшие фильмы жанра путешествия"
+    },
+    {
+      "filename": "fab348705733547c48437debb503fd94.wav",
+      "reference": "любка"
+    },
+    {
+      "filename": "058cb9baf9beca88e34242367b15670a.wav",
+      "reference": "тарусу"
+    },
+    {
+      "filename": "ca69bfe31f25693c484d18040bda73a4.wav",
+      "reference": "джой помоги найти перевод от петра иванова"
+    },
+    {
+      "filename": "02280adfd805592161021ff9c773029e.wav",
+      "reference": "имеется ли у тебя фильмас жанра боевик"
+    },
+    {
+      "filename": "9d18dec407799f9d816db63071b36f1e.wav",
+      "reference": "расскажи о рыбалке в этом отеле"
+    },
+    {
+      "filename": "9f8e60b6600531c1188520e14cdaa8fe.wav",
+      "reference": "покажи фильм жанра анимация"
+    },
+    {
+      "filename": "46d2115f94f8f9a5d126b5c33a3a57b0.wav",
+      "reference": "афина она в порядке"
+    },
+    {
+      "filename": "a4f332cac3c0133fc9ff0720e3c4f94b.wav",
+      "reference": "открой канал стар синема на телевизоре"
+    },
+    {
+      "filename": "d56a3897d795833265c7ef8299d60eb6.wav",
+      "reference": "афина ваня маня кидс шоу"
+    },
+    {
+      "filename": "95b515916be5c7888723efe855dbf43d.wav",
+      "reference": "сбер включи через пятнадцать минут какую нибудь бодрую музыку"
+    },
+    {
+      "filename": "9f6e1b58302dc2f7e53a2d1c0683ea18.wav",
+      "reference": "стоимость обмена долларов в американских фунтах"
+    },
+    {
+      "filename": "b66026a4597b7f2f47668c6a0403f8aa.wav",
+      "reference": "кто произвел триал восемьдесят"
+    },
+    {
+      "filename": "03f52381d8c64a12d1733e13022007d5.wav",
+      "reference": "сбер какая самая удобная поза для работы в офисе как расположить ноги удобнее всего"
+    },
+    {
+      "filename": "5ee46a11ae1920deea67082489c27a47.wav",
+      "reference": "сбер сделай поменьше на десять процентов яркость"
+    },
+    {
+      "filename": "71ad78b911de01fe29d7296a521cd76c.wav",
+      "reference": "сувенир"
+    },
+    {
+      "filename": "bc0acd692614f5c9d65fc56bbe6f3c74.wav",
+      "reference": "как можно здесь воспользоваться прачечной"
+    },
+    {
+      "filename": "ea45a0b3e03759ada4aa120b898b8609.wav",
+      "reference": "можешь включить соню энд софию прекрасную"
+    },
+    {
+      "filename": "5d1554077db8cd6db2bb2ac4d8fb08cd.wav",
+      "reference": "подключи канал телевидения нано"
+    },
+    {
+      "filename": "5e24e326aec884851963ef15c482d442.wav",
+      "reference": "франс на смотрешке"
+    },
+    {
+      "filename": "af06a763d6f981b6095728fa49857c0c.wav",
+      "reference": "ты можешь показать энимал контэр страйк в ютюбе"
+    },
+    {
+      "filename": "c39e969957034d05d9ba9eb231a622da.wav",
+      "reference": "тгу"
+    },
+    {
+      "filename": "02325f7196a60c615bfe0f2effa92ec4.wav",
+      "reference": "ютьюб риддл стрим"
+    },
+    {
+      "filename": "80d1612f59c91f2327de561500d14e9a.wav",
+      "reference": "вышли пожалуйста реквизиты моего счета необходимые для платежа за интернет"
+    },
+    {
+      "filename": "281666b4a8a1b1104f63be389700ce06.wav",
+      "reference": "пользуется в бразилии"
+    },
+    {
+      "filename": "1e4cb20024a222c4a0b2478358e60c6e.wav",
+      "reference": "афина какие деньги на корфу"
+    },
+    {
+      "filename": "59bbaa4457806d8c47c8aa629d3b58f8.wav",
+      "reference": "восстание"
+    },
+    {
+      "filename": "7859cdbf5d1229c7ce5a12560425732e.wav",
+      "reference": "мой друг максим отправь ему на мобильный сотню"
+    },
+    {
+      "filename": "553557bddb3287135972f927f0fa0003.wav",
+      "reference": "афина знаешь шутки про отдых"
+    },
+    {
+      "filename": "be1987cd85122062030a5c1edb93c877.wav",
+      "reference": "скачай фильмец с николь кидман экзамен"
+    },
+    {
+      "filename": "5697ebcc80baf48fd34fa2f930010c3d.wav",
+      "reference": "сыр"
+    },
+    {
+      "filename": "f00594a082193b8a317fc9b94c332893.wav",
+      "reference": "сбер чем платят жители самета"
+    },
+    {
+      "filename": "95e284fc79d61cf26a8634dfbf15c697.wav",
+      "reference": "салют гравити фолз"
+    },
+    {
+      "filename": "fb48fc1b3da0af24f0a4e56ad008c7d1.wav",
+      "reference": "у тебя найдется сериальчик типа криминала"
+    },
+    {
+      "filename": "6caacedb4ede6e76c8bc00691fe28626.wav",
+      "reference": "афина применяется ли в настоящее время гидротипная технология"
+    },
+    {
+      "filename": "d373c57c2e787ed4d853fbaeb98b27ab.wav",
+      "reference": "сто рублей на номер восемь девятьсот тридцать два"
+    },
+    {
+      "filename": "4c54c01e3b59943e7de00ecc99e08e18.wav",
+      "reference": "джой расскажи шуточку"
+    },
+    {
+      "filename": "85ae7f54f65544dfdfae43fdf61bd123.wav",
+      "reference": "мужское женское последняя серия"
+    },
+    {
+      "filename": "10d60212ba66812893779efccc5ea7d8.wav",
+      "reference": "салют как выгоднее всего пользоваться интернетом за границей"
+    },
+    {
+      "filename": "61c529f7a777180bacf67be91c2351ed.wav",
+      "reference": "где ближайшая химчистка"
+    },
+    {
+      "filename": "44d61ca8bb4fd4f70e8d6cd120036c0b.wav",
+      "reference": "вселенная стивена сезон десять"
+    },
+    {
+      "filename": "16f6f7de701a8cc7c7ed1f74e55cf24d.wav",
+      "reference": "фильмы восьмидесятых годов"
+    },
+    {
+      "filename": "a9d15ea8794231993fa58d057639c966.wav",
+      "reference": "люцифер с актрисой мишель монахэн включи"
+    },
+    {
+      "filename": "783be89657e6107d78935a5aba832bac.wav",
+      "reference": "джой посчитай мне двадцать пять плюс семнадцать сколько будет"
+    },
+    {
+      "filename": "50242b4287ff25cb70663a663def5594.wav",
+      "reference": "подключи роковое искушение фулл эйч ди"
+    },
+    {
+      "filename": "046a068b2ac58c770f61bbdd61f47fe3.wav",
+      "reference": "версаль на карте"
+    },
+    {
+      "filename": "6c469678f8beff22abd6b635fc402a63.wav",
+      "reference": "ивана валерьевича назарова"
+    },
+    {
+      "filename": "13366d58b6bc0ad2897864ac6219a091.wav",
+      "reference": "запусти друзья"
+    },
+    {
+      "filename": "9983b35c62c3f3e5357090693eb6b9fe.wav",
+      "reference": "ищи жульетта"
+    },
+    {
+      "filename": "652efd00e20e9b4c847ac795763d45d2.wav",
+      "reference": "включи мне фильм дикая бразилия"
+    },
+    {
+      "filename": "660f1a1716d68275bbff758ea9b3aa25.wav",
+      "reference": "матч апл манчестер юнайтед с астон виллой"
+    },
+    {
+      "filename": "f737b69e3453e1aff9cf48cc9bc532d4.wav",
+      "reference": "включи первый эпизод баффи истребительница вампиров"
+    },
+    {
+      "filename": "fb26b7cddbb2116d33b9e2f630e15665.wav",
+      "reference": "в восемнадцать ноль ноль выруби ночник над кроватью"
+    },
+    {
+      "filename": "73485152603cfec44faa585bc818bf38.wav",
+      "reference": "обмани меня седьмой сезон"
+    },
+    {
+      "filename": "bc38d97eda040895f746c27a41863f8e.wav",
+      "reference": "покажи мне на смотрешке телеканал нтв"
+    },
+    {
+      "filename": "446f5addf9401274b265f56997ee2dbf.wav",
+      "reference": "запусти выступление артиста"
+    },
+    {
+      "filename": "358bdf34a347ce0ef85cc59f2ab8e512.wav",
+      "reference": "включи театр"
+    },
+    {
+      "filename": "9449c8e62992ea0d75a1b19702805cc5.wav",
+      "reference": "ты можешь включить концерты ютьюб"
+    },
+    {
+      "filename": "6d7aafbc30954f79cc2d6deaf620b445.wav",
+      "reference": "где я могу одолжить трекинговые палки"
+    },
+    {
+      "filename": "9f62b53056f49075b9846ffebabaf368.wav",
+      "reference": "джой где скончался иезекииль"
+    },
+    {
+      "filename": "b357aee95af26cc70bbb2e25fe65e2b9.wav",
+      "reference": "найти лучшие фильмы жанра мелодрама"
+    },
+    {
+      "filename": "c6bb75ee11b9159ebf415d441a5cbfbe.wav",
+      "reference": "поставь на смотрешке телеканал фэшен тв"
+    },
+    {
+      "filename": "9111a68b63e61eeb5eb505bc7db38d31.wav",
+      "reference": "тридцать шестая часть последнего сезона сериала манифест"
+    },
+    {
+      "filename": "da7269c4e4046cf44a82613f505068e3.wav",
+      "reference": "сколько будет триста семьдесят пять английских фунтов в тенге"
+    },
+    {
+      "filename": "0b14d43ac4e1a5271ee2dc110844d3ac.wav",
+      "reference": "требуется заказать газированную воду объемом двадцать пять литров бонаква"
+    },
+    {
+      "filename": "30c53239cb4546f1e3c77bb45c358de3.wav",
+      "reference": "какая должность у ип при заполнении документов"
+    },
+    {
+      "filename": "78993e58e5287d4256519d53077a9319.wav",
+      "reference": "телефон ооо техгазсервис"
+    },
+    {
+      "filename": "9142b078b317e855bff3a2c7128359a3.wav",
+      "reference": "можешь включить кино несколько дней из жизни и и обломова"
+    },
+    {
+      "filename": "7384e6705e98a9300803e994b66f7e0f.wav",
+      "reference": "менеджер по персоналу"
+    },
+    {
+      "filename": "7d28e8d784ae087957dcc28e5a9b4588.wav",
+      "reference": "сергей витальевич киселев"
+    },
+    {
+      "filename": "c78570e5ec357f9a304d5c39fa14276f.wav",
+      "reference": "прямой эфир матча апл манчестер сити с брайтоном"
+    },
+    {
+      "filename": "994ac8d02a7164ab770b92d6f20e6e64.wav",
+      "reference": "видео"
+    },
+    {
+      "filename": "627e93337e4c7ece6ed9dc0451f9ffd9.wav",
+      "reference": "джой сколько часов сейчас в москве"
+    },
+    {
+      "filename": "e236426943758114bdad1cf20013d736.wav",
+      "reference": "сбер долгота танцующий лес"
+    },
+    {
+      "filename": "ebd11ac5b5f303b97c16396655a61662.wav",
+      "reference": "найди игру между лестером и арсеналом"
+    },
+    {
+      "filename": "289e491a38ae0f56d100d86e4955cb19.wav",
+      "reference": "черные кошки сезон восемь серия десять"
+    },
+    {
+      "filename": "1047d2664ceb0269b47561b5f31252b2.wav",
+      "reference": "найди канал точка на тв"
+    },
+    {
+      "filename": "717ffdb8ea18db9e6261bda8f90f13c8.wav",
+      "reference": "включи мне маленькая колдунья"
+    },
+    {
+      "filename": "96fc7a03112b3b97f6c517d0aaa6399f.wav",
+      "reference": "сбер какие координаты у кафа"
+    },
+    {
+      "filename": "7aeae3e464bf3ec8689b395880b86b86.wav",
+      "reference": "три семьсот семьдесят три девятьсот шестнадцать двенадцать шестнадцать"
+    },
+    {
+      "filename": "21b2f59baabd4ce4b83be4260f640103.wav",
+      "reference": "сезон четырнадцать сериал дрянь часть тридцать один"
+    },
+    {
+      "filename": "634c218065db3af9cf194362d1c3e119.wav",
+      "reference": "джой проложи маршрут к банкомату приватбанка"
+    },
+    {
+      "filename": "8285ad306d4774f2e28ae63207a32214.wav",
+      "reference": "сколько стоит фитнес"
+    },
+    {
+      "filename": "c9bf3add2e99720ddaba9a2bb3c64a6f.wav",
+      "reference": "две тысячи триста пятьдесят тысяч боливаров сколько будет в гуаране"
+    },
+    {
+      "filename": "bc6a7d084839e02ff6c8840a055d563b.wav",
+      "reference": "фильм охотники за привидениями смотреть"
+    },
+    {
+      "filename": "3a6bf3d7237cdebe6018a03add65d42b.wav",
+      "reference": "картина на окко"
+    },
+    {
+      "filename": "0041c2def14898cfe152cbd92210bea4.wav",
+      "reference": "сбер какое твое самое ненавистное занятие"
+    },
+    {
+      "filename": "076793e528e2b37eb2fefe5cbed51de5.wav",
+      "reference": "включай научную фантастику"
+    },
+    {
+      "filename": "d79befa59cae16588b07082ed097e16c.wav",
+      "reference": "денис макаров"
+    },
+    {
+      "filename": "a4812070653541e46f6ff55b1a4e22d7.wav",
+      "reference": "центробанк курс обмена юаня на шекель"
+    },
+    {
+      "filename": "0548bfd0ed517f2f2bf44e1c7f0fe50e.wav",
+      "reference": "салют включи взгляд"
+    },
+    {
+      "filename": "bae727ac324b6247f02751f08a1ca026.wav",
+      "reference": "запусти на смотрешке телеканал шансон тв"
+    },
+    {
+      "filename": "e8dd8de70f5ad5384ab73570138edbde.wav",
+      "reference": "скажи какой сегодня курс турецкой лиры к белорусскому рублю"
+    },
+    {
+      "filename": "da9f8662bcda7ec17c6764a2237242aa.wav",
+      "reference": "покажи мне на смотрешке тв три эйч ди"
+    },
+    {
+      "filename": "0a3c94ee89715bda5711b4f05f4ca4f5.wav",
+      "reference": "посмотреть прямой эфир матча апл манчестер челси"
+    },
+    {
+      "filename": "0506ef47128182a17d0a196085235485.wav",
+      "reference": "мне нужна замена полотенец"
+    },
+    {
+      "filename": "d8d3ceaa2c5bc4b488399cc52911e7fd.wav",
+      "reference": "людмилу попову"
+    },
+    {
+      "filename": "42d5f40845a1c917d5eb71a72d0ba1e1.wav",
+      "reference": "сбер мне нужно карту разблокировать"
+    },
+    {
+      "filename": "4aada8776ad1c347544083838b6d706b.wav",
+      "reference": "посоветуй мне олива на смотрешке"
+    },
+    {
+      "filename": "626999dd6f5d854c6224f222705018e2.wav",
+      "reference": "есть ли в отеле или поблизости йога студия"
+    },
+    {
+      "filename": "ea6895153d9122be9138541f00d80366.wav",
+      "reference": "запусти боевик"
+    },
+    {
+      "filename": "c466836fc3d5bb0248fae69780fc5920.wav",
+      "reference": "покажи мне грань будущего эйч ди"
+    },
+    {
+      "filename": "fc45d85e3d7d0a11183bd6e1f25e2d00.wav",
+      "reference": "картина на окко"
+    },
+    {
+      "filename": "f3035e08f53b00be29c28039bb70bbe7.wav",
+      "reference": "сколько стоит евро"
+    },
+    {
+      "filename": "60b6540e031fd2028be32078b29cd4ac.wav",
+      "reference": "ратьзя"
+    },
+    {
+      "filename": "4177e81a19f2857cbea6eafc46bfb07a.wav",
+      "reference": "мне нужно сливочное масло сто девяносто грамм"
+    },
+    {
+      "filename": "c9a7e921a0cabfc472e203b4839de515.wav",
+      "reference": "афина посмотреть кинофильм зеленая миля"
+    },
+    {
+      "filename": "cc2932973bbb7afc4776778218bd9345.wav",
+      "reference": "друидер"
+    },
+    {
+      "filename": "72ce509d4ce427e6f51f1606acf94b38.wav",
+      "reference": "муравьеву"
+    },
+    {
+      "filename": "9f0112ecf50d6f97c886bfc2a296eb84.wav",
+      "reference": "заказать с доставкой на дом город нурсултан килограмм сахара"
+    },
+    {
+      "filename": "d4262ba9bd3fe49e2d59432218d4dae1.wav",
+      "reference": "война ультра айч ди"
+    },
+    {
+      "filename": "84c36afa54387a5a1eebf72538a9b472.wav",
+      "reference": "найти популярный фильм в жанре боевик"
+    },
+    {
+      "filename": "ffbbbf519f14e73a7df884e16ad44275.wav",
+      "reference": "покажи байкеры братья по оружию"
+    },
+    {
+      "filename": "3f007cb29c265baa8a1d6f06161066c1.wav",
+      "reference": "искать стальная тревога"
+    },
+    {
+      "filename": "e840267e45abdd8a1d97def0d7b7ba14.wav",
+      "reference": "белые розы в номер семь пять пять"
+    },
+    {
+      "filename": "d644b5038f4cd20a7ced7b3628951270.wav",
+      "reference": "закажи мне сухарики три корочки со вкусом томата и пепси"
+    },
+    {
+      "filename": "7a307caba2a3a5740c8118593e205b77.wav",
+      "reference": "алена афанасьева"
+    },
+    {
+      "filename": "069190241136b52df09051a56873b673.wav",
+      "reference": "сбер у олега владимировича высшее экономическое образование"
+    },
+    {
+      "filename": "fdd82f41c64c6fd5d2b605175fc8918c.wav",
+      "reference": "егора николаевича панкратова"
+    },
+    {
+      "filename": "6d1bc635fbd54916853a993907993fa5.wav",
+      "reference": "лучший выпуск макситэйп"
+    },
+    {
+      "filename": "44ec27a2956506e4b8a80f2f75082b50.wav",
+      "reference": "покажи это всего лишь конец света аш д"
+    },
+    {
+      "filename": "7bb81cab7a41337273459f1d62ea7521.wav",
+      "reference": "сергей владимирович галат"
+    },
+    {
+      "filename": "2a75b2c68303adf85a19d6f9690af4d9.wav",
+      "reference": "находкой"
+    },
+    {
+      "filename": "3a63069b9f99e1c3fd4aee82467f7c26.wav",
+      "reference": "салют последняя книга которую прочитал греф"
+    },
+    {
+      "filename": "8cc460b814f35a763323a486f23c85a0.wav",
+      "reference": "салют главная тема параллельные миры в фантастике"
+    },
+    {
+      "filename": "af8a0583db553eb085f5681575c3278e.wav",
+      "reference": "два девятьсот девяносто один девятьсот двадцать девять тридцать восемь девяносто ноль"
+    },
+    {
+      "filename": "7e8a5c41c4e2ee08cdf01188a7599c0d.wav",
+      "reference": "у тебя есть кинчик коробка"
+    },
+    {
+      "filename": "36e5d0e2e9585d8a664e653477d3ef84.wav",
+      "reference": "никита тимофеевич катаев"
+    },
+    {
+      "filename": "0e25e6ccae1eb08a9a940704a02cd1e8.wav",
+      "reference": "девять триста пятьдесят три четыреста девяносто семь семьдесят восемь пятнадцать"
+    },
+    {
+      "filename": "aca61b96460caba72b300796f9530420.wav",
+      "reference": "хочу посмотреть фильм с элайджей вудом с названием день независимости"
+    },
+    {
+      "filename": "6e7ff65e90e3e2125e0660828a90239c.wav",
+      "reference": "джой включите канал дискавери"
+    },
+    {
+      "filename": "872147c0daaf509f8c7418d728c400bc.wav",
+      "reference": "афина"
+    },
+    {
+      "filename": "caf4680bfc0e14e9dd33ecf8a1010c29.wav",
+      "reference": "пошли пить лимонад"
+    },
+    {
+      "filename": "89d527d324d72b57903a89e551056d43.wav",
+      "reference": "а какое у тебя любимое кофе"
+    },
+    {
+      "filename": "965c9790e411be022601e929cf521393.wav",
+      "reference": "мария иванова"
+    },
+    {
+      "filename": "3db4f2a659a3db0207126d367bc2162b.wav",
+      "reference": "афина в приложении отображаются не все карты что делать"
+    },
+    {
+      "filename": "9929ca6926e1f4176a573237b4d7cca2.wav",
+      "reference": " "
+    },
+    {
+      "filename": "861996e8435bf3894611916332ec7bf5.wav",
+      "reference": "поставь сьюпе марджина на ютюбе"
+    },
+    {
+      "filename": "0309ab0a871cb550c59c19309a9e902a.wav",
+      "reference": "набери фильм ватиканские записи"
+    },
+    {
+      "filename": "f2d59d4ce4f6f1a6dbdd32f489d29874.wav",
+      "reference": "набери подними красный фонарь эйч ди"
+    },
+    {
+      "filename": "e38b8be00df6f4d5847f4325b505b59c.wav",
+      "reference": "кристина анатольевна истангулова"
+    },
+    {
+      "filename": "db82d3f4c40402bb03c6b9a8391441f7.wav",
+      "reference": "саввы николаевны"
+    },
+    {
+      "filename": "125274a5f2e06942c4622d8203939544.wav",
+      "reference": "охотник за разумом двадцать третья серия"
+    },
+    {
+      "filename": "6df012280aae8a9152d8e36bfa79e706.wav",
+      "reference": "марины вадимовны кузнецовой"
+    },
+    {
+      "filename": "f0e15894b719cc9b211e98f6f5b1613d.wav",
+      "reference": "запусти туристические маршруты"
+    },
+    {
+      "filename": "5fc5b7d5cf1b6eb096a4216eaaeee7a6.wav",
+      "reference": "олег николаевич прокопьев"
+    },
+    {
+      "filename": "9032e230a570cfedee448a62dcd027ff.wav",
+      "reference": "сбер какие цветы любит кирсанова"
+    },
+    {
+      "filename": "472ce75e4d10575385c99fce6d5e5a8d.wav",
+      "reference": "алиса что нового из фильмов вышло в этом году"
+    },
+    {
+      "filename": "ee6bf7a957ec240d2afc430d6b14e7b0.wav",
+      "reference": "сбер играй оркестр"
+    },
+    {
+      "filename": "ae7676526787dab3f987be9430fb276c.wav",
+      "reference": "покажи народ против ларри флинта аш ди"
+    },
+    {
+      "filename": "5c3c0ccc27c7326a23da0224b0443ba2.wav",
+      "reference": "берется ли дополнительная плата за раннее бронирование в отеле"
+    },
+    {
+      "filename": "e2234da8514628560ee7279750584daf.wav",
+      "reference": "увеличить яркость на уличном светильнике в гостевой"
+    },
+    {
+      "filename": "48ff7cc5535d10dda1bc448239a203ea.wav",
+      "reference": "скажи какой фильм будет идти в субботу на канале тнт"
+    },
+    {
+      "filename": "a4595dc53d7a9cac8db4b344cd7171f8.wav",
+      "reference": "вруби на тв стар"
+    },
+    {
+      "filename": "b616fe7d968fbb238e7f2d740294641e.wav",
+      "reference": "зарядка для телефона с доставкой на дом"
+    },
+    {
+      "filename": "9af9875f8467c62f5ab449d1c6267b4f.wav",
+      "reference": "салют день детских общественных объединений это в какой день происходит"
+    },
+    {
+      "filename": "1595beb1a1543244c28591ef297d26b3.wav",
+      "reference": "подключи кино десятилетний план"
+    },
+    {
+      "filename": "8a9869763a8465121fa1695d67ba6cf1.wav",
+      "reference": "время работы офтальмологический центр карелии"
+    },
+    {
+      "filename": "eb63c0fb3786394dc4cab09689686064.wav",
+      "reference": "пополнить номер телефона дочери"
+    },
+    {
+      "filename": "b09c33961f87a2a76b3639e55934528c.wav",
+      "reference": "лариса павловна даванидзе"
+    },
+    {
+      "filename": "688cd3a0494d429fe2adf084a6993649.wav",
+      "reference": "закажи спагетти шебекинские четыреста пятьдесят грамм две упаковки"
+    },
+    {
+      "filename": "f65d167ef9b786cf8d40f601723b2dda.wav",
+      "reference": "покажи ленту грег киннир игра"
+    },
+    {
+      "filename": "b21ebf885cd7018e39af0d020ca42c9b.wav",
+      "reference": "джой я должен"
+    },
+    {
+      "filename": "40de449b1c351fa7f5dfeed46dfe72d9.wav",
+      "reference": "купить триста сингапурских долларов какая стоимость в австралийских долларах"
+    },
+    {
+      "filename": "eb5d4160e5e68c6d65e5e13d3f9bf086.wav",
+      "reference": "эльмир ипполитов"
+    },
+    {
+      "filename": "bf3ee0d5f440203c77ba118854e1c895.wav",
+      "reference": "какие виды общества плоской земли ты знаешь"
+    },
+    {
+      "filename": "5c3b6dfa09181a837619216c1c871f13.wav",
+      "reference": "салют почему вы приняли решение баллотироваться в муниципальные кандидаты"
+    },
+    {
+      "filename": "380cf4a54b5b2f26f12d7af3c15c95d3.wav",
+      "reference": "у тебя найдется киноработа в жанре концертное выступление"
+    },
+    {
+      "filename": "f92e439601afeaad5745d23b1d8c867f.wav",
+      "reference": "рассказ служанки третий сезон"
+    },
+    {
+      "filename": "4f0af979f169353c413e01cca2e08d3b.wav",
+      "reference": "наталья петровна баранова"
+    },
+    {
+      "filename": "c5d2b71501c278753405e5cfa64d7ea1.wav",
+      "reference": "найти на смотрешке канал фэшен тв"
+    },
+    {
+      "filename": "5dff38a4efe1dfcbb8231951d9d01bfe.wav",
+      "reference": "брайтон против эвертона"
+    },
+    {
+      "filename": "61cd5dac88a299142acb2349eed9ddc7.wav",
+      "reference": "салют подводные лодки проекта шесть семь семь в честь кого названы"
+    },
+    {
+      "filename": "e93671c1e66e9f54a6c50deb3f08e323.wav",
+      "reference": "из панка"
+    },
+    {
+      "filename": "1f6f90129a41c6403efa8bb0542d603e.wav",
+      "reference": "встреча норвич с арсеналом"
+    },
+    {
+      "filename": "9c6992d7891fa2805782625073d319bb.wav",
+      "reference": "включи мне казах на тв"
+    },
+    {
+      "filename": "bc3a712ccad695ffb91969e52cbafcfe.wav",
+      "reference": "можешь включить балто"
+    },
+    {
+      "filename": "4e9245a17f2376a0c517939c50d9537a.wav",
+      "reference": "афина какая погода в субботу в орле"
+    },
+    {
+      "filename": "ac28c6da2cf57663ad12bb753b5cbaa2.wav",
+      "reference": "афина хочу снять деньги"
+    },
+    {
+      "filename": "0c4c2421dd1c51822806721d6c789e21.wav",
+      "reference": "любовь морковь включи"
+    },
+    {
+      "filename": "0140fa5e384e1d2434463ca671c5de92.wav",
+      "reference": "владимира александровича ивашкина"
+    },
+    {
+      "filename": "53e1dc025489c85008c540bd07af0432.wav",
+      "reference": "ультра эйч ди"
+    },
+    {
+      "filename": "cb9619d0ade433ff555f44ce80f7947e.wav",
+      "reference": "сбер прошу уменьшить размер минимального платежа по карте"
+    },
+    {
+      "filename": "ca036b371ce06c0929da1191817c7762.wav",
+      "reference": "нарой сверхъестественное"
+    },
+    {
+      "filename": "3d0dcceb891d72aeea59fb64aae41ffb.wav",
+      "reference": "алиса найди три богатыря"
+    },
+    {
+      "filename": "4e559b5f4460f0f11860dcf298a495a9.wav",
+      "reference": "замира геннадьевна"
+    },
+    {
+      "filename": "ded81eae6dba67e830b515ba92fb9479.wav",
+      "reference": "найди киношку жанра детская сказка"
+    },
+    {
+      "filename": "bcb5222f3cafa6e9b95defc37b214589.wav",
+      "reference": "подскажи а в отеле есть банный комплекс"
+    },
+    {
+      "filename": "278f01ae9f4672eb42aabd0ef24ec9ba.wav",
+      "reference": "сбер какая валюта в нанте"
+    },
+    {
+      "filename": "d2a3c4bbce011357180698d6eedf69df.wav",
+      "reference": "включи сансара"
+    },
+    {
+      "filename": "dabb318af92a6aae792a161db4ba4b0b.wav",
+      "reference": "покажи рождественские туфли"
+    },
+    {
+      "filename": "4baba9575224cba9f6abd149e59fbec3.wav",
+      "reference": "мертвая как я семнадцатая серия"
+    },
+    {
+      "filename": "c3509a289ad5d2d855899e97dd1dc169.wav",
+      "reference": "анастасии михайловны зверевой"
+    },
+    {
+      "filename": "be57adaa5f01f59fd6f109d89fef0088.wav",
+      "reference": "курс валюты доллар евро"
+    },
+    {
+      "filename": "a30b016f934f08e2b0e25bebcd0cdadd.wav",
+      "reference": "пополни номер телефона натальи викторовны"
+    },
+    {
+      "filename": "ca392472fd7f891dff48b1d953a1a9f8.wav",
+      "reference": "вил увези на ютуб"
+    },
+    {
+      "filename": "f81534c00a8414a246294a2f3dda8d22.wav",
+      "reference": "лето"
+    },
+    {
+      "filename": "086415ab5eddd0f9d42630a29b7b8703.wav",
+      "reference": "найти лучшие фильмы жанра комедия"
+    },
+    {
+      "filename": "dbffcb78179cb28551da562b84eabaf0.wav",
+      "reference": "заводи киноленту оливера стоуна"
+    },
+    {
+      "filename": "1175cc059e8d24f9e80e8de59c24179c.wav",
+      "reference": "можешь показать сериал джейн эйр серия тридцать шесть"
+    },
+    {
+      "filename": "8de48b4b8f6f1feaf6d641a8cc578b58.wav",
+      "reference": "включай на смотрешке телеканал бридж тв"
+    },
+    {
+      "filename": "3be70a9ed4b00fd08c065e5aabea3b5c.wav",
+      "reference": "найди отрочество фор кей"
+    },
+    {
+      "filename": "e2399f55d48767d369ae83bea122dc9a.wav",
+      "reference": "где упоминается"
+    },
+    {
+      "filename": "611b7ae2b68c56eb41ae583fb777983f.wav",
+      "reference": "нарой челси манчестер сити"
+    },
+    {
+      "filename": "347289749630d4ab1e308b649a58a5a9.wav",
+      "reference": "криминал"
+    },
+    {
+      "filename": "d0676833084cf329290bad41dae63442.wav",
+      "reference": "алиса включи двадцатый канал"
+    },
+    {
+      "filename": "6f4ab28b9fcbf011d3d33dccf32cff9e.wav",
+      "reference": "найти квантовый разлом"
+    },
+    {
+      "filename": "989418457f066cb858038bd69ef1a0f2.wav",
+      "reference": "в каком озере есть и пресная и соленая"
+    },
+    {
+      "filename": "5efc64793a64e79ffda6cbe5c7fa46b0.wav",
+      "reference": "салют включи следующий трек"
+    },
+    {
+      "filename": "49347dee83e5b052448b284faf0c706a.wav",
+      "reference": "купи литр молока веселый молочник"
+    },
+    {
+      "filename": "fdb219708b1f0ffe6339f9827beee0f1.wav",
+      "reference": "сезон шесть сериальчика десятое королевство"
+    },
+    {
+      "filename": "0d83e9f3c9b21b9bb435aad456c989d5.wav",
+      "reference": "имеется ли у тебя кино повелитель"
+    },
+    {
+      "filename": "fdfff19415981d84f05901f2f00faf53.wav",
+      "reference": "шестьсот пятьдесят тысяч гривен в шиллинги обменять"
+    },
+    {
+      "filename": "847afca6054dafb364925516c60835fc.wav",
+      "reference": "купить сухофрукты триста грамм чернослив курагу и изюм"
+    },
+    {
+      "filename": "b84cfef32ae5390ebbf379656c858f5b.wav",
+      "reference": "включай ноктюрама"
+    },
+    {
+      "filename": "a23db15c9f7cfb9d799fa63d3b3fc427.wav",
+      "reference": "сбер ютуб алексей сулима"
+    },
+    {
+      "filename": "58691432289c4dd0f8324ef19af147de.wav",
+      "reference": "имеется ли у тебя агенты фбр"
+    },
+    {
+      "filename": "3965542b5bb89816ea2b321b1c7ae2a8.wav",
+      "reference": "покажи каналы ютьюб"
+    },
+    {
+      "filename": "586aeee9e37411e622921156aedffa7b.wav",
+      "reference": "включи мне на смотрешке канал малыш тв"
+    },
+    {
+      "filename": "17bb4d77305211d44f2818dfa3ecfa4a.wav",
+      "reference": "зельда начало всего десятая серия"
+    },
+    {
+      "filename": "6e09f5d0b88999611da712050945549d.wav",
+      "reference": "включи гуд лайф джи изи и кехлани"
+    },
+    {
+      "filename": "a433b0d0114db9147e0874d50765828a.wav",
+      "reference": "салют ирония судьбы продолжение продюсер максимов"
+    },
+    {
+      "filename": "d0c4cc7649ed66c9560b1c856031693e.wav",
+      "reference": "включи на смотрешке телеканал синергия тв"
+    },
+    {
+      "filename": "6d5fdb5fecde4f65e7451af02dd79af8.wav",
+      "reference": "закажи мороженое лимонный щербет"
+    },
+    {
+      "filename": "db676a54b9fbb6752562e9f3c12ef438.wav",
+      "reference": "салют сколько денег у меня на зарплатной карте"
+    },
+    {
+      "filename": "ebe2f8c3344e4d87fdb22cea1c344f1a.wav",
+      "reference": "сбер внимание действуют мошенники пытаются списать деньги"
+    },
+    {
+      "filename": "8b676b658713bd6b0d6c6a8751e739e3.wav",
+      "reference": "танк т тридцать четыре смотреть"
+    },
+    {
+      "filename": "1e5227ef78c670ed4bbc8c93e676386c.wav",
+      "reference": "фунчоза"
+    },
+    {
+      "filename": "3f6491a5537991544fb0f511b8e66342.wav",
+      "reference": "алевтиной николаевной"
+    },
+    {
+      "filename": "6158a42d5eaa22c8dcaf41ae38d66544.wav",
+      "reference": "михаил прокофьев"
+    },
+    {
+      "filename": "48eed8ec698e7b7acc53e5f1a9980304.wav",
+      "reference": "анастасии эдуардовне комиссаровой"
+    },
+    {
+      "filename": "ed74b66cf7e9b87b2ca4d8d337e370a4.wav",
+      "reference": "вспышка рядом"
+    },
+    {
+      "filename": "5c7cc099fbdbf2448b47b7561be79ab3.wav",
+      "reference": "валерий чазов"
+    },
+    {
+      "filename": "d41a9804d44a8f2a435720aaed2dd933.wav",
+      "reference": "велиж"
+    },
+    {
+      "filename": "6956fa58cf2f33b93d55e67fdaaacd2b.wav",
+      "reference": "алиса свяжись с консьержем и попроси принести тапочки в номер"
+    },
+    {
+      "filename": "39327cd7ae552fec5bf55273be897238.wav",
+      "reference": "посмотреть игру манчестер против челси"
+    },
+    {
+      "filename": "0335bca9de578b789b173804856bcdc4.wav",
+      "reference": "эпизод тридцать семь сезона шесть девственница"
+    },
+    {
+      "filename": "2dfba110d9f20d409305b90de9003cbd.wav",
+      "reference": "что особенно сильно влияет на совместимость записей сделанных на разных магнитофонах"
+    },
+    {
+      "filename": "bb37e94c42f64fb6d941a1e000d06631.wav",
+      "reference": "у тебя в загашнике есть сериал майкл шеннон после"
+    },
+    {
+      "filename": "9855ac45f0207d046e3cc64c37cdbaf5.wav",
+      "reference": "анастасии николаевне усольцевой"
+    },
+    {
+      "filename": "54c41437121204253f49449c97e181c3.wav",
+      "reference": "подключи"
+    },
+    {
+      "filename": "875fbf709e45278189183d18248ee1f6.wav",
+      "reference": "афина сбер мне джой нужна"
+    },
+    {
+      "filename": "1739d0f4ea4d6674e1a4b8fdbd4babb7.wav",
+      "reference": "у тебя будет сериал мир дикого запада"
+    },
+    {
+      "filename": "ec8ca0e5bc011cdd26cecaacbb3185e5.wav",
+      "reference": "как записать отзыв об отеле"
+    },
+    {
+      "filename": "b7c279a696b197bf6c6471c6d219a4ca.wav",
+      "reference": "фильм"
+    },
+    {
+      "filename": "ca535e30000116e137e4bf6e8651e697.wav",
+      "reference": "сбер уменьшить звук"
+    },
+    {
+      "filename": "d9a59e5764fad85b9199ddc12667e97a.wav",
+      "reference": "есть ли у тебя недетские игры"
+    },
+    {
+      "filename": "6122f943d1a0d2015bacd88d3772acb8.wav",
+      "reference": "у меня почему то не прибавляются бонусы спасибо"
+    },
+    {
+      "filename": "c19f08972f43c6cddae5bf23fbd79344.wav",
+      "reference": "салют алиса какой баланс на карте альфа банк"
+    },
+    {
+      "filename": "e5b51bb0b704652e813497f10980ce51.wav",
+      "reference": "можешь поставить фильм опережая выстрел"
+    },
+    {
+      "filename": "bd96e97d8f513d8361053a875d22bb5f.wav",
+      "reference": "врубай татьяну аст на ютьюбе"
+    },
+    {
+      "filename": "eba926e7fe9eb8f410ef60f4c730279c.wav",
+      "reference": "салют форт лодердейл столица какой страны"
+    },
+    {
+      "filename": "7e4ad1250a8b563be41a446ed7a22d1c.wav",
+      "reference": "супергерл"
+    },
+    {
+      "filename": "37c28cf3302fa8398b35bde92b6e2b91.wav",
+      "reference": "салют ты что пошутил надо мной"
+    },
+    {
+      "filename": "959b07bd13633779ca8307eb9aa6225e.wav",
+      "reference": "можно ли оплатить сотовую связь другого человека не выходя из дома"
+    },
+    {
+      "filename": "13aae72526e5224b00f3c81dc74ea817.wav",
+      "reference": "салют когда родился ди каприо"
+    },
+    {
+      "filename": "684041393637563174ceb2b47d615e5e.wav",
+      "reference": "сделай пожалуйста яркость на минимум"
+    },
+    {
+      "filename": "e78783deee49a771122b4be801cd39ae.wav",
+      "reference": "одержимость майкла кинга найди"
+    },
+    {
+      "filename": "d75138793405c185c4b391a44fe24a92.wav",
+      "reference": "хочу чтобы мне приходили уведомления по карте"
+    },
+    {
+      "filename": "e690729591fecbff9d39be71fb33031d.wav",
+      "reference": "включи рок тв"
+    },
+    {
+      "filename": "f9b14f9bdea90972ab0c79c2dcdb73c2.wav",
+      "reference": "сбер сериал побег третья серия две тысячи девятнадцатый год"
+    },
+    {
+      "filename": "db46181599e480af7fd7dd934fa746ff.wav",
+      "reference": "афина что вы натворили"
+    },
+    {
+      "filename": "0230104750a00178bd3fb296c845d986.wav",
+      "reference": "эпизод одиннадцать сезон четыре большая буква эр"
+    },
+    {
+      "filename": "cae927f46ac69e4aaaba4dc98d7f8095.wav",
+      "reference": "покажи телеканал здоровое тв на смотрешке"
+    },
+    {
+      "filename": "cd75f150912f720ba8978de76b9f5285.wav",
+      "reference": "у тебя найдется музыкальная история"
+    },
+    {
+      "filename": "08885f4c309d79c43b2deb7b84d6bd10.wav",
+      "reference": "включи плоути"
+    },
+    {
+      "filename": "9e3b68054fa4d3f186b737a4e0152e65.wav",
+      "reference": "на ютюбе открой черкасовклаб"
+    },
+    {
+      "filename": "e3f4800e96626012a55ac553bf243b9b.wav",
+      "reference": "у тебя найдется фильм в духе путешествий"
+    },
+    {
+      "filename": "506daec853a4962cfbaa1e1e8e1f2953.wav",
+      "reference": "курс доллара центробанка"
+    },
+    {
+      "filename": "f7b625d14f19f0c7e40537a39623b9b5.wav",
+      "reference": "купить сорок тенге какая стоимость в китайских юанях"
+    },
+    {
+      "filename": "bfe512135a7087532a05a389cd1306ad.wav",
+      "reference": "анжель и тони"
+    },
+    {
+      "filename": "8d05978fd742ac8ce4af7dccdf436293.wav",
+      "reference": "поставь игры патриотов ас ди"
+    },
+    {
+      "filename": "4126c03953701084715cc91b3979fcef.wav",
+      "reference": "фильм два брата"
+    },
+    {
+      "filename": "4260386629ea3e4df2e07d046586c9c8.wav",
+      "reference": "найди бог богов махадев"
+    },
+    {
+      "filename": "b7f005e04f436eee2517d3a082e20ae5.wav",
+      "reference": "алена пащенко"
+    },
+    {
+      "filename": "8264273cfe913e6eca447de9a6f4e334.wav",
+      "reference": "хочу посмотреть кино притворщик"
+    },
+    {
+      "filename": "4295df46128f50afa4ba01b59e652a58.wav",
+      "reference": "прямой эфир матча между челси и ньюкасл"
+    },
+    {
+      "filename": "e2765f8af23c0d050d838292e54ed207.wav",
+      "reference": "икра"
+    },
+    {
+      "filename": "f40ed13050fef436866662f4cb0d457f.wav",
+      "reference": "марины матвеевны"
+    },
+    {
+      "filename": "7a4fe54aec8b832fff9be2c5548650e4.wav",
+      "reference": "поставь киноленту помпеи"
+    },
+    {
+      "filename": "6b997b05f45e5ee77f1edd560a73fff8.wav",
+      "reference": "фул эйч ди"
+    },
+    {
+      "filename": "868ad17ee8fb1d0d159be6532c6d9395.wav",
+      "reference": "скачай фильм эшер"
+    },
+    {
+      "filename": "b418ec6818d98073d65135d6076cde96.wav",
+      "reference": "киношка фред клаус брат санты"
+    },
+    {
+      "filename": "1e11601739d265638a1c3f49fce4418a.wav",
+      "reference": "покажи мне на смотрешке канал кухня тв"
+    },
+    {
+      "filename": "7ebff0fea3a359994d98a77ce9e66b93.wav",
+      "reference": "андрей хадисович чугуй"
+    },
+    {
+      "filename": "2111685192ff5c826565d358fd435d1d.wav",
+      "reference": "афина кто и зачем закрашивает граффити"
+    },
+    {
+      "filename": "cf120d90457df8acd322b7a54e13f114.wav",
+      "reference": "закажи на дом булку белого хлеба"
+    },
+    {
+      "filename": "5c3b16519c0345b3aabe4eaf640ed870.wav",
+      "reference": "фатима дегтярева"
+    },
+    {
+      "filename": "687d97a949ded3573b3a91df83f38661.wav",
+      "reference": "афина воспроизведи плей лист в свободном порядке"
+    },
+    {
+      "filename": "451e1db0ad91894ae5926622352e5159.wav",
+      "reference": "сережа шафиков"
+    },
+    {
+      "filename": "7de8c94de2329a49e7802d5920ab498b.wav",
+      "reference": "у тебя будет прикольный фильмас в жанре боевик"
+    },
+    {
+      "filename": "380eed3b47cc7f8dd630dbe1bb285a2d.wav",
+      "reference": "афина живее"
+    },
+    {
+      "filename": "df6868e55661b4fc948bf9d5f4a36cc3.wav",
+      "reference": "спортивные развлечения в отеле"
+    },
+    {
+      "filename": "a6abc393f844887cb7d034d53450099c.wav",
+      "reference": "серия пять первого сезона сериала стрела"
+    },
+    {
+      "filename": "81808303a989d36cc76198639a75cee5.wav",
+      "reference": "включи мне сериальчик охота демонического короля на свою жену"
+    },
+    {
+      "filename": "23c0d94a4660019cc2ff0a8bfd377496.wav",
+      "reference": "последний сезон сериал милые обманщицы часть двенадцать"
+    },
+    {
+      "filename": "90606c4fb6dfc001cda5a246f23c5f3f.wav",
+      "reference": "увира"
+    },
+    {
+      "filename": "dbb48a90d3ce89c17108b6eae7101f91.wav",
+      "reference": "поставь на телевизоре охота и рыбалка"
+    },
+    {
+      "filename": "05889e61ab414adcff02413abc0ba236.wav",
+      "reference": "русский роман на смотрешке"
+    },
+    {
+      "filename": "b9a8218ccc9e431936113ed6017be1d8.wav",
+      "reference": "у тебя в списке есть фильм экскаватор мася"
+    },
+    {
+      "filename": "6762b43bd992f836ad7fc7157c9e5016.wav",
+      "reference": "ночь в музее"
+    },
+    {
+      "filename": "06b535f95bebc34f2aab8c7194cce075.wav",
+      "reference": "джой пошути про петьку и чапаева"
+    },
+    {
+      "filename": "fe0df08337428664c71159c899eab8a3.wav",
+      "reference": "афина с ним все в порядке"
+    },
+    {
+      "filename": "b2ce87e11dfd2a8572cf7f01a410b502.wav",
+      "reference": "включи мультик рожденная звездой вторая серия"
+    },
+    {
+      "filename": "af3d97182718ea065969166029e8e76f.wav",
+      "reference": "мультфильм приключения маленького босса"
+    },
+    {
+      "filename": "a9761742c900c314f562bbcbd7c5ac11.wav",
+      "reference": "покажи киноработу грязь"
+    },
+    {
+      "filename": "afa77d0df8db2d58df64630a1fb40d48.wav",
+      "reference": "восемьсот шестнадцать пять сорок семь девяносто девять триста двенадцать"
+    },
+    {
+      "filename": "426541b8a51e062f0a01db7b2b68edeb.wav",
+      "reference": "сбер здравствуйте как оплатить номер телефона бонусами"
+    },
+    {
+      "filename": "dd468ca0a87eb03268a6c1e095455b9d.wav",
+      "reference": "сейчас введу"
+    },
+    {
+      "filename": "afc692f35b2f6b43b03f8105b7f6b856.wav",
+      "reference": "закажи мороженое магнат пинк эскимо восемьдесят грамм одна штука"
+    },
+    {
+      "filename": "6ca25bbe72dad5edcbab25a5b50fa496.wav",
+      "reference": "джой поставь биос онса медиа"
+    },
+    {
+      "filename": "99470b2d05222408f70242209b5d8d7f.wav",
+      "reference": "сбер какая валюта в мали"
+    },
+    {
+      "filename": "8f813f86893f17ca89a3adb0816de631.wav",
+      "reference": "пополнить баланс телефона родственника"
+    },
+    {
+      "filename": "6a5a0cb91c689f572e65175c4a9ef066.wav",
+      "reference": "в понедельник в белореченске будет дождь"
+    },
+    {
+      "filename": "104966f05de7131aac47d6f170b4e237.wav",
+      "reference": "найти первую часть фильма сплит"
+    },
+    {
+      "filename": "0edbe79fbc9a56f6c569be0653ee2303.wav",
+      "reference": "пошукай сколько у тебя четыре ка"
+    },
+    {
+      "filename": "c9c680371fe02eee1419ebe8bb441c12.wav",
+      "reference": "фильм гарри поттер и философский камень"
+    },
+    {
+      "filename": "85d03d0cbc8c24c9798498d58fca4dd6.wav",
+      "reference": "один два два три девять два восемь шесть три ноль"
+    },
+    {
+      "filename": "900b93b64ca90c92089b1eed412db933.wav",
+      "reference": "семьдесят пять фунтов в рублях"
+    },
+    {
+      "filename": "a480b64e866dcf8235c975a8ccb7233d.wav",
+      "reference": "няруко"
+    },
+    {
+      "filename": "a97715a460ddd2147419b8c1f3ffce69.wav",
+      "reference": "как выйти замуж за миллионера первый сезон"
+    },
+    {
+      "filename": "24affd8873a1c99b5b1ac16866f04fd5.wav",
+      "reference": "мне нужен банкомат рядом с моим домом"
+    },
+    {
+      "filename": "ab2963eb7128743622f76a22cf0f0f2a.wav",
+      "reference": "мне нужно купить пятьдесят казахских тенге сколько это будет в тенге"
+    },
+    {
+      "filename": "98bb3d507dc34249a9568608c0c67d66.wav",
+      "reference": "закажи мне килограмм капусты"
+    },
+    {
+      "filename": "807e67743aa7a504e7e3ab29cb166759.wav",
+      "reference": "белоусовым"
+    },
+    {
+      "filename": "3eddd1a1a5fdc28775241c04f702e406.wav",
+      "reference": "что привлекало внимание пушкина в истории"
+    },
+    {
+      "filename": "35c83a3bd2bcbf8d3c749260c1ea7753.wav",
+      "reference": "у тебя найдется четырнадцатый эпизод разочарование"
+    },
+    {
+      "filename": "6316ce80e4694501317151a90cce8977.wav",
+      "reference": "афина как называется этот спортивный элемент или как можно его назвать"
+    },
+    {
+      "filename": "eea2f270c72e0d30a8d55cc2fd850e13.wav",
+      "reference": "гостиная включить режим без звука у телевизора через полтора часа"
+    },
+    {
+      "filename": "3e122ef272a40ea93061522fac32ded3.wav",
+      "reference": "триста двадцать шесть сто шестьдесят два пятьдесят четыре девятнадцать"
+    },
+    {
+      "filename": "1836ccbbce7ed3a4677fbeb4826cbe37.wav",
+      "reference": "включи фильм нимани"
+    },
+    {
+      "filename": "81c67ecc87d92ea986ef230aaac42185.wav",
+      "reference": "в каком регионе живешь"
+    },
+    {
+      "filename": "c21c986edbcd840079941fcd3ae45c0f.wav",
+      "reference": "афина включи холидэй"
+    },
+    {
+      "filename": "242564b88f816a5718f2c4b1a9feb8ee.wav",
+      "reference": "джой какая валюта действует в сирии"
+    },
+    {
+      "filename": "b6a5c9b6adbcec2f256c66649b8cd49b.wav",
+      "reference": "врубай дневник хача"
+    },
+    {
+      "filename": "3b3c111fe4f467f89100e9c2769e50bc.wav",
+      "reference": "а можно забронировать караоке на сегодня"
+    },
+    {
+      "filename": "87aea24b7b80da87fcc48aeb45601277.wav",
+      "reference": "в прошлом году в мариенбаде найди"
+    },
+    {
+      "filename": "238ba254638586c02c4a7bb5cdd5721b.wav",
+      "reference": "джой баланс банковской карты скажи"
+    },
+    {
+      "filename": "2350f4250118e3dcb3fc42de994c6776.wav",
+      "reference": "у тебя найдется киношка в жанре видеорецензия"
+    },
+    {
+      "filename": "9df2746d7c911150f478db1ad1739eb2.wav",
+      "reference": "переключить на телеканал тнт четыре"
+    },
+    {
+      "filename": "ae1aa9a5ed0c21b854740e764eca7cae.wav",
+      "reference": "пополнение телефона через банковскую карту"
+    },
+    {
+      "filename": "d9140fe2544e431e44a57d7de910d459.wav",
+      "reference": "анастасия тайна анны"
+    },
+    {
+      "filename": "53ac71eac4dab9630ff49249a709a789.wav",
+      "reference": "включай чем заняться мертвецу в денвере фулл эйч ди на окко"
+    },
+    {
+      "filename": "7feed97842f69ff8dbedd262b4bb0e9f.wav",
+      "reference": "афина будет ли сегодня идти сильный снег на улице"
+    },
+    {
+      "filename": "f4cf04838405972a95bbfb078c01b629.wav",
+      "reference": "что скрывает ложь ты можешь включить"
+    },
+    {
+      "filename": "6de043fae66511d16b9aab886d9bb6ae.wav",
+      "reference": "салют какое первое место работы было у дудиной"
+    },
+    {
+      "filename": "8582576961dce582895b79bc20786479.wav",
+      "reference": "ты можешь показать харви милк фулл эйч ди"
+    },
+    {
+      "filename": "4a9bdf5b3b309b0d1019d9bbdbe2ab7f.wav",
+      "reference": "руслана куликова"
+    },
+    {
+      "filename": "d2a0742c8e24f4bcfbb3eaac16e6f3bf.wav",
+      "reference": "сезон один мультик открытие ведьм двадцать первая часть"
+    },
+    {
+      "filename": "86f20f0352e4dd0aef2c0e2908e9d992.wav",
+      "reference": "джой здравствуйте одобрят мне кредит"
+    },
+    {
+      "filename": "019cc1c6c7b7d61c4811bc6674e5676b.wav",
+      "reference": "у тебя будет призрачная башня"
+    },
+    {
+      "filename": "07699cfb1486846a8dbedf5b20698ce6.wav",
+      "reference": "включи игру лестер с юнайтед"
+    },
+    {
+      "filename": "906e59614616f1d266ee145ecae2e4a8.wav",
+      "reference": "смешные видео"
+    },
+    {
+      "filename": "cdf68a3b9f60cfc34460909a179769a4.wav",
+      "reference": "прямой эфир между арсеналом и ливерпулем"
+    },
+    {
+      "filename": "5e314e23bcd800c12ad0e15a40ea3f28.wav",
+      "reference": "сбер какое число было в прошлую суботу"
+    },
+    {
+      "filename": "59a83a975a44c21906717c2869d3c365.wav",
+      "reference": "цимлянском"
+    },
+    {
+      "filename": "7696a63f369a603eb48221e40613ecb2.wav",
+      "reference": "позырить трансляцию матча тоттенхэма с манчестером"
+    },
+    {
+      "filename": "0a84559414502266df2182224010df62.wav",
+      "reference": "вера павловна шарафутдинова"
+    },
+    {
+      "filename": "8cc7a52414f80c7de30456e964391952.wav",
+      "reference": "перл харбор"
+    },
+    {
+      "filename": "ecb4dbcd9993f05416db1c335cae0dff.wav",
+      "reference": "поищи сороковая серия сорвиголова"
+    },
+    {
+      "filename": "62dfd46a3df5f8160255e841f290c4b1.wav",
+      "reference": "включи мне гигант четырка"
+    },
+    {
+      "filename": "fcf8f3b95d45a73462b2b494c3287183.wav",
+      "reference": "серым юрьевым"
+    },
+    {
+      "filename": "1f3b9eb5d670c39ed35067c9890fbecc.wav",
+      "reference": "янгон"
+    },
+    {
+      "filename": "14b73f5b3a303278a133951807e4d7a6.wav",
+      "reference": "изменение чего отображает график каги"
+    },
+    {
+      "filename": "470c1f86207a140733c8c2c159be44dd.wav",
+      "reference": "можешь показать научную фантастику"
+    },
+    {
+      "filename": "173116e2bc7ecac6354cbe37afd617eb.wav",
+      "reference": "джой когда возник нижегородский кремль"
+    },
+    {
+      "filename": "0419139a486de811700b72a72911e9f9.wav",
+      "reference": "посоветуй мне свободное падение четыре ка"
+    },
+    {
+      "filename": "f8db144a698557372db45c479783577f.wav",
+      "reference": "салют я тебя люблю больше жизни"
+    },
+    {
+      "filename": "176665086960e279c1d992ced216c082.wav",
+      "reference": "мстители эра альтрона"
+    },
+    {
+      "filename": "616ef408d1ea880c3ccc5d61be36a861.wav",
+      "reference": "звезда на смотрешке"
+    },
+    {
+      "filename": "5a690e35713cbb0d8fd51067dc71df26.wav",
+      "reference": "сбер включи канал большая азия"
+    },
+    {
+      "filename": "f5dc9f2aba2230e9978b80f0dff5741c.wav",
+      "reference": "сто тридцать шекелей в шекелях"
+    },
+    {
+      "filename": "85625a60ea3093a4793b64cf124d8650.wav",
+      "reference": "найди мисс конгениальность"
+    },
+    {
+      "filename": "4963d69bd23d177a32860057dbb4ae4e.wav",
+      "reference": "огку центр занятости населения иркутского района рядом"
+    },
+    {
+      "filename": "2a61c7425347334a1572e22961dc547d.wav",
+      "reference": "викторию семину"
+    },
+    {
+      "filename": "7a2ea87abcb48c74dc3f55ede53c555b.wav",
+      "reference": "республиканский клинический перинатальный центр"
+    },
+    {
+      "filename": "0ca9581708b15f3bdcb37491dd6dda4b.wav",
+      "reference": "поищи тв центр на смотрешке"
+    },
+    {
+      "filename": "bcd176a20fd36edf489d705d7362e3b5.wav",
+      "reference": "тартип"
+    },
+    {
+      "filename": "aabee6a5f148ee796376bbfa24d88647.wav",
+      "reference": "юлька майшева"
+    },
+    {
+      "filename": "a91f0ce2bbf5a990d493d38bd0e5b099.wav",
+      "reference": "найди тв три"
+    },
+    {
+      "filename": "94dcad606fddb39b788a2937bbd56ed6.wav",
+      "reference": "две тысячи триста пятьдесят канадского доллара это сколько в шиллингах"
+    },
+    {
+      "filename": "69a9f6b1f760789a8bf5b0056fcf8527.wav",
+      "reference": "римки кондрашовой"
+    },
+    {
+      "filename": "1b0c63bd2fb3e381016c1aa2beff8eee.wav",
+      "reference": "инглиш клаб на смотрешке"
+    },
+    {
+      "filename": "4864e4f4687190dce5d52ed35f99d0b1.wav",
+      "reference": "ищи футбол челси ньюкасл"
+    },
+    {
+      "filename": "313d007388121fa6a558144209c62079.wav",
+      "reference": "сбер перевести деньги девятьсот рублей алексею"
+    },
+    {
+      "filename": "6849502a74fdb3d382e8aef2b5be6656.wav",
+      "reference": "ипатово"
+    },
+    {
+      "filename": "75674030cb43f50577d67d39ab0e9ed2.wav",
+      "reference": "давай я посмотрю на тв канал тнт мьюзик"
+    },
+    {
+      "filename": "2efcd13e640bf248ba4b338676436fc0.wav",
+      "reference": "запусти выступления мондо медиа"
+    },
+    {
+      "filename": "62eafce5f2f86932e9e21eb6baa453cd.wav",
+      "reference": "пять семьсот шесть триста пятьдесят девять пятьдесят ноль шестьдесят три"
+    },
+    {
+      "filename": "0a7e00180716e903eaed3388d9ef0ad4.wav",
+      "reference": "сколько долларов с меня возьмут за пятьдесят бальбоа"
+    },
+    {
+      "filename": "19500cbcd6e395ebb0c89ae9065ee632.wav",
+      "reference": "афина вообще"
+    },
+    {
+      "filename": "f786179d3f9f49733d23e7a1475486a2.wav",
+      "reference": "закажи пожалуйста два хот дога с горчицей и сыром"
+    },
+    {
+      "filename": "e7ab77ad55c50e09c73cc5bf60eb9726.wav",
+      "reference": "по окончании времени работы таймера"
+    },
+    {
+      "filename": "74a38704f0793f8de858ea4a7a9a2e6c.wav",
+      "reference": "отголоски включи"
+    },
+    {
+      "filename": "1f226744af09d724fcd9d8876f9b34d5.wav",
+      "reference": "чай ричард черный классический большая упаковка на двести пакетиков"
+    },
+    {
+      "filename": "aa4bb4794b6cb736c16117da33da488d.wav",
+      "reference": " "
+    },
+    {
+      "filename": "5590a7a48dbdf2b07a022af942dea954.wav",
+      "reference": "в твоем каталоге есть фильм в стиле сатирической комедии"
+    },
+    {
+      "filename": "e1818c5634cd7e7222b10260c6db02bb.wav",
+      "reference": "у тебя есть в списке черные метки"
+    },
+    {
+      "filename": "135c882736705dd8665bd088be374b3a.wav",
+      "reference": "кинолента союзники включи мне"
+    },
+    {
+      "filename": "a9cf8db0f5111fabc1c980ac997dca04.wav",
+      "reference": "валентина юрьевна"
+    },
+    {
+      "filename": "ebdece36fee3705de2d9bd5bf6f830d3.wav",
+      "reference": "ночник на прикроватной тумбочке включай"
+    },
+    {
+      "filename": "d22e37711c7f5026c8ab054cb196336a.wav",
+      "reference": "джой верни на начало"
+    },
+    {
+      "filename": "38cba9b1f9815738c8e3d9cddc01e12b.wav",
+      "reference": "молоко буренка поллитра жирностью пять процентов"
+    },
+    {
+      "filename": "ed2dd8343e229c138a4355e5ac32bacd.wav",
+      "reference": "кодинск"
+    },
+    {
+      "filename": "638c8d2597ccaff0272f76f15d77f799.wav",
+      "reference": "добрый день виртуальный ассистент я бы хотела узнать подробности про спец предложения в отеле"
+    },
+    {
+      "filename": "1e387ecaca0285a32f59bbc1da4533ef.wav",
+      "reference": "включи мне на смотрешке телеканал кухня тв"
+    },
+    {
+      "filename": "02aca1aff8438177a5df3eaa2d957c6f.wav",
+      "reference": "сайкл"
+    },
+    {
+      "filename": "d8ce9c35aa6df8717d404badd52ac38e.wav",
+      "reference": "квн высшая лига"
+    },
+    {
+      "filename": "b9039dd8f2293eb10f60c8b6ce36822c.wav",
+      "reference": "счастливый конец восьмой сезон эпизод двадцать восемь"
+    },
+    {
+      "filename": "9ec2b01a55e6b26d4a3a0a67c2ba9e8e.wav",
+      "reference": "побег сезон семь часть восемь"
+    },
+    {
+      "filename": "7ad1c35723adc29023945e0b40fef615.wav",
+      "reference": "есть ли у тебя закон желания"
+    },
+    {
+      "filename": "c8debda7fd2303ce02e5d218a9985b92.wav",
+      "reference": "запись футбольного матча эвертон против брайтон"
+    },
+    {
+      "filename": "a96ef1bb149d316bebf0dcfeb0e44a16.wav",
+      "reference": "фильм криса эванса"
+    },
+    {
+      "filename": "da7624b67ffe87ab51da344dc9f78fcd.wav",
+      "reference": "звонили мошенники что делать"
+    },
+    {
+      "filename": "025c34d57bdcbfd56421869f8beb2aca.wav",
+      "reference": "салют мне нужен банк рядом положить деньги"
+    },
+    {
+      "filename": "61e32941b96ec8b43dfde8b431dbb7bd.wav",
+      "reference": "сомнения ты можешь показать"
+    },
+    {
+      "filename": "e315590d1f59918ec2f0224a574d12e1.wav",
+      "reference": "обменять фунты стерлинги на гуарани стоимость обмена какая"
+    },
+    {
+      "filename": "0cf1dc28b576584800292fc03b3820d9.wav",
+      "reference": "второй сезон сериала аббатство даунтон"
+    },
+    {
+      "filename": "43220b369961151b3e0da197d8147227.wav",
+      "reference": "хайвэй ближайший"
+    },
+    {
+      "filename": "c139c041516c95107167092e148f33d5.wav",
+      "reference": "джой так что теперь"
+    },
+    {
+      "filename": "3d0aeb858b1026754e9f6c92ddfd7a14.wav",
+      "reference": "мелодии белой ночи покажи"
+    },
+    {
+      "filename": "b52b6ce6eebf4329ea369b8da624d518.wav",
+      "reference": "кто такой артемий кирович троицкий"
+    },
+    {
+      "filename": "a7d3f7be2e0b57f483dfbf8f5737937d.wav",
+      "reference": "олег гусейнов"
+    },
+    {
+      "filename": "9f8c4c6f238c79fe68866d495e6f02e6.wav",
+      "reference": "включи срочная доставка аш ди"
+    },
+    {
+      "filename": "63600e259ddcf50d9ee0a13aa9e62a8b.wav",
+      "reference": "можешь показать сериал молодые и голодные сезон один двадцать девятая серия"
+    },
+    {
+      "filename": "b0d6bd754c8c13511690768b72d044f5.wav",
+      "reference": "посоветуй мне индийское кино на смотрешке"
+    },
+    {
+      "filename": "6f3fbd5db170d87d1c923d6024989a79.wav",
+      "reference": "открой пункт назначения три"
+    },
+    {
+      "filename": "543e829a878772fba0611edfff5ecbbf.wav",
+      "reference": "чай лисма крепкий индийский черный чай сто двойных пакетиков"
+    },
+    {
+      "filename": "2fe1954dd09acf48d06328710bb68299.wav",
+      "reference": "включи передачу едим дома"
+    },
+    {
+      "filename": "82816cf4302a1f7981a1cbedd6ad330d.wav",
+      "reference": "фильмы в жанре триллер"
+    },
+    {
+      "filename": "651cff798ea781a5ad47f67c87e3532b.wav",
+      "reference": "афина переведи тысячу рублей моей маме"
+    },
+    {
+      "filename": "61beceaeb1dd81f92182eeef847aa596.wav",
+      "reference": "дай мне посмотреть на смотрешке телеканал кухня тв"
+    },
+    {
+      "filename": "d2d03586dd18e62b0b6b25faeecc2539.wav",
+      "reference": "подольска"
+    },
+    {
+      "filename": "a361e7337f24193f2a8b404501fa65f3.wav",
+      "reference": "зеленодольском"
+    },
+    {
+      "filename": "71020be5c2a3702f91475d258c992693.wav",
+      "reference": "киноработа"
+    },
+    {
+      "filename": "ce5b7b9d8dd640383ed20bdda4e74939.wav",
+      "reference": "поставь нам дерби арсенала с челси"
+    },
+    {
+      "filename": "5717cf88d403e5580367b0bebc728e8e.wav",
+      "reference": "выгодный курс китайского юаня к казахскому тенге"
+    },
+    {
+      "filename": "757a8c252ebea489db6d3f77692dac0a.wav",
+      "reference": "алиса приобрести пельмени талосто из говядины"
+    },
+    {
+      "filename": "7509f58925c28f6df53736fe58a56850.wav",
+      "reference": "зога первая серия"
+    },
+    {
+      "filename": "b687934efe84def4977cf863c7c4ffd6.wav",
+      "reference": "поставь айскрина"
+    },
+    {
+      "filename": "63fb27cf997865aa65f190ce6301194c.wav",
+      "reference": "у тебя будет фильмище жанр романтика"
+    },
+    {
+      "filename": "6fcea394afa559d2a813bfc070b28ebd.wav",
+      "reference": "повтори"
+    },
+    {
+      "filename": "0733a5425cc6f2e1dd425f5c9d0e8bb2.wav",
+      "reference": "хочу посмотреть трансляцию ливерпуль против лестер"
+    },
+    {
+      "filename": "d7411502ad77cf203ab31dff70c539cb.wav",
+      "reference": "давай посмотрю серию пять волчонок"
+    },
+    {
+      "filename": "3d657ed2fdc052ac5b3efad56847d87d.wav",
+      "reference": "на окко киноха"
+    },
+    {
+      "filename": "c39c6037efe0d9ac3e2995e1ef176ac9.wav",
+      "reference": "фильм симпсоны в кино открой"
+    },
+    {
+      "filename": "a67f657b3fcf4a4df8d411f4b10ef05e.wav",
+      "reference": "ливерпуль арсенал"
+    },
+    {
+      "filename": "e54d2d291c87da24a6a5bad6b6c92323.wav",
+      "reference": "кто выпускает деньги в обращение"
+    },
+    {
+      "filename": "5c08a148082b0f3322a2c46fa36e90c5.wav",
+      "reference": "у тебя в запасе есть фильм ривердейл сезон один"
+    },
+    {
+      "filename": "4e77d8a2634c6f129cdad58e9f8431eb.wav",
+      "reference": "в ютьюбе включай зэ смокерс мэгазин о сигарах и табаке о чае и кофе"
+    },
+    {
+      "filename": "b17d800d01e2ca7714ac5e354616b45c.wav",
+      "reference": "афина ты можешь сказать что ты умная"
+    },
+    {
+      "filename": "07f05ea6db37386f1c18d6ebb9a6e4f5.wav",
+      "reference": "поставь дима карташов давай останемся никем"
+    },
+    {
+      "filename": "ee446643eb860c0382deb5108c038ffc.wav",
+      "reference": "ассистент уточни пожалуйста велопрогулки в отеле включены в стоимость или нет"
+    },
+    {
+      "filename": "ab3e4f7ea2cb2ad069ef775587f184e8.wav",
+      "reference": "сериальчик братья по обмену первый сезон часть четыре"
+    },
+    {
+      "filename": "45948261dc37177d681370fe99c0a1d1.wav",
+      "reference": "матч шеффилд юнайтед манчестер юнайтед"
+    },
+    {
+      "filename": "a00b663ed5a6e41a98ca86c35929b374.wav",
+      "reference": "мне необходимо совершить перевод денежных средств своему другу"
+    },
+    {
+      "filename": "9e5468855e3bcd92ff9e8e0cb2e11bb9.wav",
+      "reference": "врубай часть два крошка доррит"
+    },
+    {
+      "filename": "ab1942467221b413509f9561084f3084.wav",
+      "reference": "введение какого гормона способствует превращению головастика в лягушку аксолотля в амбистому"
+    },
+    {
+      "filename": "2a3525c18630e1cdf18abba06834fac8.wav",
+      "reference": "найди на смотрешке канал малыш тв"
+    },
+    {
+      "filename": "5d149fadcaa858ffa35a9578ab1e3121.wav",
+      "reference": "джой как желать доброе утро если человек встает после обеда"
+    },
+    {
+      "filename": "fbaa3783ec02826f974bfbf2107591ff.wav",
+      "reference": "фильм о рождестве для просмотра с детьми"
+    },
+    {
+      "filename": "881762870ff3cc7cb1103bf30f583cd3.wav",
+      "reference": "несущий ужас включи"
+    },
+    {
+      "filename": "62fe0a0fc36db988d5ffff353861cc34.wav",
+      "reference": "у тебя есть хоттабыч"
+    },
+    {
+      "filename": "4431913b42b6926c86e870948fb5c52f.wav",
+      "reference": "салют включи русский рэп"
+    },
+    {
+      "filename": "634f30450ca795d0d0bc474c39e274af.wav",
+      "reference": "сергея сергеевича рязанцева"
+    },
+    {
+      "filename": "b1d99d7c8f2a25d5c58fc82b5fa2fbc5.wav",
+      "reference": "включи фильм морская бригада"
+    },
+    {
+      "filename": "93e8b318d5e3a77336580958363df61d.wav",
+      "reference": "вики шоу"
+    },
+    {
+      "filename": "0a31c314265786d6a8cd2e056aeb8454.wav",
+      "reference": "люблю смотреть фильмы роберта земекиса особенно назад в будущее"
+    },
+    {
+      "filename": "62f1bdf2d9b4854f671d46c9eb3728cf.wav",
+      "reference": "скачай касл аш ди"
+    },
+    {
+      "filename": "bd68b45c1b3b1a9a3609ca722976157b.wav",
+      "reference": "салют переведи пожалуйста деньги на счет автодор платные дороги"
+    },
+    {
+      "filename": "ef025474bf4fc27190cc468b86c74c0f.wav",
+      "reference": "ставь футбол челси с борнмутом"
+    },
+    {
+      "filename": "e4ed7449511d54c9ad36c1146542c958.wav",
+      "reference": "покажи на смотрешке телеканал европа плюс тв"
+    },
+    {
+      "filename": "50aa710d50f0bfaabdabd4b7421bf4f3.wav",
+      "reference": "тринадцатый сезон сериала в поиске"
+    },
+    {
+      "filename": "0247011f4b74f774a285b4f6a25deaf9.wav",
+      "reference": "сбер что в твиттере интересного"
+    },
+    {
+      "filename": "4a0c01942bf7b7b4b066b3f34d26f5f9.wav",
+      "reference": "включай сериал клеймор девятый эпизод"
+    },
+    {
+      "filename": "96203cb16382733c85cb0ee57dfcde40.wav",
+      "reference": "смотреть сериал одаренные"
+    },
+    {
+      "filename": "edab22325d8a131cd6ba89bfd892d062.wav",
+      "reference": "джой почему у девушек глаза больше"
+    },
+    {
+      "filename": "5cd376aacae66f871e8a5a5ecdda02ae.wav",
+      "reference": "курс гуарани в россии"
+    },
+    {
+      "filename": "e519869162f9e7d0590c5ebcd23eb4dd.wav",
+      "reference": "владимиру васильевичу"
+    },
+    {
+      "filename": "f47a3e423b016a417cead063caaf28ab.wav",
+      "reference": "покажи мне на смотрешке канал лдпр тв"
+    },
+    {
+      "filename": "fb39b721c842767f1a34caf3bc8d6caf.wav",
+      "reference": "артем пивоваров последняя серия"
+    },
+    {
+      "filename": "5df0f42f854d060430b2698b4196be61.wav",
+      "reference": "джой снять наличные банкомат рядом"
+    },
+    {
+      "filename": "5123e4ad352b46f2288faba75ec18a08.wav",
+      "reference": "покажи тупик четыре кей"
+    },
+    {
+      "filename": "ff29a26c433382ab3fd49dce0614059b.wav",
+      "reference": "сбер на сто процентов"
+    },
+    {
+      "filename": "c44a5d640c81fcdf0d759d4fe066ff1b.wav",
+      "reference": "салют покажи мне где находится ближайший ко мне банкомат"
+    },
+    {
+      "filename": "3fa8a3deaafb2d1ec76a729ecc0df4d8.wav",
+      "reference": "найди на смотрешке муз тв"
+    },
+    {
+      "filename": "c7aedbaaaa68f42adf05fa4b8d575dc1.wav",
+      "reference": "вытегре"
+    },
+    {
+      "filename": "8636f66547d44212ba6960c894a03f35.wav",
+      "reference": "включай на смотрешке канал кино тв"
+    },
+    {
+      "filename": "f24a90d014c56ee17bb9060981c5e4d4.wav",
+      "reference": "пятьсот шестьдесят семь шесть пятнадцать семьдесят восемнадцать семьсот"
+    },
+    {
+      "filename": "79fd7ebf669cf2b4c61948674cfd112f.wav",
+      "reference": "вяземскому"
+    },
+    {
+      "filename": "8cb2b0c0016331a4d21248b76ad5c2dc.wav",
+      "reference": "афина как сообщить номер телефона мошенников"
+    },
+    {
+      "filename": "5a4156698332219632a25cd25ab981b4.wav",
+      "reference": "найди ленту ваше здоровье"
+    },
+    {
+      "filename": "f263f55795689bc094e7cd803cfdd2d0.wav",
+      "reference": "кинуть другу на телефон денег"
+    },
+    {
+      "filename": "223743890965705eb1270a3533de5719.wav",
+      "reference": "открой передачу нтв на телевизоре"
+    },
+    {
+      "filename": "70b874a5c50c5f2ff1a73112f63c195b.wav",
+      "reference": "это жизнь"
+    },
+    {
+      "filename": "74fbb1c406d938e680c7e7925d68b34a.wav",
+      "reference": " "
+    },
+    {
+      "filename": "1954e0437c6e1988fa620d042833c975.wav",
+      "reference": "найди популярные фильмы в жанре мелодрама"
+    },
+    {
+      "filename": "d4464d341e0da8e6a02eae770f14b8f4.wav",
+      "reference": "сбер включи скорость дава"
+    },
+    {
+      "filename": "812133e2c7719895e75620be1869e760.wav",
+      "reference": "покажи мне на смотрешке передачу квн тв"
+    },
+    {
+      "filename": "7fabd84e2f151981ddac757c44706f7a.wav",
+      "reference": "афина поставь денис райдер"
+    },
+    {
+      "filename": "93c7bfcd3054687f0f701bc22f39c6cb.wav",
+      "reference": "кирилл алимбоевич федоров"
+    },
+    {
+      "filename": "628dd64936da40f8688e706728b9110b.wav",
+      "reference": " "
+    },
+    {
+      "filename": "cdda8fb3c475098712ba8133870ffd6d.wav",
+      "reference": "афина кто тебя создал такого"
+    },
+    {
+      "filename": "9fb2cc5f6da290872b12f748d287fccb.wav",
+      "reference": "купи мне шесть бутылок воды"
+    },
+    {
+      "filename": "f347028212c1666eb936e14054c53ff3.wav",
+      "reference": "у тебя будет фильм миссия невыполнима три"
+    },
+    {
+      "filename": "e6cad38365f741e2b7b0c8a9b4cab92b.wav",
+      "reference": "салют узнай мне какое сейчас атмосферное давление"
+    }
+  ]
+}

@@ -3,3 +3,6 @@ vosk>=0.3.45
 numpy>=1.24.0
 # Optional: for reading parquet manifests
 pyarrow>=15.0.0
+# Common Voice Russian preparation script
+datasets>=2.14.0
+soundfile>=0.12.1

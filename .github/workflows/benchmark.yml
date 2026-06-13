@@ -80,16 +80,16 @@ jobs:
           name: benchmark-results
           path: benchmark/results.json
 
-      - name: Commit results to benchmark-results branch
+      - name: Commit results to benchmark-results-local branch
         if: github.ref == 'refs/heads/main'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout --orphan benchmark-results-tmp
+          git checkout --orphan benchmark-results-local-tmp
           cp benchmark/results.json /tmp/results.json
           git rm -rf .
           cp /tmp/results.json results.json
           git add results.json
           git commit -m "benchmark: update results ($(date -u +%Y-%m-%d))"
-          git branch -M benchmark-results
-          git push -f origin benchmark-results
+          git branch -M benchmark-results-local
+          git push -f origin benchmark-results-local
