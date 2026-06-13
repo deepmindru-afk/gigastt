@@ -542,6 +542,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) — development setup, PR guidelines, and
 
 MIT — see [LICENSE](LICENSE)
 
+> **Benchmark data:** the source code is MIT, but the datasets under `benchmark/` are not. OpenSTT transcripts (`openstt_*`) are CC BY-NC 4.0 and Golos transcripts (`golos_*`) are under the Sber Public License — both non-commercial. See [`NOTICE`](NOTICE) and [`benchmark/DATA_LICENSE`](benchmark/DATA_LICENSE).
+
 ## Acknowledgments
 
 - [**GigaAM**](https://github.com/salute-developers/GigaAM) by [SberDevices](https://github.com/salute-developers) — the speech recognition model
