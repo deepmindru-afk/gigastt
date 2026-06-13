@@ -103,3 +103,46 @@ class GigasttRunner:
     def __exit__(self, exc_type, exc, tb):
         self._stop_server()
         return False
+
+
+class GigasttCoreMLRunner(GigasttRunner):
+    """gigastt built with ``--features coreml`` (macOS arm64 / Neural Engine).
+
+    Only available on Apple Silicon; elsewhere ``is_available()`` is ``False``.
+    Point it at a CoreML-built binary via ``BENCHMARK_GIGASTT_COREML_BINARY``;
+    otherwise it falls back to ``target/release/gigastt`` (which must itself be a
+    coreml build). Intended for the footprint / latency comparisons, not the
+    cross-WER table (the transcription is identical to ``gigastt``).
+    """
+
+    name = "gigastt-coreml"
+
+    def __init__(self, model_dir: str | None = None, port: int = 9878):
+        super().__init__(model_dir=model_dir, use_int8=True, port=port)
+
+    @staticmethod
+    def _is_apple_silicon() -> bool:
+        import platform
+
+        return platform.system() == "Darwin" and platform.machine() == "arm64"
+
+    def _find_binary(self) -> bool:
+        import os
+
+        if not self._is_apple_silicon():
+            return False
+        override = os.environ.get("BENCHMARK_GIGASTT_COREML_BINARY")
+        if override:
+            try:
+                subprocess.run([override, "--version"], capture_output=True, check=True)
+                self._binary = override
+                return True
+            except Exception:
+                return False
+        return super()._find_binary()
+
+    def is_available(self) -> bool:
+        if not self._is_apple_silicon():
+            print("[gigastt-coreml] Not available: requires macOS arm64")
+            return False
+        return super().is_available()
