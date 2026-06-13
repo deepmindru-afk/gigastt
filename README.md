@@ -1,6 +1,6 @@
 <p align="center">
   <h1 align="center">gigastt</h1>
-  <p align="center"><strong>On-device Russian speech recognition with 11.37% WER</strong></p>
+  <p align="center"><strong>On-device Russian speech recognition — 8.60% WER (renorm, golos_crowd_1k, 1k samples, 95% CI 7.5–9.7%)</strong></p>
   <p align="center">Local STT server powered by GigaAM v3 — no cloud, no API keys, full privacy</p>
   <p align="center">
     <a href="https://github.com/ekhodzitsky/gigastt/actions"><img src="https://github.com/ekhodzitsky/gigastt/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -11,9 +11,9 @@
     <a href="https://codecov.io/gh/ekhodzitsky/gigastt"><img src="https://codecov.io/gh/ekhodzitsky/gigastt/branch/main/graph/badge.svg" alt="codecov"></a>
     <a href="https://docs.rs/gigastt-core"><img src="https://docs.rs/gigastt-core/badge.svg" alt="docs.rs"></a>
     <a href="https://github.com/ekhodzitsky/gigastt"><img src="https://img.shields.io/badge/MSRV-1.88-blue.svg" alt="MSRV 1.88"></a>
-    <a href="https://github.com/ekhodzitsky/gigastt/tree/benchmark-results-local"><img src="https://img.shields.io/badge/WER-11.37%25-blue" alt="WER"></a>
+    <a href="https://github.com/ekhodzitsky/gigastt/tree/benchmark-results-local"><img src="https://img.shields.io/badge/WER-8.60%25-blue" alt="WER"></a>
     <a href="https://github.com/ekhodzitsky/gigastt/tree/benchmark-results-local"><img src="https://img.shields.io/badge/RTF-0.335x-green" alt="RTF"></a>
-    <a href="https://github.com/ekhodzitsky/gigastt/tree/benchmark-results-local"><img src="https://img.shields.io/badge/benchmark-9994%20samples-orange" alt="Benchmark"></a>
+    <a href="https://github.com/ekhodzitsky/gigastt/tree/benchmark-results-local"><img src="https://img.shields.io/badge/benchmark-golos__crowd__1k-orange" alt="Benchmark"></a>
   <p align="center"><b>English</b> | <a href="README_RU.md">Русский</a></p>
 </p>
 
@@ -23,7 +23,7 @@
 
 ---
 
-**gigastt** turns any machine into a real-time Russian speech recognition server. One binary, one command, state-of-the-art accuracy — everything runs locally.
+**gigastt** turns any machine into a Russian speech recognition server. One binary, one command, MIT-clean weights — everything runs locally.
 
 ```sh
 cargo install gigastt && gigastt serve
@@ -40,7 +40,7 @@ $ gigastt transcribe recording.wav
 $ curl -X POST http://127.0.0.1:9876/v1/transcribe \
     -H "Content-Type: application/octet-stream" \
     --data-binary @recording.wav
-{"text":"Привет, как дела?","words":[],"duration":3.5}
+{"text":"Привет, как дела?","words":[{"word":"Привет,","start":0.5,"end":0.9,"confidence":0.97},{"word":"как","start":1.0,"end":1.2,"confidence":0.95},{"word":"дела?","start":1.3,"end":1.7,"confidence":0.93}],"duration":3.5}
 ```
 
 ## Why gigastt?
@@ -48,10 +48,10 @@ $ curl -X POST http://127.0.0.1:9876/v1/transcribe \
 | | gigastt | whisper.cpp | faster-whisper | Vosk | sherpa-onnx | Cloud APIs |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
 | **Model** | GigaAM v3 | Whisper large-v3 | Whisper large-v3 | Vosk models | varies | vendor |
-| **WER (Russian)** | **11.37%** | ~18% | ~18% | ~20%+ | model-dependent | 5–10% |
+| **WER (golos_crowd_1k, renorm)** | 8.60% | 15.26% | 15.53% | **4.82%** | model-dependent | 5–10% |
 | **Languages** | Russian | 99 | 99 | 20+ | 10+ | 100+ |
-| **Streaming** | real-time WebSocket | — | — | WebSocket + gRPC | WebSocket + TCP | varies |
-| **Latency (16s, M1)** | **~700ms** | ~4s | ~2s | ~3s | ~1.5s | network |
+| **Streaming** | buffered WebSocket (offline RNN-T) | — | — | WebSocket + gRPC | WebSocket + TCP | varies |
+| **Batch latency (16s, M1)** | ~700ms (encoder) | — | — | — | — | network |
 | **Privacy** | 100% local | 100% local | 100% local | 100% local | 100% local | data leaves device |
 | **Setup** | `cargo install` | cmake + make | `pip install` | `pip install` | cmake or pip | API key + billing |
 | **Implementation** | Rust | C/C++ | Python/C++ | C++/Java | C++ | N/A |
@@ -60,11 +60,11 @@ $ curl -X POST http://127.0.0.1:9876/v1/transcribe \
 | **Concurrent sessions** | configurable pool | 1 | 1 | 1 | 1 | provider limits |
 | **Cost** | free | free | free | free | free | $0.006/min+ |
 
-> **Trade-off:** gigastt supports Russian only. If you need multilingual recognition, consider whisper.cpp or sherpa-onnx. If you need the best Russian accuracy running locally — gigastt is the only Rust-native option built on GigaAM v3, the current SOTA for Russian ASR. Trained on **700K+ hours** of Russian speech. WER measured on 9 994 Golos crowd-sourced samples (50 394 words).
+> **Trade-off:** gigastt is Russian-only. For multilingual recognition use whisper.cpp or sherpa-onnx — or NVIDIA Parakeet-TDT / Canary for higher multilingual accuracy. On clean read speech **Vosk is more accurate** (4.82% vs gigastt 8.60%, renorm on golos_crowd_1k). gigastt's niche is an **embeddable single-binary Rust/FFI server** with **MIT-clean weights** (gigastt MIT + GigaAM v3 weights MIT), a **small INT8 footprint** (~225 MB vs Vosk's 1.3 GB), and **accuracy leadership on far-field and telephony** (see the cross-domain table below). For purpose-built streaming telephony ASR also consider T-one (T-Bank, Apache-2.0); for newer streaming Vosk, see Vosk 0.54 Zipformer2. GigaAM v3 is trained on 700K+ hours of Russian speech.
 
 ## Who is this for?
 
-- **Real-time voice assistants** — WebSocket streaming with sub-second latency
+- **Real-time voice assistants** — WebSocket streaming with incremental partial results (measured ~0.7 s time-to-first-partial on CPU)
 - **Call-center transcription** — speaker diarization + REST batch processing
 - **Offline document processing** — transcribe meeting recordings without cloud upload
 - **Privacy-first mobile apps** — embed via C-ABI FFI on Android with on-device inference
@@ -72,7 +72,7 @@ $ curl -X POST http://127.0.0.1:9876/v1/transcribe \
 
 ## Features
 
-- **Real-time streaming** — partial transcription via WebSocket as you speak
+- **Streaming transcription** — incremental partial results via WebSocket over a sliding-window offline RNN-T (real-time on CPU)
 - **REST API + SSE** — file transcription with instant or streaming response
 - **Hardware acceleration** — CoreML + Neural Engine (macOS), CUDA 12+ (Linux), CPU everywhere
 - **INT8 quantization** — 4x smaller model, 43% faster inference
@@ -130,7 +130,7 @@ gigastt transcribe recording.wav
 curl -X POST http://127.0.0.1:9876/v1/transcribe \
   -H "Content-Type: application/octet-stream" \
   --data-binary @recording.wav
-# {"text":"Привет, как дела?","words":[],"duration":3.5}
+# {"text":"Привет, как дела?","words":[{"word":"Привет,","start":0.5,"end":0.9,"confidence":0.97},{"word":"как","start":1.0,"end":1.2,"confidence":0.95},{"word":"дела?","start":1.3,"end":1.7,"confidence":0.93}],"duration":3.5}
 ```
 
 ## API
@@ -240,14 +240,16 @@ java -jar client.jar recording.wav
 
 | Metric | Value |
 |---|---|
-| **WER (Russian)** | 11.37% (9 994 Golos crowd samples, 50 394 words, 95% CI [10.9%, 11.9%]) |
+| **WER (flagship, renorm)** | 8.60% (golos_crowd_1k, 1000 samples, 95% CI [7.51%, 9.66%]) |
+| **WER (raw, full set)** | 11.37% (9 994 Golos crowd samples, 50 394 words, 95% CI [10.9%, 11.9%], no ITN normalization) |
 | **INT8 vs FP32** | 0% WER degradation (11.37% vs 11.46% on 9 994 samples) |
-| **Latency (16s audio, M1)** | ~700 ms (encoder 667 ms + decode 31 ms) |
+| **Batch latency (16s audio, M1)** | ~700 ms compute (encoder 667 ms + decode 31 ms) |
+| **Streaming TTFP (smoke, golos_00)** | ~0.7 s time-to-first-partial, real-time on CPU (RTF 0.49) |
 | **Memory (RSS)** | ~560 MB |
 | **Model size** | 851 MB (FP32) / 222 MB (INT8) |
 | **Concurrent sessions** | up to 4 (configurable via `--pool-size`) |
 
-### Cross-ASR Comparison (9 994 samples, Golos crowd, CPU)
+### Cross-ASR Comparison (9 994 samples, Golos crowd, raw WER, CPU)
 
 | Engine | Model | WER | RTF | Size |
 |---|---|---|---|---|
@@ -256,7 +258,7 @@ java -jar client.jar recording.wav
 | whisper.cpp | Large v3 | 14.96% | 1.108x | ~3 GB |
 | faster-whisper | Large v3 (INT8) | 15.73% | 1.224x | ~3 GB |
 
-> **Note:** Vosk leads on this clean-speech subset (Golos crowd) with excellent accuracy, but requires 1.3 GB. gigastt targets **streaming real-time** use-cases with sub-200ms latency, hardware acceleration (CoreML/CUDA/NNAPI), and a 6× smaller model footprint.
+> **Note:** Vosk leads on this clean-speech subset (Golos crowd) with excellent accuracy, but requires 1.3 GB. gigastt's edge here is a 6× smaller INT8 footprint (~225 MB), hardware acceleration (CoreML/CUDA/NNAPI), accuracy leadership on far-field/telephony (see the cross-domain table), and an embeddable single-binary Rust/FFI server — not clean-speech WER.
 
 > **Dataset contamination caveat:** GigaAM v3 is a SberDevices model whose fine-tuning is dominated by Golos, and Common Voice / OpenSTT-style corpora are commonly part of Russian ASR training mixes — so the Golos / OpenSTT / Common Voice slices here very likely overlap GigaAM v3's training distribution. Treat the headline in-domain WER (Golos crowd) as a **best-case upper bound**, not a WER on unseen data. Golos does ship an official train/test split (so this is distribution overlap, not row-level leakage), and as the table above shows Vosk still leads on clean read speech.
 
