@@ -6,6 +6,12 @@
 mis = "mis"
 # "unparseable" — accepted variant of "unparsable".
 unparseable = "unparseable"
+# "ANE" — Apple Neural Engine (CoreML hardware), used in benchmark/latency_note.md.
+ane = "ane"
+# "daa" — substring of the git short SHA `8daa9a9` referenced in latency notes.
+daa = "daa"
+# "eazy" — the artist "G-Eazy" appearing verbatim in an ASR hypothesis transcript.
+eazy = "eazy"
 
 [default.extend-identifiers]
 # "hel\0lo" — intentional test string with embedded NUL byte.
