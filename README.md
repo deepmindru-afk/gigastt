@@ -12,7 +12,7 @@
     <a href="https://docs.rs/gigastt-core"><img src="https://docs.rs/gigastt-core/badge.svg" alt="docs.rs"></a>
     <a href="https://github.com/ekhodzitsky/gigastt"><img src="https://img.shields.io/badge/MSRV-1.88-blue.svg" alt="MSRV 1.88"></a>
     <a href="https://github.com/ekhodzitsky/gigastt/tree/benchmark-results-local"><img src="https://img.shields.io/badge/WER-8.60%25-blue" alt="WER"></a>
-    <a href="https://github.com/ekhodzitsky/gigastt/tree/benchmark-results-local"><img src="https://img.shields.io/badge/RTF-0.335x-green" alt="RTF"></a>
+    <a href="https://github.com/ekhodzitsky/gigastt/tree/benchmark-results-local"><img src="https://img.shields.io/badge/RTF-0.157x-green" alt="RTF"></a>
     <a href="https://github.com/ekhodzitsky/gigastt/tree/benchmark-results-local"><img src="https://img.shields.io/badge/benchmark-golos__crowd__1k-orange" alt="Benchmark"></a>
   <p align="center"><b>English</b> | <a href="README_RU.md">Русский</a></p>
 </p>
@@ -251,14 +251,14 @@ java -jar client.jar recording.wav
 | **Model size** | 851 MB (FP32) / 222 MB (INT8) |
 | **Concurrent sessions** | up to 4 (configurable via `--pool-size`) |
 
-### Cross-ASR Comparison (9 994 samples, Golos crowd, raw WER, CPU)
+### Cross-ASR Comparison (9 994 samples, Golos crowd, raw WER, M1 CPU)
 
 | Engine | Model | WER | RTF | Size |
 |---|---|---|---|---|
-| **Vosk** | vosk-model-ru-0.42 | **4.27%** | **0.107x** | 1.3 GB |
-| **gigastt** | GigaAM v3 (INT8) | **11.37%** | **0.335x** | **230 MB** |
-| whisper.cpp | Large v3 | 14.96% | 1.108x | ~3 GB |
-| faster-whisper | Large v3 (INT8) | 15.73% | 1.224x | ~3 GB |
+| **Vosk** | vosk-model-ru-0.42 | **4.27%** | **0.035x** | 1.3 GB |
+| **gigastt** | GigaAM v3 (INT8) | **11.37%** | **0.157x** | **230 MB** |
+| whisper.cpp | Large v3 | 14.96% | 0.357x | ~3 GB |
+| faster-whisper | Large v3 (INT8) | 15.73% | 1.187x | ~3 GB |
 
 > **Note:** Vosk leads on this clean-speech subset (Golos crowd) with excellent accuracy, but requires 1.3 GB. gigastt's edge here is a 6× smaller INT8 footprint (~225 MB), hardware acceleration (CoreML/CUDA/NNAPI), accuracy leadership on far-field/telephony (see the cross-domain table), and an embeddable single-binary Rust/FFI server — not clean-speech WER.
 
@@ -284,16 +284,13 @@ bootstrap confidence intervals.
 
 | Engine | Model | Clean read | Far-field | Phone calls | YouTube | Size |
 |---|---|---|---|---|---|---|
-| gigastt | GigaAM v3 (INT8) | *pending* | *pending* | *pending* | *pending* | 230 MB |
-| whisper.cpp | Whisper Large v3 | *pending* | *pending* | *pending* | *pending* | ~3 GB |
-| faster-whisper | Whisper Large v3 (INT8) | *pending* | *pending* | *pending* | *pending* | ~3 GB |
-| Vosk | vosk-model-ru-0.42 | *pending* | *pending* | *pending* | *pending* | 1.3 GB |
+| gigastt | GigaAM v3 (INT8) | 8.60% (7.51–9.66) | 5.90% (5.09–6.83) | 19.28% (17.88–20.67) | 11.35% (10.32–12.31) | 230 MB |
+| whisper.cpp | Whisper Large v3 | 15.26% (13.74–16.71) | 17.91% (16.29–19.57) | 32.73% (30.69–34.91) | 22.61% (20.97–24.20) | ~3 GB |
+| faster-whisper | Whisper Large v3 (INT8) | 15.53% (13.94–17.10) | 17.34% (15.62–19.07) | 24.93% (23.32–26.57) | 15.45% (14.15–16.62) | ~3 GB |
+| Vosk | vosk-model-ru-0.42 | 4.82% (4.03–5.60) | 13.93% (12.49–15.47) | 38.57% (36.72–40.64) | 20.65% (19.38–21.98) | 1.3 GB |
 
-> **Expected narrative:** smoke runs already show Vosk dominating clean read
-> speech, gigastt leading on far-field commands, and Whisper-based engines
-> becoming competitive on spontaneous/noisy domains. The full-run numbers will
-> replace the placeholders above. Full methodology and dataset preparation:
-> [`benchmark/README.md`](benchmark/README.md).
+Full methodology and dataset preparation:
+[`benchmark/README.md`](benchmark/README.md).
 
 ### Hardware Acceleration
 
