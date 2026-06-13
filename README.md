@@ -192,10 +192,12 @@ Full protocol spec: [`docs/asyncapi.yaml`](docs/asyncapi.yaml)
 
 | HTTP | Code | When |
 |---|---|---|
-| 400 | `bad_request` | Invalid audio format or malformed request |
-| 413 | `payload_too_large` | File exceeds `--body-limit-bytes` (default 50 MiB) |
-| 429 | `rate_limit_exceeded` | Per-IP token bucket exhausted; `Retry-After` header included |
-| 503 | `pool_saturated` | All inference sessions busy; `Retry-After: 30` |
+| 400 | `empty_body` | Request body is empty |
+| 413 | `payload_too_large` | Body exceeds `--body-limit-bytes` (default 50 MiB) |
+| 422 | `invalid_audio` | Audio could not be decoded (unsupported/corrupt format) |
+| 422 | `transcription_error` | Audio decoded but inference failed |
+| 429 | `rate_limited` | Per-IP token bucket exhausted; `Retry-After` header included |
+| 503 | `timeout` | All inference sessions busy; `Retry-After` + `retry_after_ms` |
 | 503 | `pool_closed` | Server is shutting down, pool closed to new checkouts |
 
 ```json
@@ -203,7 +205,7 @@ Full protocol spec: [`docs/asyncapi.yaml`](docs/asyncapi.yaml)
 HTTP/1.1 503 Service Unavailable
 Retry-After: 30
 
-{"code":"pool_saturated","message":"All inference sessions are busy"}
+{"error":"Server busy, try again later","code":"timeout","retry_after_ms":30000}
 ```
 
 ### Client Libraries

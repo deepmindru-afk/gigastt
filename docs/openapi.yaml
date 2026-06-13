@@ -50,6 +50,7 @@ info:
     | 413 | `payload_too_large` | Body exceeds `--body-limit-bytes` |
     | 422 | `transcription_error` | Audio decoded but inference failed |
     | 422 | `invalid_audio` | Audio could not be decoded |
+    | 429 | `rate_limited` | Per-IP rate limit exceeded |
     | 503 | `timeout` | Pool saturated; retry after `Retry-After` |
     | 503 | `pool_closed` | Server shutting down |
     | 404 | `metrics_disabled` | `/metrics` called without `--metrics` flag |
@@ -84,7 +85,37 @@ paths:
               example:
                 status: ok
                 model: gigaam-v3-e2e-rnnt
-                version: "2.0.3"
+                version: "2.0.14"
+
+  /ready:
+    get:
+      summary: Readiness probe
+      description: |
+        Returns 200 when the engine session pool has capacity, 503 otherwise.
+        Suitable for Kubernetes readiness probes and load-balancer gating.
+      operationId: readinessCheck
+      responses:
+        "200":
+          description: Engine pool is ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessResponse"
+              example:
+                status: ready
+                pool_available: 3
+                pool_total: 4
+        "503":
+          description: Engine pool is not ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessResponse"
+              example:
+                status: not_ready
+                pool_available: 0
+                pool_total: 4
+                reason: pool_exhausted
 
   /v1/models:
     get:
@@ -103,7 +134,7 @@ paths:
               example:
                 id: gigaam-v3-e2e-rnnt
                 name: GigaAM v3 RNN-T
-                version: "2.0.3"
+                version: "2.0.14"
                 encoder: int8
                 vocab_size: 1025
                 sample_rate: 16000
@@ -187,6 +218,8 @@ paths:
           $ref: "#/components/responses/PayloadTooLarge"
         "422":
           $ref: "#/components/responses/TranscriptionError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
 
@@ -245,6 +278,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "413":
           $ref: "#/components/responses/PayloadTooLarge"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
 
@@ -288,8 +323,36 @@ components:
           description: Loaded model identifier
         version:
           type: string
-          example: "2.0.3"
+          example: "2.0.14"
           description: Server version (semver)
+
+    ReadinessResponse:
+      type: object
+      required:
+        - status
+        - pool_available
+        - pool_total
+      properties:
+        status:
+          type: string
+          enum: [ready, not_ready]
+          example: ready
+          description: Readiness status
+        pool_available:
+          type: integer
+          example: 3
+          description: Currently available inference sessions
+        pool_total:
+          type: integer
+          example: 4
+          description: Total inference session pool size
+        reason:
+          type: string
+          enum: [pool_exhausted, shutting_down]
+          example: pool_exhausted
+          description: |
+            Why the service is not ready. Present only when status is not_ready
+            (pool_exhausted when all sessions are busy, shutting_down during drain).
 
     ModelInfo:
       type: object
@@ -314,7 +377,7 @@ components:
           example: GigaAM v3 RNN-T
         version:
           type: string
-          example: "2.0.3"
+          example: "2.0.14"
         encoder:
           type: string
           enum: [fp32, int8]
@@ -471,6 +534,23 @@ components:
               value:
                 error: "Server is shutting down"
                 code: pool_closed
+
+    TooManyRequests:
+      description: Per-IP rate limit exceeded
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds to wait before retry
+          example: 30
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: "Too many requests"
+            code: rate_limited
+            retry_after_ms: 30000
 
     MetricsDisabled:
       description: Metrics endpoint is disabled

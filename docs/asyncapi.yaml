@@ -320,6 +320,9 @@ components:
             - pool_closed
             - max_session_duration_exceeded
             - payload_too_large
+            - unsupported_protocol_version
+            - idle_timeout
+            - policy_violation
         retry_after_ms:
           type: integer
           example: 30000
