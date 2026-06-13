@@ -248,7 +248,7 @@ java -jar client.jar recording.wav
 | **Batch latency (16s audio, M1)** | ~700 ms compute (encoder 667 ms + decode 31 ms) |
 | **Streaming TTFP (smoke, golos_00)** | ~0.7 s time-to-first-partial, real-time on CPU (RTF 0.49) |
 | **Memory (RSS)** | ~560 MB |
-| **Model size** | 851 MB (FP32) / 222 MB (INT8) |
+| **Model size** | 851 MB (FP32) / 225 MB (INT8) |
 | **Concurrent sessions** | up to 4 (configurable via `--pool-size`) |
 
 ### Cross-ASR Comparison (9 994 samples, Golos crowd, raw WER, M1 CPU)
@@ -256,7 +256,7 @@ java -jar client.jar recording.wav
 | Engine | Model | WER | RTF | Size |
 |---|---|---|---|---|
 | **Vosk** | vosk-model-ru-0.42 | **4.27%** | **0.035x** | 1.3 GB |
-| **gigastt** | GigaAM v3 (INT8) | **11.37%** | **0.157x** | **230 MB** |
+| **gigastt** | GigaAM v3 (INT8) | **11.37%** | **0.157x** | **225 MB** |
 | whisper.cpp | Large v3 | 14.96% | 0.357x | ~3 GB |
 | faster-whisper | Large v3 (INT8) | 15.73% | 1.187x | ~3 GB |
 
@@ -284,7 +284,7 @@ bootstrap confidence intervals.
 
 | Engine | Model | Clean read | Far-field | Phone calls | YouTube | Size |
 |---|---|---|---|---|---|---|
-| gigastt | GigaAM v3 (INT8) | 8.60% (7.51–9.66) | 5.90% (5.09–6.83) | 19.28% (17.88–20.67) | 11.35% (10.32–12.31) | 230 MB |
+| gigastt | GigaAM v3 (INT8) | 8.60% (7.51–9.66) | 5.90% (5.09–6.83) | 19.28% (17.88–20.67) | 11.35% (10.32–12.31) | 225 MB |
 | whisper.cpp | Whisper Large v3 | 15.26% (13.74–16.71) | 17.91% (16.29–19.57) | 32.73% (30.69–34.91) | 22.61% (20.97–24.20) | ~3 GB |
 | faster-whisper | Whisper Large v3 (INT8) | 15.53% (13.94–17.10) | 17.34% (15.62–19.07) | 24.93% (23.32–26.57) | 15.45% (14.15–16.62) | ~3 GB |
 | Vosk | vosk-model-ru-0.42 | 4.82% (4.03–5.60) | 13.93% (12.49–15.47) | 38.57% (36.72–40.64) | 20.65% (19.38–21.98) | 1.3 GB |
@@ -498,10 +498,10 @@ Remote deployment (TLS + reverse proxy): see [`docs/deployment.md`](docs/deploym
 
 ## Testing
 
-240+ unit tests (including property-based via proptest) + 33 e2e/load/soak tests + WER benchmark + 4 cargo-fuzz targets + 3 criterion micro-benchmarks:
+270+ unit tests (including property-based via proptest) + 40+ e2e/load/soak tests + WER benchmark + 4 cargo-fuzz targets + 3 criterion micro-benchmarks:
 
 ```sh
-cargo test --workspace               # 240+ unit tests (no model needed)
+cargo test --workspace               # 270+ unit tests (no model needed)
 cargo clippy --workspace --all-targets  # Lint (zero warnings)
 
 # E2E tests (require model, serial to avoid OOM)
