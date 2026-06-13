@@ -114,6 +114,24 @@ near the 5 s window cap. So on the CPU EP the streaming path now transcribes cor
 Mitigations (not yet done): CoreML/GPU EP, re-decoding less often than every chunk (e.g. every
 ~250–500 ms of new audio), and/or a smaller context window — filed as roadmap task 17.
 
-**Implication for positioning (task 02):** streaming is now **accurate**, but "real-time" must be
-qualified by EP/compute — on CPU it is not real-time with this re-decode approach, and "sub-200ms"
-remains unsupported for end-to-end TTFP.
+**Implication for positioning (task 02):** streaming is now **accurate** and — after task 17 (below)
+— **real-time on CPU**. "sub-200ms" remains unsupported for end-to-end TTFP (TTFP is dominated by
+word position in the stream + compute, ~0.8 s on this clip).
+
+## Update (2026-06-13) — streaming real-time perf (task 17)
+
+Task 17 (commit `3c120a1`) removed the compute tradeoff above: the encoder no longer re-runs on
+every ~100 ms chunk. A decode **stride** re-runs it only after ~0.8 s of new audio (or at the window
+cap), then resets; `finish_stream` decodes the sub-stride remainder at end-of-stream (Stop/EOF) so
+batching never drops trailing words (wired into the WS stop handler and the SSE flush). Re-measured
+(CPU EP, INT8, release, `golos_00`, fast-feed + drain-to-close):
+
+| metric | task 16 (re-decode every chunk) | task 17 (stride) |
+|---|---|---|
+| decode calls / clip | 27 | **5** |
+| encoder time sum | 10.7 s | 1.94 s |
+| **RTF (CPU)** | **2.68** | **0.49** |
+| streaming text | «60 000» (truncated) | «60 000 тенге — сколько будет стоить?» (= batch) |
+
+RTF 0.49 → real-time with ~2× headroom on CPU; worst case at the 5 s window cap ≈ 0.75. Quality is
+guarded by the `streaming_quality` integration tests (streaming ≈ batch + a >5 s slide test).
