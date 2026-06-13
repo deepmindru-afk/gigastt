@@ -490,6 +490,8 @@ cargo test -p gigastt --test soak_test -- --ignored
 
 MIT — см. [LICENSE](LICENSE)
 
+> **Данные бенчмарка:** исходный код — MIT, но датасеты под `benchmark/` — нет. Транскрипты OpenSTT (`openstt_*`) под CC BY-NC 4.0, транскрипты Golos (`golos_*`) под Sber Public License — оба non-commercial. См. [`NOTICE`](NOTICE) и [`benchmark/DATA_LICENSE`](benchmark/DATA_LICENSE).
+
 ## Благодарности
 
 - [**GigaAM**](https://github.com/salute-developers/GigaAM) от [SberDevices](https://github.com/salute-developers) — модель распознавания речи
