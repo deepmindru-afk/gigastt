@@ -40,7 +40,7 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install cargo-ndk
-        run: cargo install cargo-ndk
+        run: cargo install --locked --version 4.1.2 cargo-ndk
 
       - name: Build libgigastt_ffi.so (arm64)
         run: |

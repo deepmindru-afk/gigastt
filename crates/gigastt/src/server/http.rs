@@ -516,9 +516,10 @@ pub async fn transcribe_stream(
                 }
             }
 
-            // Flush final segment — best-effort; always emit so SSE clients
-            // receive a clean end-of-stream marker even during shutdown.
-            if let Some(seg) = engine.flush_state(&mut stream_state) {
+            // Final decode of the sub-stride remainder, then flush — best-effort;
+            // always emit so SSE clients receive a clean end-of-stream marker
+            // even during shutdown.
+            if let Some(seg) = engine.finish_stream(&mut stream_state, &mut reservation) {
                 let _ = tx.blocking_send(Ok(seg));
             }
         }));

@@ -266,6 +266,15 @@ _EMPTY_TOKENS = {
     "джой",
 }
 
+# FROZEN map — do NOT extend. Each entry is a widely-used Latin brand/abbreviation
+# that recurs in references in Latin spelling while some engines transliterate it to
+# Cyrillic: device/service brands (apple, iphone, samsung, sony), social/media
+# (youtube, facebook, instagram, telegram, vk, ok, netflix, spotify, whatsapp), the
+# aliexpress marketplace, and the tv/synergy/pink tokens. INVARIANT: do not add new
+# entries to lower WER. The words-to-digits ITN and this map only fire on hypotheses
+# containing Latin/digit tokens, so growing the map silently rewards the output style
+# of digit/Latin engines (notably gigastt). Any extension MUST be disclosed in the
+# "Word-error normalization" section of benchmark/README.md.
 ANGLICISMS = {
     "synergy": "синергия", "tv": "тв", "pink": "пинк", "sony": "сони",
     "samsung": "самсунг", "apple": "эпл", "iphone": "айфон", "google": "гугл",
@@ -273,30 +282,6 @@ ANGLICISMS = {
     "netflix": "нетфликс", "spotify": "спотифай", "whatsapp": "ватсап",
     "telegram": "телеграм", "vk": "вк", "ok": "ок", "aliexpress": "алиэкспресс",
 }
-
-
-def _drop_bare_thousand_after_minus(tokens: list[str]) -> list[str]:
-    """Drop a bare 'тысяча' scale word immediately following 'минус'.
-
-    This aligns spoken subtrahends like 'минус тысяча девятьсот семьдесят два'
-    with the digit form '-972' after the minus sign is stripped.
-    """
-    result: list[str] = []
-    skip_next = False
-    for i, token in enumerate(tokens):
-        if skip_next:
-            skip_next = False
-            continue
-        if (
-            token == "минус"
-            and i + 1 < len(tokens)
-            and tokens[i + 1] in ("тысяча", "тысячи", "тысяч")
-        ):
-            # Drop the minus sign (handled later as empty) and the bare thousand.
-            skip_next = True
-            continue
-        result.append(token)
-    return result
 
 
 def _words_to_numbers(tokens: list[str]) -> list[str]:
@@ -420,7 +405,6 @@ def normalize_for_wer(text: str) -> list[str]:
     # This keeps symbols as explicit separators during digit-group merging.
     tokens = _TOKEN_RE.findall(text)
 
-    tokens = _drop_bare_thousand_after_minus(tokens)
     tokens = _words_to_numbers(tokens)
     tokens = _merge_digit_groups(tokens)
     tokens = _drop_ordinal_suffixes(tokens)
