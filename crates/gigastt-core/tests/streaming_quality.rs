@@ -148,3 +148,67 @@ fn streaming_long_audio_slides_window() {
         "long-audio streaming lost content words across slides: {streaming_text:?}"
     );
 }
+
+/// Streaming word timestamps must track real elapsed time, not be inflated by
+/// the encoder subsampling factor (roadmap task 11: a mel-vs-encoder frame unit
+/// mismatch used to multiply every post-first-chunk `start`/`end` by ~4×). The
+/// inflation only appears once the window slides (a non-zero frame offset), so
+/// this feeds >5 s of audio to force slides, then asserts no word lands far
+/// beyond the audio's real duration. Fixed structurally in task 16 (the offset
+/// is now derived from slid-off samples); this is the regression guard.
+#[test]
+#[ignore = "requires the GigaAM model (~850MB) at ~/.gigastt/models"]
+fn streaming_word_timestamps_not_inflated() {
+    let model_dir = default_model_dir();
+    let fixture = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../gigastt/tests/fixtures/golos_00.wav"
+    );
+
+    let engine = Engine::load(&model_dir).expect("load engine");
+    let mut triplet = engine.pool.checkout_blocking().expect("checkout triplet");
+
+    let one = decode_audio_file(fixture).expect("decode fixture");
+    let mut samples = Vec::new();
+    for _ in 0..3 {
+        samples.extend_from_slice(&one); // ~12 s > 5 s window → forces slides
+    }
+    let audio_dur_s = samples.len() as f64 / 16000.0;
+
+    let mut state = engine.create_state(false);
+    let mut max_end_s = 0.0_f64;
+    let mut word_count = 0usize;
+    let mut record = |segments: Vec<gigastt_core::inference::TranscriptSegment>| {
+        for seg in segments {
+            if seg.is_final {
+                for w in seg.words {
+                    max_end_s = max_end_s.max(w.end);
+                    word_count += 1;
+                }
+            }
+        }
+    };
+    for chunk in samples.chunks(1600) {
+        record(
+            engine
+                .process_chunk(chunk, &mut state, &mut triplet)
+                .expect("process_chunk"),
+        );
+    }
+    if let Some(seg) = engine.finish_stream(&mut state, &mut triplet) {
+        record(vec![seg]);
+    }
+
+    eprintln!("audio_dur={audio_dur_s:.2}s  max_word_end={max_end_s:.2}s  words={word_count}");
+    assert!(
+        word_count >= 5,
+        "expected several timestamped words across the stream, got {word_count}"
+    );
+    // A ~4× inflation would push post-slide words to tens of seconds on this
+    // ~12 s clip; a 1.5× tolerance catches it while allowing frame rounding.
+    assert!(
+        max_end_s <= audio_dur_s * 1.5,
+        "word end {max_end_s:.2}s far exceeds audio duration {audio_dur_s:.2}s \
+         — streaming timestamp inflation regressed (task 11)"
+    );
+}
