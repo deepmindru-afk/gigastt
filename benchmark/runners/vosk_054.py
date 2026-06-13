@@ -1,34 +1,89 @@
-"""Runner for Vosk 0.54 — NOTE: NOT a drop-in for the Kaldi vosk-api.
+"""Runner for Vosk 0.54 (Zipformer2) via sherpa-onnx.
 
-De-risk finding (2026-06-14): ``vosk-model-ru-0.54`` on alphacephei is a **Zipformer2
-ONNX** bundle — it ships ``am-onnx/``, ``decode-onnx.py``, ``lang/``, ``lm/`` and is
-*not* a Kaldi model. ``vosk.Model()`` rejects it ("Folder does not contain model
-files"), so this runner cannot reuse the 0.42 ``KaldiRecognizer`` path. Integrating
-0.54 needs an onnxruntime backend (its bundled ``decode-onnx.py``) or sherpa-onnx,
-both of which support Zipformer2 ONNX models.
+``vosk-model-ru-0.54`` is NOT a Kaldi model — it is a sherpa-onnx **offline
+transducer** (``am-onnx/{encoder,decoder,joiner}.onnx`` + ``lang/tokens.txt``),
+exactly as the bundle's own ``decode-onnx.py`` shows
+(``sherpa_onnx.OfflineRecognizer.from_transducer(...)``). So this runner uses the
+``sherpa-onnx`` package, not the vosk-api.
 
-Until that backend is wired, ``is_available()`` returns ``False`` so the full suite
-skips Vosk 0.54 cleanly instead of recording 100% failures. Tracked as a follow-up.
+That encoder→decoder→joiner ONNX transducer is the same pattern the author's native
+Rust engines implement (``voxrs/src/inference/zipformer.rs``, ``siamstt``); sherpa-onnx
+is the quickest path for the Python benchmark. The decode config below mirrors the
+model's own ``decode-onnx.py`` (modified beam search, max_active_paths=10).
+
+Install: ``uv pip install sherpa-onnx``. Until present, ``is_available()`` returns
+False and the suite skips Vosk 0.54.
 """
 
 import os
+import time
+import urllib.request
+import wave
+import zipfile
+from pathlib import Path
 
-from .vosk import VoskRunner
 
-
-class Vosk054Runner(VoskRunner):
+class Vosk054Runner:
     name = "vosk-0.54"
 
     def __init__(self, model_name: str | None = None, download_dir: str | None = None):
-        if model_name is None:
-            model_name = os.environ.get("BENCHMARK_VOSK054_MODEL", "vosk-model-ru-0.54")
-        super().__init__(model_name=model_name, download_dir=download_dir)
+        self.model_name = model_name or os.environ.get("BENCHMARK_VOSK054_MODEL", "vosk-model-ru-0.54")
+        self.download_dir = Path(download_dir) if download_dir else Path.home() / ".cache" / "vosk"
+        self.download_dir.mkdir(parents=True, exist_ok=True)
+        self._recognizer = None
 
     def is_available(self) -> bool:
-        # vosk-model-ru-0.54 is a Zipformer2 ONNX bundle, not a Kaldi model the
-        # vosk-api can load. Skip until a sherpa-onnx / onnxruntime backend is wired.
-        print(
-            "[vosk-0.54] Not available: vosk-model-ru-0.54 is a Zipformer2 ONNX model, "
-            "not loadable by vosk-api; needs a sherpa-onnx/onnxruntime backend (follow-up)."
-        )
-        return False
+        try:
+            import sherpa_onnx  # noqa: F401
+            return True
+        except Exception as e:
+            print(f"[vosk-0.54] Not available (install: uv pip install sherpa-onnx): {e}")
+            return False
+
+    def _download_model(self) -> Path:
+        model_dir = self.download_dir / self.model_name
+        if model_dir.exists():
+            return model_dir
+        url = f"https://alphacephei.com/vosk/models/{self.model_name}.zip"
+        zip_path = self.download_dir / f"{self.model_name}.zip"
+        print(f"[vosk-0.54] Downloading {url} ...")
+        urllib.request.urlretrieve(url, zip_path)
+        with zipfile.ZipFile(zip_path, "r") as z:
+            z.extractall(self.download_dir)
+        return model_dir
+
+    def _load(self):
+        if self._recognizer is None:
+            import sherpa_onnx
+
+            d = self._download_model()
+            am = d / "am-onnx"
+            self._recognizer = sherpa_onnx.OfflineRecognizer.from_transducer(
+                encoder=str(am / "encoder.onnx"),
+                decoder=str(am / "decoder.onnx"),
+                joiner=str(am / "joiner.onnx"),
+                tokens=str(d / "lang" / "tokens.txt"),
+                num_threads=1,
+                provider="cpu",
+                sample_rate=16000,
+                dither=3e-5,
+                max_active_paths=10,
+                decoding_method="modified_beam_search",
+            )
+        return self._recognizer
+
+    def transcribe(self, wav_path: str) -> tuple[str, float]:
+        import numpy as np
+
+        recognizer = self._load()
+        with wave.open(wav_path, "rb") as wf:
+            if wf.getnchannels() != 1 or wf.getsampwidth() != 2 or wf.getframerate() != 16000:
+                raise ValueError("vosk-0.54 runner expects 16kHz mono 16-bit WAV")
+            frames = wf.readframes(wf.getnframes())
+        samples = np.frombuffer(frames, dtype=np.int16).astype(np.float32) / 32768.0
+        start = time.perf_counter()
+        stream = recognizer.create_stream()
+        stream.accept_waveform(16000, samples)
+        recognizer.decode_stream(stream)
+        elapsed = time.perf_counter() - start
+        return stream.result.text.strip().lower(), elapsed
