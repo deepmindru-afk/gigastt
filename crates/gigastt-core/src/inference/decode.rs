@@ -70,7 +70,7 @@ pub(crate) fn argmax_with_confidence(logits: &[f32], blank_id: usize) -> (usize,
 ///
 /// During blank runs, decoder inputs (prev_token, h, c) are unchanged,
 /// so the output is deterministic and can be reused without re-calling the decoder.
-struct DecoderOutput {
+pub(crate) struct DecoderOutput {
     /// Decoder output vector [PRED_HIDDEN].
     dec_data: Vec<f32>,
     /// New LSTM hidden state [PRED_HIDDEN] — committed only on non-blank token.
@@ -136,6 +136,41 @@ fn run_joiner_single(
     Ok(())
 }
 
+/// Abstraction over the two ONNX session calls in the RNN-T inner loop, so the
+/// decode logic can be unit-tested with a deterministic stub instead of a real
+/// `ort::Session` (which requires a model file on disk).
+pub(crate) trait DecodeBackend {
+    /// Run the prediction network for the current decoder state.
+    fn decode_step(&mut self, state: &DecoderState) -> Result<DecoderOutput>;
+    /// Run the joiner for one encoder frame, writing logits into `logits_buf`.
+    fn joiner_step(
+        &mut self,
+        enc_frame: &[f32],
+        dec_data: &[f32],
+        logits_buf: &mut Vec<f32>,
+    ) -> Result<()>;
+}
+
+/// Production backend over the real encoder/joiner ONNX sessions.
+struct OrtBackend<'a> {
+    decoder: &'a mut Session,
+    joiner: &'a mut Session,
+}
+
+impl DecodeBackend for OrtBackend<'_> {
+    fn decode_step(&mut self, state: &DecoderState) -> Result<DecoderOutput> {
+        run_decoder(self.decoder, state)
+    }
+    fn joiner_step(
+        &mut self,
+        enc_frame: &[f32],
+        dec_data: &[f32],
+        logits_buf: &mut Vec<f32>,
+    ) -> Result<()> {
+        run_joiner_single(self.joiner, enc_frame, dec_data, logits_buf)
+    }
+}
+
 /// Run RNN-T greedy decode on encoder output.
 ///
 /// Encoder output layout: [1, 768, enc_len] (channels-first).
@@ -147,6 +182,19 @@ fn run_joiner_single(
 pub fn greedy_decode(
     decoder: &mut Session,
     joiner: &mut Session,
+    encoded: &[f32], // [1, 768, enc_len] — channels-first
+    encoded_len: usize,
+    blank_id: usize,
+    state: &mut DecoderState,
+) -> Result<DecodeResult> {
+    let mut backend = OrtBackend { decoder, joiner };
+    greedy_decode_impl(&mut backend, encoded, encoded_len, blank_id, state)
+}
+
+/// Backend-generic greedy decode loop. Identical behaviour to the production
+/// path; extracted so unit tests can drive it with a stub [`DecodeBackend`].
+fn greedy_decode_impl<B: DecodeBackend>(
+    backend: &mut B,
     encoded: &[f32], // [1, 768, enc_len] — channels-first
     encoded_len: usize,
     blank_id: usize,
@@ -195,7 +243,7 @@ pub fn greedy_decode(
                 }
             } else {
                 decoder_calls += 1;
-                let out = run_decoder(decoder, state)?;
+                let out = backend.decode_step(state)?;
                 cached_decoder_output = Some(out);
                 cached_decoder_output
                     .as_ref()
@@ -204,7 +252,7 @@ pub fn greedy_decode(
 
             // === JOINER CALL ===
             joiner_calls += 1;
-            run_joiner_single(joiner, &enc_frame, &decoder_out.dec_data, &mut logits_buf)?;
+            backend.joiner_step(&enc_frame, &decoder_out.dec_data, &mut logits_buf)?;
 
             // Greedy: argmax with confidence over logits
             let (token, confidence) = argmax_with_confidence(&logits_buf, blank_id);
@@ -221,15 +269,13 @@ pub fn greedy_decode(
             }
 
             if tokens_this_step >= MAX_TOKENS_PER_STEP {
-                // Token cap hit with non-blank token.
-                // Decoder state WAS updated on prior iterations of this inner loop.
-                // cached_decoder_output is STALE — do NOT enter blank run.
+                // Token cap: the joiner emitted MAX_TOKENS_PER_STEP non-blank tokens
+                // on this frame — dense speech, NOT silence. It is therefore NOT an
+                // endpoint signal, so reset the blank counter (consistent with the
+                // non-blank branch). The cached decoder output is stale.
                 in_blank_run = false;
                 cached_decoder_output = None;
-                state.consecutive_blanks += 1;
-                if state.consecutive_blanks >= ENDPOINT_BLANK_THRESHOLD && !tokens.is_empty() {
-                    endpoint_detected = true;
-                }
+                state.consecutive_blanks = 0;
                 break;
             }
 
@@ -338,5 +384,161 @@ mod tests {
         // If blank_id is the argmax, it should be returned
         let logits = vec![0.1, 0.2, 0.9]; // index 2 is max
         assert_eq!(argmax(&logits, 2), 2); // blank_id matches argmax
+    }
+
+    // --- greedy_decode tests via a deterministic stub backend (no model) ---
+
+    /// Stub backend: a scripted sequence of token ids drives the joiner's argmax;
+    /// decoder/joiner call counts are recorded so the blank-run cache can be checked.
+    struct FakeBackend {
+        script: std::collections::VecDeque<usize>,
+        vocab: usize,
+        blank_id: usize,
+        decoder_calls: u32,
+        joiner_calls: u32,
+    }
+
+    impl FakeBackend {
+        fn new(script: Vec<usize>, vocab: usize, blank_id: usize) -> Self {
+            Self {
+                script: script.into(),
+                vocab,
+                blank_id,
+                decoder_calls: 0,
+                joiner_calls: 0,
+            }
+        }
+    }
+
+    impl DecodeBackend for FakeBackend {
+        fn decode_step(&mut self, _state: &DecoderState) -> Result<DecoderOutput> {
+            self.decoder_calls += 1;
+            Ok(DecoderOutput {
+                dec_data: vec![0.0; PRED_HIDDEN],
+                new_h: vec![0.0; PRED_HIDDEN],
+                new_c: vec![0.0; PRED_HIDDEN],
+            })
+        }
+
+        fn joiner_step(
+            &mut self,
+            _enc_frame: &[f32],
+            _dec_data: &[f32],
+            logits_buf: &mut Vec<f32>,
+        ) -> Result<()> {
+            self.joiner_calls += 1;
+            // Once the script runs out, return blank so the loop terminates.
+            let tok = self.script.pop_front().unwrap_or(self.blank_id);
+            logits_buf.clear();
+            logits_buf.resize(self.vocab, 0.0);
+            logits_buf[tok] = 10.0; // argmax → tok
+            Ok(())
+        }
+    }
+
+    /// Encoder buffer of `frames` zeroed frames (content is irrelevant to the stub).
+    fn fake_enc(frames: usize) -> Vec<f32> {
+        vec![0.0_f32; ENC_DIM * frames]
+    }
+
+    #[test]
+    fn test_greedy_decode_happy_path() {
+        // vocab=5, blank=4. Frame 0 emits token 1 then blank; frame 1 emits token 2.
+        let mut backend = FakeBackend::new(vec![1, 4, 2, 4], 5, 4);
+        let mut state = DecoderState::new(4);
+        let result = greedy_decode_impl(&mut backend, &fake_enc(2), 2, 4, &mut state).unwrap();
+
+        assert_eq!(result.tokens.len(), 2);
+        assert_eq!(result.tokens[0].token_id, 1);
+        assert_eq!(result.tokens[0].frame_index, 0);
+        assert_eq!(result.tokens[1].token_id, 2);
+        assert_eq!(result.tokens[1].frame_index, 1);
+        // Last committed token updates prev_token and the LSTM state buffers.
+        assert_eq!(state.prev_token, 2);
+        assert_eq!(state.h.len(), PRED_HIDDEN);
+        assert!(!result.endpoint_detected);
+    }
+
+    #[test]
+    fn test_greedy_decode_blank_run_skips_decoder() {
+        // Frame 0: token then blank (2 decoder calls). Frames 1-3: blank only.
+        // The decoder must NOT be called again during the blank run (cache reuse).
+        let mut backend = FakeBackend::new(vec![1, 4, 4, 4, 4], 5, 4);
+        let mut state = DecoderState::new(4);
+        let result = greedy_decode_impl(&mut backend, &fake_enc(4), 4, 4, &mut state).unwrap();
+
+        assert_eq!(result.tokens.len(), 1);
+        assert_eq!(
+            backend.decoder_calls, 2,
+            "decoder must not run during the blank run"
+        );
+        assert!(backend.joiner_calls >= 5);
+    }
+
+    #[test]
+    fn test_greedy_decode_endpoint_after_threshold_blanks() {
+        // One token, then ENDPOINT_BLANK_THRESHOLD+ blanks → endpoint detected.
+        let mut script = vec![1usize];
+        script.extend(std::iter::repeat_n(4usize, ENDPOINT_BLANK_THRESHOLD + 1));
+        let frames = ENDPOINT_BLANK_THRESHOLD + 2;
+        let mut backend = FakeBackend::new(script, 5, 4);
+        let mut state = DecoderState::new(4);
+        let result =
+            greedy_decode_impl(&mut backend, &fake_enc(frames), frames, 4, &mut state).unwrap();
+
+        assert!(
+            result.endpoint_detected,
+            "{ENDPOINT_BLANK_THRESHOLD}+ blanks after a token must endpoint"
+        );
+    }
+
+    #[test]
+    fn test_greedy_decode_no_endpoint_before_first_token() {
+        // All blanks, no token emitted → the !tokens.is_empty() guard blocks endpoint.
+        let frames = ENDPOINT_BLANK_THRESHOLD + 5;
+        let mut backend = FakeBackend::new(vec![4usize; frames], 5, 4);
+        let mut state = DecoderState::new(4);
+        let result =
+            greedy_decode_impl(&mut backend, &fake_enc(frames), frames, 4, &mut state).unwrap();
+
+        assert!(result.tokens.is_empty());
+        assert!(
+            !result.endpoint_detected,
+            "blanks before any token must not endpoint"
+        );
+    }
+
+    #[test]
+    fn test_greedy_decode_token_cap_does_not_inflate_blanks() {
+        // One frame; the joiner returns a non-blank token on every call past the cap.
+        // Exactly MAX_TOKENS_PER_STEP tokens are emitted, and the token cap must NOT
+        // bump the blank counter or fire an endpoint (task 23 fix).
+        let mut backend = FakeBackend::new(vec![1usize; MAX_TOKENS_PER_STEP + 1], 5, 4);
+        let mut state = DecoderState::new(4);
+        let result = greedy_decode_impl(&mut backend, &fake_enc(1), 1, 4, &mut state).unwrap();
+
+        assert_eq!(result.tokens.len(), MAX_TOKENS_PER_STEP);
+        assert_eq!(
+            state.consecutive_blanks, 0,
+            "token cap must not inflate the blank counter"
+        );
+        assert!(!result.endpoint_detected);
+    }
+
+    #[test]
+    fn test_argmax_with_confidence_clear_winner() {
+        let (tok, conf) = argmax_with_confidence(&[0.1, 5.0, 0.2], 99);
+        assert_eq!(tok, 1);
+        assert!(
+            conf > 0.5 && conf <= 1.0,
+            "confidence should be a softmax prob in (0.5, 1], got {conf}"
+        );
+    }
+
+    #[test]
+    fn test_argmax_with_confidence_empty_returns_blank_zero() {
+        let (tok, conf) = argmax_with_confidence(&[], 1024);
+        assert_eq!(tok, 1024);
+        assert_eq!(conf, 0.0);
     }
 }
