@@ -78,6 +78,10 @@ WER is reported with a bootstrap 95% confidence interval computed by resampling 
 
 The Rust CI harness in `crates/gigastt/tests/benchmark.rs` uses a simpler digit-to-words normalization. Its WER numbers may therefore diverge from the Python benchmark on samples with digits, dates, or currency; this is tracked separately and is not part of this fix.
 
+### Dataset contamination
+
+GigaAM v3 is a SberDevices model whose fine-tuning is dominated by Golos, and Common Voice / OpenSTT-style corpora are commonly part of Russian ASR training mixes. The Golos / OpenSTT / Common Voice slices used here therefore very likely overlap GigaAM v3's training distribution, so the in-domain WER should be read as a **best-case upper bound**, not a WER on unseen data. Golos ships an official train/test split (distribution overlap, not row-level leakage); the renormalized matrix below still shows Vosk ahead on clean read speech.
+
 ## Quick Start
 
 ```bash

@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""Prepare a fresh Common Voice Russian slice for anti-contamination comparison.
+"""Prepare a candidate Common Voice Russian slice for cross-ASR comparison.
 
-Filters clips newer than the known training cutoff of the engines being compared.
+NOTE: this produces a RANDOM seed=42 slice. Common Voice 16.1 exposes no per-clip
+date column, so the date filter below is inactive and "fresh"/uncontaminated status
+is NOT guaranteed (see `anti_contamination_note` in the written manifest).
 """
 
 import argparse
@@ -44,10 +46,12 @@ def main():
     ds = load_dataset(args.dataset, args.language, split=args.split)
 
     min_age = args.min_age
-    # Common Voice has an "age" or "client_id"; use upstream_split or generated date if available.
-    # Fallback: keep the newest slice_size rows by downstream_split order.
+    # Keep non-empty, community-validated sentences (up_votes >= down_votes).
     candidates = [item for item in ds if item.get("sentence", "").strip() and (item.get("up_votes", 0) >= item.get("down_votes", 0))]
-    # If a date column exists, filter; otherwise use the tail of the split as a freshness proxy.
+    # Date filter: INACTIVE for Common Voice 16.1, which exposes no per-clip
+    # "timestamp" column, so this branch never runs. It is left as a hook for a
+    # future dataset that does publish per-clip dates; until then the selection
+    # below is a plain random sample, NOT date-filtered.
     if candidates and "timestamp" in candidates[0]:
         candidates = [c for c in candidates if str(c.get("timestamp", "")) >= min_age]
 
@@ -81,7 +85,7 @@ def main():
         "source": "https://huggingface.co/datasets/mozilla-foundation/common_voice_16_1",
         "attribution": "Mozilla Common Voice contributors",
         "license": "CC0-1.0",
-        "anti_contamination_note": "This slice contains only clips newer than the training cutoffs of all compared engines.",
+        "anti_contamination_note": "NOTE: this is a random seed=42 slice, NOT date-filtered. Common Voice 16.1 exposes no per-clip date column, so freshness/contamination filtering is not applied and uncontaminated status is NOT guaranteed.",
         "samples": samples,
     }
 
