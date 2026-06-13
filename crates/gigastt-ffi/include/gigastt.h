@@ -57,6 +57,10 @@ struct GigasttGigasttEngine *gigastt_engine_new_with_pool_size(const char *model
  * # Safety
  * - `engine` must be a non-null pointer returned by `gigastt_engine_new` and not yet freed.
  * - `wav_path` must be a valid, null-terminated UTF-8 string.
+ * - NOT thread-safe (single-threaded-per-handle): no thread may call
+ *   `gigastt_engine_free` on `engine` concurrently with this call. The early
+ *   `disposed` check rejects an already-freed handle but does not close the
+ *   in-call race.
  *
  * Returns a pointer to a NUL-terminated UTF-8 string on success, or `NULL` on failure.
  * The caller **must** free the returned string with `gigastt_string_free`.
@@ -78,7 +82,9 @@ gigastt_ void gigastt_string_free(char *s);
  *
  * # Safety
  * `engine` must be a pointer returned by `gigastt_engine_new` and not yet freed,
- * or `NULL` (in which case this is a no-op).
+ * or `NULL` (in which case this is a no-op). NOT thread-safe
+ * (single-threaded-per-handle): the caller must ensure no other call using this
+ * pointer runs concurrently with this free.
  */
 gigastt_ void gigastt_engine_free(struct GigasttGigasttEngine *engine);
 
@@ -116,6 +122,10 @@ gigastt_ struct GigasttGigasttStream *gigastt_stream_new(struct GigasttGigasttEn
  * # Safety
  * - `engine` and `stream` must be valid pointers.
  * - `pcm16_bytes` must point to at least `len` valid bytes (little-endian mono PCM16).
+ * - NOT thread-safe (single-threaded-per-handle): no thread may call
+ *   `gigastt_engine_free`/`gigastt_stream_free` on these pointers concurrently
+ *   with this call. The early `disposed` check rejects already-freed handles but
+ *   does not close the in-call race.
  *
  * Returns a newly allocated JSON array string on success, or `NULL` on failure.
  * The caller **must** free the returned string with `gigastt_string_free`.
@@ -131,7 +141,10 @@ char *gigastt_stream_process_chunk(struct GigasttGigasttEngine *engine,
  * Flush the streaming state and return the final segment(s).
  *
  * # Safety
- * `engine` and `stream` must be valid pointers.
+ * `engine` and `stream` must be valid pointers. NOT thread-safe
+ * (single-threaded-per-handle): no thread may call `gigastt_engine_free`/
+ * `gigastt_stream_free` on these pointers concurrently with this call. The early
+ * `disposed` check rejects already-freed handles but does not close the in-call race.
  *
  * Returns a newly allocated JSON array string (possibly `[]`) on success,
  * or `NULL` on failure. The caller **must** free the returned string with
@@ -146,7 +159,9 @@ char *gigastt_stream_flush(struct GigasttGigasttEngine *engine,
  *
  * # Safety
  * `stream` must be a pointer returned by `gigastt_stream_new` and not yet freed,
- * or `NULL` (in which case this is a no-op).
+ * or `NULL` (in which case this is a no-op). NOT thread-safe
+ * (single-threaded-per-handle): the caller must ensure no other call using this
+ * pointer runs concurrently with this free.
  */
 gigastt_ void gigastt_stream_free(struct GigasttGigasttStream *stream);
 
