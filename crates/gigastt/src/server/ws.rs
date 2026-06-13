@@ -412,13 +412,20 @@ async fn handle_stop_message(
     sink: &mut WsSink,
     engine: &Arc<Engine>,
     state_opt: &mut Option<gigastt_core::inference::StreamingState>,
+    reservation: &mut Option<gigastt_core::inference::OwnedReservation<SessionTriplet>>,
     peer: SocketAddr,
 ) -> Result<FrameOutcome> {
     tracing::info!("Stop received from {peer}, finalizing");
     let Some(mut state) = state_opt.take() else {
         return Ok(FrameOutcome::Break);
     };
-    let flush_seg = engine.flush_state(&mut state);
+    // Final decode of audio buffered since the last strided decode so trailing
+    // words aren't lost. Runs inline (the session is ending); falls back to a
+    // plain flush if the triplet was already returned to the pool.
+    let flush_seg = match reservation.as_mut() {
+        Some(res) => engine.finish_stream(&mut state, res),
+        None => engine.flush_state(&mut state),
+    };
     drop(state);
     let final_msg = if let Some(seg) = flush_seg {
         ServerMessage::Final(seg)
@@ -653,7 +660,14 @@ async fn handle_ws_inner(
                             .await
                         }
                         Ok(ClientMessage::Stop) => {
-                            handle_stop_message(&mut sink, engine, &mut state_opt, peer).await
+                            handle_stop_message(
+                                &mut sink,
+                                engine,
+                                &mut state_opt,
+                                &mut reservation,
+                                peer,
+                            )
+                            .await
                         }
                         Ok(_) => Ok(FrameOutcome::Continue),
                         Err(_) => {

@@ -63,7 +63,7 @@ fn streaming_transcript_matches_batch() {
             }
         }
     }
-    if let Some(seg) = engine.flush_state(&mut state)
+    if let Some(seg) = engine.finish_stream(&mut state, &mut triplet)
         && !seg.text.trim().is_empty()
     {
         committed.push(seg.text);
@@ -127,7 +127,7 @@ fn streaming_long_audio_slides_window() {
             }
         }
     }
-    if let Some(seg) = engine.flush_state(&mut state)
+    if let Some(seg) = engine.finish_stream(&mut state, &mut triplet)
         && !seg.text.trim().is_empty()
     {
         committed.push(seg.text);
