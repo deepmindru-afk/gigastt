@@ -306,7 +306,16 @@ async fn stream_to_partial_then_finalize(
 
     tracing::info!("Downloading {label}...");
 
-    let response = reqwest::get(url).await.context("HTTP request failed")?;
+    // Configured client: bound the connect/TLS handshake and per-read stalls, and
+    // cap redirects. NOT a whole-request timeout (a legitimate ~850 MB download can
+    // take minutes) and NO host pinning (HF LFS 302-redirects to a CloudFront host).
+    let client = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(30))
+        .read_timeout(std::time::Duration::from_secs(300))
+        .redirect(reqwest::redirect::Policy::limited(5))
+        .build()
+        .context("Failed to build HTTP client")?;
+    let response = client.get(url).send().await.context("HTTP request failed")?;
     let status = response.status();
     if !status.is_success() {
         anyhow::bail!("Download failed for {label}: HTTP {status}");
