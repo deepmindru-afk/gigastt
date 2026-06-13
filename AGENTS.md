@@ -19,7 +19,7 @@ exposes:
 - **SSE** (`/v1/transcribe/stream`) — file upload, streaming Server-Sent Events
 - **CLI** — `serve`, `download`, `transcribe`, `quantize` commands
 
-The model (~850 MB FP32, ~210 MB INT8) auto-downloads from HuggingFace on first
+The model (~850 MB FP32, ~225 MB INT8) auto-downloads from HuggingFace on first
 run. INT8 quantization is native Rust (no Python), always compiled since v0.9.0,
 and auto-invoked on first `serve`/`download` unless `--skip-quantize` is passed.
 
@@ -34,7 +34,7 @@ and auto-invoked on first `serve`/`download` unless `--skip-quantize` is passed.
 
 ## Technology Stack
 
-- **Language**: Rust 2024 edition, stable toolchain (1.85+)
+- **Language**: Rust 2024 edition, stable toolchain (1.88+)
 - **ONNX Runtime**: `ort` 2.0.0-rc.12
 - **Async runtime**: tokio (full features)
 - **HTTP + WebSocket server**: axum 0.8 (`ws`, `multipart`)
@@ -45,7 +45,7 @@ and auto-invoked on first `serve`/`download` unless `--skip-quantize` is passed.
 - **Audio decoding**: symphonia (AAC, MP3, OGG, FLAC, WAV, PCM)
 - **Audio resampling**: rubato 0.16
 - **FFT**: rustfft 6
-- **Protobuf**: prost 0.13 + prost-build 0.14 (build-time)
+- **Protobuf**: prost 0.14 + prost-build 0.14 (build-time)
 - **Rate limiting**: in-tree token-bucket (dashmap-backed)
 - **Metrics**: in-tree Prometheus text encoder (optional `--metrics` flag)
 
@@ -62,11 +62,16 @@ Features `coreml` and `cuda` are **mutually exclusive**. `nnapi` is not mutually
 
 ## Build Requirements
 
-- Rust 1.85+ (stable)
+- Rust 1.88+ (stable)
 - `protoc` (Protocol Buffers compiler) on `PATH` — required by `build.rs` which
   regenerates ONNX protobuf types via `prost-build`
   - macOS: `brew install protobuf`
   - Debian/Ubuntu: `apt install protobuf-compiler`
+- **Build-time network fetch:** `ort`'s default `download-binaries` feature downloads a
+  prebuilt onnxruntime native library over the network at build time (outside `Cargo.lock`,
+  verified by an embedded checksum). The "no cloud" guarantee is runtime-only. For
+  air-gapped builds, use `ort` with `default-features = false` + `load-dynamic` and pin the
+  native library via `ORT_*` env vars / `.cargo/config.toml`.
 
 ## Build Commands
 
@@ -97,7 +102,7 @@ The project uses a three-tier test architecture:
 ### Unit tests (no model required, run in CI on every PR)
 
 ```sh
-cargo test --workspace               # 163 unit tests across 15 modules
+cargo test --workspace               # unit tests across the workspace
 cargo clippy                         # Lint (zero warnings expected)
 cargo fmt --check                    # Format check
 ```
@@ -199,7 +204,7 @@ Downloaded to `~/.gigastt/models/` from `istupakov/gigaam-v3-onnx`:
 | File | Size | Purpose |
 |---|---|---|
 | `v3_e2e_rnnt_encoder.onnx` | 844 MB | Conformer encoder (FP32) |
-| `v3_e2e_rnnt_encoder_int8.onnx` | ~210 MB | Quantized encoder (auto-generated) |
+| `v3_e2e_rnnt_encoder_int8.onnx` | ~225 MB | Quantized encoder (auto-generated) |
 | `v3_e2e_rnnt_decoder.onnx` | 4.4 MB | LSTM decoder |
 | `v3_e2e_rnnt_joint.onnx` | 2.6 MB | RNN-T joiner |
 | `v3_e2e_rnnt_vocab.txt` | small | BPE vocabulary (1025 tokens) |

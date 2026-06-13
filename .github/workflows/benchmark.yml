@@ -62,7 +62,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip
-          pip install -r benchmark/requirements.txt
+          pip install -r benchmark/requirements.lock.txt
 
       - name: Run benchmark
         run: |

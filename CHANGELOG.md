@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `rust-version = "1.88"`, so any cold-registry build on 1.87 (including the
   Docker images) fails at resolution. The MSRV CI job had stayed green only
   thanks to a warm cargo cache.
+- **Dependency note — `ort`/`ort-sys` are pinned to the pre-release `2.0.0-rc.12`.** No
+  stable `ort` 2.0.x exists yet (the whole Rust ONNX stack is on release candidates); the
+  plan is to track the stable release and update. `ort`'s default `download-binaries`
+  feature also fetches a prebuilt onnxruntime over the network at build time.
 
 ### Fixed
 

@@ -32,6 +32,17 @@ WER is unchanged by this switch: whisper.cpp still uses the same `large-v3` Russ
 
 WER is computed after symmetric text normalization so that Russian number words and Arabic digits become comparable tokens. The same pipeline is applied to the reference and the hypothesis for every engine; there are no per-engine branches.
 
+**Caveat — the benefit of normalization is not engine-neutral.** Although the *same* function runs on reference and hypothesis with no per-engine branches, the words-to-digits ITN and the anglicism map can only fire on hypotheses that contain Arabic digits or Latin tokens. Engines that emit digits/Latin (gigastt, whisper) get a large WER reduction from normalization; a word-only engine like Vosk gets none (and even loses a little). Measured on `golos_crowd_1k`, recomputed from the committed `results_full/*.json` (not a new run):
+
+| Engine | naive WER | ITN WER | Δ |
+|---|---|---|---|
+| gigastt | 14.40 | 8.60 | **−5.80** |
+| whisper.cpp | 20.63 | 15.26 | **−5.37** |
+| faster-whisper | 20.51 | 15.53 | **−4.97** |
+| Vosk | 4.57 | 4.82 | **+0.25** |
+
+Normalization is therefore the single largest lever on the reported WER gap, and it rewards gigastt's output style: much of gigastt's lead over Vosk on clean read speech in the ITN-digit numbers is produced by the normalization itself, not by acoustics. (*naive* = lowercase + `ё`→`е` + strip everything outside `[a-zа-я0-9\s]` + split; *ITN* = the pipeline below.)
+
 The normalization steps are:
 
 1. Lowercase and replace `ё` with `е`.
@@ -66,6 +77,10 @@ WER is reported with a bootstrap 95% confidence interval computed by resampling 
 ### CI / Rust harness divergence note
 
 The Rust CI harness in `crates/gigastt/tests/benchmark.rs` uses a simpler digit-to-words normalization. Its WER numbers may therefore diverge from the Python benchmark on samples with digits, dates, or currency; this is tracked separately and is not part of this fix.
+
+### Dataset contamination
+
+GigaAM v3 is a SberDevices model whose fine-tuning is dominated by Golos, and Common Voice / OpenSTT-style corpora are commonly part of Russian ASR training mixes. The Golos / OpenSTT / Common Voice slices used here therefore very likely overlap GigaAM v3's training distribution, so the in-domain WER should be read as a **best-case upper bound**, not a WER on unseen data. Golos ships an official train/test split (distribution overlap, not row-level leakage); the renormalized matrix below still shows Vosk ahead on clean read speech.
 
 ## Quick Start
 
@@ -286,7 +301,7 @@ Existing result files were recomputed with the new symmetric words-to-digits nor
 
 ### Residual errors
 
-On `golos_crowd_1k` gigastt reaches ~8.6% WER after renormalization (down from 10.77%). The residual errors are dominated by:
+On `golos_crowd_1k` gigastt reaches 8.60% WER after renormalization (down from 10.77%) — the flagship number used in the README (1000 samples, 95% CI [7.51%, 9.66%]). The residual errors are dominated by:
 
 - **Foreign brand / artist / product names** output in original Latin spelling by gigastt (and whisper) while the reference uses Russian transliteration, e.g. "Fashion TV" vs "фэшн ти ви", "Okko" vs "окко", "Bon Jovi" vs "бона джови". Roughly 45–50% of remaining error tokens fall in this category.
 - **Real ASR errors or partial hypotheses**, including mis-heard words, substitutions, and truncated outputs on long digit strings. About half of the residual errors are genuine recognition mistakes rather than normalization mismatches.

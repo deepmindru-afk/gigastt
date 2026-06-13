@@ -1,0 +1,32 @@
+gigastt — Benchmark Data License Notice
+=======================================
+
+The data under `benchmark/` — the manifest files (`benchmark/manifests/*.json`)
+and the `reference` / `hypothesis` text fields inside
+`benchmark/results_full/*.json` — are NOT covered by the project's MIT license
+(see `/LICENSE`). The MIT license applies only to the gigastt source code. These
+benchmark transcripts retain the upstream non-commercial licenses of the datasets
+they are derived from, and are included solely to make the benchmark reproducible.
+
+Open STT
+--------
+Files: `manifests/openstt_calls.json`, `manifests/openstt_youtube.json`, and the
+corresponding `results_full/openstt_*.json`.
+- Source:  https://github.com/snakers4/open_stt
+- License: CC BY-NC 4.0 (Attribution, NonCommercial)
+           https://creativecommons.org/licenses/by-nc/4.0/
+
+Golos
+-----
+Files: `manifests/golos_crowd_1k.json`, `manifests/golos_farfield.json`, and the
+corresponding `results_full/golos_*.json`.
+- Source:  https://github.com/sberdevices/golos
+- License: Sber Public License (Attribution / NonCommercial / ShareAlike)
+           https://github.com/sberdevices/golos/blob/master/license/en_us.pdf
+
+Commercial use of these transcripts is governed by the upstream licenses above,
+NOT by the MIT license.
+
+Future option: the reference text could instead be replaced by source IDs +
+checksums to avoid redistributing transcripts; this is not done here in order to
+preserve reproducibility of the already-committed benchmark results.

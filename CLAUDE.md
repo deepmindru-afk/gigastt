@@ -17,7 +17,7 @@ cargo build                          # CPU-only debug build (default, any platfo
 cargo build --features coreml        # macOS ARM64 (CoreML / Neural Engine)
 cargo build --features cuda          # Linux x86_64 (CUDA 12+)
 cargo build --release                # Release build (LTO, stripped)
-cargo test --workspace               # Run all 163 unit tests, CPU (no model required)
+cargo test --workspace               # Run all unit tests, CPU (no model required)
 cargo test --features coreml         # Same tests with CoreML EP enabled (macOS)
 cargo test --test e2e_rest --test e2e_ws --test e2e_errors --test e2e_shutdown --test e2e_rate_limit -- --ignored --test-threads=1  # E2E tests (requires model)
 cargo test --test load_test -- --ignored           # Load tests (requires model, local only)
@@ -27,11 +27,13 @@ cargo clippy             # Lint (no expected warnings)
 
 Note: `cargo build` requires `protoc` in `PATH` for the in-tree ONNX quantization pipeline (see `build.rs`). Install via `brew install protobuf` (macOS) or `apt install protobuf-compiler` (Debian/Ubuntu).
 
+Note (build-time network fetch): `ort`'s default `download-binaries` feature makes `ort-sys` download a prebuilt onnxruntime native library over the network at build time, outside `Cargo.lock` (the download is verified by an embedded checksum). The "no cloud / full privacy" guarantee covers **runtime** inference, not the build process. For air-gapped/offline builds, use `ort` with `default-features = false` + the `load-dynamic` feature (or a vendored onnxruntime) and pin the native library via `ORT_*` env vars / `.cargo/config.toml`.
+
 Model download (required for E2E testing and file transcription, ~850MB):
 ```sh
 cargo run -- download                    # Downloads to ~/.gigastt/models/ and auto-generates INT8 encoder
 cargo run -- download --skip-quantize    # Skip auto-quantization (FP32 only)
-cargo run -- quantize                    # Regenerate INT8 encoder manually (~210MB)
+cargo run -- quantize                    # Regenerate INT8 encoder manually (~225MB)
 ```
 
 ## Docker
@@ -91,7 +93,7 @@ crates/
   - Caches compiled models in `~/.gigastt/models/coreml_cache/`
 - **CUDA execution provider** (`--features cuda`, Linux x86_64 CUDA 12+): GPU inference via ONNX Runtime CUDA EP
   - Features are compile-time and mutually exclusive; default build uses CPU EP on all platforms
-- **INT8 quantization** (always compiled, auto-invoked since v0.9.0): encoder_int8.onnx (~210MB vs 844MB)
+- **INT8 quantization** (always compiled, auto-invoked since v0.9.0): encoder_int8.onnx (~225MB vs 844MB)
   - Rust-native quantization in `crates/gigastt-core/src/quantize.rs` (no Cargo feature required; `quantize` feature kept as no-op for backward compat)
   - Auto-invoked by `gigastt download` and `gigastt serve` on first run (~2 min one-time)
   - Opt out with `--skip-quantize` or `GIGASTT_SKIP_QUANTIZE=1`
@@ -145,7 +147,7 @@ Three-tier test architecture:
 **Unit tests** (no model required, run in CI on every PR):
 - Live in `#[cfg(test)] mod tests` at bottom of each file
 - Use synthetic data, test names: `test_<what>_<expected_behavior>`
-- 163 unit tests across 3 crates (as of v2.0.3)
+- 270+ unit tests across 3 crates
 - `cargo test` — runs all unit tests
 
 **E2E tests** (require model ~850MB, run in CI on main push only):
@@ -199,7 +201,7 @@ Three-tier test architecture:
 
 GigaAM v3 e2e_rnnt from `istupakov/gigaam-v3-onnx` on HuggingFace:
 - Files: `v3_e2e_rnnt_{encoder,decoder,joint}.onnx` + `v3_e2e_rnnt_vocab.txt`
-- Encoder: 844MB (FP32) or 210MB (INT8 quantized), Decoder: 4.4MB, Joiner: 2.6MB
+- Encoder: 844MB (FP32) or 225MB (INT8 quantized), Decoder: 4.4MB, Joiner: 2.6MB
 - Sample rate: 16kHz, Features: 64 mel bins
 - ONNX tensors: encoder out `[1, 768, T]` (channels-first), decoder state `[1, 1, 320]`
 
@@ -208,7 +210,7 @@ GigaAM v3 e2e_rnnt from `istupakov/gigaam-v3-onnx` on HuggingFace:
 Rust-native quantization via `crates/gigastt-core/src/quantize.rs` (always compiled since v0.9.0):
 ```sh
 cargo run -- quantize --model-dir ~/.gigastt/models
-# Produces: v3_e2e_rnnt_encoder_int8.onnx (~210MB, ~4x smaller, ~43% faster)
+# Produces: v3_e2e_rnnt_encoder_int8.onnx (~225MB, ~4x smaller, ~43% faster)
 ```
 
 Engine auto-detects and prefers INT8 if available; falls back to FP32.

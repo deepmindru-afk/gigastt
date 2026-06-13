@@ -107,6 +107,10 @@ pub unsafe extern "C" fn gigastt_engine_new_with_pool_size(
 /// # Safety
 /// - `engine` must be a non-null pointer returned by `gigastt_engine_new` and not yet freed.
 /// - `wav_path` must be a valid, null-terminated UTF-8 string.
+/// - NOT thread-safe (single-threaded-per-handle): no thread may call
+///   `gigastt_engine_free` on `engine` concurrently with this call. The early
+///   `disposed` check rejects an already-freed handle but does not close the
+///   in-call race.
 ///
 /// Returns a pointer to a NUL-terminated UTF-8 string on success, or `NULL` on failure.
 /// The caller **must** free the returned string with `gigastt_string_free`.
@@ -118,6 +122,13 @@ pub unsafe extern "C" fn gigastt_transcribe_file(
     if engine.is_null() {
         tracing::error!("gigastt_transcribe_file: engine is null");
         eprintln!("gigastt_transcribe_file: engine is null");
+        return ptr::null_mut();
+    }
+    // Early disposed check (Acquire): reject an already-freed engine before any
+    // dereference. Does NOT close the in-call race — see the # Safety contract.
+    if unsafe { (*engine).disposed.load(Ordering::Acquire) } {
+        tracing::error!("gigastt_transcribe_file: engine is disposed");
+        eprintln!("gigastt_transcribe_file: engine is disposed");
         return ptr::null_mut();
     }
     if wav_path.is_null() {
@@ -232,12 +243,14 @@ pub unsafe extern "C" fn gigastt_string_free(s: *mut c_char) {
 ///
 /// # Safety
 /// `engine` must be a pointer returned by `gigastt_engine_new` and not yet freed,
-/// or `NULL` (in which case this is a no-op).
+/// or `NULL` (in which case this is a no-op). NOT thread-safe
+/// (single-threaded-per-handle): the caller must ensure no other call using this
+/// pointer runs concurrently with this free.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn gigastt_engine_free(engine: *mut GigasttEngine) {
     if !engine.is_null() {
         let disposed = unsafe { std::ptr::addr_of_mut!((*engine).disposed) };
-        if unsafe { (*disposed).swap(true, Ordering::Relaxed) } {
+        if unsafe { (*disposed).swap(true, Ordering::AcqRel) } {
             return;
         }
         let _ = unsafe { Box::from_raw(engine) };
@@ -347,6 +360,10 @@ pub unsafe extern "C" fn gigastt_stream_new(engine: *mut GigasttEngine) -> *mut 
 /// # Safety
 /// - `engine` and `stream` must be valid pointers.
 /// - `pcm16_bytes` must point to at least `len` valid bytes (little-endian mono PCM16).
+/// - NOT thread-safe (single-threaded-per-handle): no thread may call
+///   `gigastt_engine_free`/`gigastt_stream_free` on these pointers concurrently
+///   with this call. The early `disposed` check rejects already-freed handles but
+///   does not close the in-call race.
 ///
 /// Returns a newly allocated JSON array string on success, or `NULL` on failure.
 /// The caller **must** free the returned string with `gigastt_string_free`.
@@ -368,6 +385,14 @@ pub unsafe extern "C" fn gigastt_stream_process_chunk(
     }
     if pcm16_bytes.is_null() {
         tracing::error!("gigastt_stream_process_chunk: pcm16_bytes is null");
+        return ptr::null_mut();
+    }
+    // Early disposed check (Acquire): reject already-freed handles before any
+    // dereference. Does NOT close the in-call race — see the # Safety contract.
+    if unsafe { (*engine).disposed.load(Ordering::Acquire) }
+        || unsafe { (*stream).disposed.load(Ordering::Acquire) }
+    {
+        tracing::error!("gigastt_stream_process_chunk: engine or stream is disposed");
         return ptr::null_mut();
     }
 
@@ -425,7 +450,10 @@ pub unsafe extern "C" fn gigastt_stream_process_chunk(
 /// Flush the streaming state and return the final segment(s).
 ///
 /// # Safety
-/// `engine` and `stream` must be valid pointers.
+/// `engine` and `stream` must be valid pointers. NOT thread-safe
+/// (single-threaded-per-handle): no thread may call `gigastt_engine_free`/
+/// `gigastt_stream_free` on these pointers concurrently with this call. The early
+/// `disposed` check rejects already-freed handles but does not close the in-call race.
 ///
 /// Returns a newly allocated JSON array string (possibly `[]`) on success,
 /// or `NULL` on failure. The caller **must** free the returned string with
@@ -441,6 +469,14 @@ pub unsafe extern "C" fn gigastt_stream_flush(
     }
     if stream.is_null() {
         tracing::error!("gigastt_stream_flush: stream is null");
+        return ptr::null_mut();
+    }
+    // Early disposed check (Acquire): reject already-freed handles before any
+    // dereference. Does NOT close the in-call race — see the # Safety contract.
+    if unsafe { (*engine).disposed.load(Ordering::Acquire) }
+        || unsafe { (*stream).disposed.load(Ordering::Acquire) }
+    {
+        tracing::error!("gigastt_stream_flush: engine or stream is disposed");
         return ptr::null_mut();
     }
 
@@ -463,12 +499,14 @@ pub unsafe extern "C" fn gigastt_stream_flush(
 ///
 /// # Safety
 /// `stream` must be a pointer returned by `gigastt_stream_new` and not yet freed,
-/// or `NULL` (in which case this is a no-op).
+/// or `NULL` (in which case this is a no-op). NOT thread-safe
+/// (single-threaded-per-handle): the caller must ensure no other call using this
+/// pointer runs concurrently with this free.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn gigastt_stream_free(stream: *mut GigasttStream) {
     if !stream.is_null() {
         let disposed = unsafe { std::ptr::addr_of_mut!((*stream).disposed) };
-        if unsafe { (*disposed).swap(true, Ordering::Relaxed) } {
+        if unsafe { (*disposed).swap(true, Ordering::AcqRel) } {
             return;
         }
         let stream = unsafe { Box::from_raw(stream) };
