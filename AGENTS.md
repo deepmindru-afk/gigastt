@@ -45,7 +45,7 @@ and auto-invoked on first `serve`/`download` unless `--skip-quantize` is passed.
 - **Audio decoding**: symphonia (AAC, MP3, OGG, FLAC, WAV, PCM)
 - **Audio resampling**: rubato 0.16
 - **FFT**: rustfft 6
-- **Protobuf**: prost 0.13 + prost-build 0.14 (build-time)
+- **Protobuf**: prost 0.14 + prost-build 0.14 (build-time)
 - **Rate limiting**: in-tree token-bucket (dashmap-backed)
 - **Metrics**: in-tree Prometheus text encoder (optional `--metrics` flag)
 
@@ -67,6 +67,11 @@ Features `coreml` and `cuda` are **mutually exclusive**. `nnapi` is not mutually
   regenerates ONNX protobuf types via `prost-build`
   - macOS: `brew install protobuf`
   - Debian/Ubuntu: `apt install protobuf-compiler`
+- **Build-time network fetch:** `ort`'s default `download-binaries` feature downloads a
+  prebuilt onnxruntime native library over the network at build time (outside `Cargo.lock`,
+  verified by an embedded checksum). The "no cloud" guarantee is runtime-only. For
+  air-gapped builds, use `ort` with `default-features = false` + `load-dynamic` and pin the
+  native library via `ORT_*` env vars / `.cargo/config.toml`.
 
 ## Build Commands
 
