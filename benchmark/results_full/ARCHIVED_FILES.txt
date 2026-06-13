@@ -1,0 +1,37 @@
+# Archived benchmark result files
+# Archive date: 2026-06-13 09:43:15 UTC
+# These are the full 4×4 benchmark matrix results using the new normalization.
+# 16 original + 16 _renorm.json files (32 total).
+
+benchmark/results_full/golos_crowd_1k_faster_whisper.json
+benchmark/results_full/golos_crowd_1k_faster_whisper_renorm.json
+benchmark/results_full/golos_crowd_1k_gigastt.json
+benchmark/results_full/golos_crowd_1k_gigastt_renorm.json
+benchmark/results_full/golos_crowd_1k_vosk.json
+benchmark/results_full/golos_crowd_1k_vosk_renorm.json
+benchmark/results_full/golos_crowd_1k_whisper_cpp.json
+benchmark/results_full/golos_crowd_1k_whisper_cpp_renorm.json
+benchmark/results_full/golos_farfield_faster_whisper.json
+benchmark/results_full/golos_farfield_faster_whisper_renorm.json
+benchmark/results_full/golos_farfield_gigastt.json
+benchmark/results_full/golos_farfield_gigastt_renorm.json
+benchmark/results_full/golos_farfield_vosk.json
+benchmark/results_full/golos_farfield_vosk_renorm.json
+benchmark/results_full/golos_farfield_whisper_cpp.json
+benchmark/results_full/golos_farfield_whisper_cpp_renorm.json
+benchmark/results_full/openstt_calls_faster_whisper.json
+benchmark/results_full/openstt_calls_faster_whisper_renorm.json
+benchmark/results_full/openstt_calls_gigastt.json
+benchmark/results_full/openstt_calls_gigastt_renorm.json
+benchmark/results_full/openstt_calls_vosk.json
+benchmark/results_full/openstt_calls_vosk_renorm.json
+benchmark/results_full/openstt_calls_whisper_cpp.json
+benchmark/results_full/openstt_calls_whisper_cpp_renorm.json
+benchmark/results_full/openstt_youtube_faster_whisper.json
+benchmark/results_full/openstt_youtube_faster_whisper_renorm.json
+benchmark/results_full/openstt_youtube_gigastt.json
+benchmark/results_full/openstt_youtube_gigastt_renorm.json
+benchmark/results_full/openstt_youtube_vosk.json
+benchmark/results_full/openstt_youtube_vosk_renorm.json
+benchmark/results_full/openstt_youtube_whisper_cpp.json
+benchmark/results_full/openstt_youtube_whisper_cpp_renorm.json
