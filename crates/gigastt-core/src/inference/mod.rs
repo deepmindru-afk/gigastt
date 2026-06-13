@@ -89,6 +89,14 @@ const ENCODER_SUBSAMPLING: usize = 4;
 /// Seconds per encoder frame (HOP_LENGTH * ENCODER_SUBSAMPLING / 16000 = 0.04s).
 const SECONDS_PER_FRAME: f64 = (HOP_LENGTH as f64 * ENCODER_SUBSAMPLING as f64) / 16000.0;
 
+/// Max streaming encoder window before forcing a finalize (samples @16kHz, 5s).
+/// Re-decoding the whole window each chunk gives the offline Conformer left
+/// context; this cap bounds the per-chunk encoder cost.
+const STREAM_MAX_WINDOW_SAMPLES: usize = 16000 * 5;
+/// Left-context audio retained across a streaming finalize/slide (samples @16kHz,
+/// ~1.5s) so the next window keeps acoustic context instead of restarting cold.
+const STREAM_LEFT_CONTEXT_SAMPLES: usize = 16000 * 3 / 2;
+
 /// Default number of session triplets in the pool.
 #[cfg(target_os = "android")]
 const DEFAULT_POOL_SIZE: usize = 1;
@@ -486,8 +494,13 @@ pub struct StreamingState {
     pub audio_buffer: Vec<f32>,
     /// Accumulated transcript builder (reset on endpointing).
     pub assembler: TranscriptAssembler,
-    /// Total encoder frames processed so far (for absolute timestamp offset).
-    pub total_frames: usize,
+    /// Absolute sample offset (@16kHz) of `audio_buffer[0]`: how much committed
+    /// audio has slid off the front. Drives absolute word timestamps
+    /// (encoder-frame offset = this / (HOP_LENGTH * ENCODER_SUBSAMPLING)).
+    pub window_start_samples: usize,
+    /// Leading samples of `audio_buffer` that are already-emitted left context;
+    /// words decoded within this region are suppressed (not re-emitted).
+    pub context_samples: usize,
     /// Optional cached resampler for non-16kHz streams.
     pub resampler: Option<rubato::Async<f32>>,
     /// Reusable FFT buffer for mel spectrogram (avoids per-chunk allocation).
@@ -583,6 +596,19 @@ impl TranscriptAssembler {
             self.text.push_str(&w.word);
         }
         self.words.extend(new_words);
+    }
+
+    /// Replace the accumulated transcript with a freshly decoded hypothesis.
+    ///
+    /// The sliding-window streaming path re-decodes its whole context window on
+    /// every chunk, so it overwrites (rather than appends) the current tail.
+    pub fn set_words(&mut self, words: Vec<WordInfo>) {
+        self.text = words
+            .iter()
+            .map(|w| w.word.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
+        self.words = words;
     }
 
     /// Build a **final** segment and reset internal accumulation.
@@ -1125,7 +1151,8 @@ impl Engine {
             decoder: DecoderState::new(self.tokenizer.blank_id()),
             audio_buffer: Vec::new(),
             assembler: TranscriptAssembler::new(),
-            total_frames: 0,
+            window_start_samples: 0,
+            context_samples: 0,
             resampler: None,
             mel_fft_input: Vec::new(),
             mel_power: Vec::new(),
@@ -1155,9 +1182,8 @@ impl Engine {
             return Ok(vec![]);
         }
 
-        // Keep a copy of the 16kHz samples for diarization before the buffer
-        // logic potentially pads/realigns them. Skip allocation when diarization
-        // is not active for this session.
+        // Diarization needs the raw 16kHz chunk before it is folded into the
+        // sliding window. Skip the allocation when diarization is inactive.
         #[cfg(feature = "diarization")]
         let samples_16k_copy = if state.diarization_state.is_some() {
             Some(samples.to_vec())
@@ -1165,25 +1191,24 @@ impl Engine {
             None
         };
 
-        let usable = match self
-            .features
-            .prepare_buffer(samples, &mut state.audio_buffer)
-        {
-            Some(n) => n,
-            None => return Ok(vec![]),
-        };
-        let samples = &state.audio_buffer[..usable];
+        // Sliding-window streaming: accumulate audio and re-run the encoder on
+        // the whole retained window each chunk, so the offline Conformer always
+        // has left context — an isolated ~100ms chunk decodes to garbage. The
+        // window is bounded by STREAM_MAX_WINDOW_SAMPLES; on endpoint or cap we
+        // finalize the tail and slide, keeping STREAM_LEFT_CONTEXT_SAMPLES of
+        // acoustic context for the next decode.
+        state.audio_buffer.extend_from_slice(samples);
+        if state.audio_buffer.len() < N_FFT {
+            return Ok(vec![]);
+        }
 
         let mel_start = std::time::Instant::now();
         let num_frames = self.features.compute_mel(
-            samples,
+            &state.audio_buffer,
             &mut state.mel_fft_input,
             &mut state.mel_power,
             &mut state.mel_output,
         );
-        audio::consume_audio_buffer(&mut state.audio_buffer, usable);
-
-        let features = &state.mel_output[..];
         tracing::debug!(
             elapsed_us = mel_start.elapsed().as_micros() as u64,
             "mel_compute"
@@ -1192,19 +1217,35 @@ impl Engine {
             return Ok(vec![]);
         }
 
-        #[cfg_attr(not(feature = "diarization"), allow(unused_mut))]
-        let (mut new_words, endpoint) = self
+        // Encoder-frame offset of the window start (drift-free: a single division
+        // over the cumulative slid-off sample count).
+        let frame_offset = state.window_start_samples / (HOP_LENGTH * ENCODER_SUBSAMPLING);
+
+        // Re-decode the whole window from a fresh decoder state: the window
+        // overlaps the previous one, so persisting the LSTM state would
+        // double-condition the prediction network.
+        let mut decoder_state = DecoderState::new(self.tokenizer.blank_id());
+        let (all_words, endpoint) = self
             .run_inference(
                 triplet,
-                features,
+                &state.mel_output[..],
                 num_frames,
-                &mut state.decoder,
-                state.total_frames,
+                &mut decoder_state,
+                frame_offset,
             )
             .map_err(|e| GigasttError::Inference { source: e.into() })?;
-        state.total_frames += num_frames;
 
-        // --- Diarization: feed audio to the streaming pipeline and assign speakers ---
+        // Suppress words inside the already-emitted left context so a slid
+        // window does not re-emit committed words.
+        let window_start_s = frame_offset as f64 * SECONDS_PER_FRAME;
+        let context_boundary_s = window_start_s + state.context_samples as f64 / 16000.0;
+        #[cfg_attr(not(feature = "diarization"), allow(unused_mut))]
+        let mut tail: Vec<WordInfo> = all_words
+            .into_iter()
+            .filter(|w| w.start + f64::EPSILON >= context_boundary_s)
+            .collect();
+
+        // --- Diarization: feed this chunk's audio and tag the tail words. ---
         #[cfg(feature = "diarization")]
         if let (Some(dia), Some(copy)) =
             (state.diarization_state.as_mut(), samples_16k_copy.as_ref())
@@ -1212,33 +1253,38 @@ impl Engine {
             if let Err(e) = dia.feed(copy) {
                 tracing::warn!("Diarization feed failed: {e:#}");
             }
-
-            // The streaming pipeline finalizes a speaker turn when a speech
-            // region ends; annotate this chunk's words with the most recently
-            // identified speaker.
             if let Some(turn) = dia.turns().last() {
                 let speaker = turn.speaker.0;
-                for w in &mut new_words {
+                for w in &mut tail {
                     w.speaker = Some(speaker);
                 }
             }
         }
 
-        if new_words.is_empty() && !endpoint {
-            return Ok(vec![]);
-        }
-
-        // Accumulate new words
-        state.assembler.append(new_words);
-
+        state.assembler.set_words(tail);
         let ts = now_timestamp();
 
-        if endpoint {
-            state.decoder.consecutive_blanks = 0;
-            Ok(vec![state.assembler.finalize(ts)])
-        } else {
-            Ok(vec![state.assembler.partial(ts)])
+        let over_cap = state.audio_buffer.len() >= STREAM_MAX_WINDOW_SAMPLES;
+        if endpoint || over_cap {
+            let seg = state.assembler.finalize(ts);
+            // Slide: retain the trailing left-context window for the next decode.
+            let keep = STREAM_LEFT_CONTEXT_SAMPLES.min(state.audio_buffer.len());
+            let slide_off = state.audio_buffer.len() - keep;
+            if slide_off > 0 {
+                audio::consume_audio_buffer(&mut state.audio_buffer, slide_off);
+                state.window_start_samples += slide_off;
+            }
+            state.context_samples = keep;
+            if seg.text.trim().is_empty() {
+                return Ok(vec![]);
+            }
+            return Ok(vec![seg]);
         }
+
+        if state.assembler.is_empty() {
+            return Ok(vec![]);
+        }
+        Ok(vec![state.assembler.partial(ts)])
     }
 
     /// Flush accumulated text as a Final segment (called on Stop/Close).
