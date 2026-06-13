@@ -19,6 +19,11 @@ class Gigastt < Formula
     if Hardware::CPU.arm?
       url "https://github.com/ekhodzitsky/gigastt/releases/download/v2.0.14/gigastt-2.0.14-aarch64-apple-darwin.tar.gz"
       sha256 "abbbbf46c4faea56afa3d44a3c0b202b8b4f375d9047b1a14ec10844a519f223"
+    elsif Hardware::CPU.intel?
+      # sha256 is a placeholder; .github/workflows/homebrew.yml overwrites it
+      # from SHA256SUMS.txt after the first release carrying this target.
+      url "https://github.com/ekhodzitsky/gigastt/releases/download/v2.0.14/gigastt-2.0.14-x86_64-apple-darwin.tar.gz"
+      sha256 "0000000000000000000000000000000000000000000000000000000000000000"
     end
   end
 
@@ -26,6 +31,11 @@ class Gigastt < Formula
     if Hardware::CPU.intel?
       url "https://github.com/ekhodzitsky/gigastt/releases/download/v2.0.14/gigastt-2.0.14-x86_64-unknown-linux-gnu.tar.gz"
       sha256 "1140d4a1628857933f691ad21c2eb49be54bcddf30d90b2e688b764f5783cb0b"
+    elsif Hardware::CPU.arm?
+      # sha256 is a placeholder; .github/workflows/homebrew.yml overwrites it
+      # from SHA256SUMS.txt after the first release carrying this target.
+      url "https://github.com/ekhodzitsky/gigastt/releases/download/v2.0.14/gigastt-2.0.14-aarch64-unknown-linux-gnu.tar.gz"
+      sha256 "0000000000000000000000000000000000000000000000000000000000000000"
     end
   end
 
