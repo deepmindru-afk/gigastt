@@ -301,7 +301,7 @@ Existing result files were recomputed with the new symmetric words-to-digits nor
 
 ### Residual errors
 
-On `golos_crowd_1k` gigastt reaches ~8.6% WER after renormalization (down from 10.77%). The residual errors are dominated by:
+On `golos_crowd_1k` gigastt reaches 8.60% WER after renormalization (down from 10.77%) — the flagship number used in the README (1000 samples, 95% CI [7.51%, 9.66%]). The residual errors are dominated by:
 
 - **Foreign brand / artist / product names** output in original Latin spelling by gigastt (and whisper) while the reference uses Russian transliteration, e.g. "Fashion TV" vs "фэшн ти ви", "Okko" vs "окко", "Bon Jovi" vs "бона джови". Roughly 45–50% of remaining error tokens fall in this category.
 - **Real ASR errors or partial hypotheses**, including mis-heard words, substitutions, and truncated outputs on long digit strings. About half of the residual errors are genuine recognition mistakes rather than normalization mismatches.
