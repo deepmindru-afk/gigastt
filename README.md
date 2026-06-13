@@ -256,6 +256,8 @@ java -jar client.jar recording.wav
 
 > **Note:** Vosk leads on this clean-speech subset (Golos crowd) with excellent accuracy, but requires 1.3 GB. gigastt targets **streaming real-time** use-cases with sub-200ms latency, hardware acceleration (CoreML/CUDA/NNAPI), and a 6× smaller model footprint.
 
+> **Dataset contamination caveat:** GigaAM v3 is a SberDevices model whose fine-tuning is dominated by Golos, and Common Voice / OpenSTT-style corpora are commonly part of Russian ASR training mixes — so the Golos / OpenSTT / Common Voice slices here very likely overlap GigaAM v3's training distribution. Treat the headline in-domain WER (Golos crowd) as a **best-case upper bound**, not a WER on unseen data. Golos does ship an official train/test split (so this is distribution overlap, not row-level leakage), and as the table above shows Vosk still leads on clean read speech.
+
 ### Cross-Domain Comparison (1 000-sample slices, CPU)
 
 A single clean-speech dataset does not tell the whole story. The benchmark now
