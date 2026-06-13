@@ -1,10 +1,14 @@
-"""Runner for Vosk 0.54 (Zipformer2) — a newer Russian model alongside 0.42.
+"""Runner for Vosk 0.54 — NOTE: NOT a drop-in for the Kaldi vosk-api.
 
-Reuses ``VoskRunner``'s alphacephei ZIP download + ``KaldiRecognizer`` path; only
-the default model name differs, so both Vosk versions show up side-by-side in the
-results table. The exact model id should be confirmed against
-https://alphacephei.com/vosk/models (override with ``BENCHMARK_VOSK054_MODEL``)
-before a full run.
+De-risk finding (2026-06-14): ``vosk-model-ru-0.54`` on alphacephei is a **Zipformer2
+ONNX** bundle — it ships ``am-onnx/``, ``decode-onnx.py``, ``lang/``, ``lm/`` and is
+*not* a Kaldi model. ``vosk.Model()`` rejects it ("Folder does not contain model
+files"), so this runner cannot reuse the 0.42 ``KaldiRecognizer`` path. Integrating
+0.54 needs an onnxruntime backend (its bundled ``decode-onnx.py``) or sherpa-onnx,
+both of which support Zipformer2 ONNX models.
+
+Until that backend is wired, ``is_available()`` returns ``False`` so the full suite
+skips Vosk 0.54 cleanly instead of recording 100% failures. Tracked as a follow-up.
 """
 
 import os
@@ -19,3 +23,12 @@ class Vosk054Runner(VoskRunner):
         if model_name is None:
             model_name = os.environ.get("BENCHMARK_VOSK054_MODEL", "vosk-model-ru-0.54")
         super().__init__(model_name=model_name, download_dir=download_dir)
+
+    def is_available(self) -> bool:
+        # vosk-model-ru-0.54 is a Zipformer2 ONNX bundle, not a Kaldi model the
+        # vosk-api can load. Skip until a sherpa-onnx / onnxruntime backend is wired.
+        print(
+            "[vosk-0.54] Not available: vosk-model-ru-0.54 is a Zipformer2 ONNX model, "
+            "not loadable by vosk-api; needs a sherpa-onnx/onnxruntime backend (follow-up)."
+        )
+        return False
