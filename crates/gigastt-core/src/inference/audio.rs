@@ -13,6 +13,14 @@ use super::{HOP_LENGTH, N_FFT};
 
 const MAX_BUFFER_SAMPLES: usize = 16000 * 5; // 5 seconds at 16kHz
 const MAX_DURATION_S: f64 = 600.0; // 10 minutes
+/// Upper bound on a header-declared sample rate. Legal rates (8k–48k) stay well
+/// below this; anything above is a malformed/adversarial header and is rejected
+/// before it can scale the duration cap or the capacity hint.
+const MAX_SAMPLE_RATE: u32 = 192_000;
+/// Ceiling used to size the duration cap and capacity hint. The header's
+/// `sample_rate` is clamped to this when computing the sample budget, so a
+/// crafted header cannot inflate either beyond 10 min × 48 kHz worth of samples.
+const MAX_DECODE_SAMPLE_RATE: u32 = 48_000;
 
 /// Sample rate in Hz. Invariant: `rate > 0`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -213,6 +221,9 @@ fn decode_audio_inner<'s>(
         .and_then(|p| p.audio())
         .context("No audio codec parameters")?;
     let sample_rate = audio_params.sample_rate.context("Unknown sample rate")?;
+    if sample_rate == 0 || sample_rate > MAX_SAMPLE_RATE {
+        anyhow::bail!("Unsupported sample rate: {sample_rate}Hz");
+    }
     let channels = audio_params
         .channels
         .as_ref()
@@ -230,15 +241,17 @@ fn decode_audio_inner<'s>(
         .make_audio_decoder(audio_params, &AudioDecoderOptions::default())
         .context("Unsupported audio codec")?;
 
+    // Sample budget from a CLAMPED rate (header `sample_rate` capped at
+    // MAX_DECODE_SAMPLE_RATE), so a crafted header cannot inflate the duration
+    // cap or the capacity hint. Computed before the capacity match so the hint
+    // is bounded by the same budget.
+    let max_samples: usize =
+        MAX_DURATION_S as usize * sample_rate.min(MAX_DECODE_SAMPLE_RATE) as usize;
+
     let mut all_samples: Vec<f32> = match n_frames_hint {
-        Some(n) if n > 0 && n <= (MAX_DURATION_S as u64 + 1) * sample_rate as u64 => {
-            Vec::with_capacity(n as usize)
-        }
+        Some(n) if n > 0 && n <= max_samples as u64 => Vec::with_capacity(n as usize),
         _ => Vec::new(),
     };
-    // Precompute the sample budget so the check is a single comparison per
-    // packet rather than a floating-point divide.
-    let max_samples: usize = (MAX_DURATION_S * sample_rate as f64) as usize;
 
     loop {
         let packet = match format.next_packet() {
@@ -775,7 +788,7 @@ mod tests {
 
     // --- decode_audio_bytes tests ---
 
-    fn make_wav_bytes(samples: &[i16], sample_rate: u32) -> Vec<u8> {
+    pub(super) fn make_wav_bytes(samples: &[i16], sample_rate: u32) -> Vec<u8> {
         let data_size = (samples.len() * 2) as u32;
         let file_size = 36 + data_size;
         let mut buf = Vec::new();
@@ -977,11 +990,26 @@ mod tests {
             "error should mention 'too long', got: {msg}"
         );
     }
+
+    #[test]
+    fn test_decode_rejects_adversarial_sample_rate() {
+        // A crafted header with an out-of-range sample rate must be rejected
+        // before it can scale the duration cap or trigger an oversized
+        // reservation — and must never panic.
+        let silence: Vec<i16> = vec![0; 16]; // tiny payload — the header is the attack
+        // Just above the ceiling: a well-formed header that the clamp must reject.
+        let result = decode_audio_bytes(&make_wav_bytes(&silence, MAX_SAMPLE_RATE + 1));
+        assert!(result.is_err(), "sample_rate above MAX_SAMPLE_RATE must be rejected");
+        // A grossly inflated rate must also be rejected (not panic / not allocate).
+        let result = decode_audio_bytes(&make_wav_bytes(&silence, 1_000_000_000));
+        assert!(result.is_err(), "absurd sample_rate must be rejected");
+    }
 }
 
 #[cfg(test)]
 mod proptests {
     use super::*;
+    use super::tests::make_wav_bytes;
     use proptest::prelude::*;
 
     proptest! {
@@ -1025,6 +1053,17 @@ mod proptests {
             }
             let result = resample(&samples, from_rate, SampleRate(16000));
             prop_assert!(result.is_ok(), "resample failed: {:?}", result.err());
+        }
+
+        #[test]
+        fn proptest_decode_header_sample_rate_never_panics(rate in 0u32..=300_000u32) {
+            // Decoding a WAV with an arbitrary header sample rate must never panic;
+            // any rate above the ceiling must be rejected, never accepted.
+            let silence: Vec<i16> = vec![0; 8];
+            let result = decode_audio_bytes(&make_wav_bytes(&silence, rate));
+            if rate > MAX_SAMPLE_RATE {
+                prop_assert!(result.is_err(), "rate {} above ceiling must be rejected", rate);
+            }
         }
     }
 }
