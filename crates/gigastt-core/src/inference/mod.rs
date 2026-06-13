@@ -96,6 +96,11 @@ const STREAM_MAX_WINDOW_SAMPLES: usize = 16000 * 5;
 /// Left-context audio retained across a streaming finalize/slide (samples @16kHz,
 /// ~1.5s) so the next window keeps acoustic context instead of restarting cold.
 const STREAM_LEFT_CONTEXT_SAMPLES: usize = 16000 * 3 / 2;
+/// Decode stride: re-run the encoder only after this much NEW audio has
+/// accumulated (samples @16kHz, 0.8s) instead of on every ~100ms chunk.
+/// Re-decoding the window is the dominant streaming cost, so the stride keeps
+/// the engine real-time; `finish_stream` decodes the sub-stride remainder at EOF.
+const STREAM_DECODE_STRIDE_SAMPLES: usize = 16000 * 4 / 5;
 
 /// Default number of session triplets in the pool.
 #[cfg(target_os = "android")]
@@ -501,6 +506,10 @@ pub struct StreamingState {
     /// Leading samples of `audio_buffer` that are already-emitted left context;
     /// words decoded within this region are suppressed (not re-emitted).
     pub context_samples: usize,
+    /// New samples accumulated since the last decode. The encoder re-runs only
+    /// once this reaches `STREAM_DECODE_STRIDE_SAMPLES`, then resets to 0 — this
+    /// is what keeps the stream real-time (re-decoding the window is the cost).
+    pub pending_samples: usize,
     /// Optional cached resampler for non-16kHz streams.
     pub resampler: Option<rubato::Async<f32>>,
     /// Reusable FFT buffer for mel spectrogram (avoids per-chunk allocation).
@@ -1153,6 +1162,7 @@ impl Engine {
             assembler: TranscriptAssembler::new(),
             window_start_samples: 0,
             context_samples: 0,
+            pending_samples: 0,
             resampler: None,
             mel_fft_input: Vec::new(),
             mel_power: Vec::new(),
@@ -1182,89 +1192,41 @@ impl Engine {
             return Ok(vec![]);
         }
 
-        // Diarization needs the raw 16kHz chunk before it is folded into the
-        // sliding window. Skip the allocation when diarization is inactive.
+        // Diarization tracks speakers continuously, so feed every chunk's audio
+        // even when this chunk doesn't trigger a decode (see the stride gate).
         #[cfg(feature = "diarization")]
-        let samples_16k_copy = if state.diarization_state.is_some() {
-            Some(samples.to_vec())
-        } else {
-            None
-        };
+        if let Some(dia) = state.diarization_state.as_mut()
+            && let Err(e) = dia.feed(samples)
+        {
+            tracing::warn!("Diarization feed failed: {e:#}");
+        }
 
-        // Sliding-window streaming: accumulate audio and re-run the encoder on
-        // the whole retained window each chunk, so the offline Conformer always
-        // has left context — an isolated ~100ms chunk decodes to garbage. The
-        // window is bounded by STREAM_MAX_WINDOW_SAMPLES; on endpoint or cap we
-        // finalize the tail and slide, keeping STREAM_LEFT_CONTEXT_SAMPLES of
-        // acoustic context for the next decode.
+        // Sliding-window streaming: accumulate audio; the encoder re-runs on the
+        // whole retained window so the offline Conformer always has left context
+        // (an isolated ~100ms chunk decodes to garbage). Re-decoding is the cost,
+        // so we only decode once STREAM_DECODE_STRIDE_SAMPLES of NEW audio have
+        // arrived (or the window hit its cap) — this keeps the engine real-time.
+        // The window is bounded by STREAM_MAX_WINDOW_SAMPLES; on endpoint or cap
+        // we finalize the tail and slide, retaining STREAM_LEFT_CONTEXT_SAMPLES.
         state.audio_buffer.extend_from_slice(samples);
+        state.pending_samples += samples.len();
+        let over_cap = state.audio_buffer.len() >= STREAM_MAX_WINDOW_SAMPLES;
+        // Stride gate on NEW audio since the last decode (not since the last
+        // slide): otherwise a non-finalizing partial would leave the counter
+        // high and decode on every subsequent chunk.
+        if state.pending_samples < STREAM_DECODE_STRIDE_SAMPLES && !over_cap {
+            return Ok(vec![]);
+        }
         if state.audio_buffer.len() < N_FFT {
             return Ok(vec![]);
         }
 
-        let mel_start = std::time::Instant::now();
-        let num_frames = self.features.compute_mel(
-            &state.audio_buffer,
-            &mut state.mel_fft_input,
-            &mut state.mel_power,
-            &mut state.mel_output,
-        );
-        tracing::debug!(
-            elapsed_us = mel_start.elapsed().as_micros() as u64,
-            "mel_compute"
-        );
-        if num_frames == 0 {
-            return Ok(vec![]);
-        }
-
-        // Encoder-frame offset of the window start (drift-free: a single division
-        // over the cumulative slid-off sample count).
-        let frame_offset = state.window_start_samples / (HOP_LENGTH * ENCODER_SUBSAMPLING);
-
-        // Re-decode the whole window from a fresh decoder state: the window
-        // overlaps the previous one, so persisting the LSTM state would
-        // double-condition the prediction network.
-        let mut decoder_state = DecoderState::new(self.tokenizer.blank_id());
-        let (all_words, endpoint) = self
-            .run_inference(
-                triplet,
-                &state.mel_output[..],
-                num_frames,
-                &mut decoder_state,
-                frame_offset,
-            )
+        let endpoint = self
+            .decode_window(state, triplet)
             .map_err(|e| GigasttError::Inference { source: e.into() })?;
-
-        // Suppress words inside the already-emitted left context so a slid
-        // window does not re-emit committed words.
-        let window_start_s = frame_offset as f64 * SECONDS_PER_FRAME;
-        let context_boundary_s = window_start_s + state.context_samples as f64 / 16000.0;
-        #[cfg_attr(not(feature = "diarization"), allow(unused_mut))]
-        let mut tail: Vec<WordInfo> = all_words
-            .into_iter()
-            .filter(|w| w.start + f64::EPSILON >= context_boundary_s)
-            .collect();
-
-        // --- Diarization: feed this chunk's audio and tag the tail words. ---
-        #[cfg(feature = "diarization")]
-        if let (Some(dia), Some(copy)) =
-            (state.diarization_state.as_mut(), samples_16k_copy.as_ref())
-        {
-            if let Err(e) = dia.feed(copy) {
-                tracing::warn!("Diarization feed failed: {e:#}");
-            }
-            if let Some(turn) = dia.turns().last() {
-                let speaker = turn.speaker.0;
-                for w in &mut tail {
-                    w.speaker = Some(speaker);
-                }
-            }
-        }
-
-        state.assembler.set_words(tail);
+        state.pending_samples = 0;
         let ts = now_timestamp();
 
-        let over_cap = state.audio_buffer.len() >= STREAM_MAX_WINDOW_SAMPLES;
         if endpoint || over_cap {
             let seg = state.assembler.finalize(ts);
             // Slide: retain the trailing left-context window for the next decode.
@@ -1285,6 +1247,87 @@ impl Engine {
             return Ok(vec![]);
         }
         Ok(vec![state.assembler.partial(ts)])
+    }
+
+    /// Re-decode the whole retained window from a fresh decoder state and update
+    /// the assembler with the context-suppressed tail. Returns whether the
+    /// decoder detected an endpoint. Shared by [`Engine::process_chunk`]
+    /// (strided) and [`Engine::finish_stream`] (forced at end of stream).
+    fn decode_window(
+        &self,
+        state: &mut StreamingState,
+        triplet: &mut SessionTriplet,
+    ) -> anyhow::Result<bool> {
+        let mel_start = std::time::Instant::now();
+        let num_frames = self.features.compute_mel(
+            &state.audio_buffer,
+            &mut state.mel_fft_input,
+            &mut state.mel_power,
+            &mut state.mel_output,
+        );
+        tracing::debug!(
+            elapsed_us = mel_start.elapsed().as_micros() as u64,
+            "mel_compute"
+        );
+        if num_frames == 0 {
+            return Ok(false);
+        }
+
+        // Encoder-frame offset of the window start (drift-free: a single division
+        // over the cumulative slid-off sample count).
+        let frame_offset = state.window_start_samples / (HOP_LENGTH * ENCODER_SUBSAMPLING);
+
+        // The window overlaps the previous one, so persisting the LSTM state
+        // would double-condition the prediction network — decode fresh.
+        let mut decoder_state = DecoderState::new(self.tokenizer.blank_id());
+        let (all_words, endpoint) = self.run_inference(
+            triplet,
+            &state.mel_output[..],
+            num_frames,
+            &mut decoder_state,
+            frame_offset,
+        )?;
+
+        // Suppress words inside the already-emitted left context so a slid
+        // window does not re-emit committed words.
+        let window_start_s = frame_offset as f64 * SECONDS_PER_FRAME;
+        let context_boundary_s = window_start_s + state.context_samples as f64 / 16000.0;
+        #[cfg_attr(not(feature = "diarization"), allow(unused_mut))]
+        let mut tail: Vec<WordInfo> = all_words
+            .into_iter()
+            .filter(|w| w.start + f64::EPSILON >= context_boundary_s)
+            .collect();
+
+        #[cfg(feature = "diarization")]
+        if let Some(dia) = state.diarization_state.as_mut()
+            && let Some(turn) = dia.turns().last()
+        {
+            let speaker = turn.speaker.0;
+            for w in &mut tail {
+                w.speaker = Some(speaker);
+            }
+        }
+
+        state.assembler.set_words(tail);
+        Ok(endpoint)
+    }
+
+    /// Decode any audio buffered since the last strided decode, then finalize.
+    /// Call when the stream ends (Stop / EOF) so the decode-stride batching does
+    /// not drop trailing words. Best-effort: on decode failure, falls back to a
+    /// plain flush of whatever the assembler already holds.
+    pub fn finish_stream(
+        &self,
+        state: &mut StreamingState,
+        triplet: &mut SessionTriplet,
+    ) -> Option<TranscriptSegment> {
+        let has_pending = state.pending_samples > 0 && state.audio_buffer.len() >= N_FFT;
+        if has_pending
+            && let Err(e) = self.decode_window(state, triplet)
+        {
+            tracing::warn!("finish_stream decode failed: {e:#}");
+        }
+        self.flush_state(state)
     }
 
     /// Flush accumulated text as a Final segment (called on Stop/Close).
