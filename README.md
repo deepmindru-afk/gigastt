@@ -94,6 +94,8 @@ brew install gigastt
 gigastt serve
 
 # From crates.io (requires `protoc` on PATH: `brew install protobuf` / `apt install protobuf-compiler`)
+# Note: building also fetches a prebuilt onnxruntime over the network at build-time
+# (ort's default download-binaries); "no cloud / full privacy" covers runtime, not the build.
 cargo install gigastt
 gigastt serve
 
