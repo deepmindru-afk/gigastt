@@ -89,4 +89,31 @@ streaming latency is not a demonstrated advantage, and streaming quality current
 - `partial_response_lag_ms` is an upper-bounded approximation, under-estimated when compute ≥
   `chunk_ms`; the server `encoder_inference` log is the authoritative per-chunk compute source.
 - README / public wording intentionally untouched here (roadmap task 02). The streaming-quality
-  regression is out of scope for task 01 and should be filed/triaged separately.
+  problem was filed as roadmap task 16 (see update below).
+
+## Update (2026-06-13) — streaming-quality fix landed
+
+Roadmap task 16 is fixed (commit `8daa9a9`): the streaming path now decodes on a **sliding
+context window** — accumulate audio and re-run the encoder on the whole retained (≤5 s) window
+each chunk (fresh decoder state), then slide + dedup on endpoint/cap. Verified by model-gated
+integration tests (`crates/gigastt-core/tests/streaming_quality.rs`: streaming ≈ batch on
+`golos_00`, plus a >5 s long-audio slide test). Re-measured on the same fixture (CPU EP, INT8,
+release):
+
+| metric | before fix (broken) | after fix |
+|---|---|---|
+| streaming text (golos_00) | «И» | «60 000 — сколько будет стоить?» (full phrase, across segments) |
+| partials emitted / clip | 1 | 11 |
+| TTFP (from audio start) | ~735 ms | ~782–792 ms |
+| per-chunk encoder compute | flat ~100 ms (isolated) | **432 → 712 ms, grows with window** |
+
+**The tradeoff (honest):** correctness is bought with compute. Re-decoding the growing window
+every 100 ms chunk costs ~432–712 ms of encoder time on CPU — **~4–7× slower than real-time**
+near the 5 s window cap. So on the CPU EP the streaming path now transcribes correctly but
+**cannot keep up with a live real-time stream** (it falls behind / accumulates backpressure).
+Mitigations (not yet done): CoreML/GPU EP, re-decoding less often than every chunk (e.g. every
+~250–500 ms of new audio), and/or a smaller context window — filed as roadmap task 17.
+
+**Implication for positioning (task 02):** streaming is now **accurate**, but "real-time" must be
+qualified by EP/compute — on CPU it is not real-time with this re-decode approach, and "sub-200ms"
+remains unsupported for end-to-end TTFP.
