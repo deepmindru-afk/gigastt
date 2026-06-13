@@ -27,20 +27,30 @@ Domains: **Clean read** = `golos_crowd_1k` · **Far-field** = `golos_farfield` �
 | Vosk 0.42 | vosk-model-ru-0.42 | **4.82 (4.03–5.60)** | 13.93 (12.49–15.47) | 38.57 (36.72–40.64) | 20.65 (19.38–21.98) |
 | whisper.cpp | Large v3 | 15.26 (13.74–16.71) | 17.91 (16.29–19.57) | 32.73 (30.69–34.91) | 22.61 (20.97–24.20) |
 | faster-whisper | Large v3 (INT8) | 15.53 (13.94–17.10) | 17.34 (15.62–19.07) | 24.93 (23.32–26.57) | 15.45 (14.15–16.62) |
-| Vosk 0.54 | vosk-model-ru-0.54 | `pending` | `pending` | `pending` | `pending` |
+| Vosk 0.54 | vosk-model-ru-0.54 | **2.97 (2.41–3.56)** | 6.29 (5.43–7.28) | 22.74 (21.28–24.17) | 17.24 (16.0–18.43) |
 | faster-whisper-turbo | Large v3 turbo | `pending` | `pending` | `pending` | `pending` |
-| T-one | voicekit-team/T-one | `pending` | `pending` | `pending` | `pending` |
+| T-one | t-tech/T-one | `pending` | `pending` | `pending` | `pending` |
 
-**Reading of the existing four:** gigastt leads on **3 of 4** domains — far-field,
-phone, and YouTube — by a wide margin (far-field 5.90 vs Vosk's 13.93; phone 19.28
-vs 38.57; YouTube 11.35 vs 20.65). **Vosk 0.42 wins clean read** (4.82 vs 8.60) and
-this should be stated plainly. The Whisper engines trail on every domain here.
+**Reading (modern Vosk 0.54 now measured — 1000 samples/domain, RTF ~0.04, 0 fail):**
+Against the *outdated* Vosk 0.42, gigastt led 3 of 4 domains. Against **modern Vosk
+0.54** the honest picture is narrower:
+- **Clean read:** Vosk 0.54 **2.97%** — best of all, beats 0.42 (4.82) and gigastt (8.60).
+- **Far-field:** now a **statistical tie** — gigastt 5.90 (5.09–6.83) vs Vosk 0.54 6.29
+  (5.43–7.28), CIs overlap. gigastt's old far-field "lead" was against 0.42's 13.93; it
+  does **not** hold against 0.54.
+- **Phone calls:** **gigastt wins** — 19.28 (17.88–20.67) vs 22.74 (21.28–24.17), CIs
+  separated.
+- **YouTube:** **gigastt wins** — 11.35 (10.32–12.31) vs 17.24 (16.0–18.43), separated.
 
-> Open question the new runners answer: **Vosk 0.54** (Zipformer2) is the real
-> modern Vosk and is reported ≈6% on Common Voice ru — it may narrow or change the
-> clean-read story. **T-one** is purpose-built for telephony and is the engine most
-> likely to contest gigastt's phone-call lead. Both are why this table must be
-> re-run before any "we lead" claim.
+So gigastt's defensible accuracy claim shrinks to **2 clear wins (phone + YouTube),
+1 tie (far-field), 1 loss (clean read)** — spontaneous/telephony speech, not "hard
+speech in general". Vosk 0.54 also beats gigastt on RTF (~0.04 vs ~0.16) but stays
+~6× larger and offers no embeddable single-binary / FFI / streaming story.
+
+> Still open: **T-one** (`t-tech/T-one`; runner fixed, blocked on an HF download) and
+> **faster-whisper-turbo**, to be added once their weights finish downloading (need an
+> `HF_TOKEN`). T-one is purpose-built for telephony and is the most likely to contest
+> the phone-call win, so the "phone win" claim stays provisional until T-one is measured.
 
 ---
 
@@ -54,11 +64,15 @@ RTF = processing time / audio duration, per domain.
 | gigastt | 0.157 | 0.164 | 0.212 | 0.158 |
 | whisper.cpp | 0.357 | 0.556 | 0.624 | 0.765 |
 | faster-whisper | 1.187 | 1.604 | 2.312 | 1.879 |
-| Vosk 0.54 / turbo / T-one | `pending` | `pending` | `pending` | `pending` |
+| Vosk 0.54 | **0.043** | **0.042** | **0.042** | **0.042** |
+| turbo / T-one | `pending` | `pending` | `pending` | `pending` |
 
-**Reading:** Vosk is the fastest by far (~0.03) but pays in accuracy on hard audio.
-gigastt is the fastest *accurate* engine (~0.16–0.21, comfortably real-time on CPU).
-faster-whisper is **slower than real-time** on CPU (>1.0 RTF) across all domains.
+**Reading:** both Vosk versions are the fastest (~0.03–0.04). Modern **Vosk 0.54 is
+fast *and* accurate** (~0.04 RTF, and it wins/ties gigastt on 2 of 4 domains), so the
+old "Vosk trades accuracy for speed" line no longer holds against 0.54. gigastt is
+still comfortably real-time (~0.16–0.21) and far faster than faster-whisper (>1.0 RTF,
+**slower than real-time** on CPU) — but gigastt's speed edge is over the Whisper
+engines, not over Vosk.
 
 ---
 
@@ -116,12 +130,13 @@ is what makes it embeddable.
 
 ## 6. Two positioning theses (pick after the full re-run)
 
-**Thesis A — "Best local accuracy on *hard* Russian speech" (data currently supports this).**
-On the committed matrix gigastt already leads far-field, phone, and YouTube at ~6×
-smaller footprint and real-time CPU speed. Frame: *the smallest engine that wins on
-the speech that actually matters in production — far-field commands, noisy phone
-calls, spontaneous video — conceding only clean studio read-speech to Vosk.* Risk:
-T-one may take telephony; Vosk 0.54 may shift the picture. Only claim after the re-run.
+**Thesis A — "Best local accuracy on *spontaneous/telephony* Russian speech" (narrowed by the Vosk 0.54 data).**
+Against **modern Vosk 0.54**, gigastt's accuracy wins shrink to **phone calls and
+YouTube** (CI-separated); far-field is a **tie** and clean read is a loss. So the honest
+claim is *the smallest engine that wins on noisy phone calls and spontaneous video* —
+NOT "hard speech in general", and NOT far-field anymore. Caveat: **T-one** (telephony
+specialist) is the most likely to take the phone-call column, so even this narrowed
+claim is provisional until T-one is measured.
 
 **Thesis B — "Streaming + footprint + Rust-native embeddability" (robust regardless of WER).**
 Frame on the axes that don't depend on winning WER: true incremental streaming (vs
@@ -137,10 +152,10 @@ specific A claims *per domain* once the re-run confirms them against Vosk 0.54 +
 
 ## What's still pending (blocks publishing to README)
 
-1. Full run of **Vosk 0.54**, **faster-whisper-turbo**, **T-one** on all 4 domains
-   (WER + RTF). Requires: confirm `vosk-model-ru-0.54` id on alphacephei; `pip install
-   torch transformers` + confirm T-one's exact HF/processor API; ~GBs of downloads;
-   a several-hour run → **needs an agreed time window**.
+1. ✅ **Vosk 0.54 done** (all 4 domains, 1000 samples — numbers above, via sherpa-onnx).
+   Still pending: **faster-whisper-turbo** + **T-one** (`t-tech/T-one`, runner fixed) —
+   both blocked on stalled unauthenticated HuggingFace downloads; need an `HF_TOKEN`
+   (or a manual model fetch) to finish.
 2. `benchmark_footprint.py` + `benchmark_punctuation.py` + `benchmark_hallucinations.py`
    actual numbers (smoke first, ≤50 samples).
 3. Vosk-server streaming latency for a fair streaming comparison.
