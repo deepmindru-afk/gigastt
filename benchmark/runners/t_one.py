@@ -10,9 +10,14 @@ path is::
     pipeline = StreamingCTCPipeline.from_hugging_face()      # pulls t-tech/T-one
     text = pipeline.forward_offline(read_audio("clip.wav"))
 
-Decoding uses **greedy CTC** (``DecoderType.GREEDY``) to avoid the optional 5.5 GB
-KenLM beam-search LM — only the 144 MB ``model.onnx`` is needed. Beam+LM would be a
-touch more accurate; flag that when reporting T-one numbers.
+Decoder is selected via ``BENCHMARK_TONE_DECODER`` (``greedy`` default, or
+``beam_search`` for T-one's production config). Greedy uses only the 144 MB
+``model.onnx``; beam_search additionally needs the optional **5.5 GB KenLM**. That LM
+hangs on HF download, so fetch it separately (e.g. ``curl`` the
+``t-tech/T-one/resolve/main/kenlm.bin``) and point ``BENCHMARK_TONE_KENLM`` at the
+local file — it is loaded via ``BeamSearchCTCDecoder.from_local``. Beam+LM is T-one's
+honest config; greedy is the always-works fallback. Flag which decoder was used when
+reporting T-one numbers.
 
 Install (``tone`` pulls torch; ``read_audio`` needs ``miniaudio``)::
 
@@ -46,16 +51,40 @@ class TOneRunner:
 
     def _load(self):
         if self._pipeline is None:
+            import os
+
             from tone import DecoderType, StreamingCTCPipeline
 
-            # Greedy CTC avoids the optional 5.5 GB KenLM (the beam-search LM) and
-            # uses only the 144 MB model.onnx. Slightly lower accuracy than beam+LM,
-            # but the LM download is impractical — flag this caveat when reporting
-            # T-one numbers.
-            print("[t-one] Loading StreamingCTCPipeline (greedy, no external LM) ...")
-            self._pipeline = StreamingCTCPipeline.from_hugging_face(
-                decoder_type=DecoderType.GREEDY
-            )
+            # Decoder via BENCHMARK_TONE_DECODER: "greedy" (default — only the 144 MB
+            # model.onnx) or "beam_search" (T-one's production config — needs the 5.5 GB
+            # KenLM). The HF download of that LM hangs, so a locally-fetched kenlm.bin
+            # can be passed via BENCHMARK_TONE_KENLM and is loaded with from_local().
+            mode = os.environ.get("BENCHMARK_TONE_DECODER", "greedy").lower()
+            kenlm = os.environ.get("BENCHMARK_TONE_KENLM")
+            if mode in ("beam", "beam_search"):
+                if kenlm and os.path.exists(kenlm):
+                    from tone import (
+                        BeamSearchCTCDecoder,
+                        StreamingCTCModel,
+                        StreamingLogprobSplitter,
+                    )
+
+                    print(f"[t-one] Loading beam+LM (local KenLM: {kenlm}) ...")
+                    self._pipeline = StreamingCTCPipeline(
+                        StreamingCTCModel.from_hugging_face(),
+                        StreamingLogprobSplitter(),
+                        BeamSearchCTCDecoder.from_local(kenlm),
+                    )
+                else:
+                    print("[t-one] Loading beam+LM (downloads 5.5 GB KenLM from HF) ...")
+                    self._pipeline = StreamingCTCPipeline.from_hugging_face(
+                        decoder_type=DecoderType.BEAM_SEARCH
+                    )
+            else:
+                print("[t-one] Loading greedy (no external LM) ...")
+                self._pipeline = StreamingCTCPipeline.from_hugging_face(
+                    decoder_type=DecoderType.GREEDY
+                )
         return self._pipeline
 
     @staticmethod
