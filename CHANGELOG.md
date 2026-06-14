@@ -7,35 +7,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
+## [2.1.0] - 2026-06-14
 
-- **MSRV bumped 1.87 → 1.88.** `ort`/`ort-sys` 2.0.0-rc.12 declare
-  `rust-version = "1.88"`, so any cold-registry build on 1.87 (including the
-  Docker images) fails at resolution. The MSRV CI job had stayed green only
-  thanks to a warm cargo cache.
-- **Dependency note — `ort`/`ort-sys` are pinned to the pre-release `2.0.0-rc.12`.** No
-  stable `ort` 2.0.x exists yet (the whole Rust ONNX stack is on release candidates); the
-  plan is to track the stable release and update. `ort`'s default `download-binaries`
-  feature also fetches a prebuilt onnxruntime over the network at build time.
-
-### Fixed
-
-- **All three Docker images build again.** The rot ran deep: builder pins
-  behind the workspace MSRV, missing stubs for the declared
-  `[[bench]]`/`[[test]]` targets in the dependency-cache layer, the real
-  build silently linking against stale dummy rlibs (COPY preserves host
-  mtimes; sources are now touched before the final build), a phantom `proto/`
-  COPY in the benchmark image, missing `pkg-config`/`libssl-dev` for
-  `openssl-sys` (via reqwest native-tls), and base images too old for ort's
-  prebuilt onnxruntime (`__cxa_call_terminate` needs gcc-13 libstdc++ —
-  Debian bookworm→trixie, CUDA Ubuntu 22.04→24.04). Cargo invocations now
-  run `--locked`.
+A large correctness + honesty pass (a full project audit), an honest cross-ASR
+benchmark against current Russian-ASR engines, and a reworked README.
 
 ### Added
 
-- **CI builds the Docker images** (`docker-build` jobs): the CPU image plus a
-  `--version` smoke run on every main push and on PRs touching docker-relevant
-  paths; the CUDA and benchmark images on main push.
+- **Honest cross-ASR benchmark — 7 engines × 4 Russian domains.** gigastt, Vosk 0.42,
+  **Vosk 0.54** (Zipformer2 via sherpa-onnx), whisper.cpp, faster-whisper,
+  faster-whisper-turbo, and **T-one** (greedy + production beam+LM) on clean read,
+  far-field, phone calls and YouTube — with WER + 95% CI, RTF, footprint and an explicit
+  training-contamination caveat. See [`docs/benchmarks.md`](docs/benchmarks.md).
+- **Release platform matrix expanded** to `x86_64-pc-windows-msvc`,
+  `x86_64-apple-darwin` (Intel) and `aarch64-unknown-linux-gnu` (cross-compiled), with
+  matching Homebrew coverage.
+- **Benchmark data licensing** — `benchmark/DATA_LICENSE` + root `NOTICE` carve the
+  benchmark transcripts (Open STT CC BY-NC 4.0; Golos Sber Public License) out of the
+  project's MIT grant.
+- **CI builds the Docker images** (`docker-build` jobs): the CPU image plus a `--version`
+  smoke run on every main push and on docker-relevant PRs; the CUDA and benchmark images
+  on main push.
+
+### Changed
+
+- **README reworked (EN + RU)** — niche-led, honest positioning (an embeddable on-device
+  Russian STT, not a WER-leaderboard claim), ~80 lines, 4 badges, with detail split into
+  `docs/{api,benchmarks,architecture,troubleshooting}.md`. Removed unmeasured/false
+  claims (sub-200 ms streaming, "only Rust-native"); streaming reframed honestly as
+  buffered/chunked over an offline RNN-T (~0.7 s time-to-first-partial).
+- **API + docs aligned to the code** — REST / OpenAPI / AsyncAPI error contracts, a
+  single flagship WER (8.60% renorm), and consistent test counts / model sizes / MSRV
+  across README, CLAUDE.md and AGENTS.md.
+- **Supply-chain transparency** — documented the build-time onnxruntime fetch (ort's
+  default `download-binaries`), and pinned `cargo-ndk` and the benchmark lockfile.
+- **MSRV bumped 1.87 → 1.88** (`ort`/`ort-sys` 2.0.0-rc.12 require it). `ort`/`ort-sys`
+  remain pinned to the pre-release `2.0.0-rc.12` — no stable `ort` 2.0.x exists yet.
+
+### Fixed
+
+- **Streaming recognition quality** — decode on a sliding context window over the offline
+  RNN-T (fixes the isolated-chunk regression that collapsed partials to a single token),
+  with a decode stride to stay real-time on CPU; streaming word-timestamp units corrected.
+- **Model downloads** now use connect/read timeouts and a bounded redirect policy.
+- **All three Docker images build again** (builder pins behind the workspace MSRV, stale
+  dummy-rlib relinking, missing `[[bench]]`/`[[test]]` stubs, `pkg-config`/`libssl-dev`
+  for `openssl-sys`, and base images too old for ort's prebuilt onnxruntime). Cargo
+  invocations now run `--locked`.
+
+### Security
+
+- **Audio sample-rate DoS bounded** — a hostile WAV header can no longer drive an
+  unbounded allocation; the decode sample budget is clamped to a fixed ceiling.
+- **FFI use-after-free guarded** — the C-ABI hot paths reject already-disposed handles
+  and use acquire/release ordering on the dispose flag.
 
 ## [2.0.14] - 2026-06-11
 
