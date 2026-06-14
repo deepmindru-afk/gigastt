@@ -28,11 +28,12 @@ Domains: **Clean read** = `golos_crowd_1k` · **Far-field** = `golos_farfield` �
 | whisper.cpp | Large v3 | 15.26 (13.74–16.71) | 17.91 (16.29–19.57) | 32.73 (30.69–34.91) | 22.61 (20.97–24.20) |
 | faster-whisper | Large v3 (INT8) | 15.53 (13.94–17.10) | 17.34 (15.62–19.07) | 24.93 (23.32–26.57) | 15.45 (14.15–16.62) |
 | Vosk 0.54 | vosk-model-ru-0.54 | **2.97 (2.41–3.56)** | 6.29 (5.43–7.28) | 22.74 (21.28–24.17) | 17.24 (16.0–18.43) |
-| faster-whisper-turbo ¹ | Large v3 turbo | 14.45 (11.52–18.0) | 18.30 (16.69–20.03) | 29.22 (26.02–32.76) | 15.16 (12.82–17.45) |
+| faster-whisper-turbo ¹ | Large v3 turbo | 14.45 (11.52–18.0) | 18.30 (16.69–20.03) | 26.58 (24.94–28.22) | 15.45 (14.2–16.64) |
 | **T-one (beam+LM)** | t-tech/T-one | 6.61 (5.43–7.91) | 14.62 (12.48–16.97) | 21.73 (19.96–23.68) | 23.23 (21.46–25.11) |
 | T-one (greedy, no LM) | t-tech/T-one | 7.85 (6.67–9.24) | 17.22 (15.02–19.58) | 22.37 (20.58–24.22) | 26.54 (24.66–28.48) |
 
-¹ turbo is a **300-sample** directional slice (CPU-slow; wider CIs); all others are 1000.
+¹ turbo: clean read is a **300-sample** slice (wider CI); far-field/phone/YouTube are
+1000. CPU-slow (~1.3–2.0 RTF). turbo ≈ large-v3 — it does not shift the picture.
 T-one's **beam+LM** is its production config (the 5.5 GB KenLM, fetched manually);
 **greedy** is the no-LM fallback. Both shown for honesty.
 
@@ -85,7 +86,7 @@ RTF = processing time / audio duration, per domain.
 | faster-whisper | 1.187 | 1.604 | 2.312 | 1.879 |
 | Vosk 0.54 | **0.043** | **0.042** | **0.042** | **0.042** |
 | T-one (beam+LM) | 0.056 | 0.060 | 0.065 | 0.065 |
-| faster-whisper-turbo | 1.811 | 1.974 | 2.047 | 1.815 |
+| faster-whisper-turbo | 1.811 | 1.974 | 1.569 | 1.265 |
 
 **Reading:** the CTC/transducer engines are all fast — Vosk (~0.03–0.04), **T-one
 beam+LM ~0.06**, gigastt ~0.16–0.21 — and modern **Vosk 0.54 is fast *and* accurate**,
