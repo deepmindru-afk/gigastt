@@ -16,3 +16,6 @@ lcov-*.info
 lcov-*.xml
 coverage.json
 cobertura*.xml
+
+# Internal planning docs — never commit
+/docs/superpowers/
