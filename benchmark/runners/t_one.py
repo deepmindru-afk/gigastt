@@ -10,9 +10,13 @@ path is::
     pipeline = StreamingCTCPipeline.from_hugging_face()      # pulls t-tech/T-one
     text = pipeline.forward_offline(read_audio("clip.wav"))
 
-Install (pulls torch)::
+Decoding uses **greedy CTC** (``DecoderType.GREEDY``) to avoid the optional 5.5 GB
+KenLM beam-search LM — only the 144 MB ``model.onnx`` is needed. Beam+LM would be a
+touch more accurate; flag that when reporting T-one numbers.
 
-    uv pip install "git+https://github.com/voicekit-team/T-one.git"
+Install (``tone`` pulls torch; ``read_audio`` needs ``miniaudio``)::
+
+    uv pip install "git+https://github.com/voicekit-team/T-one.git" miniaudio
 
 Until ``tone`` is importable, ``is_available()`` returns ``False`` and the suite skips
 T-one. All heavy imports are lazy so importing this module never fails.
@@ -42,9 +46,16 @@ class TOneRunner:
 
     def _load(self):
         if self._pipeline is None:
-            from tone import StreamingCTCPipeline
-            print("[t-one] Loading StreamingCTCPipeline from t-tech/T-one ...")
-            self._pipeline = StreamingCTCPipeline.from_hugging_face()
+            from tone import DecoderType, StreamingCTCPipeline
+
+            # Greedy CTC avoids the optional 5.5 GB KenLM (the beam-search LM) and
+            # uses only the 144 MB model.onnx. Slightly lower accuracy than beam+LM,
+            # but the LM download is impractical — flag this caveat when reporting
+            # T-one numbers.
+            print("[t-one] Loading StreamingCTCPipeline (greedy, no external LM) ...")
+            self._pipeline = StreamingCTCPipeline.from_hugging_face(
+                decoder_type=DecoderType.GREEDY
+            )
         return self._pipeline
 
     @staticmethod
