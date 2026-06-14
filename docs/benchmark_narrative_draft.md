@@ -28,8 +28,13 @@ Domains: **Clean read** = `golos_crowd_1k` · **Far-field** = `golos_farfield` �
 | whisper.cpp | Large v3 | 15.26 (13.74–16.71) | 17.91 (16.29–19.57) | 32.73 (30.69–34.91) | 22.61 (20.97–24.20) |
 | faster-whisper | Large v3 (INT8) | 15.53 (13.94–17.10) | 17.34 (15.62–19.07) | 24.93 (23.32–26.57) | 15.45 (14.15–16.62) |
 | Vosk 0.54 | vosk-model-ru-0.54 | **2.97 (2.41–3.56)** | 6.29 (5.43–7.28) | 22.74 (21.28–24.17) | 17.24 (16.0–18.43) |
-| faster-whisper-turbo | Large v3 turbo | `pending` | `pending` | `pending` | `pending` |
-| T-one | t-tech/T-one | `pending` | `pending` | `pending` | `pending` |
+| faster-whisper-turbo ¹ | Large v3 turbo | 14.45 (11.52–18.0) | 18.30 (16.69–20.03) | 29.22 (26.02–32.76) | 15.16 (12.82–17.45) |
+| **T-one (beam+LM)** | t-tech/T-one | 6.61 (5.43–7.91) | 14.62 (12.48–16.97) | 21.73 (19.96–23.68) | 23.23 (21.46–25.11) |
+| T-one (greedy, no LM) | t-tech/T-one | 7.85 (6.67–9.24) | 17.22 (15.02–19.58) | 22.37 (20.58–24.22) | 26.54 (24.66–28.48) |
+
+¹ turbo is a **300-sample** directional slice (CPU-slow; wider CIs); all others are 1000.
+T-one's **beam+LM** is its production config (the 5.5 GB KenLM, fetched manually);
+**greedy** is the no-LM fallback. Both shown for honesty.
 
 **Reading (modern Vosk 0.54 now measured — 1000 samples/domain, RTF ~0.04, 0 fail):**
 Against the *outdated* Vosk 0.42, gigastt led 3 of 4 domains. Against **modern Vosk
@@ -38,19 +43,33 @@ Against the *outdated* Vosk 0.42, gigastt led 3 of 4 domains. Against **modern V
 - **Far-field:** now a **statistical tie** — gigastt 5.90 (5.09–6.83) vs Vosk 0.54 6.29
   (5.43–7.28), CIs overlap. gigastt's old far-field "lead" was against 0.42's 13.93; it
   does **not** hold against 0.54.
-- **Phone calls:** **gigastt wins** — 19.28 (17.88–20.67) vs 22.74 (21.28–24.17), CIs
-  separated.
-- **YouTube:** **gigastt wins** — 11.35 (10.32–12.31) vs 17.24 (16.0–18.43), separated.
+- **Phone calls:** **gigastt holds** — 19.28 (17.88–20.67) beats Vosk 0.54 22.74
+  (21.28–24.17, separated) and ties/leads even **T-one's production beam+LM** 21.73
+  (19.96–23.68; CIs barely overlap, gigastt point estimate ahead). ⚠️ Caveat:
+  `openstt_calls` very likely overlaps GigaAM v3's training (contamination flatters
+  gigastt), and T-one's *published* telephony strength is on its own call-center set,
+  not this slice.
+- **YouTube:** **gigastt wins clearly** — 11.35 (10.32–12.31) vs Vosk 17.24 and T-one
+  beam 23.23, all separated.
 
-So gigastt's defensible accuracy claim shrinks to **2 clear wins (phone + YouTube),
-1 tie (far-field), 1 loss (clean read)** — spontaneous/telephony speech, not "hard
-speech in general". Vosk 0.54 also beats gigastt on RTF (~0.04 vs ~0.16) but stays
-~6× larger and offers no embeddable single-binary / FFI / streaming story.
+**T-one (telephony specialist):** its production **beam+LM** (5.5 GB KenLM, fetched
+manually since the HF download hangs) lifts it over greedy on every domain — but it
+still loses to gigastt on far-field (14.62 vs 5.90) and YouTube (23.23 vs 11.35), ties
+on phone, and loses clean read to Vosk 0.54. It is *not* general-domain; the honest
+read is that **full beam+LM T-one did not take gigastt's phone column** (only tied it).
 
-> Still open: **T-one** (`t-tech/T-one`; runner fixed, blocked on an HF download) and
-> **faster-whisper-turbo**, to be added once their weights finish downloading (need an
-> `HF_TOKEN`). T-one is purpose-built for telephony and is the most likely to contest
-> the phone-call win, so the "phone win" claim stays provisional until T-one is measured.
+So even against **modern Vosk 0.54 *and* full beam+LM T-one**, gigastt's defensible
+accuracy claim is: **1 clear win (YouTube), phone held (tie/ahead, with the
+contamination caveat), far-field tied (Vosk 0.54), clean read lost (Vosk 0.54)**. The
+durable story is **Thesis B** — embeddable single-binary / FFI / streaming / ~225 MB —
+not a WER crown: Vosk 0.54 beats gigastt on RTF (~0.04 vs ~0.16) and T-one matches it,
+but both are larger and neither ships an embeddable Rust/FFI streaming server.
+
+> ✅ Resolved: **T-one** (greedy *and* production beam+LM — the latter via a
+> manually-curl'd 5.5 GB KenLM, since the HF download hangs) and **faster-whisper-turbo**
+> (300-sample slice) are now measured. T-one did **not** take the phone column (tie).
+> All 7 engines have WER numbers; only the non-WER axes (footprint, punctuation,
+> hallucinations) remain.
 
 ---
 
@@ -65,14 +84,15 @@ RTF = processing time / audio duration, per domain.
 | whisper.cpp | 0.357 | 0.556 | 0.624 | 0.765 |
 | faster-whisper | 1.187 | 1.604 | 2.312 | 1.879 |
 | Vosk 0.54 | **0.043** | **0.042** | **0.042** | **0.042** |
-| turbo / T-one | `pending` | `pending` | `pending` | `pending` |
+| T-one (beam+LM) | 0.056 | 0.060 | 0.065 | 0.065 |
+| faster-whisper-turbo | 1.811 | 1.974 | 2.047 | 1.815 |
 
-**Reading:** both Vosk versions are the fastest (~0.03–0.04). Modern **Vosk 0.54 is
-fast *and* accurate** (~0.04 RTF, and it wins/ties gigastt on 2 of 4 domains), so the
-old "Vosk trades accuracy for speed" line no longer holds against 0.54. gigastt is
-still comfortably real-time (~0.16–0.21) and far faster than faster-whisper (>1.0 RTF,
-**slower than real-time** on CPU) — but gigastt's speed edge is over the Whisper
-engines, not over Vosk.
+**Reading:** the CTC/transducer engines are all fast — Vosk (~0.03–0.04), **T-one
+beam+LM ~0.06**, gigastt ~0.16–0.21 — and modern **Vosk 0.54 is fast *and* accurate**,
+so the old "Vosk trades accuracy for speed" line no longer holds. gigastt is comfortably
+real-time but **not the fastest** (Vosk and T-one are quicker); its speed edge is only
+over the Whisper engines, which run **slower than real-time** on CPU (faster-whisper
+>1.0 RTF, turbo ~1.8–2.0).
 
 ---
 
@@ -130,13 +150,13 @@ is what makes it embeddable.
 
 ## 6. Two positioning theses (pick after the full re-run)
 
-**Thesis A — "Best local accuracy on *spontaneous/telephony* Russian speech" (narrowed by the Vosk 0.54 data).**
-Against **modern Vosk 0.54**, gigastt's accuracy wins shrink to **phone calls and
-YouTube** (CI-separated); far-field is a **tie** and clean read is a loss. So the honest
-claim is *the smallest engine that wins on noisy phone calls and spontaneous video* —
-NOT "hard speech in general", and NOT far-field anymore. Caveat: **T-one** (telephony
-specialist) is the most likely to take the phone-call column, so even this narrowed
-claim is provisional until T-one is measured.
+**Thesis A — "Best local accuracy on *spontaneous/telephony* Russian speech" (now fully measured vs Vosk 0.54 + T-one).**
+gigastt's only **CI-separated** accuracy win is **YouTube** (11.35 vs all). **Phone is
+held** — gigastt 19.28 ties/leads even T-one's production beam+LM (21.73) and beats Vosk
+0.54 (22.74) — but with a **contamination caveat** (`openstt_calls` likely in GigaAM v3's
+training). Far-field is a **tie** (Vosk 0.54), clean read a **loss** (Vosk 0.54). So the
+honest accuracy claim is narrow: *the smallest engine that wins YouTube and holds noisy
+phone calls* — not "best/hard speech in general", not far-field, not clean read.
 
 **Thesis B — "Streaming + footprint + Rust-native embeddability" (robust regardless of WER).**
 Frame on the axes that don't depend on winning WER: true incremental streaming (vs
@@ -145,17 +165,18 @@ server (rate-limit / origin allowlist / graceful drain), MIT-clean code *and* we
 This is the defensible niche from the competitive analysis and survives even if a
 competitor wins a WER column.
 
-**Recommendation:** lead with **B** (it's true today and unbreakable), and add the
-specific A claims *per domain* once the re-run confirms them against Vosk 0.54 + T-one.
+**Recommendation:** lead with **B** (unbreakable). The re-run is done, so the only
+A-claim worth making is *per domain*: "wins YouTube; holds noisy phone calls (with the
+data caveat)" — and concede clean read (Vosk 0.54) and tie far-field plainly. Do **not**
+claim general accuracy leadership.
 
 ---
 
 ## What's still pending (blocks publishing to README)
 
-1. ✅ **Vosk 0.54 done** (all 4 domains, 1000 samples — numbers above, via sherpa-onnx).
-   Still pending: **faster-whisper-turbo** + **T-one** (`t-tech/T-one`, runner fixed) —
-   both blocked on stalled unauthenticated HuggingFace downloads; need an `HF_TOKEN`
-   (or a manual model fetch) to finish.
+1. ✅ **All 7 engines measured.** Vosk 0.54 (sherpa-onnx), faster-whisper-turbo
+   (300-sample slice) and T-one (greedy *and* production beam+LM, the latter via a
+   manually-curl'd 5.5 GB KenLM) are done — full WER + RTF tables above.
 2. `benchmark_footprint.py` + `benchmark_punctuation.py` + `benchmark_hallucinations.py`
    actual numbers (smoke first, ≤50 samples).
 3. Vosk-server streaming latency for a fair streaming comparison.

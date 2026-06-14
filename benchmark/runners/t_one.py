@@ -10,9 +10,18 @@ path is::
     pipeline = StreamingCTCPipeline.from_hugging_face()      # pulls t-tech/T-one
     text = pipeline.forward_offline(read_audio("clip.wav"))
 
-Install (pulls torch)::
+Decoder is selected via ``BENCHMARK_TONE_DECODER`` (``greedy`` default, or
+``beam_search`` for T-one's production config). Greedy uses only the 144 MB
+``model.onnx``; beam_search additionally needs the optional **5.5 GB KenLM**. That LM
+hangs on HF download, so fetch it separately (e.g. ``curl`` the
+``t-tech/T-one/resolve/main/kenlm.bin``) and point ``BENCHMARK_TONE_KENLM`` at the
+local file — it is loaded via ``BeamSearchCTCDecoder.from_local``. Beam+LM is T-one's
+honest config; greedy is the always-works fallback. Flag which decoder was used when
+reporting T-one numbers.
 
-    uv pip install "git+https://github.com/voicekit-team/T-one.git"
+Install (``tone`` pulls torch; ``read_audio`` needs ``miniaudio``)::
+
+    uv pip install "git+https://github.com/voicekit-team/T-one.git" miniaudio
 
 Until ``tone`` is importable, ``is_available()`` returns ``False`` and the suite skips
 T-one. All heavy imports are lazy so importing this module never fails.
@@ -42,9 +51,40 @@ class TOneRunner:
 
     def _load(self):
         if self._pipeline is None:
-            from tone import StreamingCTCPipeline
-            print("[t-one] Loading StreamingCTCPipeline from t-tech/T-one ...")
-            self._pipeline = StreamingCTCPipeline.from_hugging_face()
+            import os
+
+            from tone import DecoderType, StreamingCTCPipeline
+
+            # Decoder via BENCHMARK_TONE_DECODER: "greedy" (default — only the 144 MB
+            # model.onnx) or "beam_search" (T-one's production config — needs the 5.5 GB
+            # KenLM). The HF download of that LM hangs, so a locally-fetched kenlm.bin
+            # can be passed via BENCHMARK_TONE_KENLM and is loaded with from_local().
+            mode = os.environ.get("BENCHMARK_TONE_DECODER", "greedy").lower()
+            kenlm = os.environ.get("BENCHMARK_TONE_KENLM")
+            if mode in ("beam", "beam_search"):
+                if kenlm and os.path.exists(kenlm):
+                    from tone import (
+                        BeamSearchCTCDecoder,
+                        StreamingCTCModel,
+                        StreamingLogprobSplitter,
+                    )
+
+                    print(f"[t-one] Loading beam+LM (local KenLM: {kenlm}) ...")
+                    self._pipeline = StreamingCTCPipeline(
+                        StreamingCTCModel.from_hugging_face(),
+                        StreamingLogprobSplitter(),
+                        BeamSearchCTCDecoder.from_local(kenlm),
+                    )
+                else:
+                    print("[t-one] Loading beam+LM (downloads 5.5 GB KenLM from HF) ...")
+                    self._pipeline = StreamingCTCPipeline.from_hugging_face(
+                        decoder_type=DecoderType.BEAM_SEARCH
+                    )
+            else:
+                print("[t-one] Loading greedy (no external LM) ...")
+                self._pipeline = StreamingCTCPipeline.from_hugging_face(
+                    decoder_type=DecoderType.GREEDY
+                )
         return self._pipeline
 
     @staticmethod
