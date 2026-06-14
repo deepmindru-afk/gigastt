@@ -122,17 +122,33 @@ must be measured before any latency-leadership claim.
 
 ## 4. Footprint
 
-| Engine | Model on disk | Peak RSS (cold) | Cold-start |
-|---|---|---|---|
-| gigastt | **225 MB** (INT8; 851 MB FP32) | `pending` | `pending` |
-| Vosk 0.42 | ~1.3 GB | `pending` | `pending` |
-| faster-whisper | Large v3 ≈1.5 GB (INT8) | `pending` | `pending` |
-| whisper.cpp | Large v3 ≈3 GB | `pending` | `pending` |
-| T-one | `pending` | `pending` | `pending` |
+Measured on M1 (INT8 / greedy where applicable; RSS = peak resident over the first
+transcription; whisper.cpp not run — GGML model not cached locally).
 
-`benchmark_footprint.py` fills peak RSS + cold-start. The on-disk number is gigastt's
-strongest single stat: **~6× smaller than Vosk, ~13× smaller than whisper.cpp**, which
-is what makes it embeddable.
+| Engine | Deployable model on disk | Peak RSS (cold) | Cold-start |
+|---|---|---|---|
+| **gigastt** | **~225 MB** (INT8) | 1502 MB ¹ | **0.94 s** |
+| T-one (greedy) | 138 MB | 672 MB | 1.87 s |
+| T-one (beam+LM) | 138 MB + 5.5 GB LM | — | — |
+| Vosk 0.54 | 966 MB | **560 MB** | 1.16 s |
+| Vosk 0.42 | 3.5 GB | 1100 MB | 29.8 s |
+| faster-whisper-turbo | 1.6 GB | 2154 MB | 6.8 s |
+| faster-whisper | 2.9 GB | 2619 MB | 8.2 s |
+
+¹ gigastt's RSS is measured at the **default `--pool-size 4`** (4 model copies in the
+session pool); a single session is roughly a quarter (~400 MB). At pool=4 it is *not*
+the RAM leader.
+
+**Honest reading — footprint is a real advantage but not a clean sweep:**
+- **On-disk size:** gigastt ~225 MB is **4–13× smaller** than the Whisper/Vosk engines
+  (Vosk 0.54 966 MB, turbo 1.6 GB, faster-whisper 2.9 GB, Vosk 0.42 3.5 GB). But it is
+  *not* the absolute smallest — **T-one greedy is 138 MB**. T-one's *production* beam+LM,
+  though, is 138 MB **+ a 5.5 GB KenLM**, so gigastt is the smallest model with **no LM
+  trade-off**.
+- **Cold-start:** gigastt **wins** (0.94 s, fastest; Vosk 0.42 is a dreadful ~30 s).
+- **RAM:** gigastt does **not** win at the default pool (1.5 GB ≈ 4× model); Vosk 0.54
+  (560 MB) and T-one greedy (672 MB) are leaner. Single-session gigastt (~400 MB) is
+  competitive — state that honestly rather than claiming a RAM win.
 
 ---
 
@@ -178,8 +194,9 @@ claim general accuracy leadership.
 1. ✅ **All 7 engines measured.** Vosk 0.54 (sherpa-onnx), faster-whisper-turbo
    (300-sample slice) and T-one (greedy *and* production beam+LM, the latter via a
    manually-curl'd 5.5 GB KenLM) are done — full WER + RTF tables above.
-2. `benchmark_footprint.py` + `benchmark_punctuation.py` + `benchmark_hallucinations.py`
-   actual numbers (smoke first, ≤50 samples).
+2. ✅ **Footprint measured** (§4 — gigastt wins on-disk size + cold-start, not RAM).
+   Remaining axes: `benchmark_punctuation.py` (Common Voice ru) and
+   `benchmark_hallucinations.py` (MUSAN non-speech).
 3. Vosk-server streaming latency for a fair streaming comparison.
 4. Only then: update the README cross-domain table + write the final, single
    positioning paragraph.
