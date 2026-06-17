@@ -576,7 +576,7 @@ pub async fn transcribe_stream(
             checkout_start.elapsed().as_secs_f64(),
         );
     }
-    let reservation = guard.into_owned();
+    let mut reservation = guard.into_owned();
 
     // Create mpsc channel for streaming segments from the inference task to SSE.
     let (tx, rx) = tokio::sync::mpsc::channel::<
@@ -588,134 +588,61 @@ pub async fn transcribe_stream(
     // starts flowing, so `with_graceful_shutdown` can't observe this task. Clone
     // the shutdown token and check it before every chunk so SIGTERM during a
     // long transcription drops cleanly.
+    //
+    // The whole file is transcribed in one blocking task, streaming each 1 s
+    // chunk's segments out as they are produced. Each `process_chunk` is a small
+    // bounded unit of work, so unlike the single-shot REST path it is not
+    // wrapped by the per-request inference timeout; liveness on shutdown is
+    // handled by the per-chunk cancellation check.
     let cancel = state.shutdown.clone();
     let tracker = state.tracker.clone();
-    let metrics = state.metrics_registry.clone();
-    // Per-request inference timeout (`0` disables), applied per 1 s chunk so a
-    // wedged ORT Run on the SSE surface is bounded too — matching REST + WS. We
-    // drive the chunk loop from async and run each `process_chunk` in its own
-    // `spawn_blocking` wrapped in a timeout; the streaming state + reservation
-    // move into each blocking call and come back out (mirrors the WS handler).
-    let inference_timeout_secs = limits.inference_timeout_secs;
-    tracker.spawn(async move {
-        let mut stream_state = engine.create_state(false);
-        let mut reservation = reservation;
-        let chunk_size = 16000; // 1 second at 16 kHz
-        let mut chunks = samples.chunks(chunk_size);
-        // Whether the loop ran to completion (so we still flush the remainder)
-        // vs. was cut short by shutdown / error / timeout (so we don't).
-        let mut clean_finish = true;
-        loop {
-            if cancel.is_cancelled() {
-                tracing::info!("SSE transcription cancelled by shutdown");
-                clean_finish = false;
-                break;
-            }
-            let Some(chunk) = chunks.next() else { break };
-            let chunk_vec = chunk.to_vec();
-            let eng = engine.clone();
-            let span = tracing::Span::current();
-            let handle = tokio::task::spawn_blocking(move || {
-                let _enter = span.enter();
-                // Move state + reservation in so they come back unconditionally,
-                // including after a panic inside `process_chunk`.
-                let mut state = stream_state;
-                let mut res = reservation;
-                let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    eng.process_chunk(&chunk_vec, &mut state, &mut res)
-                }));
-                (r, state, res)
-            });
+    let span = tracing::Span::current();
+    tracker.spawn_blocking(move || {
+        let _enter = span.enter();
+        // catch_unwind ensures the triplet is returned to the pool even on panic.
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let mut stream_state = engine.create_state(false);
+            let chunk_size = 16000; // 1 second at 16 kHz
 
-            let joined = if inference_timeout_secs == 0 {
-                handle.await
-            } else {
-                match tokio::time::timeout(
-                    std::time::Duration::from_secs(inference_timeout_secs),
-                    handle,
-                )
-                .await
-                {
-                    Ok(j) => j,
-                    Err(_elapsed) => {
-                        if let Some(ref reg) = metrics {
-                            reg.counter_inc("gigastt_inference_timeouts_total", &[], 1);
+            for chunk in samples.chunks(chunk_size) {
+                if cancel.is_cancelled() {
+                    tracing::info!("SSE transcription cancelled by shutdown");
+                    return;
+                }
+                match engine.process_chunk(chunk, &mut stream_state, &mut reservation) {
+                    Ok(segs) => {
+                        for seg in segs {
+                            if tx.blocking_send(Ok(seg)).is_err() {
+                                // Receiver dropped (client disconnected).
+                                return;
+                            }
                         }
-                        tracing::error!(
-                            "SSE inference exceeded {inference_timeout_secs}s — aborting stream"
-                        );
-                        let _ = tx
-                            .send(Err(StreamError {
-                                code: "inference_timeout",
-                                message: "Inference timed out.".into(),
-                            }))
-                            .await;
-                        // `spawn_blocking` can't be cancelled: the detached run
-                        // keeps the triplet + streaming state and returns the
-                        // slot to the pool only when it eventually finishes.
+                    }
+                    Err(e) => {
+                        let _ = tx.blocking_send(Err(StreamError {
+                            code: e.code(),
+                            message: "Transcription failed. Please check audio format.".into(),
+                        }));
                         return;
                     }
                 }
-            };
-
-            match joined {
-                Ok((Ok(Ok(segs)), state_back, res_back)) => {
-                    stream_state = state_back;
-                    reservation = res_back;
-                    for seg in segs {
-                        if tx.send(Ok(seg)).await.is_err() {
-                            // Receiver dropped (client disconnected).
-                            return;
-                        }
-                    }
-                }
-                Ok((Ok(Err(e)), _state_back, res_back)) => {
-                    let _ = tx
-                        .send(Err(StreamError {
-                            code: e.code(),
-                            message: "Transcription failed. Please check audio format.".into(),
-                        }))
-                        .await;
-                    // Return the recovered triplet to the pool; stream ends here.
-                    drop(res_back);
-                    return;
-                }
-                Ok((Err(_panic), _state_back, res_back)) => {
-                    tracing::error!("Panic in SSE inference task — triplet recovered");
-                    let _ = tx
-                        .send(Err(StreamError {
-                            code: "inference_panic",
-                            message: "Inference failed unexpectedly.".into(),
-                        }))
-                        .await;
-                    drop(res_back);
-                    return;
-                }
-                Err(e) => {
-                    tracing::error!("SSE spawn_blocking join error: {e}");
-                    return;
-                }
             }
-        }
 
-        if clean_finish {
-            // Final decode of the sub-stride remainder. This runs a real (but
-            // single-window, bounded-size) encoder + RNN-T pass — not a free
-            // assembler flush — so it stays in a blocking task. It is the one
-            // ORT Run on the happy path not wrapped by the per-chunk inference
-            // timeout, which is acceptable because it executes only after every
-            // chunk already succeeded and is bounded by the streaming window.
-            // State + reservation come back so the triplet is checked in on drop.
-            let eng = engine.clone();
-            let handle = tokio::task::spawn_blocking(move || {
-                let mut state = stream_state;
-                let mut res = reservation;
-                let seg = eng.finish_stream(&mut state, &mut res);
-                (seg, state, res)
-            });
-            if let Ok((Some(seg), _state, _res)) = handle.await {
-                let _ = tx.send(Ok(seg)).await;
+            // Final decode of the sub-stride remainder, then flush — best-effort;
+            // always emit so SSE clients receive a clean end-of-stream marker.
+            if let Some(seg) = engine.finish_stream(&mut stream_state, &mut reservation) {
+                let _ = tx.blocking_send(Ok(seg));
             }
+        }));
+
+        if result.is_err() {
+            tracing::error!("Panic in SSE inference task — triplet recovered");
+            // Mirror the WebSocket contract: surface a distinct `inference_panic`
+            // code instead of ending the stream silently.
+            let _ = tx.blocking_send(Err(StreamError {
+                code: "inference_panic",
+                message: "Inference failed unexpectedly.".into(),
+            }));
         }
         // reservation dropped here automatically returns the triplet to the pool
     });
