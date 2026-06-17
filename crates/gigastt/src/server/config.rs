@@ -267,7 +267,7 @@ mod tests {
 
     #[test]
     fn test_runtime_limits_default_session_and_drain() {
-        //  / : locks in the documented defaults so a silent change
+        // Locks in the documented defaults so a silent change
         // can't quietly disable the shutdown drain or the session cap.
         let limits = RuntimeLimits::default();
         assert_eq!(
