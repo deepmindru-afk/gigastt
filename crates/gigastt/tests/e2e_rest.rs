@@ -337,13 +337,17 @@ async fn test_sse_midstream_disconnect() {
 
     assert_eq!(resp.status(), 200);
 
-    // Read just the first event, then drop the response to simulate disconnect
+    // Begin reading the stream, then drop it mid-flight to simulate a client
+    // disconnect. The point of this test is the server's resilience to that
+    // disconnect, not event timing: a 440 Hz sine is not speech, so the model
+    // legitimately may emit no early `partial` and only a trailing segment —
+    // hard-requiring a first event within 10 s made this test flaky on slow CI
+    // runners. Poll once to start the response body flowing, tolerating either an
+    // event or the window elapsing.
     let mut stream = resp.bytes_stream();
-    let _first = tokio::time::timeout(Duration::from_secs(10), stream.next())
-        .await
-        .expect("Timed out waiting for first SSE event");
+    let _ = tokio::time::timeout(Duration::from_secs(5), stream.next()).await;
 
-    // Drop the stream, simulating client disconnect
+    // Drop the stream, simulating client disconnect.
     drop(stream);
 
     // Give the server a moment to detect the disconnect and clean up
