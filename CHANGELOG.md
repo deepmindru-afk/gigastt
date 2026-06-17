@@ -22,13 +22,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Per-request inference timeout (`--inference-timeout-secs`).** A
   `spawn_blocking` ONNX run that exceeds the timeout (env
   `GIGASTT_INFERENCE_TIMEOUT_SECS`, default 600, `0` disables) now returns a
-  typed `inference_timeout` to the client (REST: HTTP 504; WebSocket / SSE:
-  error event + close) instead of hanging the request, with a
-  `gigastt_inference_timeouts_total` counter. The default of 600 s comfortably
-  covers a worst-case in-spec 10-minute (600 s audio) file on the CPU EP, so the
-  advertised upload ceiling still works out of the box. The SSE path bounds each
-  1 s chunk individually, matching REST + WebSocket. Note: `spawn_blocking` can't
-  be cancelled, so a hung run's triplet returns to the pool only when it
+  typed `inference_timeout` to the client (REST: HTTP 504; WebSocket: error +
+  close) instead of hanging the request, with a `gigastt_inference_timeouts_total`
+  counter. The default of 600 s comfortably covers a worst-case in-spec
+  10-minute (600 s audio) file on the CPU EP, so the advertised upload ceiling
+  still works out of the box. The SSE streaming path is not wrapped — each 1 s
+  chunk is a small bounded unit and shutdown is handled by a per-chunk
+  cancellation check. Note: `spawn_blocking` can't be
+  cancelled, so a hung run's triplet returns to the pool only when it
   eventually completes (or at restart) — the timeout unblocks the *client*, not
   the stuck slot.
 - **Degraded pool boot (`--pool-min-size`).** When some session triplets fail
