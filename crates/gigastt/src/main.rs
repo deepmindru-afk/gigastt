@@ -3,6 +3,7 @@ use clap::{Parser, Subcommand};
 use gigastt::server;
 use gigastt::server::{OriginPolicy, RuntimeLimits, ServerConfig};
 use gigastt_core::export::{ExportFormat, RenderOpts};
+use gigastt_core::model::ModelVariant;
 use gigastt_core::{inference, model};
 use std::net::IpAddr;
 use std::str::FromStr;
@@ -42,6 +43,41 @@ enum Commands {
         /// Model directory
         #[arg(long, default_value_t = model::default_model_dir())]
         model_dir: String,
+
+        /// Recognition head to use. Omit to auto-detect from the model
+        /// directory: if a model is already installed its variant is used as-is
+        /// (no download). Only required when the directory is empty or you want
+        /// to switch variants. `rnnt` (lower WER, bare lowercase) or
+        /// `e2e_rnnt` (punctuation / casing / ITN). Env: GIGASTT_MODEL_VARIANT.
+        #[arg(
+            long,
+            env = "GIGASTT_MODEL_VARIANT",
+            value_parser = parse_model_variant
+        )]
+        model_variant: Option<ModelVariant>,
+
+        /// Punctuation + capitalization restoration: `on`, `off`, or `auto`.
+        /// `auto` (default) enables it for the `rnnt` head (bare output) and
+        /// disables it for `e2e_rnnt` (already punctuated). Requires the punct
+        /// model in `--punct-model-dir`; missing model → bare text + a warning.
+        /// Env: GIGASTT_PUNCTUATION.
+        #[arg(
+            long,
+            env = "GIGASTT_PUNCTUATION",
+            default_value = "auto",
+            value_parser = parse_punctuation_mode
+        )]
+        punctuation: PunctuationMode,
+
+        /// Directory holding the optional punctuation model
+        /// (`rupunct_small_int8.onnx`, `tokenizer.json`, `config.json`).
+        /// Defaults to `~/.gigastt/models/punct/`. Env: GIGASTT_PUNCT_MODEL_DIR.
+        #[arg(
+            long,
+            env = "GIGASTT_PUNCT_MODEL_DIR",
+            default_value_t = model::default_punct_model_dir()
+        )]
+        punct_model_dir: String,
 
         /// Number of concurrent inference sessions
         #[arg(long, default_value_t = 4)]
@@ -158,6 +194,16 @@ enum Commands {
         #[arg(long, default_value_t = model::default_model_dir())]
         model_dir: String,
 
+        /// Recognition head to download: `rnnt` (default — lower WER, bare
+        /// lowercase) or `e2e_rnnt` (punctuation / casing / ITN).
+        #[arg(
+            long,
+            env = "GIGASTT_MODEL_VARIANT",
+            default_value = "rnnt",
+            value_parser = parse_model_variant
+        )]
+        model_variant: ModelVariant,
+
         /// Skip downloading the speaker diarization model
         #[cfg(feature = "diarization")]
         #[arg(long, default_value_t = false)]
@@ -190,6 +236,37 @@ enum Commands {
         /// Model directory
         #[arg(long, default_value_t = model::default_model_dir())]
         model_dir: String,
+
+        /// Recognition head to use. Omit to auto-detect from the model
+        /// directory (existing install used as-is; only downloads if empty).
+        /// `rnnt` (lower WER, bare lowercase) or `e2e_rnnt` (punctuation /
+        /// casing / ITN). Env: GIGASTT_MODEL_VARIANT.
+        #[arg(
+            long,
+            env = "GIGASTT_MODEL_VARIANT",
+            value_parser = parse_model_variant
+        )]
+        model_variant: Option<ModelVariant>,
+
+        /// Punctuation + capitalization restoration: `on`, `off`, or `auto`.
+        /// `auto` (default) enables it for `rnnt`, disables it for `e2e_rnnt`.
+        /// Env: GIGASTT_PUNCTUATION.
+        #[arg(
+            long,
+            env = "GIGASTT_PUNCTUATION",
+            default_value = "auto",
+            value_parser = parse_punctuation_mode
+        )]
+        punctuation: PunctuationMode,
+
+        /// Directory holding the optional punctuation model. Defaults to
+        /// `~/.gigastt/models/punct/`. Env: GIGASTT_PUNCT_MODEL_DIR.
+        #[arg(
+            long,
+            env = "GIGASTT_PUNCT_MODEL_DIR",
+            default_value_t = model::default_punct_model_dir()
+        )]
+        punct_model_dir: String,
 
         /// Export format: json, txt, srt, vtt, md [default: txt]
         #[arg(short, long, env = "GIGASTT_FORMAT", default_value = "txt")]
@@ -354,11 +431,87 @@ fn is_loopback_host(host: &str) -> bool {
     false
 }
 
-/// Ensure the INT8 encoder exists, producing it via the native Rust
-/// quantization pipeline if missing. Honoured by `serve` and `download`.
-/// First-time quantization takes ~2 minutes on the 844 MB FP32 encoder.
-fn ensure_int8_encoder(model_dir: &str, skip: bool) -> anyhow::Result<()> {
-    let int8_path = std::path::Path::new(model_dir).join("v3_e2e_rnnt_encoder_int8.onnx");
+/// clap value parser for `--model-variant`. Accepts `rnnt` / `e2e_rnnt`
+/// (case-insensitive); see [`ModelVariant::from_str`].
+fn parse_model_variant(s: &str) -> Result<ModelVariant, String> {
+    s.parse()
+}
+
+/// Whether to run the optional punctuation / casing restoration pass.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PunctuationMode {
+    /// Always attempt to load + apply the punct model.
+    On,
+    /// Never apply punctuation (pass-through bare output).
+    Off,
+    /// Decide from the active model variant: on for `rnnt` (bare output),
+    /// off for `e2e_rnnt` (punctuation already baked into the head).
+    Auto,
+}
+
+impl std::str::FromStr for PunctuationMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "on" | "true" | "1" | "yes" => Ok(PunctuationMode::On),
+            "off" | "false" | "0" | "no" => Ok(PunctuationMode::Off),
+            "auto" => Ok(PunctuationMode::Auto),
+            other => Err(format!(
+                "unknown punctuation mode '{other}' (expected 'on', 'off', or 'auto')"
+            )),
+        }
+    }
+}
+
+/// clap value parser for `--punctuation`.
+fn parse_punctuation_mode(s: &str) -> Result<PunctuationMode, String> {
+    s.parse()
+}
+
+/// Resolve `--punctuation` against the active model variant and, when the pass
+/// should run, load the punctuation restorer from `punct_model_dir`.
+///
+/// Graceful fallback: when the punct model dir / files are absent or the model
+/// fails to load, a warning is logged once and `None` is returned so
+/// transcription proceeds with bare text — the punct pass is strictly optional
+/// and never blocks recognition.
+fn maybe_load_punctuator(
+    mode: PunctuationMode,
+    punct_model_dir: &str,
+    variant: ModelVariant,
+) -> Option<gigastt_core::punctuation::Punctuator> {
+    let enabled = match mode {
+        PunctuationMode::On => true,
+        PunctuationMode::Off => false,
+        // e2e_rnnt already emits punctuation/casing, so only the bare rnnt head
+        // benefits from the restoration pass.
+        PunctuationMode::Auto => variant == ModelVariant::Rnnt,
+    };
+    if !enabled {
+        return None;
+    }
+    match gigastt_core::punctuation::Punctuator::load(std::path::Path::new(punct_model_dir)) {
+        Ok(p) => {
+            tracing::info!("Punctuation restoration enabled (model dir: {punct_model_dir})");
+            Some(p)
+        }
+        Err(e) => {
+            tracing::warn!(
+                "Punctuation model unavailable at {punct_model_dir} ({e:#}); \
+                 continuing without punctuation restoration"
+            );
+            None
+        }
+    }
+}
+
+/// Ensure the INT8 encoder exists for `variant`, producing it via the native
+/// Rust quantization pipeline if missing. Honoured by `serve` and `download`.
+/// First-time quantization takes ~2 minutes on the FP32 encoder.
+fn ensure_int8_encoder(variant: ModelVariant, model_dir: &str, skip: bool) -> anyhow::Result<()> {
+    let dir = std::path::Path::new(model_dir);
+    let int8_path = dir.join(variant.encoder_int8_file());
     if int8_path.exists() {
         return Ok(());
     }
@@ -368,7 +521,7 @@ fn ensure_int8_encoder(model_dir: &str, skip: bool) -> anyhow::Result<()> {
         );
         return Ok(());
     }
-    let input = std::path::Path::new(model_dir).join("v3_e2e_rnnt_encoder.onnx");
+    let input = dir.join(variant.encoder_file());
     if !input.exists() {
         anyhow::bail!(
             "Cannot quantize: FP32 encoder not found at {}",
@@ -395,6 +548,9 @@ async fn main() -> anyhow::Result<()> {
             port,
             host,
             model_dir,
+            model_variant,
+            punctuation,
+            punct_model_dir,
             pool_size,
             pool_min_size,
             batch_pool_size,
@@ -417,14 +573,16 @@ async fn main() -> anyhow::Result<()> {
             config,
         } => {
             ensure_bind_allowed(&host, bind_all)?;
-            model::ensure_model(&model_dir).await?;
-            ensure_int8_encoder(&model_dir, skip_quantize)?;
+            let resolved = model::ensure_model_variant(model_variant, &model_dir).await?;
+            ensure_int8_encoder(resolved, &model_dir, skip_quantize)?;
+            let punctuator = maybe_load_punctuator(punctuation, &punct_model_dir, resolved);
             let engine = inference::Engine::load_with_pools(
                 &model_dir,
                 pool_size,
                 pool_min_size,
                 batch_pool_size,
-            )?;
+            )?
+            .with_punctuator(punctuator);
             log_rss();
             let limits = build_limits(
                 config.as_deref(),
@@ -462,24 +620,31 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Download {
             model_dir,
+            model_variant,
             #[cfg(feature = "diarization")]
             skip_diarization,
             skip_quantize,
         } => {
-            model::ensure_model(&model_dir).await?;
+            // `download` is an explicit action: None here maps to the default
+            // (Rnnt) so a bare `gigastt download` fetches something useful.
+            let requested = Some(model_variant);
+            let resolved = model::ensure_model_variant(requested, &model_dir).await?;
             #[cfg(feature = "diarization")]
             {
                 if !skip_diarization {
                     model::ensure_speaker_model(&model_dir).await?;
                 }
             }
-            ensure_int8_encoder(&model_dir, skip_quantize)?;
+            ensure_int8_encoder(resolved, &model_dir, skip_quantize)?;
             tracing::info!("Model ready at {model_dir}");
         }
         Commands::Quantize { model_dir, force } => {
-            model::ensure_model(&model_dir).await?;
-            let input = std::path::Path::new(&model_dir).join("v3_e2e_rnnt_encoder.onnx");
-            let output = std::path::Path::new(&model_dir).join("v3_e2e_rnnt_encoder_int8.onnx");
+            // Quantize an existing model dir: detect the head already on disk
+            // (default rnnt when the dir is empty and `ensure_model` must fetch).
+            let dir = std::path::Path::new(&model_dir);
+            let resolved = model::ensure_model_variant(None, &model_dir).await?;
+            let input = dir.join(resolved.encoder_file());
+            let output = dir.join(resolved.encoder_int8_file());
             if output.exists() && !force {
                 tracing::info!("INT8 model already exists: {}", output.display());
                 tracing::info!("Use --force to re-quantize.");
@@ -491,14 +656,19 @@ async fn main() -> anyhow::Result<()> {
         Commands::Transcribe {
             file,
             model_dir,
+            model_variant,
+            punctuation,
+            punct_model_dir,
             format,
             output,
             max_chars_per_line,
             max_words_per_line,
             word_timestamps,
         } => {
-            model::ensure_model(&model_dir).await?;
-            let engine = inference::Engine::load_with_pool_size(&model_dir, 1)?;
+            let resolved = model::ensure_model_variant(model_variant, &model_dir).await?;
+            let punctuator = maybe_load_punctuator(punctuation, &punct_model_dir, resolved);
+            let engine =
+                inference::Engine::load_with_pool_size(&model_dir, 1)?.with_punctuator(punctuator);
             log_rss();
             let mut guard = engine.pool.checkout().await?;
             let result = engine.transcribe_file(&file, &mut guard);
@@ -585,11 +755,36 @@ mod tests {
                 port,
                 bind_all,
                 metrics,
+                model_variant,
                 ..
             } => {
                 assert_eq!(port, 1234);
                 assert!(bind_all);
                 assert!(!metrics);
+                // No --model-variant → None (auto-detect from disk).
+                assert_eq!(model_variant, None);
+            }
+            _ => panic!("expected Serve"),
+        }
+    }
+
+    #[test]
+    fn test_cli_serve_model_variant_override() {
+        let cli = Cli::parse_from(["gigastt", "serve", "--model-variant", "e2e_rnnt"]);
+        match cli.command {
+            Commands::Serve { model_variant, .. } => {
+                assert_eq!(model_variant, Some(ModelVariant::E2eRnnt));
+            }
+            _ => panic!("expected Serve"),
+        }
+    }
+
+    #[test]
+    fn test_cli_serve_model_variant_explicit_rnnt() {
+        let cli = Cli::parse_from(["gigastt", "serve", "--model-variant", "rnnt"]);
+        match cli.command {
+            Commands::Serve { model_variant, .. } => {
+                assert_eq!(model_variant, Some(ModelVariant::Rnnt));
             }
             _ => panic!("expected Serve"),
         }
@@ -599,8 +794,24 @@ mod tests {
     fn test_cli_download_parsing() {
         let cli = Cli::parse_from(["gigastt", "download", "--model-dir", "/tmp/models"]);
         match cli.command {
-            Commands::Download { model_dir, .. } => {
+            Commands::Download {
+                model_dir,
+                model_variant,
+                ..
+            } => {
                 assert_eq!(model_dir, "/tmp/models");
+                assert_eq!(model_variant, ModelVariant::Rnnt);
+            }
+            _ => panic!("expected Download"),
+        }
+    }
+
+    #[test]
+    fn test_cli_download_model_variant_override() {
+        let cli = Cli::parse_from(["gigastt", "download", "--model-variant", "e2e_rnnt"]);
+        match cli.command {
+            Commands::Download { model_variant, .. } => {
+                assert_eq!(model_variant, ModelVariant::E2eRnnt);
             }
             _ => panic!("expected Download"),
         }
@@ -623,11 +834,14 @@ mod tests {
         match cli.command {
             Commands::Transcribe {
                 file,
+                model_variant,
                 format,
                 output,
                 ..
             } => {
                 assert_eq!(file, "audio.wav");
+                // No --model-variant → None (auto-detect from disk).
+                assert_eq!(model_variant, None);
                 assert_eq!(format, "txt");
                 assert!(output.is_none());
             }
@@ -693,6 +907,114 @@ mod tests {
     }
 
     #[test]
+    fn test_cli_serve_rejects_unknown_model_variant() {
+        let res = Cli::try_parse_from(["gigastt", "serve", "--model-variant", "whisper"]);
+        assert!(res.is_err(), "unknown variant must be rejected by clap");
+    }
+
+    #[test]
+    fn test_punctuation_mode_from_str() {
+        use std::str::FromStr;
+        assert_eq!(
+            PunctuationMode::from_str("on").unwrap(),
+            PunctuationMode::On
+        );
+        assert_eq!(
+            PunctuationMode::from_str("OFF").unwrap(),
+            PunctuationMode::Off
+        );
+        assert_eq!(
+            PunctuationMode::from_str(" auto ").unwrap(),
+            PunctuationMode::Auto
+        );
+        assert!(PunctuationMode::from_str("maybe").is_err());
+    }
+
+    #[test]
+    fn test_cli_serve_punctuation_defaults_auto() {
+        let cli = Cli::parse_from(["gigastt", "serve"]);
+        match cli.command {
+            Commands::Serve {
+                punctuation,
+                punct_model_dir,
+                ..
+            } => {
+                assert_eq!(punctuation, PunctuationMode::Auto);
+                assert!(punct_model_dir.contains("punct"));
+            }
+            _ => panic!("expected Serve"),
+        }
+    }
+
+    #[test]
+    fn test_cli_serve_punctuation_override() {
+        let cli = Cli::parse_from([
+            "gigastt",
+            "serve",
+            "--punctuation",
+            "on",
+            "--punct-model-dir",
+            "/tmp/punct",
+        ]);
+        match cli.command {
+            Commands::Serve {
+                punctuation,
+                punct_model_dir,
+                ..
+            } => {
+                assert_eq!(punctuation, PunctuationMode::On);
+                assert_eq!(punct_model_dir, "/tmp/punct");
+            }
+            _ => panic!("expected Serve"),
+        }
+    }
+
+    #[test]
+    fn test_cli_transcribe_punctuation_off() {
+        let cli = Cli::parse_from(["gigastt", "transcribe", "a.wav", "--punctuation", "off"]);
+        match cli.command {
+            Commands::Transcribe { punctuation, .. } => {
+                assert_eq!(punctuation, PunctuationMode::Off);
+            }
+            _ => panic!("expected Transcribe"),
+        }
+    }
+
+    #[test]
+    fn test_maybe_load_punctuator_off_skips_load() {
+        // `off` must never touch the filesystem / model dir.
+        assert!(
+            maybe_load_punctuator(PunctuationMode::Off, "/nonexistent", ModelVariant::Rnnt)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn test_maybe_load_punctuator_auto_e2e_skips_load() {
+        // `auto` + e2e_rnnt → punctuation disabled (head already punctuates),
+        // so no load is attempted even if the dir is missing.
+        assert!(
+            maybe_load_punctuator(PunctuationMode::Auto, "/nonexistent", ModelVariant::E2eRnnt)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn test_maybe_load_punctuator_missing_model_falls_back_to_none() {
+        // `on` + missing model dir → graceful fallback to None (warn, no panic).
+        let tmp = tempfile::tempdir().unwrap();
+        let missing = tmp.path().join("absent");
+        assert!(
+            maybe_load_punctuator(
+                PunctuationMode::On,
+                missing.to_str().unwrap(),
+                ModelVariant::Rnnt
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
     fn test_cli_serve_with_metrics() {
         let cli = Cli::parse_from(["gigastt", "serve", "--metrics"]);
         match cli.command {
@@ -739,23 +1061,35 @@ mod tests {
     #[test]
     fn test_ensure_int8_encoder_already_exists() {
         let tmp = tempfile::tempdir().unwrap();
-        let int8_path = tmp.path().join("v3_e2e_rnnt_encoder_int8.onnx");
+        let int8_path = tmp.path().join("v3_rnnt_encoder_int8.onnx");
         std::fs::write(&int8_path, b"fake").unwrap();
-        ensure_int8_encoder(tmp.path().to_str().unwrap(), false).unwrap();
+        ensure_int8_encoder(ModelVariant::Rnnt, tmp.path().to_str().unwrap(), false).unwrap();
     }
 
     #[test]
     fn test_ensure_int8_encoder_skip_flag() {
         let tmp = tempfile::tempdir().unwrap();
-        ensure_int8_encoder(tmp.path().to_str().unwrap(), true).unwrap();
+        ensure_int8_encoder(ModelVariant::Rnnt, tmp.path().to_str().unwrap(), true).unwrap();
     }
 
     #[test]
     fn test_ensure_int8_encoder_missing_input() {
         let tmp = tempfile::tempdir().unwrap();
-        let err = ensure_int8_encoder(tmp.path().to_str().unwrap(), false).unwrap_err();
+        let err = ensure_int8_encoder(ModelVariant::Rnnt, tmp.path().to_str().unwrap(), false)
+            .unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("Cannot quantize"), "unexpected error: {msg}");
+    }
+
+    #[test]
+    fn test_ensure_int8_encoder_e2e_targets_e2e_encoder_name() {
+        // With the e2e variant, the FP32 input it looks for is the e2e encoder;
+        // an rnnt encoder in the dir must NOT satisfy it.
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("v3_rnnt_encoder.onnx"), b"rnnt").unwrap();
+        let err = ensure_int8_encoder(ModelVariant::E2eRnnt, tmp.path().to_str().unwrap(), false)
+            .unwrap_err();
+        assert!(format!("{err}").contains("Cannot quantize"));
     }
 
     #[test]

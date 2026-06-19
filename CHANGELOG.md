@@ -39,6 +39,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Punctuation + capitalization restoration for the `rnnt` head
+  (`--punctuation`).** An optional post-processing pass turns the plain `rnnt`
+  head's bare lowercase output into properly cased, punctuated Russian
+  (e.g. `шестьдесят тысяч тенге сколько будет стоить` →
+  `Шестьдесят тысяч тенге, сколько будет стоить?`). Backed by an INT8 ONNX export
+  of `RUPunct/RUPunct_small` (MIT, ~29 MB) run via ONNX Runtime with the
+  `tokenizers` crate for WordPiece — no Python at runtime. `--punctuation
+  <auto|on|off>` (env `GIGASTT_PUNCTUATION`, default `auto` = on for `rnnt`, off
+  for `e2e_rnnt` which already punctuates) and `--punct-model-dir`
+  (env `GIGASTT_PUNCT_MODEL_DIR`, default `~/.gigastt/models/punct/`). The pass is
+  fully optional: if the model is absent it logs once and returns the text
+  unchanged. Inverse text normalization (number-words → digits) is a planned
+  follow-up. (The ONNX artifact must be published to a model host before an
+  auto-download default can be wired; for now place it in the punct model dir.)
+- **Selectable recognition head (`--model-variant rnnt|e2e_rnnt`).** gigastt can now
+  run either GigaAM v3 head. The plain `rnnt` head is the default for fresh installs:
+  it scores markedly lower WER on bare normalized text (measured ~3.3% vs ~9.6% for
+  `e2e_rnnt` on a golos_crowd_1k subset) but emits lowercase text without punctuation.
+  `e2e_rnnt` keeps native punctuation, casing, and inverse text normalization. The
+  engine auto-detects the installed variant from the files on disk (real filenames per
+  variant; the `rnnt` vocab is `v3_vocab.txt`), and the downloader fetches the matching
+  set with per-file SHA-256 verification. Existing installs are respected: running
+  `serve`/`transcribe` without `--model-variant` uses whatever model is already present
+  and never silently re-downloads; an explicit `--model-variant` switches (and never
+  mixes variants). Env var `GIGASTT_MODEL_VARIANT`.
 - **Dedicated batch pool (`--batch-pool-size`).** Both REST file-transcription
   paths — `/v1/transcribe` and the SSE `/v1/transcribe/stream` (which also
   transcribes a whole upload, holding its triplet for the file's duration) —
