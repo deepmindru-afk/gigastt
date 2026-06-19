@@ -22,7 +22,7 @@ Reproducible benchmark comparing **gigastt** against popular open-source ASR eng
 
 RTF is measured against a **pre-warmed engine** so that model-load time is not unfairly charged to any runner:
 
-- **gigastt** is measured via HTTP calls to a `gigastt serve` process that stays up for the whole benchmark.
+- **gigastt** is measured via HTTP POST to a `gigastt serve` process that stays up for the whole benchmark. WebSocket streaming was evaluated but abandoned for WER benchmarking: when inference is slower than real-time, the streaming endpoint finalizes on incomplete audio and returns truncated transcripts.
 - **faster-whisper** and **Vosk** load their models once in `is_available()` and reuse them for every sample.
 - **whisper.cpp** runs in **server mode** (`whisper-server`). The model is loaded once when the server starts; each sample is sent as an HTTP POST to `/inference` and the wall-clock request latency is used as `processing_time`. This replaces the previous per-sample `whisper-cli` invocation that re-loaded the ~3 GB model on every file and produced an artificially high RTF.
 
@@ -88,10 +88,10 @@ GigaAM v3 is a SberDevices model whose fine-tuning is dominated by Golos, and Co
 cd benchmark
 pip install -r requirements.lock.txt
 
-# Run on 100 samples (default)
+# Run on 100 samples (default). First run transcribes; later runs read from cache.
 python benchmark.py
 
-# Run on full Golos crowd dataset (slow!)
+# Run on full Golos crowd dataset (slow on first run, ~seconds once cached)
 python benchmark.py --max-samples 0 --output results_full.json
 
 # Run only specific engines
@@ -99,7 +99,19 @@ python benchmark.py --runners gigastt,whisper_cpp
 
 # Use environment variable for limit
 GIGASTT_BENCHMARK_MAX_SAMPLES=50 python benchmark.py
+
+# Force a fresh run without using the cache
+python benchmark.py --no-cache
+
+# Clear cached transcription results
+python benchmark.py --clear-cache
+
+# Profile where time is spent (writes benchmark.prof)
+python benchmark.py --profile --max-samples 10
+python -m pstats benchmark.prof
 ```
+
+On a 2024 MacBook Pro, 3 Golos crowd samples through `gigastt` take ~85 s on a cold cache and ~0.35 s once cached. Most of the wall-clock time is model inference; the cache eliminates that on repeat runs.
 
 ### Lockfile
 
@@ -115,10 +127,10 @@ uv pip compile requirements.txt \
 
 ## Tests
 
-Run the normalization unit tests with:
+Run the benchmark unit tests with:
 
 ```bash
-python -m pytest tests/test_common.py -v
+python -m pytest tests/ -v
 ```
 
 ## Docker (fully isolated)
@@ -323,13 +335,27 @@ No further normalization rules were added specifically to tailor results to giga
       "name": "gigastt",
       "samples": 100,
       "failures": 0,
+      "cached_hits": 100,
       "wer": 11.40,
       "ci_low": 10.9,
       "ci_high": 11.9,
       "rtf": 0.045,
       "total_errors": 57,
       "total_ref_words": 500,
-      "details": [...]
+      "details": [
+        {
+          "file": "00001.wav",
+          "reference": "...",
+          "hypothesis": "...",
+          "wer": 0.0,
+          "errors": 0,
+          "ref_words": 5,
+          "audio_sec": 3.5,
+          "proc_sec": 0.15,
+          "failed": false,
+          "cached": true
+        }
+      ]
     }
   ],
   "metadata": {
@@ -339,6 +365,45 @@ No further normalization rules were added specifically to tailor results to giga
     "engines": [ { "name": "gigastt", "version": "...", "model_sha256": "..." }, ... ]
   }
 }
+```
+
+## Histograms
+
+Each runner result includes WER breakdown histograms in `runners[*].histograms`:
+
+| Dimension | Buckets | What it tells you |
+|---|---|---|
+| `audio_duration` | `0-5s`, `5-15s`, `15-30s`, `30s+` | WER by clip length — reveals whether the engine struggles with long-form audio. |
+| `ref_words` | `1-5`, `6-15`, `16-30`, `30+` | WER by utterance complexity — short commands vs. long sentences. |
+| `wer` | `0%`, `1-10%`, `10-20%`, `20-50%`, `50-100%`, `100%+` | Distribution of per-sample WER — shows how many samples are perfect, how many are catastrophic. |
+
+Each bucket contains:
+
+```json
+{
+  "bucket": "5-15s",
+  "samples": 42,
+  "ref_words": 315,
+  "errors": 23,
+  "wer": 7.30,
+  "low_inclusive": 5.0,
+  "high_exclusive": 15.0
+}
+```
+
+Failed samples are counted in the `100%+` bucket because they are treated as 100% WER for that sample.
+
+Example CLI output:
+
+```text
+--- Histograms: gigastt ---
+
+audio_duration:
+  Bucket            Samples    Words   Errors    WER %
+  0-5s                   45      312       12     3.85
+  5-15s                  42      315       23     7.30
+  15-30s                 10       89        9    10.11
+  30s+                    3       28        8    28.57
 ```
 
 ## CI / Automation
