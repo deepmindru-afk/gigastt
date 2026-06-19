@@ -153,8 +153,8 @@ fn streaming_long_audio_slides_window() {
 /// the encoder subsampling factor (a mel-vs-encoder frame unit
 /// mismatch used to multiply every post-first-chunk `start`/`end` by ~4×). The
 /// inflation only appears once the window slides (a non-zero frame offset), so
-/// this feeds >5 s of audio to force slides, then asserts no word lands far
-/// beyond the audio's real duration. Fixed by the sliding-window change (the offset
+/// this feeds several seconds of audio to force slides, then asserts no word
+/// lands far beyond the audio's real duration. Fixed structurally (the offset
 /// is now derived from slid-off samples); this is the regression guard.
 #[test]
 #[ignore = "requires the GigaAM model (~850MB) at ~/.gigastt/models"]
