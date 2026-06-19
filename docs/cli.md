@@ -20,6 +20,16 @@ gigastt serve [OPTIONS]
   --port <PORT>             Listen port [default: 9876]
   --host <HOST>             Bind address [default: 127.0.0.1]
   --model-dir <DIR>         Model directory [default: ~/.gigastt/models]
+  --model-variant <V>       Recognition head: rnnt | e2e_rnnt. Omit to use the model
+                            already installed; fresh installs default to rnnt (lower WER,
+                            no punctuation). e2e_rnnt keeps punctuation/casing/ITN.
+                            Env: GIGASTT_MODEL_VARIANT.
+  --punctuation <MODE>      Restore punctuation/casing on output: auto | on | off
+                            [default: auto = on for rnnt, off for e2e_rnnt].
+                            Optional ONNX pass; absent model → text unchanged.
+                            Env: GIGASTT_PUNCTUATION.
+  --punct-model-dir <DIR>   Punctuation model directory [default: ~/.gigastt/models/punct].
+                            Env: GIGASTT_PUNCT_MODEL_DIR.
   --pool-size <N>           Concurrent inference sessions [default: 4]
   --bind-all                Required to listen on a non-loopback address.
                             Also: GIGASTT_ALLOW_BIND_ANY=1.
@@ -62,6 +72,7 @@ gigastt serve [OPTIONS]
 
 gigastt download [OPTIONS]
   --model-dir <DIR>      Model directory [default: ~/.gigastt/models]
+  --model-variant <V>    Head to download: rnnt (default) | e2e_rnnt. Env: GIGASTT_MODEL_VARIANT.
   --skip-diarization     Skip downloading the speaker diarization model
   --skip-quantize        Skip auto-quantization after download (FP32 only)
 
