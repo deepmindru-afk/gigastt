@@ -7,12 +7,33 @@
     <a href="https://docs.rs/gigastt-core"><img src="https://docs.rs/gigastt-core/badge.svg" alt="docs.rs"></a>
     <a href="https://github.com/ekhodzitsky/gigastt/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT"></a>
   </p>
+  <p align="center">
+    <a href="docs/benchmarks.md"><img src="https://img.shields.io/badge/WER%20clean-3.55%25-2ea44f" alt="WER чистая речь 3.55%"></a>
+    <a href="docs/benchmarks.md"><img src="https://img.shields.io/badge/most%20accurate-3%2F4%20RU%20domains-2ea44f" alt="Самый точный на 3 из 4 русских доменов"></a>
+    <a href="docs/benchmarks.md"><img src="https://img.shields.io/badge/speed-RTF%20~0.10%20(10%C3%97%20realtime)-1f6feb" alt="RTF ~0.10, около 10x быстрее реального времени на CPU"></a>
+    <a href="docs/benchmarks.md"><img src="https://img.shields.io/badge/model-225%20MB%20INT8-1f6feb" alt="модель 225 МБ INT8"></a>
+    <a href="docs/benchmarks.md"><img src="https://img.shields.io/badge/RAM-~400%20MB-1f6feb" alt="~400 МБ RAM на одну сессию"></a>
+    <a href="docs/benchmarks.md"><img src="https://img.shields.io/badge/cold%20start-0.94%20s-1f6feb" alt="холодный старт 0.94 с"></a>
+  </p>
   <p align="center"><a href="README.md">English</a> | <b>Русский</b></p>
 </p>
 
 ---
 
 gigastt превращает любую машину в приватный сервер распознавания русской речи — или встраивает тот же движок в Rust-приложение или Android-бинарник. Открытая модель **GigaAM v3** работает полностью локально через ONNX Runtime: без облака, без API-ключей.
+
+## Обзор
+
+Голова `rnnt` (GigaAM v3), INT8, **Apple M1 CPU**, замерено тем же [сквозным харнессом](docs/benchmarks.md), что и все конкуренты (WER %, **меньше — лучше**):
+
+| Движок | Чистая речь | Far-field | Телефон | YouTube |
+|---|---|---|---|---|
+| **gigastt** (GigaAM v3 `rnnt`) | 3.55 | **4.08** | **18.50** | **10.91** |
+| главный конкурент — Vosk 0.54 | **2.97** | 6.29 | 22.74 | 17.24 |
+
+**Скорость** RTF ~0.10 (≈10× быстрее реального времени, CPU)  ·  **Модель** 225 МБ INT8  ·  **Память** ~400 МБ одна сессия (790 МБ при дефолтном `--pool-size 2`)  ·  **Холодный старт** 0.94 с  ·  **Стриминг** первый partial ~0.78 с
+
+**Самый точный на 3 из 4 русских доменов** (far-field, телефон, YouTube) и статистическая ничья на чистой речи — см. [полные бенчмарки против 6 движков](docs/benchmarks.md).
 
 ```sh
 cargo install gigastt && gigastt serve
@@ -29,7 +50,7 @@ $ gigastt transcribe recording.wav
 
 - **Стриминг в реальном времени** — инкрементальные partial-результаты по WebSocket; REST + SSE для файлов
 - **Встраиваемость** — один статический бинарник, C-ABI FFI `cdylib` для Android/mobile, или крейт `gigastt-core`
-- **Точный и маленький** — самый точный на 3 из 4 русских доменов, ничья с Vosk 0.54 на чистой речи (3.55%); INT8-модель ~225 МБ, real-time на CPU (RTF ~0.10); ускорение CoreML / CUDA / NNAPI
+- **Точный и маленький** — самый точный на 3 из 4 русских доменов (см. [Обзор](#обзор)); INT8-модель ~225 МБ с ускорением CoreML / CUDA / NNAPI
 - **Защищённый сервер** — loopback по умолчанию, origin-allowlist, rate-limiting по IP, graceful drain, метрики Prometheus
 - **MIT-чистый** — gigastt (MIT) на весах GigaAM v3 (MIT) — пригоден для коммерческих on-device продуктов
 
