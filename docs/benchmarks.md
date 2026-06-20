@@ -58,7 +58,7 @@ phone, YouTube — CI-separated) and **statistically ties the best (Vosk 0.54) o
 read**. It is not a runaway leader on clean read — Vosk's point estimate still edges it —
 but the head switch turned the old "concedes clean read" story into a near-tie. The
 durable advantage remains the packaging — see Footprint and the
-[README](../README.md#where-it-fits).
+[README](../README.md#how-it-compares).
 
 ## Speed — RTF (processing ÷ audio; lower = faster; M1 CPU)
 
@@ -86,6 +86,7 @@ the 1025-token BPE one.)
 | Vosk 0.54 | 966 MB | **560 MB** | 1.16 s |
 | Vosk 0.42 | 3.5 GB | 1100 MB | 29.8 s |
 | faster-whisper-turbo | 1.6 GB | 2154 MB | 6.8 s |
+| whisper.cpp (Large v3) | 2.9 GB | — | — |
 | faster-whisper (Large v3) | 2.9 GB | 2619 MB | 8.2 s |
 
 ¹ gigastt RSS is at the v2.3 default `--pool-size 2` (2 model copies, INT8 `rnnt`);

@@ -29,7 +29,7 @@ info:
     All defaults below are configurable from v0.7.0 onward via CLI flags or environment variables
     (see `gigastt serve --help`):
 
-    - `--pool-size` (default 4) — concurrent inference sessions
+    - `--pool-size` (default 2) — concurrent inference sessions
     - `--ws-frame-max-bytes` (default 512 KiB) — max WebSocket frame / message
     - `--body-limit-bytes` (default 50 MiB) — max REST request body
     - `--idle-timeout-secs` (default 300) — WebSocket idle disconnect

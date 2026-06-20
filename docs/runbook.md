@@ -69,7 +69,7 @@ gigastt serve --max-session-secs 0
 ## Pool exhaustion & backpressure
 
 Each concurrent inference holds one `SessionTriplet` from a pool sized by
-`--pool-size` (default 4). When all triplets are busy, callers wait up to
+`--pool-size` (default 2). When all triplets are busy, callers wait up to
 `--pool-checkout-timeout-secs` (default 30) for one to free up, then get
 backpressure:
 
@@ -137,8 +137,8 @@ To force a clean re-download, remove `~/.gigastt/models/` and re-run.
 
 RSS scales with `--pool-size` (each triplet owns its ONNX sessions) plus ORT's
 per-request scratch (a few minutes of 16 kHz audio allocates ~90+ MiB in the
-encoder by itself). A default pool of 4 with the INT8 encoder sits around
-~560 MiB; the FP32 encoder is much larger.
+encoder by itself). A default pool of 2 with the INT8 encoder sits around
+~790 MiB resident (single session ~400 MiB); the FP32 encoder is much larger.
 
 **Reduce footprint**
 - Use the **INT8 encoder** (the default — auto-quantized on first run; don't

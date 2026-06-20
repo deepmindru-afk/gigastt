@@ -113,11 +113,11 @@ Gradle packages these automatically into the APK/AAB.
 
 ## Model Bundling
 
-The GigaAM v3 INT8 model set is ~210 MB on disk (FP32 is ~850 MB):
+The GigaAM v3 INT8 model set is ~225 MB on disk (FP32 is ~850 MB):
 
 | File | Size (approx) |
 |------|---------------|
-| `v3_e2e_rnnt_encoder_int8.onnx` | ~210 MB |
+| `v3_e2e_rnnt_encoder_int8.onnx` | ~215 MB |
 | `v3_e2e_rnnt_encoder.onnx` (FP32) | ~844 MB |
 | `v3_e2e_rnnt_decoder.onnx` | ~4.4 MB |
 | `v3_e2e_rnnt_joint.onnx` | ~2.6 MB |
@@ -202,7 +202,7 @@ class MainActivity : AppCompatActivity() {
 
 ## On-device Quantization
 
-Instead of bundling or downloading the ~210 MB INT8 encoder, you can ship the ~850 MB FP32 encoder and quantize it on the device after download. This is a one-time operation that takes about 2 minutes on a modern flagship phone and produces `v3_e2e_rnnt_encoder_int8.onnx` in the same directory.
+Instead of bundling or downloading the ~215 MB INT8 encoder, you can ship the ~850 MB FP32 encoder and quantize it on the device after download. This is a one-time operation that takes about 2 minutes on a modern flagship phone and produces `v3_e2e_rnnt_encoder_int8.onnx` in the same directory.
 
 ```kotlin
 val modelDir = File(context.filesDir, "gigastt_models")
@@ -222,7 +222,7 @@ GigasttBridge.stringFree(result)
 | Component | Approximate Size |
 |-----------|------------------|
 | `libgigastt_ffi.so` (arm64, stripped, release, LTO) | ~20–30 MB |
-| ONNX models (INT8) | ~210 MB |
+| ONNX models (INT8) | ~225 MB |
 | **Total on-device** | ~230–240 MB |
 
 Tips to reduce binary size:

@@ -290,5 +290,5 @@ If you observe clients hanging past the cap or not receiving `Final` on deploy, 
 
 ## See also
 
-- [CLI Reference](../README.md#cli-reference) — `--bind-all`, `--allow-origin`, `--cors-allow-any` flags
-- [Security](../README.md#security) — server-side security features
+- [CLI Reference](cli.md) — `--bind-all`, `--allow-origin`, `--cors-allow-any` flags
+- [Security](../SECURITY.md) — server-side security features

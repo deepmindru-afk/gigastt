@@ -29,19 +29,21 @@ gigastt turns any machine into a private Russian speech-recognition server — o
 
 WER (%) on four Russian domains, lower is better — plus every axis that decides a deployment. gigastt is the `rnnt` head, INT8.
 
-| Engine | Clean | Far-field | Phone | YouTube | RTF | Disk | Peak RAM | Cold-start | Streaming |
-|---|--:|--:|--:|--:|--:|--:|--:|--:|---|
-| **gigastt** (GigaAM v3 `rnnt`) | 3.55 | **4.08** | **18.50** | **10.91** | 0.10 | ~225 MB | 790 / ~400 MB | **0.94 s** | **Yes** — incremental WS |
-| Vosk 0.54 (Zipformer2) | **2.97** | 6.29 | 22.74 | 17.24 | ~0.03 | 966 MB | 560 MB | 1.16 s | Yes (server) |
-| T-one (beam + LM) | 6.61 | 14.62 | 21.73 | 23.23 | 0.065 | 138 MB + 5.5 GB LM | — | — | Yes (300 ms) |
-| T-one (greedy, no LM) | 7.85 | 17.22 | 22.37 | 26.54 | 0.065 | 138 MB | 672 MB | 1.87 s | Yes (300 ms) |
-| whisper.cpp (Large v3) | 15.26 | 17.91 | 32.73 | 22.61 | 0.36–0.77 | 2.9 GB | — | — | No |
-| faster-whisper (Large v3) | 15.53 | 17.34 | 24.93 | 15.45 | &gt;1.0 | 2.9 GB | 2619 MB | 8.2 s | No |
-| faster-whisper-turbo | 14.45 | 18.30 | 26.58 | 15.45 | &gt;1.0 | 1.6 GB | 2154 MB | 6.8 s | No |
+| Engine | Clean | Far-field | Phone | YouTube | RTF | Disk | Peak RAM | Cold-start | Streaming | Punct. |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|---|---|
+| **gigastt** (GigaAM v3 `rnnt`) | 3.55 | **4.08** | **18.50** | **10.91** | 0.10 | ~225 MB | 790 / ~400 MB | **0.94 s** | **Yes** — incremental WS | **Yes** |
+| Vosk 0.54 (Zipformer2) | **2.97** | 6.29 | 22.74 | 17.24 | ~0.03 | 966 MB | 560 MB | 1.16 s | Yes (server) | Add-on |
+| T-one (beam + LM) | 6.61 | 14.62 | 21.73 | 23.23 | 0.065 | 138 MB + 5.5 GB LM | — | — | Yes (300 ms) | No |
+| T-one (greedy, no LM) | 7.85 | 17.22 | 22.37 | 26.54 | 0.065 | 138 MB | 672 MB | 1.87 s | Yes (300 ms) | No |
+| whisper.cpp (Large v3) | 15.26 | 17.91 | 32.73 | 22.61 | 0.36–0.77 | 2.9 GB | — | — | No | Yes |
+| faster-whisper (Large v3) | 15.53 | 17.34 | 24.93 | 15.45 | &gt;1.0 | 2.9 GB | 2619 MB | 8.2 s | No | Yes |
+| faster-whisper-turbo | 14.45 | 18.30 | 26.58 | 15.45 | &gt;1.0 | 1.6 GB | 2154 MB | 6.8 s | No | Yes |
 
-Conditions: Apple M1, CPU EP, INT8/greedy, 1000 samples/domain (clean read 992; turbo = 300-sample slice), 95% bootstrap CIs. Clean read 3.55 (2.9–4.2) overlaps Vosk 0.54 2.97 (2.4–3.6) — a statistical tie; far-field / phone / YouTube wins are CI-separated. RTF &gt; 1.0 = slower than real-time on CPU. gigastt RAM is at the default `--pool-size 2` (single-session ~400 MB). "—" = not measured. Full methodology and caveats → **[Benchmarks](docs/benchmarks.md)**.
+Conditions: Apple M1, CPU EP, INT8/greedy, 1000 samples/domain (clean read 992; turbo = 300-sample slice), 95% bootstrap CIs. Clean read 3.55 (2.9–4.2) overlaps Vosk 0.54 2.97 (2.4–3.6) — a statistical tie; far-field / phone / YouTube wins are CI-separated. RTF &gt; 1.0 = slower than real-time on CPU. gigastt RAM is at the default `--pool-size 2` (single-session ~400 MB). "—" = not measured. Full methodology and caveats: [Benchmarks](docs/benchmarks.md).
 
 **Streaming:** the Whisper engines are offline-only — no partials while you speak. gigastt streams genuine incremental WebSocket partials (~0.78 s to first partial on CPU) from one self-contained binary with no Python; Vosk-server and T-one (300 ms chunks) also stream. So streaming is gigastt's clear win over the Whisper family; over Vosk / T-one the edge is packaging — incremental partials plus a C-ABI FFI in a single binary — not lower latency.
+
+**Punctuation &amp; casing:** gigastt outputs readable Russian out of the box — native on the `e2e_rnnt` head, or via a small bundled RuPunct + ITN pass on the default `rnnt` head (`--punctuation` / `--itn`, auto-downloaded). That matches the Whisper engines (punctuated natively) and beats the Russian specialists — Vosk needs a separate 1.6 GB `recasepunc` add-on and T-one emits none.
 
 ## Scope &amp; honest caveats
 
@@ -88,6 +90,7 @@ $ gigastt serve
 | Capability | Support |
 |---|---|
 | Heads | `rnnt` (34-token char, default — lowest WER) · `e2e_rnnt` (1025-token BPE, punctuation / casing / ITN baked in) |
+| Post-processing | optional punctuation, casing &amp; Russian ITN — native on `e2e_rnnt`, or a bundled RuPunct + ITN pass on `rnnt` (auto-downloaded; `--punctuation` / `--itn`) |
 | Delivery | static binary · C-ABI FFI `cdylib` (Android / mobile) · `gigastt-core` crate (no server deps) |
 | Execution providers | CPU (any platform) · CoreML / Neural Engine (macOS ARM64) · CUDA 12+ (Linux x86_64) · NNAPI (Android) |
 | Streaming | incremental WebSocket partials · REST + SSE for files · single port 9876 |
@@ -107,7 +110,7 @@ $ gigastt serve
 
 ## Requirements
 
-Rust **1.88+**, `protoc` on `PATH`. macOS 14+ (Apple Silicon, CoreML) or Linux x86_64 (optional NVIDIA CUDA 12+). ~1.5 GB disk, ~790 MB RAM at the default `--pool-size 2` (~400 MB single-session). The `gigastt-core` crate has no server dependencies — embed it directly: `gigastt-core = "2.0"`.
+Rust **1.88+**, `protoc` on `PATH`. macOS 14+ (Apple Silicon, CoreML) or Linux x86_64 (optional NVIDIA CUDA 12+). ~1.5 GB disk, ~790 MB RAM at the default `--pool-size 2` (~400 MB single-session). The `gigastt-core` crate has no server dependencies — embed it directly: `gigastt-core = "2.3"`.
 
 ## License
 

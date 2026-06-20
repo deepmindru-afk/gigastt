@@ -292,7 +292,7 @@ This guarantees that a regression like a broken `cargo test` cannot reach `main`
   - `--idle-timeout-secs` (default 300) — WebSocket idle timeout
   - `--ws-frame-max-bytes` (default 512 KiB) — max WS frame size
   - `--body-limit-bytes` (default 50 MiB) — max REST body size
-  - `--pool-size` (default 4) — concurrent inference sessions
+  - `--pool-size` (default 2) — concurrent inference sessions
   - `--pool-min-size` (default 1) — minimum triplets required to boot (degraded-pool floor)
   - `--batch-pool-size` (default 0) — triplets reserved for batch REST jobs (0 = shared pool)
   - `--inference-timeout-secs` (default 600) — per-request inference timeout; 0 disables
