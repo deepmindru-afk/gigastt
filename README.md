@@ -3,17 +3,10 @@
   <p align="center"><strong>Embeddable on-device Russian speech-to-text — one Rust binary, no cloud, MIT-clean weights.</strong></p>
   <p align="center">
     <a href="https://github.com/ekhodzitsky/gigastt/actions"><img src="https://github.com/ekhodzitsky/gigastt/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+    <a href="https://codecov.io/gh/ekhodzitsky/gigastt"><img src="https://codecov.io/gh/ekhodzitsky/gigastt/branch/main/graph/badge.svg" alt="codecov"></a>
     <a href="https://crates.io/crates/gigastt"><img src="https://img.shields.io/crates/v/gigastt.svg" alt="crates.io"></a>
     <a href="https://docs.rs/gigastt-core"><img src="https://docs.rs/gigastt-core/badge.svg" alt="docs.rs"></a>
     <a href="https://github.com/ekhodzitsky/gigastt/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT"></a>
-  </p>
-  <p align="center">
-    <a href="docs/benchmarks.md"><img src="https://img.shields.io/badge/WER%20clean-3.55%25-2ea44f" alt="WER clean read 3.55%"></a>
-    <a href="docs/benchmarks.md"><img src="https://img.shields.io/badge/most%20accurate-3%2F4%20RU%20domains-2ea44f" alt="Most accurate on 3 of 4 Russian domains"></a>
-    <a href="docs/benchmarks.md"><img src="https://img.shields.io/badge/speed-RTF%20~0.10%20(10%C3%97%20realtime)-1f6feb" alt="RTF ~0.10, about 10x real-time on CPU"></a>
-    <a href="docs/benchmarks.md"><img src="https://img.shields.io/badge/model-225%20MB%20INT8-1f6feb" alt="225 MB INT8 model"></a>
-    <a href="docs/benchmarks.md"><img src="https://img.shields.io/badge/RAM-~400%20MB-1f6feb" alt="~400 MB RAM single session"></a>
-    <a href="docs/benchmarks.md"><img src="https://img.shields.io/badge/cold%20start-0.94%20s-1f6feb" alt="0.94 s cold start"></a>
   </p>
   <p align="center"><b>English</b> | <a href="README_RU.md">Русский</a></p>
 </p>

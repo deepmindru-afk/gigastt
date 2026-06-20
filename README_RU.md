@@ -3,17 +3,10 @@
   <p align="center"><strong>Встраиваемое локальное распознавание русской речи — один бинарник на Rust, без облака, MIT-чистые веса.</strong></p>
   <p align="center">
     <a href="https://github.com/ekhodzitsky/gigastt/actions"><img src="https://github.com/ekhodzitsky/gigastt/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+    <a href="https://codecov.io/gh/ekhodzitsky/gigastt"><img src="https://codecov.io/gh/ekhodzitsky/gigastt/branch/main/graph/badge.svg" alt="codecov"></a>
     <a href="https://crates.io/crates/gigastt"><img src="https://img.shields.io/crates/v/gigastt.svg" alt="crates.io"></a>
     <a href="https://docs.rs/gigastt-core"><img src="https://docs.rs/gigastt-core/badge.svg" alt="docs.rs"></a>
     <a href="https://github.com/ekhodzitsky/gigastt/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT"></a>
-  </p>
-  <p align="center">
-    <a href="docs/benchmarks.md"><img src="https://img.shields.io/badge/WER%20clean-3.55%25-2ea44f" alt="WER чистая речь 3.55%"></a>
-    <a href="docs/benchmarks.md"><img src="https://img.shields.io/badge/most%20accurate-3%2F4%20RU%20domains-2ea44f" alt="Самый точный на 3 из 4 русских доменов"></a>
-    <a href="docs/benchmarks.md"><img src="https://img.shields.io/badge/speed-RTF%20~0.10%20(10%C3%97%20realtime)-1f6feb" alt="RTF ~0.10, около 10x быстрее реального времени на CPU"></a>
-    <a href="docs/benchmarks.md"><img src="https://img.shields.io/badge/model-225%20MB%20INT8-1f6feb" alt="модель 225 МБ INT8"></a>
-    <a href="docs/benchmarks.md"><img src="https://img.shields.io/badge/RAM-~400%20MB-1f6feb" alt="~400 МБ RAM на одну сессию"></a>
-    <a href="docs/benchmarks.md"><img src="https://img.shields.io/badge/cold%20start-0.94%20s-1f6feb" alt="холодный старт 0.94 с"></a>
   </p>
   <p align="center"><a href="README.md">English</a> | <b>Русский</b></p>
 </p>
