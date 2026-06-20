@@ -7,12 +7,33 @@
     <a href="https://docs.rs/gigastt-core"><img src="https://docs.rs/gigastt-core/badge.svg" alt="docs.rs"></a>
     <a href="https://github.com/ekhodzitsky/gigastt/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT"></a>
   </p>
+  <p align="center">
+    <a href="docs/benchmarks.md"><img src="https://img.shields.io/badge/WER%20clean-3.55%25-2ea44f" alt="WER clean read 3.55%"></a>
+    <a href="docs/benchmarks.md"><img src="https://img.shields.io/badge/most%20accurate-3%2F4%20RU%20domains-2ea44f" alt="Most accurate on 3 of 4 Russian domains"></a>
+    <a href="docs/benchmarks.md"><img src="https://img.shields.io/badge/speed-RTF%20~0.10%20(10%C3%97%20realtime)-1f6feb" alt="RTF ~0.10, about 10x real-time on CPU"></a>
+    <a href="docs/benchmarks.md"><img src="https://img.shields.io/badge/model-225%20MB%20INT8-1f6feb" alt="225 MB INT8 model"></a>
+    <a href="docs/benchmarks.md"><img src="https://img.shields.io/badge/RAM-~400%20MB-1f6feb" alt="~400 MB RAM single session"></a>
+    <a href="docs/benchmarks.md"><img src="https://img.shields.io/badge/cold%20start-0.94%20s-1f6feb" alt="0.94 s cold start"></a>
+  </p>
   <p align="center"><b>English</b> | <a href="README_RU.md">Русский</a></p>
 </p>
 
 ---
 
 gigastt turns any machine into a private Russian speech-recognition server — or embeds the same engine into a Rust app or an Android binary. It runs the open **GigaAM v3** model fully on-device via ONNX Runtime: no cloud, no API keys.
+
+## At a glance
+
+GigaAM v3 `rnnt` head, INT8, **Apple M1 CPU**, measured through the *same* [like-for-like harness](docs/benchmarks.md) as every competitor (WER %, **lower is better**):
+
+| Engine | Clean read | Far-field | Phone calls | YouTube |
+|---|---|---|---|---|
+| **gigastt** (GigaAM v3 `rnnt`) | 3.55 | **4.08** | **18.50** | **10.91** |
+| best rival — Vosk 0.54 | **2.97** | 6.29 | 22.74 | 17.24 |
+
+**Speed** RTF ~0.10 (≈10× real-time on CPU)  ·  **Model** 225 MB INT8  ·  **RAM** ~400 MB single-session (790 MB at default `--pool-size 2`)  ·  **Cold-start** 0.94 s  ·  **Streaming** first partial ~0.78 s
+
+**Most accurate on 3 of 4 Russian domains** (far-field, phone, YouTube) and a statistical tie on clean read — see [full benchmarks vs 6 engines](docs/benchmarks.md).
 
 ```sh
 cargo install gigastt && gigastt serve
@@ -29,7 +50,7 @@ $ gigastt transcribe recording.wav
 
 - **Real-time streaming** — incremental partials over WebSocket; REST + SSE for files
 - **Embeddable** — a single static binary, a C-ABI FFI `cdylib` for Android/mobile, or the `gigastt-core` crate
-- **Accurate & small** — most accurate on 3 of 4 Russian domains, ties Vosk 0.54 on clean read (3.55%); INT8 model ~225 MB, real-time on CPU (RTF ~0.10); CoreML / CUDA / NNAPI acceleration
+- **Accurate & small** — most accurate on 3 of 4 Russian domains (see [At a glance](#at-a-glance)); INT8 model ~225 MB with CoreML / CUDA / NNAPI acceleration
 - **Hardened server** — loopback-only by default, origin allowlist, per-IP rate limiting, graceful drain, Prometheus metrics
 - **MIT-clean** — gigastt (MIT) on GigaAM v3 weights (MIT) — usable in commercial on-device products
 
