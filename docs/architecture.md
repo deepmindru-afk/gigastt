@@ -9,7 +9,7 @@
                   |
         RNN-T Decoder + Joiner       stateful h/c persisted across streaming chunks
                   |
-        BPE Tokenizer (1025) + punctuation
+        Tokenizer (char 34 / BPE 1025) -> optional punctuation / ITN
                   |
              Russian text
 ```
@@ -24,7 +24,7 @@ gigastt is a 3-crate Cargo workspace:
 | [`gigastt-ffi`](../crates/gigastt-ffi) | lib (cdylib) | C-ABI FFI for Android / mobile embedding |
 | [`gigastt`](../crates/gigastt) | bin | Server (axum HTTP/WS/SSE) + CLI |
 
-Embed inference in any Rust project with `gigastt-core = "2.0"`.
+Embed inference in any Rust project with `gigastt-core = "2.3"`.
 
 ## Model
 
@@ -33,7 +33,7 @@ Embed inference in any Rust project with `gigastt-core = "2.0"`.
 LSTM decoder + joiner), 16-layer 768-dim encoder (240M params); the vocab depends on the
 head (`rnnt` 34-token char — the v2.3 default — or `e2e_rnnt` 1025-token BPE), 16 kHz
 mono input, MIT licensed. Download ~850 MB (encoder 844 MB, decoder 4.4 MB, joiner
-2.6 MB); INT8 encoder ~225 MB. Trained on 700K+ hours of Russian speech.
+2.6 MB); INT8 encoder ~215 MB. Trained on 700K+ hours of Russian speech.
 
 ## Hardware acceleration
 

@@ -29,7 +29,7 @@ info:
     (see `gigastt serve --help`):
 
     - `--body-limit-bytes` (default 50 MiB) — max upload size
-    - `--pool-size` (default 4) — concurrent inference sessions
+    - `--pool-size` (default 2) — concurrent inference sessions
     - `--rate-limit-per-minute` (default 0 = off) — per-IP token bucket
     - File transcription cap: 10 minutes of audio
     - Pool saturation: REST returns `503 Service Unavailable` + `Retry-After: 30`

@@ -33,7 +33,7 @@ Model download (required for E2E testing and file transcription, ~850MB):
 ```sh
 cargo run -- download                    # Downloads to ~/.gigastt/models/ and auto-generates INT8 encoder
 cargo run -- download --skip-quantize    # Skip auto-quantization (FP32 only)
-cargo run -- quantize                    # Regenerate INT8 encoder manually (~225MB)
+cargo run -- quantize                    # Regenerate INT8 encoder manually (~215MB)
 ```
 
 ## Docker
@@ -93,7 +93,7 @@ crates/
   - Caches compiled models in `~/.gigastt/models/coreml_cache/`
 - **CUDA execution provider** (`--features cuda`, Linux x86_64 CUDA 12+): GPU inference via ONNX Runtime CUDA EP
   - Features are compile-time and mutually exclusive; default build uses CPU EP on all platforms
-- **INT8 quantization** (always compiled, auto-invoked since v0.9.0): encoder_int8.onnx (~225MB vs 844MB)
+- **INT8 quantization** (always compiled, auto-invoked since v0.9.0): encoder_int8.onnx (~215MB vs 844MB)
   - Rust-native quantization in `crates/gigastt-core/src/quantize.rs` (no Cargo feature required; `quantize` feature kept as no-op for backward compat)
   - Auto-invoked by `gigastt download` and `gigastt serve` on first run (~2 min one-time)
   - Opt out with `--skip-quantize` or `GIGASTT_SKIP_QUANTIZE=1`
@@ -203,7 +203,7 @@ Three-tier test architecture:
 GigaAM v3 from `istupakov/gigaam-v3-onnx` on HuggingFace. Two selectable heads (`--model-variant`, auto-detected from the files on disk):
 - **`rnnt`** (default since v2.3): `v3_rnnt_{encoder,decoder,joint}.onnx` + `v3_vocab.txt` (34-token char vocab). Much lower WER than e2e (clean read 3.55% on `golos_crowd_1k` via the cross-engine harness vs e2e 8.60%; leads far-field/phone/YouTube — see `docs/benchmarks.md`); bare lowercase output, so pair with `--punctuation` / `--itn` for readable text.
 - **`e2e_rnnt`**: `v3_e2e_rnnt_{encoder,decoder,joint}.onnx` + `v3_e2e_rnnt_vocab.txt` (1025-token BPE). Punctuation/casing/ITN baked in.
-- Encoder (shared arch): 844MB (FP32) or 225MB (INT8 quantized, 3.9×); decoder/joiner a few MB each.
+- Encoder (shared arch): 844MB (FP32) or 215MB (INT8 quantized, 3.9×); decoder/joiner a few MB each.
 - Sample rate: 16kHz, Features: 64 mel bins
 - ONNX tensors: encoder out `[1, 768, T]` (channels-first), decoder state `[1, 1, 320]`
 
@@ -212,7 +212,7 @@ GigaAM v3 from `istupakov/gigaam-v3-onnx` on HuggingFace. Two selectable heads (
 Rust-native quantization via `crates/gigastt-core/src/quantize.rs` (always compiled since v0.9.0):
 ```sh
 cargo run -- quantize --model-dir ~/.gigastt/models
-# Produces: v3_e2e_rnnt_encoder_int8.onnx (~225MB, ~3.9x smaller; dynamic INT8 with
+# Produces: v3_e2e_rnnt_encoder_int8.onnx (~215MB, ~3.9x smaller; dynamic INT8 with
 # MatMulInteger/ConvInteger integer compute → RTF well below 1.0 on CPU)
 ```
 

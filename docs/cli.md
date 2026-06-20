@@ -35,7 +35,10 @@ gigastt serve [OPTIONS]
   --itn <MODE>              Inverse text normalization (number-words → digits):
                             auto | on | off [default: auto = on for rnnt, off for
                             e2e_rnnt]. Runs before punctuation. Env: GIGASTT_ITN.
-  --pool-size <N>           Concurrent inference sessions [default: 4]
+  --pool-size <N>           Concurrent inference sessions [default: 2]
+  --pool-checkout-timeout-secs <S>  Seconds a handler waits for a free session triplet
+                            before returning 503 [default: 30].
+                            Env: GIGASTT_POOL_CHECKOUT_TIMEOUT_SECS.
   --bind-all                Required to listen on a non-loopback address.
                             Also: GIGASTT_ALLOW_BIND_ANY=1.
   --allow-origin <URL>      Additional Origin allowed (repeatable).

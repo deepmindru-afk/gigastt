@@ -48,6 +48,10 @@ curl -X POST http://127.0.0.1:9876/v1/transcribe/stream \
 # data: {"type":"final","text":"Привет, как дела?"}
 ```
 
+The default `rnnt` head emits bare lowercase; punctuation, casing, and Russian ITN are
+applied per server configuration (`--punctuation` / `--itn`). The `e2e_rnnt` head bakes
+them in.
+
 ### Export formats
 
 `/v1/transcribe` supports alternative output formats via the `format` query
