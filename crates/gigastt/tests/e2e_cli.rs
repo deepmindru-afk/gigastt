@@ -351,11 +351,23 @@ fn cli_serve_boots_and_graceful_shutdown() {
     }
     assert!(ready, "server did not become healthy within 120s");
 
-    // Metrics live on their own loopback port.
-    assert_eq!(
-        http_status(metrics_port, "/metrics"),
-        Some(200),
-        "metrics endpoint should answer on its dedicated port"
+    // Metrics live on their own loopback port, bound by a separate listener that
+    // can come up slightly after the main server reports `/health` ready — more
+    // so under the instrumented coverage build. Poll it instead of probing once,
+    // to avoid a readiness race (the single-probe version flaked in CI's
+    // `Coverage (E2E)` job while the non-instrumented `E2E Tests` job passed).
+    let metrics_start = Instant::now();
+    let mut metrics_ok = false;
+    while metrics_start.elapsed() < Duration::from_secs(30) {
+        if http_status(metrics_port, "/metrics") == Some(200) {
+            metrics_ok = true;
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    assert!(
+        metrics_ok,
+        "metrics endpoint should answer 200 on its dedicated port within 30s"
     );
 
     // Graceful shutdown: SIGTERM should drain and return a clean exit, which is
