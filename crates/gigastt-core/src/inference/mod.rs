@@ -60,16 +60,18 @@ impl EmbeddingExtractor for SharedExtractor {
 compile_error!("Features `coreml` and `cuda` are mutually exclusive. Choose one.");
 
 use anyhow::Context;
-#[cfg(any(feature = "coreml", feature = "cuda"))]
-use ort::ep;
-use ort::session::Session;
-use ort::value::TensorRef;
 use serde::Serialize;
 use std::ops::{Deref, DerefMut};
 use std::path::Path;
 
 use crate::error::GigasttError;
 use crate::model::ModelVariant;
+use crate::runtime::factory::Runtime;
+#[allow(unused_imports)]
+use crate::runtime::factory::RuntimeFactory;
+use crate::runtime::production_factory;
+use crate::runtime::session::RuntimeSession;
+use crate::runtime::tensor::{Shape, Tensor, TensorData, TensorDataView};
 
 use features::MelSpectrogram;
 use tokenizer::Tokenizer;
@@ -82,10 +84,6 @@ pub const N_FFT: usize = 320;
 pub const HOP_LENGTH: usize = 160;
 /// Hidden dimension of the RNN-T prediction (decoder) network.
 pub const PRED_HIDDEN: usize = 320;
-
-fn ort_err(e: impl std::fmt::Display) -> anyhow::Error {
-    anyhow::anyhow!("{e}")
-}
 
 pub fn now_timestamp() -> f64 {
     use std::sync::OnceLock;
@@ -218,9 +216,12 @@ const POOL_RAM_FRACTION_DENOM: u64 = 2;
 /// Moved out of the pool on checkout and returned on checkin.
 /// Each triplet is independent and can run inference concurrently with others.
 pub struct SessionTriplet {
-    pub(crate) encoder: Session,
-    pub(crate) decoder: Session,
-    pub(crate) joiner: Session,
+    pub(crate) encoder: Box<dyn RuntimeSession>,
+    pub(crate) decoder: Box<dyn RuntimeSession>,
+    pub(crate) joiner: Box<dyn RuntimeSession>,
+    /// Reusable encoder input tensors: `[audio_signal [1, N_MELS, num_frames], length [1]]`.
+    /// Resized and overwritten in `run_inference` to avoid per-call allocations.
+    pub(crate) encoder_inputs: Vec<Tensor>,
 }
 
 /// Errors returned by [`Pool::checkout`].
@@ -1040,7 +1041,7 @@ impl Engine {
         // which head runs — callers select the variant only at download time.
         let Some(variant) = ModelVariant::detect_in_dir(dir) else {
             return Err(GigasttError::ModelLoad {
-                path: model_dir.to_string(),
+                path: dir.display().to_string(),
                 source: None,
             });
         };
@@ -1059,19 +1060,164 @@ impl Engine {
             .unwrap_or(1);
         let encoder_intra_threads =
             Self::clamp_encoder_intra_threads(pool_size, encoder_intra_threads, logical_cpus);
-        Self::load_inner(
+
+        let factory = production_factory(dir);
+        Self::load_with_factory(
             dir,
-            variant,
-            model_dir,
             pool_size,
             min_size,
             batch_pool_size,
+            factory,
             encoder_intra_threads,
         )
-        .map_err(|e| GigasttError::ModelLoad {
-            path: model_dir.to_string(),
+    }
+
+    /// Package-private factory-based loader. Used by production code paths and
+    /// by tests that inject a [`crate::runtime::factory::RuntimeFactory`].
+    pub(crate) fn load_with_factory(
+        model_dir: &Path,
+        pool_size: usize,
+        min_size: usize,
+        batch_pool_size: usize,
+        factory: Box<dyn crate::runtime::factory::RuntimeFactory>,
+        encoder_intra_threads: usize,
+    ) -> Result<Self, GigasttError> {
+        let Some(variant) = ModelVariant::detect_in_dir(model_dir) else {
+            return Err(GigasttError::ModelLoad {
+                path: model_dir.display().to_string(),
+                source: None,
+            });
+        };
+        let pool_size = pool_size.max(1);
+        let min_size = min_size.clamp(1, pool_size);
+
+        let runtime = factory.create(encoder_intra_threads)?;
+        let model_load = |e: anyhow::Error| GigasttError::ModelLoad {
+            path: model_dir.display().to_string(),
             source: Some(e.into()),
-        })
+        };
+
+        tracing::info!("Detected model variant: {variant:?}");
+        let is_int8 = model_dir.join(variant.encoder_int8_file()).exists();
+        if is_int8 {
+            tracing::info!("Using INT8 quantized encoder");
+        }
+
+        tracing::info!(
+            "Loading ONNX models from {} (pool_size={pool_size})...",
+            model_dir.display()
+        );
+
+        #[cfg(feature = "coreml")]
+        tracing::info!("Using CoreML execution provider (Neural Engine + CPU)");
+        #[cfg(feature = "cuda")]
+        tracing::info!("Using CUDA execution provider (falls back to CPU if unavailable)");
+        #[cfg(not(any(feature = "coreml", feature = "cuda")))]
+        tracing::info!("Using CPU execution provider");
+
+        // CoreML can reject a model at load time; fall back to CPU if that happens.
+        #[cfg(feature = "coreml")]
+        let triplets = match Self::load_triplets_runtime(
+            &*runtime, model_dir, variant, pool_size, min_size,
+        )
+        .map_err(model_load)
+        {
+            Ok(triplets) => triplets,
+            Err(load_err) => {
+                tracing::warn!(
+                    "CoreML EP failed to load sessions ({load_err:#}); falling back to CPU execution provider"
+                );
+                let cpu_factory = factory.cpu_fallback();
+                let runtime = cpu_factory.create(encoder_intra_threads)?;
+                Self::load_triplets_runtime(&*runtime, model_dir, variant, pool_size, min_size)
+                    .map_err(model_load)?
+            }
+        };
+        #[cfg(not(feature = "coreml"))]
+        let triplets =
+            Self::load_triplets_runtime(&*runtime, model_dir, variant, pool_size, min_size)
+                .map_err(model_load)?;
+
+        let tokenizer =
+            Tokenizer::load(&model_dir.join(variant.vocab_file())).map_err(model_load)?;
+        let features = FeatureExtractor::new();
+
+        tracing::info!(
+            "Models loaded (vocab_size={}, pool_size={pool_size})",
+            tokenizer.vocab_size()
+        );
+
+        #[cfg(feature = "diarization")]
+        #[allow(deprecated)] // legacy OnnxEmbeddingExtractor::new — see import note above
+        let speaker_encoder = {
+            let model_path = model_dir.join("wespeaker_resnet34.onnx");
+            if model_path.exists() {
+                match OnnxEmbeddingExtractor::new(
+                    &model_path,
+                    SPEAKER_EMBEDDING_DIM,
+                    SPEAKER_SEGMENT_SAMPLES,
+                    SPEAKER_POOL_SIZE,
+                ) {
+                    Ok(enc) => {
+                        tracing::info!("Speaker encoder loaded (diarization available)");
+                        Some(std::sync::Arc::new(enc))
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "Speaker encoder not loaded, diarization unavailable: {e:#}"
+                        );
+                        None
+                    }
+                }
+            } else {
+                tracing::warn!("wespeaker_resnet34.onnx not found, diarization unavailable");
+                None
+            }
+        };
+
+        let (pool, batch_pool) = Self::split_triplets(triplets, batch_pool_size);
+        let engine = Self {
+            pool,
+            batch_pool,
+            tokenizer,
+            features,
+            variant,
+            punctuator: None,
+            itn: false,
+            biaser: None,
+            vad: None,
+            vad_config: crate::vad::VadConfig::default(),
+            int8: is_int8,
+            #[cfg(feature = "diarization")]
+            speaker_encoder,
+        };
+
+        // CoreML compiles its graph partitions lazily, so sessions that loaded
+        // fine can still fail at the first `Run()`. Probe one triplet now; if the
+        // probe fails, rebuild the pool on the CPU EP.
+        #[cfg(feature = "coreml")]
+        let engine = probe_or_rebuild(
+            engine,
+            |e: &Self| e.warmup_one().map_err(anyhow::Error::from),
+            |mut e, probe_err| {
+                tracing::warn!(
+                    "CoreML EP failed at runtime ({probe_err:#}); falling back to CPU execution provider"
+                );
+                let cpu_factory = factory.cpu_fallback();
+                let runtime = cpu_factory
+                    .create(encoder_intra_threads)
+                    .map_err(|e| anyhow::anyhow!(e))?;
+                let triplets =
+                    Self::load_triplets_runtime(&*runtime, model_dir, variant, pool_size, min_size)?;
+                let (pool, batch_pool) = Self::split_triplets(triplets, batch_pool_size);
+                e.pool = pool;
+                e.batch_pool = batch_pool;
+                Ok(e)
+            },
+        )
+        .map_err(model_load)?;
+
+        Ok(engine)
     }
 
     /// Path to the preferred encoder model for `variant`: INT8 quantized if
@@ -1083,195 +1229,6 @@ impl Engine {
         } else {
             dir.join(variant.encoder_file())
         }
-    }
-
-    /// Load a single set of encoder/decoder/joiner ONNX sessions from disk for
-    /// `variant`, using the execution provider selected at compile time.
-    ///
-    /// `encoder_intra_threads` configures the encoder session's intra-op thread
-    /// count on the CPU EP only; the CoreML / CUDA loaders ignore it (the
-    /// accelerator owns scheduling there).
-    fn load_sessions(
-        dir: &Path,
-        variant: ModelVariant,
-        prepacked: &ort::session::builder::PrepackedWeights,
-        encoder_intra_threads: usize,
-    ) -> anyhow::Result<(Session, Session, Session)> {
-        #[cfg(feature = "coreml")]
-        {
-            let _ = encoder_intra_threads;
-            Self::load_sessions_coreml(dir, variant, prepacked)
-        }
-        #[cfg(feature = "cuda")]
-        {
-            let _ = encoder_intra_threads;
-            Self::load_sessions_cuda(dir, variant, prepacked)
-        }
-        #[cfg(not(any(feature = "coreml", feature = "cuda")))]
-        {
-            Self::load_sessions_cpu(dir, variant, prepacked, encoder_intra_threads)
-        }
-    }
-
-    #[cfg(feature = "coreml")]
-    fn load_sessions_coreml(
-        dir: &Path,
-        variant: ModelVariant,
-        prepacked: &ort::session::builder::PrepackedWeights,
-    ) -> anyhow::Result<(Session, Session, Session)> {
-        // CoreML has its own cache (`coreml_cache/`) for compiled subgraphs.
-        // We do NOT call `.with_optimized_model_path(...)` here: CoreML EP
-        // replaces part of the graph with compiled nodes that cannot be
-        // re-serialized as ONNX, and ORT errors out with
-        // `Unable to serialize model as it contains compiled nodes`
-        // on macOS 14+. The CoreML cache below is sufficient.
-        //
-        // `with_static_input_shapes(true)` is load-bearing (issue #42): the
-        // Conformer encoder has a dynamic time axis, and CoreML-compiled
-        // partitions with dynamic shapes fail at prediction time with
-        // `Error executing model: ... (error code: -1)` regardless of model
-        // format or compute units. Restricting CoreML to statically-shaped
-        // subgraphs keeps the heavy conv/matmul blocks accelerated and
-        // leaves the dynamic-shape ops on the CPU EP.
-        let cache_dir = dir.join("coreml_cache");
-        let coreml_ep = ep::CoreML::default()
-            .with_model_format(ep::coreml::ModelFormat::MLProgram)
-            .with_static_input_shapes(true)
-            .with_compute_units(ep::coreml::ComputeUnits::CPUAndNeuralEngine)
-            .with_specialization_strategy(ep::coreml::SpecializationStrategy::FastPrediction)
-            .with_model_cache_dir(cache_dir.to_string_lossy())
-            .build();
-
-        let cpu_fallback = ort::execution_providers::CPUExecutionProvider::default();
-        let eps = [coreml_ep.clone(), cpu_fallback.into()];
-        let encoder_path = Self::encoder_model_path(dir, variant);
-        let encoder = Session::builder()
-            .map_err(ort_err)?
-            .with_prepacked_weights(prepacked)
-            .map_err(ort_err)?
-            .with_execution_providers(&eps)
-            .map_err(ort_err)?
-            .commit_from_file(&encoder_path)
-            .map_err(ort_err)?;
-        let decoder = Session::builder()
-            .map_err(ort_err)?
-            .with_prepacked_weights(prepacked)
-            .map_err(ort_err)?
-            .with_execution_providers(&eps)
-            .map_err(ort_err)?
-            .commit_from_file(dir.join(variant.decoder_file()))
-            .map_err(ort_err)?;
-        let joiner = Session::builder()
-            .map_err(ort_err)?
-            .with_prepacked_weights(prepacked)
-            .map_err(ort_err)?
-            .with_execution_providers(&eps)
-            .map_err(ort_err)?
-            .commit_from_file(dir.join(variant.joint_file()))
-            .map_err(ort_err)?;
-        Ok((encoder, decoder, joiner))
-    }
-
-    #[cfg(feature = "cuda")]
-    fn load_sessions_cuda(
-        dir: &Path,
-        variant: ModelVariant,
-        prepacked: &ort::session::builder::PrepackedWeights,
-    ) -> anyhow::Result<(Session, Session, Session)> {
-        // CUDA EP compiles subgraphs that cannot be re-serialized as ONNX,
-        // so we do NOT call `.with_optimized_model_path(...)` here — same
-        // reason as the CoreML block. ORT's CUDA EP keeps its own caches
-        // internally.
-        let cuda_ep = ep::CUDA::default().build();
-
-        let cpu_fallback = ort::execution_providers::CPUExecutionProvider::default();
-        let eps = [cuda_ep.clone(), cpu_fallback.into()];
-        let encoder_path = Self::encoder_model_path(dir, variant);
-        let encoder = Session::builder()
-            .map_err(ort_err)?
-            .with_prepacked_weights(prepacked)
-            .map_err(ort_err)?
-            .with_execution_providers(&eps)
-            .map_err(ort_err)?
-            .commit_from_file(&encoder_path)
-            .map_err(ort_err)?;
-        let decoder = Session::builder()
-            .map_err(ort_err)?
-            .with_prepacked_weights(prepacked)
-            .map_err(ort_err)?
-            .with_execution_providers(&eps)
-            .map_err(ort_err)?
-            .commit_from_file(dir.join(variant.decoder_file()))
-            .map_err(ort_err)?;
-        let joiner = Session::builder()
-            .map_err(ort_err)?
-            .with_prepacked_weights(prepacked)
-            .map_err(ort_err)?
-            .with_execution_providers(&eps)
-            .map_err(ort_err)?
-            .commit_from_file(dir.join(variant.joint_file()))
-            .map_err(ort_err)?;
-        Ok((encoder, decoder, joiner))
-    }
-
-    /// Load encoder/decoder/joiner sessions on the plain CPU EP.
-    ///
-    /// This is the default build's loader and the runtime-fallback target
-    /// when the CoreML probe in [`Engine::load`] fails (issue #42). Not
-    /// compiled under `cuda` (mutually exclusive with `coreml`), where it
-    /// would be dead code.
-    #[cfg(not(feature = "cuda"))]
-    fn load_sessions_cpu(
-        dir: &Path,
-        variant: ModelVariant,
-        prepacked: &ort::session::builder::PrepackedWeights,
-        encoder_intra_threads: usize,
-    ) -> anyhow::Result<(Session, Session, Session)> {
-        let cache_dir = dir.join("optimized_cache");
-        std::fs::create_dir_all(&cache_dir)
-            .with_context(|| format!("Failed to create ONNX cache dir: {}", cache_dir.display()))?;
-        let cpu_fallback = ort::execution_providers::CPUExecutionProvider::default();
-        let eps = [cpu_fallback.into()];
-        let encoder_path = Self::encoder_model_path(dir, variant);
-        // Only the encoder's intra-op count is configurable (it dominates the
-        // single-utterance cost); inter-op stays 1 because the Conformer is a
-        // near-linear chain, and the decoder/joiner stay intra=1 (tiny ops).
-        // Default `encoder_intra_threads == 1` ⇒ identical to the prior build.
-        let encoder = Session::builder()
-            .map_err(ort_err)?
-            .with_prepacked_weights(prepacked)
-            .map_err(ort_err)?
-            .with_intra_threads(encoder_intra_threads.max(1))
-            .map_err(ort_err)?
-            .with_inter_threads(1)
-            .map_err(ort_err)?
-            .with_optimized_model_path(cache_dir.join("encoder_optimized.onnx"))
-            .map_err(ort_err)?
-            .with_execution_providers(&eps)
-            .map_err(ort_err)?
-            .commit_from_file(&encoder_path)
-            .map_err(ort_err)?;
-        let decoder = Session::builder()
-            .map_err(ort_err)?
-            .with_prepacked_weights(prepacked)
-            .map_err(ort_err)?
-            .with_intra_threads(1)
-            .map_err(ort_err)?
-            .with_inter_threads(1)
-            .map_err(ort_err)?
-            .commit_from_file(dir.join(variant.decoder_file()))
-            .map_err(ort_err)?;
-        let joiner = Session::builder()
-            .map_err(ort_err)?
-            .with_prepacked_weights(prepacked)
-            .map_err(ort_err)?
-            .with_intra_threads(1)
-            .map_err(ort_err)?
-            .with_inter_threads(1)
-            .map_err(ort_err)?
-            .commit_from_file(dir.join(variant.joint_file()))
-            .map_err(ort_err)?;
-        Ok((encoder, decoder, joiner))
     }
 
     /// Split loaded triplets into an interactive pool and an optional batch
@@ -1423,39 +1380,51 @@ impl Engine {
         }
     }
 
-    /// Load up to `pool_size` session triplets in parallel via the given
-    /// per-triplet loader (`load_sessions` for the compile-time-selected EP,
-    /// `load_sessions_cpu` for the CoreML runtime fallback). Tolerates a
-    /// partial pool down to `min_size` (see [`Engine::finalize_pool_load`]).
-    fn load_triplets(
+    /// Load up to `pool_size` session triplets in parallel through the given
+    /// [`Runtime`], tolerating a partial pool down to `min_size`.
+    fn load_triplets_runtime(
+        runtime: &dyn Runtime,
         dir: &Path,
         variant: ModelVariant,
         pool_size: usize,
         min_size: usize,
-        prepacked: &ort::session::builder::PrepackedWeights,
-        load_one: impl Fn(
-            &Path,
-            ModelVariant,
-            &ort::session::builder::PrepackedWeights,
-        ) -> anyhow::Result<(Session, Session, Session)>
-        + Sync,
     ) -> anyhow::Result<Vec<SessionTriplet>> {
+        let encoder_path = Self::encoder_model_path(dir, variant);
+        let decoder_path = dir.join(variant.decoder_file());
+        let joiner_path = dir.join(variant.joint_file());
+
         let results: Vec<anyhow::Result<SessionTriplet>> = std::thread::scope(|s| {
             let handles: Vec<_> = (0..pool_size)
                 .map(|i| {
-                    let pp = prepacked;
-                    let load_one = &load_one;
+                    let encoder_path = &encoder_path;
+                    let decoder_path = &decoder_path;
+                    let joiner_path = &joiner_path;
                     s.spawn(move || {
                         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                             tracing::info!(
-                                "Loading session triplet {}/{pool_size} (shared weights)",
+                                "Loading session triplet {}/{pool_size} (shared runtime)",
                                 i + 1
                             );
-                            let (encoder, decoder, joiner) = load_one(dir, variant, pp)?;
+                            let encoder = runtime
+                                .load_session(encoder_path, true)
+                                .map_err(|e| anyhow::anyhow!(e))?;
+                            let decoder = runtime
+                                .load_session(decoder_path, false)
+                                .map_err(|e| anyhow::anyhow!(e))?;
+                            let joiner = runtime
+                                .load_session(joiner_path, false)
+                                .map_err(|e| anyhow::anyhow!(e))?;
                             Ok(SessionTriplet {
                                 encoder,
                                 decoder,
                                 joiner,
+                                encoder_inputs: vec![
+                                    Tensor::new(
+                                        Shape::new(vec![1, N_MELS, 1]),
+                                        TensorData::F32(vec![0.0; N_MELS]),
+                                    )?,
+                                    Tensor::new(Shape::new(vec![1]), TensorData::I64(vec![0]))?,
+                                ],
                             })
                         }))
                         .map_err(|_| anyhow::anyhow!("model loading thread panicked"))?
@@ -1471,148 +1440,6 @@ impl Engine {
                 .collect()
         });
         Self::finalize_pool_load(results, pool_size, min_size)
-    }
-
-    fn load_inner(
-        dir: &Path,
-        variant: ModelVariant,
-        model_dir: &str,
-        pool_size: usize,
-        min_size: usize,
-        batch_pool_size: usize,
-        encoder_intra_threads: usize,
-    ) -> anyhow::Result<Self> {
-        tracing::info!("Detected model variant: {variant:?}");
-        let is_int8 = dir.join(variant.encoder_int8_file()).exists();
-        if is_int8 {
-            tracing::info!("Using INT8 quantized encoder");
-        }
-
-        tracing::info!("Loading ONNX models from {model_dir} (pool_size={pool_size})...");
-
-        #[cfg(feature = "coreml")]
-        tracing::info!("Using CoreML execution provider (Neural Engine + CPU)");
-        #[cfg(feature = "cuda")]
-        tracing::info!("Using CUDA execution provider (falls back to CPU if unavailable)");
-        #[cfg(not(any(feature = "coreml", feature = "cuda")))]
-        tracing::info!("Using CPU execution provider");
-
-        // Shared prepacked weights container (Arc-based, thread-safe)
-        let prepacked = ort::session::builder::PrepackedWeights::new();
-
-        // CoreML can reject a model at two distinct stages: session creation
-        // (MLModel compilation) and the first `Run()` (issue #42). This guards
-        // the first stage; the warmup probe below guards the second.
-        #[cfg(feature = "coreml")]
-        let triplets = match Self::load_triplets(
-            dir,
-            variant,
-            pool_size,
-            min_size,
-            &prepacked,
-            |d, v, pp| Self::load_sessions(d, v, pp, encoder_intra_threads),
-        ) {
-            Ok(triplets) => triplets,
-            Err(load_err) => {
-                tracing::warn!(
-                    "CoreML EP failed to load sessions ({load_err:#}); falling back to CPU execution provider"
-                );
-                // Fresh container: the failed attempt may have pre-packed
-                // weights with CoreML-specific kernel layouts.
-                let prepacked = ort::session::builder::PrepackedWeights::new();
-                Self::load_triplets(dir, variant, pool_size, min_size, &prepacked, |d, v, pp| {
-                    Self::load_sessions_cpu(d, v, pp, encoder_intra_threads)
-                })?
-            }
-        };
-        #[cfg(not(feature = "coreml"))]
-        let triplets =
-            Self::load_triplets(dir, variant, pool_size, min_size, &prepacked, |d, v, pp| {
-                Self::load_sessions(d, v, pp, encoder_intra_threads)
-            })?;
-
-        let tokenizer = Tokenizer::load(&dir.join(variant.vocab_file()))?;
-        let features = FeatureExtractor::new();
-
-        tracing::info!(
-            "Models loaded (vocab_size={}, pool_size={pool_size})",
-            tokenizer.vocab_size()
-        );
-
-        #[cfg(feature = "diarization")]
-        #[allow(deprecated)] // legacy OnnxEmbeddingExtractor::new — see import note above
-        let speaker_encoder = {
-            let model_path = dir.join("wespeaker_resnet34.onnx");
-            if model_path.exists() {
-                match OnnxEmbeddingExtractor::new(
-                    &model_path,
-                    SPEAKER_EMBEDDING_DIM,
-                    SPEAKER_SEGMENT_SAMPLES,
-                    SPEAKER_POOL_SIZE,
-                ) {
-                    Ok(enc) => {
-                        tracing::info!("Speaker encoder loaded (diarization available)");
-                        Some(std::sync::Arc::new(enc))
-                    }
-                    Err(e) => {
-                        tracing::warn!(
-                            "Speaker encoder not loaded, diarization unavailable: {e:#}"
-                        );
-                        None
-                    }
-                }
-            } else {
-                tracing::warn!("wespeaker_resnet34.onnx not found, diarization unavailable");
-                None
-            }
-        };
-
-        let (pool, batch_pool) = Self::split_triplets(triplets, batch_pool_size);
-        let engine = Self {
-            pool,
-            batch_pool,
-            tokenizer,
-            features,
-            variant,
-            punctuator: None,
-            itn: false,
-            biaser: None,
-            vad: None,
-            vad_config: crate::vad::VadConfig::default(),
-            int8: is_int8,
-            #[cfg(feature = "diarization")]
-            speaker_encoder,
-        };
-
-        // CoreML compiles its graph partitions lazily, so sessions that
-        // loaded fine can still fail at the first `Run()` (issue #42). Probe
-        // one triplet now; if the probe fails, rebuild the pool on the CPU EP
-        // instead of surfacing the error on every real request.
-        #[cfg(feature = "coreml")]
-        let engine = probe_or_rebuild(
-            engine,
-            |e: &Self| e.warmup_one().map_err(anyhow::Error::from),
-            |mut e, probe_err| {
-                tracing::warn!(
-                    "CoreML EP failed at runtime ({probe_err:#}); falling back to CPU execution provider"
-                );
-                let prepacked = ort::session::builder::PrepackedWeights::new();
-                let triplets = Self::load_triplets(
-                    dir,
-                    variant,
-                    pool_size,
-                    min_size,
-                    &prepacked,
-                    |d, v, pp| Self::load_sessions_cpu(d, v, pp, encoder_intra_threads),
-                )?;
-                let (pool, batch_pool) = Self::split_triplets(triplets, batch_pool_size);
-                e.pool = pool;
-                e.batch_pool = batch_pool;
-                Ok(e)
-            },
-        )?;
-
-        Ok(engine)
     }
 
     /// Run one ~1 s silent inference on a single pooled session triplet.
@@ -2191,40 +2018,41 @@ impl Engine {
         decoder_state: &mut DecoderState,
         frame_offset: usize,
     ) -> anyhow::Result<(Vec<WordInfo>, bool)> {
-        // Encoder input: audio_signal [1, 64, num_frames], length [1]
-        let signal_tensor = TensorRef::from_array_view(([1_usize, N_MELS, num_frames], features))?;
-        let length_data = [num_frames as i64];
-        let length_tensor = TensorRef::from_array_view(([1_usize], length_data.as_slice()))?;
+        // Reuse the encoder input tensors: resize the signal tensor to the
+        // current frame count and overwrite both buffers in place.
+        triplet.encoder_inputs[0].resize_to(Shape::new(vec![1, N_MELS, num_frames]));
+        triplet.encoder_inputs[0]
+            .as_f32_mut()
+            .context("encoder signal tensor is not f32")?
+            .copy_from_slice(features);
+        triplet.encoder_inputs[1]
+            .as_i64_mut()
+            .context("encoder length tensor is not i64")?[0] = num_frames as i64;
 
         let enc_start = std::time::Instant::now();
         let encoder_outputs = triplet
             .encoder
-            .run(ort::inputs![signal_tensor, length_tensor])
+            .run(&triplet.encoder_inputs)
             .context("Encoder inference failed")?;
         tracing::info!(
             elapsed_ms = enc_start.elapsed().as_millis() as u64,
             "encoder_inference"
         );
 
-        let (_enc_shape, enc_data) = encoder_outputs[0]
-            .try_extract_tensor::<f32>()
-            .context("Failed to extract encoder output")?;
-        let (_len_shape, len_data) = encoder_outputs[1]
-            .try_extract_tensor::<i32>()
-            .context("Failed to extract encoder length")?;
-
-        let enc_len = usize::try_from(len_data[0]).context("Negative encoder length")?;
+        let enc_len = match encoder_outputs[1].view().data() {
+            TensorDataView::I32(v) => usize::try_from(v[0]).context("Negative encoder length")?,
+            TensorDataView::I64(v) => usize::try_from(v[0]).context("Negative encoder length")?,
+            _ => anyhow::bail!("Unexpected encoder length tensor type"),
+        };
 
         tracing::debug!("Encoder output: {} frames", enc_len);
 
-        // RNN-T greedy decode — we pass the encoder-output borrow directly
-        // instead of copying it.  The `encoder_outputs` variable is dropped
-        // automatically at the end of this scope, after decode finishes.
+        // RNN-T greedy decode — the encoder output is borrowed for the decode loop.
         let dec_start = std::time::Instant::now();
         let result = decode::greedy_decode(
-            &mut triplet.decoder,
-            &mut triplet.joiner,
-            enc_data,
+            &*triplet.decoder,
+            &*triplet.joiner,
+            &encoder_outputs[0].view(),
             enc_len,
             self.tokenizer.blank_id(),
             decoder_state,
@@ -2773,12 +2601,6 @@ mod tests {
     #[test]
     fn test_pool_error_display() {
         assert_eq!(format!("{}", PoolError::Closed), "session pool is closed");
-    }
-
-    #[test]
-    fn test_ort_err() {
-        let e = ort_err("test ort error");
-        assert_eq!(format!("{e}"), "test ort error");
     }
 
     #[test]
@@ -3621,5 +3443,110 @@ mod tests {
             .transcribe_samples(&samples, &mut guard)
             .expect("at-threshold audio must not error");
         assert!(result.words.is_empty(), "silence decodes to no words");
+    }
+
+    mod mock_runtime_tests {
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        use crate::inference::{Engine, PRED_HIDDEN};
+        use crate::runtime::mock::{MockFactory, MockSession};
+        use crate::runtime::tensor::{Shape, Tensor, TensorData};
+
+        const ENC_DIM: usize = 768;
+
+        fn tiny_mock_engine() -> (Engine, tempfile::TempDir) {
+            let tmp = tempfile::tempdir().expect("tempdir");
+            let dir = tmp.path();
+
+            // Empty model files are enough for variant detection; the mock
+            // runtime intercepts all session loading before the filesystem is
+            // read for ONNX data.
+            std::fs::write(dir.join("v3_rnnt_encoder.onnx"), b"").unwrap();
+            std::fs::write(dir.join("v3_rnnt_decoder.onnx"), b"").unwrap();
+            std::fs::write(dir.join("v3_rnnt_joint.onnx"), b"").unwrap();
+            // vocab: index 0 = "▁hi", index 1 = "<blk>" (blank wins on ties).
+            std::fs::write(dir.join("v3_vocab.txt"), "\u{2581}hi\n<blk>\n").unwrap();
+
+            let mut sessions: HashMap<String, Arc<MockSession>> = HashMap::new();
+            sessions.insert(
+                "v3_rnnt_encoder".into(),
+                Arc::new(MockSession::new(
+                    vec![Shape::new(vec![1, 64, 1]), Shape::new(vec![1])],
+                    vec![
+                        Tensor::new(
+                            Shape::new(vec![1, ENC_DIM, 1]),
+                            TensorData::F32(vec![0.0; ENC_DIM]),
+                        )
+                        .unwrap(),
+                        Tensor::new(Shape::new(vec![1]), TensorData::I64(vec![1])).unwrap(),
+                    ],
+                )),
+            );
+            sessions.insert(
+                "v3_rnnt_decoder".into(),
+                Arc::new(MockSession::new(
+                    vec![
+                        Shape::new(vec![1, 1]),
+                        Shape::new(vec![1, 1, PRED_HIDDEN]),
+                        Shape::new(vec![1, 1, PRED_HIDDEN]),
+                    ],
+                    vec![
+                        Tensor::new(
+                            Shape::new(vec![1, 1, PRED_HIDDEN]),
+                            TensorData::F32(vec![0.0; PRED_HIDDEN]),
+                        )
+                        .unwrap(),
+                        Tensor::new(
+                            Shape::new(vec![1, 1, PRED_HIDDEN]),
+                            TensorData::F32(vec![0.0; PRED_HIDDEN]),
+                        )
+                        .unwrap(),
+                        Tensor::new(
+                            Shape::new(vec![1, 1, PRED_HIDDEN]),
+                            TensorData::F32(vec![0.0; PRED_HIDDEN]),
+                        )
+                        .unwrap(),
+                    ],
+                )),
+            );
+            sessions.insert(
+                "v3_rnnt_joint".into(),
+                Arc::new(MockSession::new(
+                    vec![
+                        Shape::new(vec![1, ENC_DIM, 1]),
+                        Shape::new(vec![1, PRED_HIDDEN, 1]),
+                    ],
+                    vec![
+                        Tensor::new(Shape::new(vec![1, 1, 2]), TensorData::F32(vec![0.0; 2]))
+                            .unwrap(),
+                    ],
+                )),
+            );
+
+            let factory = Box::new(MockFactory::new(sessions));
+            let engine = Engine::load_with_factory(dir, 1, 1, 0, factory, 1)
+                .expect("engine should load with mock runtime");
+            (engine, tmp)
+        }
+
+        #[test]
+        fn test_engine_loads_with_mock_runtime() {
+            let _ = tiny_mock_engine();
+        }
+
+        #[test]
+        fn test_engine_mock_runtime_decodes_silence() {
+            let (engine, _tmp) = tiny_mock_engine();
+            let mut guard = engine.pool.checkout_blocking().expect("checkout");
+            let samples = vec![0.0f32; 100]; // < N_FFT → one padded mel frame
+            let result = engine
+                .transcribe_samples(&samples, &mut guard)
+                .expect("mock decode must not error");
+
+            assert!(result.text.is_empty(), "blank-only decode yields no text");
+            assert!(result.words.is_empty());
+            assert!((result.duration_s - 100.0 / 16000.0).abs() < 1e-9);
+        }
     }
 }

@@ -22,15 +22,13 @@
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use ort::session::Session;
-use ort::value::TensorRef;
 use parking_lot::Mutex;
 
-/// `ort` errors are not `Send`/`Sync`; stringify them so they cross `?` into
-/// `anyhow` like everywhere else in the crate.
-fn ort_err(e: impl std::fmt::Display) -> anyhow::Error {
-    anyhow::anyhow!("{e}")
-}
+use crate::runtime::{
+    factory::RuntimeFactory,
+    session::RuntimeSession,
+    tensor::{Shape, Tensor, TensorData},
+};
 
 /// Silero VAD ONNX filename on disk. Single source of truth shared with the
 /// model-download path in [`crate::model`].
@@ -88,7 +86,10 @@ impl VadConfig {
 /// never by this struct, so a single `SileroVad` can serve many concurrent
 /// streams.
 pub struct SileroVad {
-    session: Mutex<Session>,
+    session: Mutex<Box<dyn RuntimeSession>>,
+    /// Reusable input tensors: `[frame [1,512], state [2,1,128], sample_rate [1]]`.
+    /// Mutated in place in `run_frame` to avoid per-frame allocations.
+    input_tensors: Mutex<Vec<Tensor>>,
 }
 
 impl SileroVad {
@@ -100,14 +101,38 @@ impl SileroVad {
     /// session. The caller treats an error as "VAD unavailable" and proceeds
     /// without it — VAD is strictly optional.
     pub fn load(model_path: &Path) -> Result<Self> {
-        let session = Session::builder()
-            .map_err(ort_err)?
-            .commit_from_file(model_path)
-            .map_err(ort_err)
-            .with_context(|| format!("Failed to load VAD model {}", model_path.display()))?;
+        let factory = crate::runtime::cpu_factory();
+        Self::load_with_factory(model_path, factory.as_ref())
+    }
+
+    /// Like [`SileroVad::load`], but loads the ONNX session through a
+    /// caller-supplied `RuntimeFactory` (e.g. a non-`ort` backend or a test
+    /// mock) instead of the default CPU `ort` runtime.
+    pub fn load_with_factory(model_path: &Path, factory: &dyn RuntimeFactory) -> Result<Self> {
+        tracing::debug!("Loading VAD model from {}", model_path.display());
+        let runtime = factory
+            .cpu_fallback()
+            .create(1)
+            .map_err(|e| anyhow::anyhow!(e))
+            .context("Failed to create runtime for VAD model")?;
+        let session = runtime
+            .load_session(model_path, false)
+            .map_err(|e| anyhow::anyhow!(e))
+            .context("Failed to load VAD model")?;
         tracing::info!("VAD model loaded from {}", model_path.display());
         Ok(Self {
             session: Mutex::new(session),
+            input_tensors: Mutex::new(vec![
+                Tensor::new_checked(
+                    Shape::new(vec![1, VAD_FRAME_SAMPLES]),
+                    TensorData::F32(vec![0.0; VAD_FRAME_SAMPLES]),
+                ),
+                Tensor::new_checked(
+                    Shape::new(vec![2, 1, 128]),
+                    TensorData::F32(vec![0.0; VAD_STATE_LEN]),
+                ),
+                Tensor::new_checked(Shape::new(vec![1]), TensorData::I64(vec![VAD_SAMPLE_RATE])),
+            ]),
         })
     }
 
@@ -122,40 +147,37 @@ impl SileroVad {
         let n = frame.len().min(VAD_FRAME_SAMPLES);
         input[..n].copy_from_slice(&frame[..n]);
 
-        let input_t = TensorRef::from_array_view(([1_usize, VAD_FRAME_SAMPLES], input.as_slice()))?;
-        let state_t = TensorRef::from_array_view(([2_usize, 1, 128], state.as_slice()))?;
-        let sr_t = TensorRef::from_array_view(([1_usize], [VAD_SAMPLE_RATE].as_slice()))?;
+        let outputs = {
+            let mut inputs = self.input_tensors.lock();
+            inputs[0]
+                .as_f32_mut()
+                .context("VAD frame tensor is not f32")?
+                .copy_from_slice(&input);
+            inputs[1]
+                .as_f32_mut()
+                .context("VAD state tensor is not f32")?
+                .copy_from_slice(state);
+            // inputs[2] (sample rate) is constant and was set at construction.
 
-        let prob = {
-            let mut session = self.session.lock();
-            let outputs = session
-                .run(ort::inputs![
-                    "input" => input_t,
-                    "state" => state_t,
-                    "sr" => sr_t,
-                ])
-                .context("VAD model inference failed")?;
-
-            // Copy the next state out before the borrow ends. A length other
-            // than VAD_STATE_LEN means the model's recurrent-state contract
-            // changed; surface it rather than silently running later frames on
-            // stale state (the non-blocking caller then disables VAD).
-            let (_, new_state) = outputs["stateN"]
-                .try_extract_tensor::<f32>()
-                .context("failed to extract VAD state")?;
-            if new_state.len() != VAD_STATE_LEN {
-                anyhow::bail!(
-                    "unexpected VAD state length {} (expected {VAD_STATE_LEN})",
-                    new_state.len()
-                );
-            }
-            state.copy_from_slice(new_state);
-
-            let (_, prob) = outputs["output"]
-                .try_extract_tensor::<f32>()
-                .context("failed to extract VAD probability")?;
-            prob.first().copied().unwrap_or(0.0)
+            let session = self.session.lock();
+            session.run(&inputs).context("VAD model inference failed")?
         };
+
+        // Identify the state and probability outputs by shape so the code
+        // does not depend on the exact output order of the Silero model.
+        let mut prob = 0.0f32;
+        let mut new_state = [0.0f32; VAD_STATE_LEN];
+        for output in outputs {
+            let view = output.view();
+            if let Some(data) = view.data().as_f32() {
+                if data.len() == VAD_STATE_LEN {
+                    new_state.copy_from_slice(data);
+                } else if data.len() == 1 {
+                    prob = data[0];
+                }
+            }
+        }
+        state.copy_from_slice(&new_state);
         Ok(prob)
     }
 
