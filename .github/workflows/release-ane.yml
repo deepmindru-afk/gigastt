@@ -72,8 +72,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$OUT_DIR"
+          # gigaam v3 models (v3_rnnt, …) live only in the GitHub source, not the
+          # stale PyPI release — install from the pinned upstream commit so the
+          # converted weights are reproducible.
           uv run --python 3.12 \
-            --with torch --with coremltools --with gigaam \
+            --with torch --with coremltools \
+            --with "gigaam @ git+https://github.com/salute-developers/GigaAM.git@85558932f047bf80d03f2b2e9dc2584c26e8bda6" \
             --with soundfile --with scikit-learn --with "numpy<2" \
             python scripts/convert_gigaam_ane.py \
               --buckets 512,768,1536,3000 --nbits 6 --out-dir "$OUT_DIR"
