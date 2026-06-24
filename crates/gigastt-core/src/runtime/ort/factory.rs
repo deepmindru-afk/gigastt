@@ -156,7 +156,11 @@ pub fn default_factory() -> Box<dyn RuntimeFactory> {
     {
         Box::new(crate::runtime::candle::factory::CandleFactory::new())
     }
-    #[cfg(not(feature = "candle"))]
+    #[cfg(all(feature = "ane", target_os = "macos"))]
+    {
+        Box::new(crate::runtime::coreml::factory::AneFactory::new())
+    }
+    #[cfg(not(any(feature = "candle", all(feature = "ane", target_os = "macos"))))]
     {
         if cfg!(feature = "coreml") {
             Box::new(OrtFactory::coreml())
@@ -189,6 +193,18 @@ pub fn production_factory(model_dir: &Path) -> Box<dyn RuntimeFactory> {
             Some(crate::model::ModelVariant::Rnnt)
         ) {
             return Box::new(crate::runtime::candle::factory::CandleFactory::new());
+        }
+    }
+    // The ANE backend is rnnt-only (same restriction as Candle) and macOS-only
+    // (Apple frameworks); use it only when the detected variant is `Rnnt`,
+    // otherwise fall back to the ort factory below.
+    #[cfg(all(feature = "ane", target_os = "macos"))]
+    {
+        if matches!(
+            crate::model::ModelVariant::detect_in_dir(model_dir),
+            Some(crate::model::ModelVariant::Rnnt)
+        ) {
+            return Box::new(crate::runtime::coreml::factory::AneFactory::new());
         }
     }
 

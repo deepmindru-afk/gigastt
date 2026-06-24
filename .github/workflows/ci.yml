@@ -122,6 +122,36 @@ jobs:
                   print(v)
               sys.exit(1)
           print("OK: candle is isolated")
+
+          OBJC2_PATTERNS = [
+              # Whole objc2 family, underscore form (Rust paths/imports):
+              # objc2, objc2_core_ml, objc2_foundation, objc2_app_kit, ...
+              r"\bobjc2(_\w+)?\b",
+              # Dash form (Cargo manifest / doc references): objc2-core-ml, ...
+              r"\bobjc2-[\w-]+\b",
+          ]
+          OBJC2_RE = re.compile("|".join(f"(?:{p})" for p in OBJC2_PATTERNS))
+
+          objc2_violations = []
+          for path in Path("crates").rglob("*.rs"):
+              is_coreml = any(a == "runtime" and b == "coreml"
+                              for a, b in zip(path.parts, path.parts[1:]))
+              if is_coreml:
+                  continue
+              lines = path.read_text(encoding="utf-8").splitlines()
+              test_indices = test_line_indices(lines)
+              for lineno, line in enumerate(lines, start=1):
+                  if lineno in test_indices:
+                      continue
+                  if OBJC2_RE.search(line):
+                      objc2_violations.append(f"{path}:{lineno}:{line}")
+
+          if objc2_violations:
+              print("ERROR: objc2 (objc2/objc2_foundation/objc2_core_ml/...) used outside runtime/coreml/:")
+              for v in objc2_violations:
+                  print(v)
+              sys.exit(1)
+          print("OK: objc2 is isolated")
           PY
 
   clippy:
@@ -263,6 +293,24 @@ jobs:
       - run: cargo build -p gigastt-core --features candle
       - run: cargo clippy -p gigastt-core --features candle -- -D warnings
       - run: cargo test -p gigastt-core --features candle --lib
+
+  build-ane:
+    runs-on: macos-14
+    name: Build (ANE)
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install protoc
+        run: brew install protobuf
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: cargo build -p gigastt --features ane
+      - run: cargo clippy -p gigastt --features ane --all-targets -- -D warnings
+      - run: cargo test -p gigastt-core --lib --features ane
+      # Warning-free with the lean core (no default features) + ane only.
+      - run: cargo check -p gigastt-core --no-default-features --features ane
 
   e2e-tests:
     # Only run on main push — PRs get fast feedback from unit tests + clippy
@@ -458,6 +506,13 @@ jobs:
           # Mirrors the allowlist enforced by `deny.toml` so a new transitive
           # dep with an off-list license fails review instead of slipping in.
           allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, Zlib, CC0-1.0, MPL-2.0, OpenSSL, Unicode-3.0, Unicode-DFS-2016, CDLA-Permissive-2.0
+          # GitHub's Cargo license detection mis-parses filetime's `MIT/Apache-2.0`
+          # (slash form) as an unknown LicenseRef and cannot detect a license for
+          # several crates.io packages. cargo-deny / `deny.toml` (the authoritative
+          # license gate, run in the separate "Cargo Deny" job) vets all of these
+          # as MIT/Apache/Zlib, so exempt the affected ANE-stack packages from this
+          # secondary check rather than weakening the allowlist.
+          allow-dependencies-licenses: pkg:cargo/filetime, pkg:cargo/objc2, pkg:cargo/objc2-core-ml, pkg:cargo/objc2-foundation, pkg:cargo/half, pkg:cargo/tar
 
   docs:
     runs-on: ubuntu-latest
@@ -491,9 +546,10 @@ jobs:
         with:
           shared-key: ci
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      # coreml+cuda is a hard compile_error and nnapi is Android-only, so the
-      # platform execution-provider features are excluded from the powerset.
-      - run: cargo hack check --feature-powerset --workspace --exclude-features coreml,cuda,nnapi --locked
+      # coreml+cuda is a hard compile_error, nnapi is Android-only, and ane is
+      # Apple-only (the objc2 base crate hard compile_errors on non-Apple targets),
+      # so the platform execution-provider features are excluded from the powerset.
+      - run: cargo hack check --feature-powerset --workspace --exclude-features coreml,cuda,nnapi,ane --locked
 
   publish-dry-run:
     runs-on: ubuntu-latest
