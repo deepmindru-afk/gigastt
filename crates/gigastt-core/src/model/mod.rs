@@ -93,11 +93,29 @@ pub const ANE_BUCKETS: &[usize] = &[512, 768, 1536, 3000];
 /// `release-ane.yml`. Each digest is simultaneously the content-identity
 /// fingerprint and the download pin for that bucket's `.tar`.
 ///
-/// Empty-string sentinels mean **no ANE release is published yet**: after
-/// running the Release ANE workflow, fill each entry from the printed
-/// `SHA256SUMS.txt` and bump [`ANE_RELEASE_BASE`]'s tag in the same change.
+/// Pinned to the `ane-v3-2026-06-24` release (built by `release-ane.yml`). On a
+/// re-release, refill each entry from the printed `SHA256SUMS.txt` and bump
+/// [`ANE_RELEASE_BASE`]'s tag in the same change. An empty string means "not
+/// published yet" and makes `ensure_ane_packages` bail for that bucket.
 #[cfg(all(feature = "net", feature = "ane"))]
-const ANE_TAR_CHECKSUMS: &[(usize, &str)] = &[(512, ""), (768, ""), (1536, ""), (3000, "")];
+const ANE_TAR_CHECKSUMS: &[(usize, &str)] = &[
+    (
+        512,
+        "307739d76bebe9805d36e695db030bcf4e71b0b105670609cdcbd3cdc4d4c629",
+    ),
+    (
+        768,
+        "111bd2722c46d41c0984e246752782f05892017990f50837ee6342b0dc41b5be",
+    ),
+    (
+        1536,
+        "dabb0ee21e064a79621f047c795d81f33ef95358c43157a7d242cd9a504b2e93",
+    ),
+    (
+        3000,
+        "7499327eccb326f18014c222adce11f323fbaf3ff76dea7f7c0820f9adb834d4",
+    ),
+];
 
 /// HuggingFace repo hosting the optional RUPunct punctuation model (MIT).
 #[cfg(feature = "net")]
@@ -2178,13 +2196,19 @@ mod tests {
         );
     }
 
-    /// The sentinel checksums (no release yet) must surface the actionable
-    /// "not yet published" bail rather than attempting a download.
+    /// Every shipped bucket resolves to its pinned `.tar` checksum; a bucket with
+    /// no pin (an empty sentinel, or one outside the ladder) surfaces the
+    /// actionable "not yet published" bail rather than downloading unverified.
     #[cfg(all(feature = "net", feature = "ane"))]
     #[test]
-    fn test_require_ane_tar_checksum_bails_on_sentinel() {
-        // Default table is all sentinels until a release is published.
-        let err = require_ane_tar_checksum(768).expect_err("sentinel must bail");
+    fn test_require_ane_tar_checksum_resolves_pinned_and_bails_unpinned() {
+        // Each ladder bucket is pinned to its release `.tar` SHA-256.
+        for &b in ANE_BUCKETS {
+            let sum = require_ane_tar_checksum(b).expect("shipped bucket must be pinned");
+            assert_eq!(sum.len(), 64, "checksum must be 64 hex chars, got: {sum}");
+        }
+        // A bucket with no pin (here: outside the ladder) takes the bail path.
+        let err = require_ane_tar_checksum(99_999).expect_err("unpinned bucket must bail");
         assert!(
             format!("{err}").contains("not yet published"),
             "unexpected error: {err}"

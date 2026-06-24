@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.5.0] - 2026-06-24
 
 ### Added
 
@@ -16,16 +16,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   each encoder window is padded up to the nearest fixed bucket (ladder `512/768/1536/3000`
   mel frames), run FP16 on the ANE, and trimmed back; windows below the 50% fill
   floor — including every streaming window — transparently fall back to the `ort`
-  encoder (no crash, no ANE benefit). End-to-end ≈ 3.7× over the CPU build (decode-bound;
-  the RNN-T greedy loop, not the encoder, is the bottleneck), WER vs `ort` ≈ 1.11%
-  (one borderline FP16-pad-up token flip on a 15-clip Golos set, else byte-identical).
+  encoder (no crash, no ANE benefit). Warm end-to-end ≈ 10× over the CPU build
+  (encoder ~15× on the Neural Engine; the RNN-T greedy decode and feature extraction
+  stay on the CPU and become the larger share once the encoder is offloaded). A
+  compiled-model disk cache cuts the ~20 s first-load to ~0.1 s on later starts.
+  WER vs `ort` ≈ 1.11% (one borderline FP16-pad-up token flip on a 15-clip Golos
+  set, else byte-identical).
   The smallest (512) bucket serves typical 3–5 s clips at higher fill, cutting the
   pad-up waste — and the encoder latency — versus routing them up to the 768 bucket.
   Distinct from `--features coreml` (the ort CoreML EP); mutually exclusive with
   `coreml`/`cuda`/`nnapi`/`candle`; `rnnt` head only (`e2e_rnnt` falls back to `ort`).
-  Bucket packages convert locally via `scripts/convert_gigaam_ane.py` (and, once an
-  ANE release is published, `gigastt download --ane`). See
-  [`docs/ane-backend.md`](docs/ane-backend.md).
+  Bucket packages download via `gigastt download --ane` (published at the
+  `ane-v3-2026-06-24` release) or convert locally via `scripts/convert_gigaam_ane.py`.
+  See [`docs/ane-backend.md`](docs/ane-backend.md).
 
 ## [2.4.0] - 2026-06-23
 
