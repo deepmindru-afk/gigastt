@@ -69,15 +69,21 @@ jobs:
       - name: Convert + palettize per-bucket ANE encoders
         env:
           OUT_DIR: ${{ runner.temp }}/ane
+          GIGAAM_REPO: ${{ runner.temp }}/GigaAM
         run: |
           set -euo pipefail
           mkdir -p "$OUT_DIR"
           # gigaam v3 models (v3_rnnt, …) live only in the GitHub source, not the
-          # stale PyPI release — install from the pinned upstream commit so the
-          # converted weights are reproducible.
+          # stale PyPI release — but the git package metadata pins numpy==2.*,
+          # which conflicts with the coremltools/numpy<2 stack. So clone the
+          # pinned upstream source and import it via GIGAAM_REPO (sys.path, taken
+          # by the convert script), while the PyPI `gigaam` supplies the
+          # numpy<2-compatible runtime deps. This is the exact setup that produced
+          # the validated local packages.
+          git clone --quiet https://github.com/salute-developers/GigaAM.git "$GIGAAM_REPO"
+          git -C "$GIGAAM_REPO" checkout --quiet 85558932f047bf80d03f2b2e9dc2584c26e8bda6
           uv run --python 3.12 \
-            --with torch --with coremltools \
-            --with "gigaam @ git+https://github.com/salute-developers/GigaAM.git@85558932f047bf80d03f2b2e9dc2584c26e8bda6" \
+            --with torch --with coremltools --with gigaam \
             --with soundfile --with scikit-learn --with "numpy<2" \
             python scripts/convert_gigaam_ane.py \
               --buckets 512,768,1536,3000 --nbits 6 --out-dir "$OUT_DIR"
