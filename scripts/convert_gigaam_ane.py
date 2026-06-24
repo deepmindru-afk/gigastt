@@ -198,6 +198,15 @@ def convert_bucket(enc, mel_frames: int, nbits: int, group_size: int, out_dir: s
     try:
         mel = torch.randn(1, 64, mel_frames, dtype=torch.float32)
 
+        # Restore the stock pos_enc.forward before the reference run: when several
+        # buckets are converted in one process the encoder is shared, and the
+        # previous bucket left its static-slice monkeypatch (with ITS T') on
+        # pos_enc — running this bucket's stock forward through that stale slice
+        # mismatches shapes (e.g. 192 vs 128). Dropping the instance attribute
+        # falls back to the class method; this bucket re-patches for its own T'
+        # just below. (No-op for the first bucket / a fresh encoder.)
+        enc.pos_enc.__dict__.pop("forward", None)
+
         # Numerical equivalence vs the stock forward, captured BEFORE patching
         # pos_enc.forward (compares the static-slice wrapper to the stock one).
         with torch.inference_mode():
