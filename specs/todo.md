@@ -273,7 +273,7 @@ long-file + upgrade docs). Deferred:
 - Fix: default the CPU EP to `available_parallelism()` clamped by
   `pool_size`, or at least set it in the Docker `CMD` and document
   `GIGASTT_ENCODER_INTRA_THREADS`.
-- **Status: ⏳ still open (2026-07-09)** — the flag, `GIGASTT_ENCODER_INTRA_THREADS`, and an oversubscription clamp exist, but the default is still 1 everywhere including the Docker CMD.
+- **Status: ✅ closed (PR #132)** — with the flag/env unset the encoder intra-threads now default to logical CPUs divided across the concurrently-running pool triplets (`serve`: `pool_size + batch_pool_size`; `transcribe`: 1), still auto-clamped; explicit values (incl. `1`) pass through. Measured ~3× encoder on a 10-core box, transcripts byte-identical across the 15 Golos fixtures. Docker `CMD` needs no override.
 
 ### 24. Recognition knobs are process-global serve flags (P2)
 - punctuation / itn / vad / hotwords / model_variant are baked in at
@@ -288,7 +288,7 @@ long-file + upgrade docs). Deferred:
 - Fix: one `info!` per request with `audio_secs / wall_secs / rtf /
   encoder`, and a loud `warn!` (not info) when loading FP32 because no
   `_int8.onnx` is present, naming the one-line fix.
-- **Status: ⏳ still open (2026-07-09)** — Prometheus inference-duration histograms and the `/v1/models` precision field exist, but there is no per-request RTF `info!` line and no `warn!` on the FP32 fallback.
+- **Status: ✅ closed (PR #131)** — one `info!` per completed file transcription (`audio_s`/`wall_s`/`rtf`/`encoder=int8|fp32/backend`), engine-side so CLI + REST + SSE all get it; a `warn!` (not info) now fires when the INT8 encoder is missing and the FP32 fallback loads on the ORT path, naming the fix (`gigastt download` / `gigastt quantize`). Suppressed on candle/ANE builds.
 
 ### 26. No async batch path for long files (P2)
 - A long file holds one HTTP connection + a pool triplet for the whole
@@ -304,15 +304,22 @@ long-file + upgrade docs). Deferred:
   loop in favour of `POST ?format=md&word_timestamps=true`, gate on
   `/ready`.
 
-### 33. Nightly soak workflow red — fuzz target crashes on upstream symphonia panic (P1)
-- The nightly soak *job* is green, but the whole workflow has been red
-  every night since 2026-06-01 (39 consecutive runs as of 2026-07-09):
-  the fuzz companion job's `audio_decode` target hits an upstream panic
-  in `symphonia-metadata 0.6.0` (`ape.rs:226`), reachable from gigastt's
-  audio decode path. The failing input artifact is uploaded by each run.
-- Risk: a permanently red workflow masks real soak regressions.
-- Fix: report/patch upstream (or pin a fixed symphonia-metadata), or
-  guard the fuzz target against the known panic until the fix lands.
+### 33. APEv2 tag-size integer-overflow panic (upstream symphonia) — reddened nightly soak (P2/DoS)
+- Root cause (diagnosed 2026-07-09): a crafted 36-byte APEv2 tag header
+  (APE tags can ride on MP3 uploads) with an unbounded `size` field made
+  `symphonia-metadata 0.6.0`'s `size + 32` overflow and panic
+  (`ape.rs:226`, "attempt to add with overflow"). Reachable from the
+  audio-upload path — a 36-byte payload forced an HTTP 500 (the server
+  survives: REST is under `catch_unwind`, SSE was not). It also reddened
+  the nightly soak fuzz `audio_decode` target every night since 2026-06-01.
+  No upstream fix exists (unchanged on `main`, unreported).
+- **Status: ✅ closed (PR #133)** — vendored a one-line `saturating_add`
+  guard in `symphonia-metadata` (`[patch.crates-io]`, drop when upstream
+  ships >= 0.6.1) + wrapped the SSE decode in `catch_unwind` to match REST
+  (panic → 422 instead of 500) + a regression test on the exact 36-byte
+  artifact (panics without the patch, clean `Err` with it). Docker
+  dep-cache layer copies `vendor/`. **Follow-up: file the upstream issue**
+  (draft prepared; overflow at `symphonia-metadata` `ape.rs:226`).
 
 ---
 
