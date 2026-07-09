@@ -228,7 +228,7 @@ All new findings from the 2026-04-18 review are catalogued in
   low-memory machines.
 - Fix: `POST /v1/admin/reload` (loopback-only, no auth since local)
   re-creates the session pool.
-- **Status: ⏳ still open (2026-07-09)** — SIGHUP reload added in v2.x covers `RuntimeLimits`/rate-limiter only; the engine/INT8 encoder still needs a restart.
+- **Status: ✅ closed (PR #134)** — loopback-only `POST /v1/admin/reload` rebuilds the engine from the exact boot recipe (model dir + pool/threads + punct/ITN/VAD/hotword chain) and atomically swaps it in via `ArcSwap<Engine>`; warmed before the swap, a build failure keeps the currently-serving engine (never engineless), in-flight requests finish on the engine they started on. Strict peer-IP loopback check (holds under `--bind-all`/`--cors-allow-any`), rate-limit-exempt, concurrent reload → 409. Picks up a re-quantized/replaced INT8 encoder without a restart.
 
 ### 20. No TLS / auth for remote deployments
 - Docker/remote use is deferred to reverse proxy. Fine for now;
