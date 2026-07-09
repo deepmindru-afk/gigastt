@@ -5,7 +5,7 @@ that each milestone unblocks the next and keeps `main` shippable
 at every boundary. Every phase ends with a git tag + release-notes
 bullet.
 
-## Milestones delivered (2026-04-20)
+## Milestones delivered (2026-04-20, extended 2026-07-09)
 
 | Phase | Tag | Highlights |
 |-------|-----|-----------|
@@ -18,10 +18,11 @@ bullet.
 | 5 | v0.10.x | Speaker diarization as default feature (`polyvoice` integration) |
 | 6 | v1.0.x | First stable release, semver guarantees, pool checkout timeout, protocol version negotiation, extended metrics |
 | 7 | v2.0.x | Workspace split into `gigastt-core` / `gigastt-ffi` / `gigastt` crates |
+| 8 | v2.1.x–v2.3.x | reconciliation sweep, per-op quantize axis, export formats (srt/vtt/md), Silero VAD endpointing, batch pool, WER baseline gate + histograms, `rnnt` default head |
+| 9 | v2.4.x | runtime abstraction seam (PR #115), Candle/Metal backend, GHCR Docker images (+cuda) |
+| 10 | v2.5.x | native ANE (Core ML) encoder backend + published bucket packages (`download --ane`) |
 
-**Carry-over not in v1.0 critique:** item 15 (WER histograms), item 16
-(nightly soak), item 18 (`ort_err()` audit), item 19 (hot-reload model),
-CUDA release asset. Re-sequenced into Phase 6 / 7 below.
+**Carry-over remaining (2026-07-09):** item 19 (hot-reload model) and the CUDA release-matrix tarball (partial — GHCR `:cuda` image ships since v2.4.0). Items 15 (v2.3.0) and 16 (v0.9.0) shipped; item 18 is obsolete (`ort_err()` removed by the v2.4.0 runtime abstraction).
 
 ## Phase 0 — stop the bleeding (1 day)
 

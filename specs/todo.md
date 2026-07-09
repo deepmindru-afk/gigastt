@@ -8,7 +8,7 @@ Each item: **P0/P1/P2** priority, a short problem statement, the
 concrete symptom, and the proposed direction. Full rollout sequence
 lives in `specs/plan.md`.
 
-## Progress snapshot (2026-04-21)
+## Progress snapshot (2026-04-21, refreshed 2026-07-09)
 
 > **v1.0 readiness work is tracked in [`specs/prod-readiness-v1.0.md`](prod-readiness-v1.0.md)** —
 > 50 findings (P0/P1/P2) + 14 sustainability items from the 4-critic review
@@ -34,13 +34,13 @@ lives in `specs/plan.md`.
 | 12. `/v1/models.capabilities` | P2 | ✅ v0.7.0 (capabilities payload) |
 | 13. `handle_ws_inner` split | P2 | ✅ v0.6.1 (three frame handlers + e2e test) |
 | 14. `cargo deny` + SBOM | P2 | ✅ v0.9.0 (CycloneDX SBOM + SLSA provenance + minisign signatures in `release.yml`) |
-| 15. WER histogram breakdown | P2 | ⏳ open (see V1-41 / V1-42) |
+| 15. WER histogram breakdown | P2 | ✅ v2.3.0 (PR #67 — histograms by audio-duration / word-count / WER bucket in the benchmark JSON; V1-41 baseline gate + V1-42 external set also closed) |
 | 16. Self-hosted nightly soak | P2 | ✅ v0.9.0 (`.github/workflows/soak.yml` runs 03:17 UTC, V1-09) |
 | 17. Per-IP rate limiting | P2 | ✅ v0.8.0 (initial) + v0.9.0 (math fix V1-06 + in-tree implementation dropping `tower_governor`) |
-| 18. `ort_err()` wrapper audit | P2 | ⏳ open |
+| 18. `ort_err()` wrapper audit | P2 | ✅ v2.4.0 (obsolete — `ort_err()` removed by the runtime abstraction, PR #115; ort errors now cross the seam as typed `RuntimeError`) |
 | 19. Hot-reload model | P2 | ⏳ open |
 | 20. TLS/auth deployment docs | P2 | ✅ v0.8.0 (`docs/deployment.md` Caddy/nginx) + v0.9.0 (`X-Forwarded-For` trust-boundary fix, V1-11) |
-| CUDA in release matrix | P0 addendum | ⏳ open (removed from matrix v0.5.2+) |
+| CUDA in release matrix | P0 addendum | partial — tarball intentionally absent (CUDA toolchain broken on GH runners, see release.yml comment); CUDA ships via the GHCR `:2.x-cuda` Docker image since v2.4.0 (amd64) |
 
 Also shipped alongside (2026-04-14 advisory): `rustls-webpki` 0.103.10→0.103.12 closing RUSTSEC-2026-0098/99 in v0.5.3.
 2026-04-21 patch series (v0.9.1 / v0.9.2): CI-only fixes so the v0.9.0 release tarballs could actually publish — `protoc` provisioning on every cargo-build job, minisign non-interactive passphrase via stdin. No source changes.
@@ -220,12 +220,15 @@ All new findings from the 2026-04-18 review are catalogued in
 - Fix: track `ort` release notes; when Send is implemented, delete
   the helper and let `?` propagate natively.
 
+- **Status: ✅ closed v2.4.0** — the helper was removed wholesale by the runtime abstraction (PR #115); only a doc-comment mention survives in `punctuation.rs`.
+
 ### 19. Model reload requires restart
 - No hot-swap of the INT8 encoder if it is created after server
   start. Not critical, but surfaces in the auto-quantize path on
   low-memory machines.
 - Fix: `POST /v1/admin/reload` (loopback-only, no auth since local)
   re-creates the session pool.
+- **Status: ⏳ still open (2026-07-09)** — SIGHUP reload added in v2.x covers `RuntimeLimits`/rate-limiter only; the engine/INT8 encoder still needs a restart.
 
 ### 20. No TLS / auth for remote deployments
 - Docker/remote use is deferred to reverse proxy. Fine for now;
@@ -252,6 +255,7 @@ long-file + upgrade docs). Deferred:
 - Fix: cut `v2.4.0`, watch the first `docker-publish` run; if arm64
   emulation is unviable, drop to amd64-only or add a native arm64
   runner.
+- **Status: ✅ verified v2.4.0 + v2.5.0** — `docker-publish` succeeded on both tag runs; `ghcr.io/ekhodzitsky/gigastt:{2.4.0,2.5.0,latest}` multi-arch (amd64+arm64, the QEMU arm64 leg survived) and `:2.5.0-cuda` (amd64) are publicly pullable.
 
 ### 22. REST has no segment-level timestamps; md export has no time headers (P1)
 - `/v1/transcribe` returns per-`word` start/end but no segment
@@ -260,6 +264,7 @@ long-file + upgrade docs). Deferred:
 - Fix: add `?segments=true` → `{segments:[{start,end,text,words}]}`
   (collect the streaming `TranscriptSegment`s), plus a segment-grouped
   md mode (`### [mm:ss]`) reusing `export::build_cues`.
+- **Status: partial (2026-07-09)** — export formats shipped v2.3.0 (PR #68: `?format=txt/srt/vtt/md` + `build_cues` cue grouping on `/v1/transcribe`); still open: the `?segments=true` JSON shape `{segments:[{start,end,text,words}]}` and a segment-grouped `### [mm:ss]` markdown mode.
 
 ### 23. CPU encoder is single-threaded by default (P1)
 - `--encoder-intra-threads` defaults to 1; a serial consumer on an
@@ -268,6 +273,7 @@ long-file + upgrade docs). Deferred:
 - Fix: default the CPU EP to `available_parallelism()` clamped by
   `pool_size`, or at least set it in the Docker `CMD` and document
   `GIGASTT_ENCODER_INTRA_THREADS`.
+- **Status: ⏳ still open (2026-07-09)** — the flag, `GIGASTT_ENCODER_INTRA_THREADS`, and an oversubscription clamp exist, but the default is still 1 everywhere including the Docker CMD.
 
 ### 24. Recognition knobs are process-global serve flags (P2)
 - punctuation / itn / vad / hotwords / model_variant are baked in at
@@ -282,6 +288,7 @@ long-file + upgrade docs). Deferred:
 - Fix: one `info!` per request with `audio_secs / wall_secs / rtf /
   encoder`, and a loud `warn!` (not info) when loading FP32 because no
   `_int8.onnx` is present, naming the one-line fix.
+- **Status: ⏳ still open (2026-07-09)** — Prometheus inference-duration histograms and the `/v1/models` precision field exist, but there is no per-request RTF `info!` line and no `warn!` on the FP32 fallback.
 
 ### 26. No async batch path for long files (P2)
 - A long file holds one HTTP connection + a pool triplet for the whole
@@ -296,6 +303,16 @@ long-file + upgrade docs). Deferred:
 - Fix: open an issue/PR there — bump to the GHCR image, drop the chunk
   loop in favour of `POST ?format=md&word_timestamps=true`, gate on
   `/ready`.
+
+### 33. Nightly soak workflow red — fuzz target crashes on upstream symphonia panic (P1)
+- The nightly soak *job* is green, but the whole workflow has been red
+  every night since 2026-06-01 (39 consecutive runs as of 2026-07-09):
+  the fuzz companion job's `audio_decode` target hits an upstream panic
+  in `symphonia-metadata 0.6.0` (`ape.rs:226`), reachable from gigastt's
+  audio decode path. The failing input artifact is uploaded by each run.
+- Risk: a permanently red workflow masks real soak regressions.
+- Fix: report/patch upstream (or pin a fixed symphonia-metadata), or
+  guard the fuzz target against the known panic until the fix lands.
 
 ---
 

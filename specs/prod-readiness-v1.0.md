@@ -51,6 +51,36 @@ historical audit trail; trust this rollup over the table cells for
   SUS-03 (minisign signatures + public key published), SUS-05 (SLSA
   provenance attestations).
 
+## v2.5.0 reconciliation (2026-07-09) — authoritative
+
+> Delta on top of the v2.1.0 reconciliation below, verified against code at
+> HEAD (v2.5.0+, 8103a11) by an evidence audit on 2026-07-09. The priority
+> tables' status cells have now been flipped to match reality (this pass), so
+> table cells and reconciliation sections agree again.
+
+**Closed since the v2.1.0 reconciliation:**
+
+- **V1-18** ✅ v2.3.0 (PR #78) — the remaining `run_decoder()` per-call
+  `to_vec()`s are gone; `DecodeBuffers` are reused in place, zero per-token
+  allocations (confirmed alloc-free by a wall-clock profile on 2026-06-24).
+- **V1-48** ✅ v2.3.0 (PR #81) — opt-in Silero v5 VAD: file silence-skipping
+  + streaming endpointing.
+- **TODO-18** ✅ obsolete v2.4.0 (PR #115) — `ort_err()` was removed wholesale
+  by the runtime abstraction; ort errors now surface as typed `RuntimeError`.
+  (The "stays until ort ships Send errors" rationale below predates #115.)
+- **TODO-CUDA** partial — the release-matrix tarball is still intentionally
+  absent (CUDA toolchain broken on GH runners; see the release.yml comment),
+  but CUDA ships via the GHCR `:2.x-cuda` Docker image since v2.4.0 (amd64).
+
+**Newly discovered (2026-07-09):** the Nightly Soak *workflow* has been red
+since 2026-06-01 — the fuzz companion job's `audio_decode` target crashes on an
+upstream `symphonia-metadata 0.6.0` panic (`ape.rs:226`), 39 consecutive red
+runs; the soak job itself is green. Tracked as `specs/todo.md` item 33.
+
+**Still genuinely open at HEAD:** V1-50 (multi-model `manifest.toml`), SUS-07
+(Miri/ASAN/TSAN), TODO-19 (model hot-reload), plus `specs/todo.md` items
+23–27 and the ANE follow-ups 28–32.
+
 ## v2.1.0 reconciliation (2026-06-17) — authoritative
 
 > The 2026-04-20 priority tables and the per-item detail rows below were last
@@ -143,13 +173,13 @@ historical audit trail; trust this rollup over the table cells for
 
 | # | State | What's left |
 |---|-------|-------------|
-| V1-18 | PARTIAL | Encoder borrow + per-frame buffers reused; `run_decoder()` still `to_vec()`s dec/h/c per non-blank call. |
-| V1-48 | OPEN | No VAD endpointing (L-effort feature). |
+| V1-18 | ✅ v2.3.0 | Closed by PR #78 — see the v2.5.0 reconciliation above. |
+| V1-48 | ✅ v2.3.0 | Closed by PR #81 (Silero v5 VAD) — see the v2.5.0 reconciliation above. |
 | V1-50 | OPEN | Model filenames hardcoded; no `manifest.toml` for new models (e.g. GigaAM v4). |
 | SUS-07 | OPEN | No Miri / ASAN / TSAN job in CI. |
-| TODO-18 | OPEN (by design) | `ort_err()` helper stays until `ort` ships a stable Send-able-error release (still pinned `2.0.0-rc.12`). |
+| TODO-18 | ✅ obsolete v2.4.0 | `ort_err()` removed by the runtime abstraction (PR #115). |
 | TODO-19 | OPEN | No hot-reload admin endpoint; INT8/model reload still needs a restart. |
-| TODO-CUDA | OPEN | No CUDA artifact in the `release.yml` matrix (all entries `cuda: false`); CUDA ships only via `Dockerfile.cuda`. |
+| TODO-CUDA | partial | GHCR `:cuda` image since v2.4.0; matrix tarball still intentionally absent (broken GH toolchain). |
 
 ## Progress snapshot (2026-04-20) — priority-sorted
 
@@ -173,75 +203,75 @@ historical audit trail; trust this rollup over the table cells for
 | Rank | # | Area | Status |
 |------|---|------|--------|
 | P1.1 | V1-11 | `X-Forwarded-For` spoofing in published nginx/Caddy recipes (per-IP RL bypass) | ✅ done (v0.9.0) |
-| P1.2 | V1-12 | `/metrics` on CORS-allowlisted router + rate-limited (info leak + Prom throttle) | ⏳ open |
-| P1.3 | V1-16 | `thread::scope` panic on pool-load aborts the whole process (OOM on 4 GB box) | ⏳ open |
-| P1.4 | V1-21 | `SessionPool` lacks Drop-guard (per-call `catch_unwind` is opt-in, bugs pool) | ⏳ open |
+| P1.2 | V1-12 | `/metrics` on CORS-allowlisted router + rate-limited (info leak + Prom throttle) | ✅ v2.3.0 (separate loopback metrics listener, default 127.0.0.1:9090, `--metrics-listen`) |
+| P1.3 | V1-16 | `thread::scope` panic on pool-load aborts the whole process (OOM on 4 GB box) | ✅ v0.9.6 (per-slot `catch_unwind`) + v2.3.0 (`--pool-min-size` degraded boot) |
+| P1.4 | V1-21 | `SessionPool` lacks Drop-guard (per-call `catch_unwind` is opt-in, bugs pool) | ✅ v0.9.0 (`PoolGuard`/`OwnedReservation` Drop auto-checkin) |
 | P1.5 | V1-25 | Odd-length PCM frame drops last byte silently (phase-shift corruption) | ✅ done (v0.9.0) |
-| P1.6 | V1-27 | `/health` does not probe encoder (k8s liveness false-positive) | ⏳ open |
-| P1.7 | V1-24 | Batch REST pool starves WS streaming (9 min jobs → 30 s WS timeouts) | ⏳ open |
-| P1.8 | V1-17 | Global `PrometheusBuilder` forces `--test-threads=1` (CI slowdown + stale `/metrics`) | ⏳ open |
-| P1.9 | V1-30 | Missing pool / inference / WS Prometheus metrics (unalertable SRE posture) | ⏳ open |
-| P1.10 | V1-15 | Rate-limiter retain-recent `std::thread` never exits (leak + slow SIGTERM) | ⏳ open |
-| P1.11 | V1-28 | Pool checkout timeout hardcoded in two places (operational rigidity) | ⏳ open |
-| P1.12 | V1-13 | WebSocket protocol version is declarative, no negotiation (future breakage) | ⏳ open |
+| P1.6 | V1-27 | `/health` does not probe encoder (k8s liveness false-positive) | ✅ v1.0.x (`GET /ready` k8s probe: 503 pool_exhausted/shutting_down; `/health` liveness-only) |
+| P1.7 | V1-24 | Batch REST pool starves WS streaming (9 min jobs → 30 s WS timeouts) | ✅ v2.3.0 (opt-in `--batch-pool-size` REST/SSE batch pool; WS keeps the interactive pool) |
+| P1.8 | V1-17 | Global `PrometheusBuilder` forces `--test-threads=1` (CI slowdown + stale `/metrics`) | ✅ v0.9.0 (in-tree per-instance `MetricsRegistry`; `metrics-exporter-prometheus` dropped) |
+| P1.9 | V1-30 | Missing pool / inference / WS Prometheus metrics (unalertable SRE posture) | ✅ v1.0.0 (pool/WS/inference metrics) + v2.0.4 (pool_waiters) + v2.3.0 (batch-pool gauges, inference_timeouts_total) |
+| P1.10 | V1-15 | Rate-limiter retain-recent `std::thread` never exits (leak + slow SIGTERM) | ✅ v0.9.0 (shutdown-aware tokio GC task; no std::thread remains) |
+| P1.11 | V1-28 | Pool checkout timeout hardcoded in two places (operational rigidity) | ✅ v1.0.0 (`--pool-checkout-timeout-secs`, single knob feeds WS+REST+Retry-After) |
+| P1.12 | V1-13 | WebSocket protocol version is declarative, no negotiation (future breakage) | ✅ v1.0.0 (client proposes via `Configure.protocol_version`; mismatch → `unsupported_protocol_version` + close) |
 | P1.13 | V1-14 | `/ws` deprecation has no `Deprecation` / `Sunset` hint for clients | ✅ done (v0.9.0) |
-| P1.14 | V1-18 | Decoder loop allocations in hot path (millions of `.to_vec()` per 40 s clip) | ⏳ open |
-| P1.15 | V1-19 | `SincFixedIn::new(chunk_size = samples.len())` rebuilds FIR per streaming chunk | ⏳ open |
-| P1.16 | V1-20 | `quantize.rs` hardcodes `axis=0` for all ops (silent WER regression on MatMul) | ⏳ open |
+| P1.14 | V1-18 | Decoder loop allocations in hot path (millions of `.to_vec()` per 40 s clip) | ✅ v2.3.0 (PR #78 — `DecodeBuffers` reused, zero per-token allocations) |
+| P1.15 | V1-19 | `SincFixedIn::new(chunk_size = samples.len())` rebuilds FIR per streaming chunk | ✅ v0.9.6 (`resample_with_cache`, per-connection cache; rubato 3.0 in v2.0.10) |
+| P1.16 | V1-20 | `quantize.rs` hardcodes `axis=0` for all ops (silent WER regression on MatMul) | ✅ v2.3.0 (per-op output-channel axis: Conv→0, Gemm transB-aware, MatMul→last dim) |
 | P1.17 | V1-22 | `test_rest_oversized_body_rejected` asserts `!= 200` (fake test) | ✅ done (v0.9.0) |
-| P1.18 | V1-29 | Idle timeout test burns 310 s wall-clock in CI main push | ⏳ open |
+| P1.18 | V1-29 | Idle timeout test burns 310 s wall-clock in CI main push | ✅ v1.0.0 (idle-timeout e2e at 3 s, ~5 s wall-clock, model-free) |
 | P1.19 | V1-23 | Remove `tests/server_integration.rs` (6 `sleep(200 ms)` duplicates of `e2e_ws`) | ✅ done (v0.9.0) |
-| P1.20 | V1-26 | Engine god-object (`transcribe_file` / `process_chunk` / `tokens_to_words`) | ⏳ open |
+| P1.20 | V1-26 | Engine god-object (`transcribe_file` / `process_chunk` / `tokens_to_words`) | partial — runtime/EP layer extracted behind the RuntimeFactory seam (v2.4.0, PR #115) + `TokenFormatter` split (v2.1); `inference/mod.rs` Engine monolith itself still open |
 
 ### P2 — polish for v1.x (ordered most → least critical)
 
 | Rank | # | Area | Status |
 |------|---|------|--------|
-| P2.1 | V1-33 | AsyncAPI spec diverged from code (paths, schema, error enum, sample math) | ⏳ open |
-| P2.2 | V1-47 | No inference timeout around `spawn_blocking` (ORT hang → pool dry) | ⏳ open |
-| P2.3 | V1-41 | Benchmark has no baseline or regression gate (WER drift unnoticed) | ⏳ open |
-| P2.4 | V1-36 | Prometheus `path` label = raw URI (cardinality explosion via scanners) | ⏳ open |
-| P2.5 | V1-37 | No server-side WebSocket ping timer (proxies drop idle connections silently) | ⏳ open |
-| P2.6 | V1-42 | Only 15 Golos fixtures (not statistically significant for WER gating) | ⏳ open |
+| P2.1 | V1-33 | AsyncAPI spec diverged from code (paths, schema, error enum, sample math) | ✅ v2.1.0 (asyncapi.yaml synced: WordInfo confidence/speaker + full error enum) |
+| P2.2 | V1-47 | No inference timeout around `spawn_blocking` (ORT hang → pool dry) | ✅ v2.1.0 (`--inference-timeout-secs`, typed `inference_timeout` 504/WS close + counter) |
+| P2.3 | V1-41 | Benchmark has no baseline or regression gate (WER drift unnoticed) | ✅ v2.3.0 (`benchmark_baseline.json` + relative/absolute gate + diff table + PR self-test) |
+| P2.4 | V1-36 | Prometheus `path` label = raw URI (cardinality explosion via scanners) | ✅ v2.1.0 (path label bounded to known route set, `other` fallback) |
+| P2.5 | V1-37 | No server-side WebSocket ping timer (proxies drop idle connections silently) | ✅ v2.1.0 (server ping every 30 s, close after 2 missed pongs) |
+| P2.6 | V1-42 | Only 15 Golos fixtures (not statistically significant for WER gating) | ✅ v2.0.8 (external 9 994-sample set + `DATA_LICENSE`/`NOTICE` provenance; 15 bundled fixtures kept) |
 | P2.7 | V1-46 | `Engine::warmup()` missing (first-request cold start, CoreML compile) | ✅ v2.0.14 (warmup + CoreML runtime probe/fallback, issue #42) |
 | P2.8 | V1-50 | Multi-model support via `manifest.toml` (blocks GigaAM v4 without code change) | ⏳ open |
-| P2.9 | V1-35 | SSE error-code parity with WebSocket (single `inference_error` hides variants) | ⏳ open |
-| P2.10 | V1-48 | VAD endpointing (noise breaks blank-run endpointing today) | ⏳ open |
-| P2.11 | V1-40 | Pin `tokio`/`serde` minor versions + dry-run check (supply-chain hygiene) | ⏳ open |
-| P2.12 | V1-31 | `consecutive_blanks++` on MAX_TOKENS overrun (semantic mixing) | ⏳ open |
-| P2.13 | V1-43 | `now_timestamp()` uses `unwrap_or_default()` (clock-skew edge case) | ⏳ open |
-| P2.14 | V1-38 | `.cargo/audit.toml` + `deny.toml` duplicate RUSTSEC-2021-0073 | ⏳ open |
-| P2.15 | V1-32 | Word-boundary `\u{2581}` as literal vs escape (hidden coupling) | ⏳ open |
-| P2.16 | V1-34 | `supported_rates` redeclared in two modules | ⏳ open |
-| P2.17 | V1-49 | Shutdown oneshot swallows `Err(_)` silently (debug UX) | ⏳ open |
-| P2.18 | V1-45 | `health` handler touches state for no reason | ⏳ open |
-| P2.19 | V1-44 | `MelSpectrogram::new()` without `Default` (clippy complaint) | ⏳ open |
-| P2.20 | V1-39 | Empty `scripts/` directory — either populate or delete | ⏳ open |
+| P2.9 | V1-35 | SSE error-code parity with WebSocket (single `inference_error` hides variants) | ✅ v2.1.0 (per-variant `GigasttError::code()` over SSE + distinct `inference_panic`) |
+| P2.10 | V1-48 | VAD endpointing (noise breaks blank-run endpointing today) | ✅ v2.3.0 (PR #81 — opt-in Silero v5 VAD: silence skipping + streaming endpointing) |
+| P2.11 | V1-40 | Pin `tokio`/`serde` minor versions + dry-run check (supply-chain hygiene) | ✅ (by design: Dependabot + CI `--locked` + `publish --dry-run --locked`; no minor-pinning) |
+| P2.12 | V1-31 | `consecutive_blanks++` on MAX_TOKENS overrun (semantic mixing) | ✅ v2.1.0 (token cap leaves `consecutive_blanks` intact; unit-tested) |
+| P2.13 | V1-43 | `now_timestamp()` uses `unwrap_or_default()` (clock-skew edge case) | ✅ v2.1.0 (`now_timestamp()` anchored to a monotonic `Instant`) |
+| P2.14 | V1-38 | `.cargo/audit.toml` + `deny.toml` duplicate RUSTSEC-2021-0073 | ✅ v0.9.0 (ignore removed from both files) |
+| P2.15 | V1-32 | Word-boundary `\u{2581}` as literal vs escape (hidden coupling) | ✅ v2.1.0 (shared `tokenizer::WORD_BOUNDARY` const) |
+| P2.16 | V1-34 | `supported_rates` redeclared in two modules | ✅ v0.9.3 (single `SUPPORTED_RATES` const in server/config.rs) |
+| P2.17 | V1-49 | Shutdown oneshot swallows `Err(_)` silently (debug UX) | ✅ v2.1.0 (shutdown oneshot logs `warn!` on `Err`) |
+| P2.18 | V1-45 | `health` handler touches state for no reason | ✅ v2.1.0 (State extractor dropped; later re-added intentionally for the variant-aware /health payload) |
+| P2.19 | V1-44 | `MelSpectrogram::new()` without `Default` (clippy complaint) | ✅ v2.1.0 (`Default` impl in features.rs) |
+| P2.20 | V1-39 | Empty `scripts/` directory — either populate or delete | ✅ v2.1.0 (scripts/ populated with benchmark-prep + model-conversion helpers) |
 
 ### Sustainability (ordered most → least critical)
 
 | Rank | # | Work | Status |
 |------|---|------|--------|
-| S.1 | SUS-01 | `SECURITY.md` (disclosure contact, supported versions) — mandatory for crates.io | ⏳ open |
-| S.2 | SUS-04 | Dependabot / Renovate weekly (enables the `prost` / `ort-rc` upgrades of V1-10) | ⏳ open |
+| S.1 | SUS-01 | `SECURITY.md` (disclosure contact, supported versions) — mandatory for crates.io | ✅ v1.0.0 (SECURITY.md) |
+| S.2 | SUS-04 | Dependabot / Renovate weekly (enables the `prost` / `ort-rc` upgrades of V1-10) | ✅ (.github/dependabot.yml — cargo + github-actions, weekly, actively merging) |
 | S.3 | SUS-03 | Signed releases (GPG / minisign) + publish `SHA256SUMS.asc` (MITM vector today) | ✅ done (v0.9.0) |
-| S.4 | SUS-14 | `cargo-semver-checks` in CI (protects against accidental breaking changes) | ⏳ open |
-| S.5 | SUS-13 | `docs/privacy.md` — make the privacy-first claim auditable | ⏳ open |
+| S.4 | SUS-14 | `cargo-semver-checks` in CI (protects against accidental breaking changes) | ✅ v1.0.0 (Semver Checks job in ci.yml) |
+| S.5 | SUS-13 | `docs/privacy.md` — make the privacy-first claim auditable | ✅ v1.0.0 (docs/privacy.md) |
 | S.6 | SUS-02 | CycloneDX SBOM in release workflow | ✅ done (v0.9.0) |
 | S.7 | SUS-05 | SLSA build provenance attestations in release workflow | ✅ done (v0.9.0) |
-| S.8 | SUS-10 | `docs/runbook.md` (pool exhaustion, model-download failure, OOM) | ⏳ open |
-| S.9 | SUS-11 | `terminationGracePeriodSeconds` + shutdown guide in `deployment.md` | ⏳ open |
-| S.10 | SUS-09 | Grafana dashboard JSON + `alerts.yml` examples | ⏳ open |
-| S.11 | SUS-06 | `cargo-fuzz` harness for WAV header, WS binary frame, ONNX protobuf | ⏳ open |
+| S.8 | SUS-10 | `docs/runbook.md` (pool exhaustion, model-download failure, OOM) | ✅ v1.0.0 (docs/runbook.md; triage sections extended v2.1) |
+| S.9 | SUS-11 | `terminationGracePeriodSeconds` + shutdown guide in `deployment.md` | ✅ (deployment.md k8s drain section + terminationGracePeriodSeconds) |
+| S.10 | SUS-09 | Grafana dashboard JSON + `alerts.yml` examples | ✅ v1.0.0 (docs/observability/{alerts.yml,dashboard.json}) |
+| S.11 | SUS-06 | `cargo-fuzz` harness for WAV header, WS binary frame, ONNX protobuf | ✅ (4 cargo-fuzz targets; built in CI + 60 s/target nightly in soak.yml) |
 | S.12 | SUS-08 | Coverage gate (`cargo-llvm-cov` → codecov, 90 %+) | ✅ done (v2.0.12) |
 | S.13 | SUS-07 | Miri + ASAN / TSAN nightly | ⏳ open |
-| S.14 | SUS-12 | OpenAPI spec for REST (complements AsyncAPI) | ⏳ open |
+| S.14 | SUS-12 | OpenAPI spec for REST (complements AsyncAPI) | ✅ v0.9.6 (docs/openapi.yaml) |
 
 ### Documentation
 
 | Rank | # | Work | Status |
 |------|---|------|--------|
-| D.1 | DOC-01 | Sync `specs/todo.md` ↔ `CHANGELOG.md` (addressed alongside this plan) | 🔨 in progress |
+| D.1 | DOC-01 | Sync `specs/todo.md` ↔ `CHANGELOG.md` (addressed alongside this plan) | ✅ (kept in sync; last full audit pass 2026-07-09) |
 
 ---
 
