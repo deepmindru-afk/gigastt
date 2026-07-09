@@ -264,7 +264,7 @@ long-file + upgrade docs). Deferred:
 - Fix: add `?segments=true` → `{segments:[{start,end,text,words}]}`
   (collect the streaming `TranscriptSegment`s), plus a segment-grouped
   md mode (`### [mm:ss]`) reusing `export::build_cues`.
-- **Status: partial (2026-07-09)** — export formats shipped v2.3.0 (PR #68: `?format=txt/srt/vtt/md` + `build_cues` cue grouping on `/v1/transcribe`); still open: the `?segments=true` JSON shape `{segments:[{start,end,text,words}]}` and a segment-grouped `### [mm:ss]` markdown mode.
+- **Status: ✅ closed** — export formats shipped v2.3.0 (PR #68: `?format=txt/srt/vtt/md` + `build_cues` cue grouping); the remainder shipped in PR #135: additive `?segments=true` → `{segments:[{start,end,text,words}]}` JSON and a segment-grouped `### [mm:ss]` markdown mode (`?format=md&segments=true`), both reusing `build_cues` for consistent boundaries. Default JSON/md responses are byte-unchanged; OpenAPI updated. (File-mode segments are derived from `build_cues`, not the streaming `TranscriptSegment`, which is streaming-only.)
 
 ### 23. CPU encoder is single-threaded by default (P1)
 - `--encoder-intra-threads` defaults to 1; a serial consumer on an
