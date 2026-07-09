@@ -318,8 +318,9 @@ long-file + upgrade docs). Deferred:
   ships >= 0.6.1) + wrapped the SSE decode in `catch_unwind` to match REST
   (panic → 422 instead of 500) + a regression test on the exact 36-byte
   artifact (panics without the patch, clean `Err` with it). Docker
-  dep-cache layer copies `vendor/`. **Follow-up: file the upstream issue**
-  (draft prepared; overflow at `symphonia-metadata` `ape.rs:226`).
+  dep-cache layer copies `vendor/`. Upstream issue filed
+  (pdeljanov/Symphonia#526); drop the vendored patch once a fixed
+  `symphonia-metadata` (>= 0.6.1) ships.
 
 ---
 
