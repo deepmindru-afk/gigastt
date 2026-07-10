@@ -281,6 +281,17 @@ long-file + upgrade docs). Deferred:
 - Fix: optional per-request query params on `/v1/transcribe` that
   override the server default (honoured only when the resource is
   loaded; `409 variant_not_loaded` otherwise). Defaults unchanged.
+- **Status: ✅ closed (PR #136)** — additive `?punctuation=` / `?itn=` / `?vad=`
+  overrides on `POST /v1/transcribe` via a `TranscribeOverrides` arg threaded
+  through additive `_with_overrides` wrappers (FFI/UniFFI/Node signatures
+  byte-unchanged). Turning a knob on without its backing model returns `409`
+  (`vad_not_loaded` / `punctuation_not_available`), and a `?variant=` mismatch
+  returns `409 variant_not_loaded` — validated before pool checkout. Default
+  response byte-unchanged; OpenAPI updated. **Deferred** (out of scope, noted):
+  per-request `hotwords` (needs a per-request `Biaser` threaded through the
+  decode loop + DoS surface) and actual `variant` switching (single-model
+  engine → needs the multi-model `manifest.toml` work, V1-50). SSE/WS are
+  unaffected — they never run the punctuation/ITN passes.
 
 ### 25. No per-request RTF signal; silent FP32 fallback (P2)
 - `transcribe` logs nothing about timing, and a missing INT8 encoder
