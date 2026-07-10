@@ -90,13 +90,13 @@ $ gigastt serve
 | Возможность | Поддержка |
 |---|---|
 | Головы | `rnnt` (34-токенный char, дефолт — ниже всех WER) · `e2e_rnnt` (1025-токенный BPE, пунктуация / регистр / ITN встроены) |
-| Постобработка | опциональные пунктуация, регистр и русский ITN — нативно на `e2e_rnnt` или встроенный проход RuPunct + ITN на `rnnt` (авто-докачка; `--punctuation` / `--itn`) |
+| Постобработка | опциональные пунктуация, регистр и русский ITN — нативно на `e2e_rnnt` или встроенный проход RuPunct + ITN на `rnnt` (авто-докачка; `--punctuation` / `--itn`), переопределяемо на каждый запрос (`?punctuation=` / `?itn=` / `?vad=`) |
 | Доставка | статический бинарник · C-ABI FFI `cdylib` (Android / mobile) · крейт `gigastt-core` (без серверных зависимостей) |
 | Провайдеры исполнения | CPU (любая платформа) · CoreML / Neural Engine (macOS ARM64) · CUDA 12+ (Linux x86_64) · NNAPI (Android) |
 | Стриминг | инкрементальные partial'ы по WebSocket · REST + SSE для файлов · один порт 9876 |
 | Аудио на вход | WAV · M4A/AAC · MP3 · OGG/Vorbis · FLAC (авто-микс в моно) |
-| Экспорт | JSON · TXT · SRT · VTT · Markdown (пословные тайминги + confidence) |
-| Защита сервера | loopback по умолчанию · origin-allowlist · rate-limiting по IP · graceful drain · Prometheus `/metrics` на отдельном порту |
+| Экспорт | JSON · TXT · SRT · VTT · Markdown — пословные тайминги + confidence или посегментно (`?segments=true` JSON, `### [mm:ss]` Markdown) |
+| Защита сервера | loopback по умолчанию · origin-allowlist · rate-limiting по IP · graceful drain · Prometheus `/metrics` на отдельном порту · loopback-only горячая перезагрузка модели (`POST /v1/admin/reload`) |
 
 ## Документация
 
@@ -110,7 +110,7 @@ $ gigastt serve
 
 ## Требования
 
-Rust **1.88+**, `protoc` в `PATH`. macOS 14+ (Apple Silicon, CoreML) или Linux x86_64 (опц. NVIDIA CUDA 12+). ~1.5 ГБ диска, ~790 МБ RAM при дефолтном `--pool-size 2` (~400 МБ на одну сессию). Крейт `gigastt-core` без серверных зависимостей: `gigastt-core = "2.3"`.
+Rust **1.88+**, `protoc` в `PATH`. macOS 14+ (Apple Silicon, CoreML) или Linux x86_64 (опц. NVIDIA CUDA 12+). ~1.5 ГБ диска, ~790 МБ RAM при дефолтном `--pool-size 2` (~400 МБ на одну сессию). Крейт `gigastt-core` без серверных зависимостей: `gigastt-core = "2.8"`.
 
 ## Лицензия
 
