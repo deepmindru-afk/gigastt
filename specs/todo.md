@@ -301,8 +301,13 @@ long-file + upgrade docs). Deferred:
 - `voodoo2serg/recognition` hand-rolls ffmpeg segmentation + faked
   `### mm:ss` timestamps that current gigastt obsoletes.
 - Fix: open an issue/PR there — bump to the GHCR image, drop the chunk
-  loop in favour of `POST ?format=md&word_timestamps=true`, gate on
-  `/ready`.
+  loop in favour of `POST ?format=md&segments=true`, gate on `/ready`.
+- **Status: ✅ closed** — issue filed (voodoo2serg/recognition#1) once the
+  exact replacement shipped in v2.7.0: `?format=md&segments=true` gives real
+  `### [mm:ss]` segment headers (obsoleting their `chunk_index × 120s`
+  arithmetic), full-file single call (no ffmpeg pre-chunk), GHCR
+  `ghcr.io/ekhodzitsky/gigastt:2.7.0`, `/ready` gate. Non-presumptuous FYI;
+  the plain `{text}` contract is unchanged so their worker still works.
 
 ### 33. APEv2 tag-size integer-overflow panic (upstream symphonia) — reddened nightly soak (P2/DoS)
 - Root cause (diagnosed 2026-07-09): a crafted 36-byte APEv2 tag header
