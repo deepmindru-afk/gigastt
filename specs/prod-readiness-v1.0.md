@@ -77,9 +77,12 @@ since 2026-06-01 — the fuzz companion job's `audio_decode` target crashes on a
 upstream `symphonia-metadata 0.6.0` panic (`ape.rs:226`), 39 consecutive red
 runs; the soak job itself is green. Tracked as `specs/todo.md` item 33.
 
-**Still genuinely open at HEAD:** V1-50 (multi-model `manifest.toml`), SUS-07
-(Miri/ASAN/TSAN), TODO-19 (model hot-reload), plus `specs/todo.md` items
-23–27 and the ANE follow-ups 28–32.
+**Still genuinely open at HEAD (updated 2026-07-10):** V1-50 (multi-model
+`manifest.toml`), `specs/todo.md` item 26 (async `/v1/jobs`), and the ANE
+follow-ups 28–32. Closed since the 2026-07-09 line: SUS-07 (Miri/TSAN, PR #137),
+TODO-19 (model hot-reload, PR #134), and `specs/todo.md` items 23 (PR #132),
+24 (PR #136), 25 (PR #131), 27 (voodoo2serg/recognition#1) — released across
+v2.6.0 / v2.7.0.
 
 ## v2.1.0 reconciliation (2026-06-17) — authoritative
 
@@ -176,7 +179,7 @@ runs; the soak job itself is green. Tracked as `specs/todo.md` item 33.
 | V1-18 | ✅ v2.3.0 | Closed by PR #78 — see the v2.5.0 reconciliation above. |
 | V1-48 | ✅ v2.3.0 | Closed by PR #81 (Silero v5 VAD) — see the v2.5.0 reconciliation above. |
 | V1-50 | OPEN | Model filenames hardcoded; no `manifest.toml` for new models (e.g. GigaAM v4). |
-| SUS-07 | OPEN | No Miri / ASAN / TSAN job in CI. |
+| SUS-07 | ✅ | Nightly Miri + TSAN job (`.github/workflows/miri.yml`, PR #137) — see below. |
 | TODO-18 | ✅ obsolete v2.4.0 | `ort_err()` removed by the runtime abstraction (PR #115). |
 | TODO-19 | OPEN | No hot-reload admin endpoint; INT8/model reload still needs a restart. |
 | TODO-CUDA | partial | GHCR `:cuda` image since v2.4.0; matrix tarball still intentionally absent (broken GH toolchain). |
@@ -264,7 +267,7 @@ runs; the soak job itself is green. Tracked as `specs/todo.md` item 33.
 | S.10 | SUS-09 | Grafana dashboard JSON + `alerts.yml` examples | ✅ v1.0.0 (docs/observability/{alerts.yml,dashboard.json}) |
 | S.11 | SUS-06 | `cargo-fuzz` harness for WAV header, WS binary frame, ONNX protobuf | ✅ (4 cargo-fuzz targets; built in CI + 60 s/target nightly in soak.yml) |
 | S.12 | SUS-08 | Coverage gate (`cargo-llvm-cov` → codecov, 90 %+) | ✅ done (v2.0.12) |
-| S.13 | SUS-07 | Miri + ASAN / TSAN nightly | ⏳ open |
+| S.13 | SUS-07 | Miri + ASAN / TSAN nightly | ✅ (PR #137) — nightly `miri.yml`: Miri over the pure-Rust core (322 tests, strict-provenance) + TSAN over the Pool primitive; objc2/ort/FFI/ArcSwap explicitly out of scope (covered by e2e/soak) |
 | S.14 | SUS-12 | OpenAPI spec for REST (complements AsyncAPI) | ✅ v0.9.6 (docs/openapi.yaml) |
 
 ### Documentation
@@ -836,7 +839,7 @@ runs; the soak job itself is green. Tracked as `specs/todo.md` item 33.
 | SUS-04 | `.github/dependabot.yml` weekly for `cargo` + `github-actions` | S | `ort=rc.12`, `prost 0.6` make this urgent |
 | SUS-05 | `actions/attest-build-provenance@v2` SLSA attestations | S | `softprops/action-gh-release` supports it |
 | SUS-06 | `cargo-fuzz` harness for WAV header, WS binary frame, ONNX | M | Initial `cargo fuzz run` targets |
-| SUS-07 | Miri + ASAN/TSAN nightly job | M | Only for `cargo test` subset |
+| SUS-07 | Miri + ASAN/TSAN nightly job | M | ✅ done (PR #137) — Miri over the pure-Rust `gigastt-core` subset (quantizer/decode/tokenizer/audio-parsing/tensor/protocol, ~320 tests, strict-provenance, ~4 min) + TSAN over the Pool concurrency primitive; nightly `miri.yml`, not on PR. ASAN dropped (redundant with the existing fuzz-ASAN in `soak.yml`). Not covered (by design): objc2 ANE bridge, onnxruntime path, `gigastt-ffi` C-ABI, `ArcSwap<Engine>` hot-reload, mel-FFT/resampler numerics. No real UB/race found. |
 | SUS-08 | `tarpaulin` or `grcov` coverage gate | S | Upload to codecov |
 | SUS-09 | Grafana dashboard JSON + `alerts.yml` | S | Exports live under `docs/observability/` |
 | SUS-10 | `docs/runbook.md` (pool exhaustion, model-download failure, OOM) | S | |
