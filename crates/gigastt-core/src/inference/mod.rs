@@ -1884,6 +1884,43 @@ impl Engine {
         self.transcribe_samples_with_overrides(&float_samples, triplet, overrides)
     }
 
+    /// Transcribe a multi-channel recording with one speaker label per channel.
+    ///
+    /// Runs the engine once per channel sequentially on the supplied triplet. The
+    /// caller is responsible for deciding whether to use this mode (e.g. after
+    /// checking for dual-mono). Channel 0 becomes `speaker_0`, channel 1
+    /// `speaker_1`, and so on. Results are merged into a single chronologically
+    /// ordered transcript.
+    #[cfg(feature = "file-decode")]
+    pub fn transcribe_channels(
+        &self,
+        channels: &[Vec<f32>],
+        triplet: &mut SessionTriplet,
+    ) -> Result<TranscribeResult, GigasttError> {
+        if channels.is_empty() {
+            return Ok(TranscribeResult {
+                text: String::new(),
+                words: Vec::new(),
+                duration_s: 0.0,
+            });
+        }
+
+        let mut per_channel = Vec::with_capacity(channels.len());
+        let overrides = TranscribeOverrides::default();
+        for channel_samples in channels {
+            let words = self.decode_words_for_samples(channel_samples, triplet, &overrides)?;
+            let duration_s = channel_samples.len() as f64 / 16000.0;
+            per_channel.push(TranscribeResult {
+                text: String::new(),
+                words,
+                duration_s,
+            });
+        }
+
+        let merged = merge_channel_results(per_channel);
+        Ok(self.finish_transcribe_result(merged.words, merged.duration_s, &overrides))
+    }
+
     /// Run the full mel + encoder + RNN-T decode pipeline on an already-decoded
     /// 16 kHz f32 sample buffer. Shared tail of [`Engine::transcribe_file`] and
     /// [`Engine::transcribe_bytes_shared`].
@@ -1915,30 +1952,8 @@ impl Engine {
         let wall_start = std::time::Instant::now();
         let duration_s = float_samples.len() as f64 / 16000.0;
 
-        // Take the VAD path only when a VAD is attached AND the caller hasn't
-        // opted out for this request. `?vad=false` forces the whole-buffer decode
-        // even on a VAD-enabled engine; `None` uses the engine default (VAD path
-        // iff a VAD is attached). `?vad=true` on a VAD-less engine can't reach
-        // here — the handler 409s first — but the `self.vad.is_some()` guard keeps
-        // this correct regardless.
-        let use_vad = self.vad.is_some() && overrides.vad.unwrap_or(true);
-
-        // When the VAD path is taken, decode only the detected speech regions
-        // (skipping silence) and remap word timestamps back to the original
-        // timeline. VAD is non-blocking: on any VAD error we log and decode the
-        // whole buffer, exactly as if no VAD were attached. With no VAD the path
-        // is byte-for-byte the previous behaviour.
         #[cfg_attr(not(feature = "diarization"), allow(unused_mut))]
-        let mut words = match (use_vad, &self.vad) {
-            (true, Some(vad)) => match vad.speech_regions(float_samples, &self.vad_config) {
-                Ok(regions) => self.decode_speech_regions(float_samples, &regions, triplet)?,
-                Err(e) => {
-                    tracing::warn!("VAD failed, decoding full audio: {e:#}");
-                    self.decode_words(float_samples, triplet)?
-                }
-            },
-            _ => self.decode_words(float_samples, triplet)?,
-        };
+        let mut words = self.decode_words_for_samples(float_samples, triplet, overrides)?;
 
         #[cfg(feature = "diarization")]
         if let Some(ref enc) = self.speaker_encoder {
@@ -1965,34 +1980,7 @@ impl Engine {
             }
         }
 
-        let text: String = words
-            .iter()
-            .map(|w| w.word.as_str())
-            .collect::<Vec<_>>()
-            .join(" ");
-
-        // Optional inverse text normalization (number-words → digits) for the
-        // plain `rnnt` head. Runs BEFORE punctuation so the restorer cases the
-        // already-digitized text. No-op when disabled; word-level timing is
-        // left untouched — only the joined `text` is rewritten. The per-request
-        // override wins over the engine default; `None` keeps the boot policy.
-        let text = if overrides.itn.unwrap_or(self.itn) {
-            crate::itn::apply_itn(&text)
-        } else {
-            text
-        };
-
-        // Optional punctuation / casing restoration (plain `rnnt` head). The
-        // engine default is "on iff a punctuator is attached"; a per-request
-        // override can force it off (`Some(false)`) or on (`Some(true)`, only
-        // reachable when a punctuator is loaded — the handler 409s otherwise).
-        // The `self.punctuator` guard keeps this a no-op when none is attached;
-        // `restore` itself never fails (returns the input unchanged on error).
-        // Word-level timing is left untouched — only the joined `text` changes.
-        let text = match &self.punctuator {
-            Some(p) if overrides.punctuation.unwrap_or(true) => p.restore(&text),
-            _ => text,
-        };
+        let mut result = self.finish_transcribe_result(words, duration_s, overrides);
 
         let wall_s = wall_start.elapsed().as_secs_f64();
         let rtf = if duration_s > 0.0 {
@@ -2020,11 +2008,7 @@ impl Engine {
             "transcribe complete"
         );
 
-        Ok(TranscribeResult {
-            text,
-            words,
-            duration_s,
-        })
+        Ok(result)
     }
 
     /// Decode a 16 kHz f32 buffer to words: single-pass for short inputs (one
@@ -2140,6 +2124,79 @@ impl Engine {
             start += stride;
         }
         Ok(merged)
+    }
+
+    /// Decode a 16 kHz f32 buffer to words, applying VAD if configured.
+    ///
+    /// The VAD path is taken only when a VAD is attached AND the caller hasn't
+    /// opted out via `overrides.vad`. `?vad=false` forces whole-buffer decode
+    /// even on a VAD-enabled engine; `None` uses the engine default (VAD path
+    /// iff a VAD is attached). `vad = Some(true)` on a VAD-less engine can't
+    /// reach here — callers should validate overrides first — but the
+    /// `self.vad.is_some()` guard keeps this correct regardless.
+    fn decode_words_for_samples(
+        &self,
+        float_samples: &[f32],
+        triplet: &mut SessionTriplet,
+        overrides: &TranscribeOverrides,
+    ) -> Result<Vec<WordInfo>, GigasttError> {
+        let use_vad = self.vad.is_some() && overrides.vad.unwrap_or(true);
+        match (use_vad, &self.vad) {
+            (true, Some(vad)) => match vad.speech_regions(float_samples, &self.vad_config) {
+                Ok(regions) => self.decode_speech_regions(float_samples, &regions, triplet),
+                Err(e) => {
+                    tracing::warn!("VAD failed, decoding full audio: {e:#}");
+                    self.decode_words(float_samples, triplet)
+                }
+            },
+            _ => self.decode_words(float_samples, triplet),
+        }
+    }
+
+    /// Build the final [`TranscribeResult`] from raw words: join text, apply ITN,
+    /// and apply punctuation restoration. Word-level timing is left untouched.
+    /// Per-request overrides win over engine defaults; a `None` override keeps
+    /// the boot policy.
+    fn finish_transcribe_result(
+        &self,
+        words: Vec<WordInfo>,
+        duration_s: f64,
+        overrides: &TranscribeOverrides,
+    ) -> TranscribeResult {
+        let text: String = words
+            .iter()
+            .map(|w| w.word.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        // Optional inverse text normalization (number-words → digits) for the
+        // plain `rnnt` head. Runs BEFORE punctuation so the restorer cases the
+        // already-digitized text. No-op when disabled; word-level timing is
+        // left untouched — only the joined `text` is rewritten. The per-request
+        // override wins over the engine default; `None` keeps the boot policy.
+        let text = if overrides.itn.unwrap_or(self.itn) {
+            crate::itn::apply_itn(&text)
+        } else {
+            text
+        };
+
+        // Optional punctuation / casing restoration (plain `rnnt` head). The
+        // engine default is "on iff a punctuator is attached"; a per-request
+        // override can force it off (`Some(false)`) or on (`Some(true)`, only
+        // reachable when a punctuator is loaded — the handler 409s otherwise).
+        // The `self.punctuator` guard keeps this a no-op when none is attached;
+        // `restore` itself never fails (returns the input unchanged on error).
+        // Word-level timing is left untouched — only the joined `text` changes.
+        let text = match &self.punctuator {
+            Some(p) if overrides.punctuation.unwrap_or(true) => p.restore(&text),
+            _ => text,
+        };
+
+        TranscribeResult {
+            text,
+            words,
+            duration_s,
+        }
     }
 
     fn run_inference(
@@ -2412,6 +2469,40 @@ impl std::fmt::Display for OverrideError {
 
 impl std::error::Error for OverrideError {}
 
+/// Merge per-channel [`TranscribeResult`]s into a single chronologically ordered
+/// result. Each channel is assigned a zero-based speaker label (`speaker_0`,
+/// `speaker_1`, …). Words are sorted by `start`; equal timestamps are ordered by
+/// channel index for stability.
+pub fn merge_channel_results(per_channel: Vec<TranscribeResult>) -> TranscribeResult {
+    let mut all_words = Vec::new();
+    let mut duration_s = 0.0_f64;
+    for (channel_idx, mut result) in per_channel.into_iter().enumerate() {
+        let speaker = channel_idx as u32;
+        for w in &mut result.words {
+            w.speaker = Some(speaker);
+        }
+        duration_s = duration_s.max(result.duration_s);
+        all_words.extend(result.words);
+    }
+
+    all_words.sort_by(|a, b| {
+        a.start
+            .total_cmp(&b.start)
+            .then_with(|| a.speaker.cmp(&b.speaker))
+    });
+
+    let text = all_words
+        .iter()
+        .map(|w| w.word.as_str())
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    TranscribeResult {
+        text,
+        words: all_words,
+        duration_s,
+    }
+}
 /// A transcript segment emitted by the inference engine.
 ///
 /// Partial segments (`is_final == false`) represent interim results that may change.
@@ -2629,6 +2720,72 @@ mod tests {
 
     fn word(text: &str, start: f64, end: f64) -> WordInfo {
         WordInfo::new(text, start, end, 1.0, None)
+    }
+
+    fn sample_word(w: &str, start: f64, end: f64, speaker: Option<u32>) -> WordInfo {
+        WordInfo::new(w, start, end, 0.9, speaker)
+    }
+
+    #[test]
+    fn test_merge_channel_results_empty() {
+        let merged = merge_channel_results(vec![
+            TranscribeResult {
+                text: String::new(),
+                words: vec![],
+                duration_s: 0.0,
+            },
+            TranscribeResult {
+                text: String::new(),
+                words: vec![],
+                duration_s: 0.0,
+            },
+        ]);
+        assert!(merged.words.is_empty());
+        assert!(merged.text.is_empty());
+    }
+
+    #[test]
+    fn test_merge_channel_results_interleaved_channels() {
+        let ch0 = TranscribeResult {
+            text: String::new(),
+            words: vec![
+                sample_word("привет", 0.0, 0.4, None),
+                sample_word("как", 1.0, 1.3, None),
+            ],
+            duration_s: 1.5,
+        };
+        let ch1 = TranscribeResult {
+            text: String::new(),
+            words: vec![sample_word("да", 0.5, 0.8, None)],
+            duration_s: 1.5,
+        };
+        let merged = merge_channel_results(vec![ch0, ch1]);
+        assert_eq!(merged.words.len(), 3);
+        assert_eq!(merged.words[0].word, "привет");
+        assert_eq!(merged.words[0].speaker, Some(0));
+        assert_eq!(merged.words[1].word, "да");
+        assert_eq!(merged.words[1].speaker, Some(1));
+        assert_eq!(merged.words[2].word, "как");
+        assert_eq!(merged.words[2].speaker, Some(0));
+    }
+
+    #[test]
+    fn test_merge_channel_results_tie_order_by_channel() {
+        let ch0 = TranscribeResult {
+            text: String::new(),
+            words: vec![sample_word("а", 0.5, 0.7, None)],
+            duration_s: 1.0,
+        };
+        let ch1 = TranscribeResult {
+            text: String::new(),
+            words: vec![sample_word("б", 0.5, 0.7, None)],
+            duration_s: 1.0,
+        };
+        let merged = merge_channel_results(vec![ch0, ch1]);
+        assert_eq!(merged.words[0].word, "а");
+        assert_eq!(merged.words[0].speaker, Some(0));
+        assert_eq!(merged.words[1].word, "б");
+        assert_eq!(merged.words[1].speaker, Some(1));
     }
 
     #[test]
