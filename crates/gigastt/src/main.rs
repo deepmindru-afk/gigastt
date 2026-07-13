@@ -157,6 +157,28 @@ enum Commands {
         #[arg(long, env = "GIGASTT_BATCH_POOL_SIZE", default_value_t = 0)]
         batch_pool_size: usize,
 
+        /// Enable the asynchronous `/v1/jobs` API for long-file and batch
+        /// transcription. Off by default; when disabled the `/v1/jobs` routes
+        /// are not registered and return 404. Env: GIGASTT_ENABLE_JOBS.
+        #[arg(long, env = "GIGASTT_ENABLE_JOBS", default_value_t = false)]
+        enable_jobs: bool,
+
+        /// TTL in seconds for finished/failed/cancelled jobs before eviction
+        /// from the in-memory store [default: 3600]. Env: GIGASTT_JOBS_TTL_SECS.
+        #[arg(long, env = "GIGASTT_JOBS_TTL_SECS")]
+        jobs_ttl_secs: Option<u64>,
+
+        /// Maximum number of jobs kept in memory (queued + finished). When full,
+        /// POST /v1/jobs returns 429 + Retry-After [default: 100].
+        /// Env: GIGASTT_JOBS_MAX.
+        #[arg(long, env = "GIGASTT_JOBS_MAX")]
+        jobs_max: Option<usize>,
+
+        /// Maximum retry attempts for a job that hits inference_timeout or panics
+        /// [default: 3]. Env: GIGASTT_JOBS_RETRY.
+        #[arg(long, env = "GIGASTT_JOBS_RETRY")]
+        jobs_retry: Option<u32>,
+
         /// Intra-op thread count for the encoder session on the CPU build. The
         /// encoder dominates the single-utterance cost, so more threads speed up
         /// weak CPUs / long single-file jobs. When unset, defaults to the logical
@@ -456,6 +478,10 @@ fn build_limits(
     shutdown_drain_secs: Option<u64>,
     pool_checkout_timeout_secs: Option<u64>,
     inference_timeout_secs: Option<u64>,
+    jobs_enabled: Option<bool>,
+    jobs_ttl_secs: Option<u64>,
+    jobs_max: Option<usize>,
+    jobs_retry: Option<u32>,
 ) -> anyhow::Result<RuntimeLimits> {
     let mut limits = if let Some(path) = config_path {
         server::config::load_config_file(std::path::Path::new(path))?
@@ -492,6 +518,18 @@ fn build_limits(
     if let Some(v) = inference_timeout_secs {
         limits.inference_timeout_secs = v;
     }
+    if let Some(v) = jobs_enabled {
+        limits.jobs_enabled = v;
+    }
+    if let Some(v) = jobs_ttl_secs {
+        limits.jobs_ttl_secs = v;
+    }
+    if let Some(v) = jobs_max {
+        limits.jobs_max = v;
+    }
+    if let Some(v) = jobs_retry {
+        limits.jobs_retry = v;
+    }
     Ok(limits)
 }
 
@@ -506,6 +544,7 @@ fn build_server_config(
     metrics_listen: std::net::SocketAddr,
     trust_proxy: bool,
     config: Option<String>,
+    batch_pool_size: usize,
 ) -> ServerConfig {
     ServerConfig {
         port,
@@ -519,6 +558,7 @@ fn build_server_config(
         metrics_listen,
         trust_proxy,
         config_path: config.map(std::path::PathBuf::from),
+        batch_pool_size,
     }
 }
 
@@ -947,6 +987,10 @@ async fn main() -> anyhow::Result<()> {
             pool_size,
             pool_min_size,
             batch_pool_size,
+            enable_jobs,
+            jobs_ttl_secs,
+            jobs_max,
+            jobs_retry,
             encoder_intra_threads,
             bind_all,
             allow_origin,
@@ -978,6 +1022,10 @@ async fn main() -> anyhow::Result<()> {
                 shutdown_drain_secs,
                 pool_checkout_timeout_secs,
                 inference_timeout_secs,
+                Some(enable_jobs),
+                jobs_ttl_secs,
+                jobs_max,
+                jobs_retry,
             )?;
             let metrics_listen =
                 metrics_listen.unwrap_or_else(server::config::default_metrics_listen);
@@ -998,6 +1046,7 @@ async fn main() -> anyhow::Result<()> {
                 metrics_listen,
                 trust_proxy,
                 config,
+                batch_pool_size,
             );
 
             // The reusable engine build recipe, captured so BOTH first-run boot
@@ -1964,10 +2013,87 @@ mod tests {
 
     #[test]
     fn test_build_limits_defaults_when_no_config() {
-        let limits =
-            build_limits(None, None, None, None, None, None, None, None, None, None).unwrap();
+        let limits = build_limits(
+            None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+        )
+        .unwrap();
         assert_eq!(limits.idle_timeout_secs, 300);
         assert_eq!(limits.ws_frame_max_bytes, 512 * 1024);
+    }
+
+    #[test]
+    fn test_build_limits_job_overrides() {
+        let limits = build_limits(
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(true),
+            Some(7200),
+            Some(50),
+            Some(5),
+        )
+        .unwrap();
+        assert!(limits.jobs_enabled);
+        assert_eq!(limits.jobs_ttl_secs, 7200);
+        assert_eq!(limits.jobs_max, 50);
+        assert_eq!(limits.jobs_retry, 5);
+    }
+
+    #[test]
+    fn test_cli_serve_jobs_flags() {
+        let cli = Cli::parse_from([
+            "gigastt",
+            "serve",
+            "--enable-jobs",
+            "--jobs-ttl-secs",
+            "7200",
+            "--jobs-max",
+            "50",
+            "--jobs-retry",
+            "5",
+        ]);
+        match cli.command {
+            Commands::Serve {
+                enable_jobs,
+                jobs_ttl_secs,
+                jobs_max,
+                jobs_retry,
+                ..
+            } => {
+                assert!(enable_jobs);
+                assert_eq!(jobs_ttl_secs, Some(7200));
+                assert_eq!(jobs_max, Some(50));
+                assert_eq!(jobs_retry, Some(5));
+            }
+            _ => panic!("expected Serve"),
+        }
+    }
+
+    #[test]
+    fn test_cli_serve_jobs_defaults_off() {
+        let cli = Cli::parse_from(["gigastt", "serve"]);
+        match cli.command {
+            Commands::Serve {
+                enable_jobs,
+                jobs_ttl_secs,
+                jobs_max,
+                jobs_retry,
+                ..
+            } => {
+                assert!(!enable_jobs);
+                assert_eq!(jobs_ttl_secs, None);
+                assert_eq!(jobs_max, None);
+                assert_eq!(jobs_retry, None);
+            }
+            _ => panic!("expected Serve"),
+        }
     }
 
     #[test]
@@ -1983,6 +2109,10 @@ mod tests {
             Some(5),
             Some(15),
             Some(45),
+            None,
+            None,
+            None,
+            None,
         )
         .unwrap();
         assert_eq!(limits.idle_timeout_secs, 600);
@@ -2002,6 +2132,10 @@ mod tests {
         std::fs::write(tmp.path(), b"idle_timeout_secs = 123\n").unwrap();
         let limits = build_limits(
             Some(tmp.path().to_str().unwrap()),
+            None,
+            None,
+            None,
+            None,
             None,
             None,
             None,
@@ -2031,6 +2165,10 @@ mod tests {
             None,
             None,
             None,
+            None,
+            None,
+            None,
+            None,
         );
         assert!(result.is_err());
     }
@@ -2044,6 +2182,10 @@ mod tests {
             None,
             Some(30),
             Some(0),
+            None,
+            None,
+            None,
+            None,
             None,
             None,
             None,
@@ -2067,6 +2209,10 @@ mod tests {
             None,
             None,
             None,
+            None,
+            None,
+            None,
+            None,
         )
         .unwrap();
         assert_eq!(limits.rate_limit_per_minute, 0);
@@ -2086,10 +2232,12 @@ mod tests {
             "127.0.0.1:9099".parse().unwrap(),
             true,
             Some("/tmp/config.toml".into()),
+            2,
         );
         assert_eq!(cfg.port, 1234);
         assert_eq!(cfg.metrics_listen.port(), 9099);
         assert_eq!(cfg.host, "127.0.0.1");
+        assert_eq!(cfg.batch_pool_size, 2);
         assert_eq!(cfg.origin_policy.allowed_origins.len(), 1);
         assert!(!cfg.origin_policy.allow_any);
         assert!(cfg.metrics_enabled);

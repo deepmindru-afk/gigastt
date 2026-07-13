@@ -4,14 +4,22 @@
 //! [`JobStore`] trait so a persistent backend (e.g. SQLite) can plug in
 //! later without touching the handlers.
 
+use arc_swap::ArcSwap;
 use axum::body::Bytes;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
+use std::future::Future;
+use std::pin::Pin;
+use std::str::FromStr;
+use std::sync::Arc;
 
 use parking_lot::Mutex;
 
 use super::config::RuntimeLimits;
 use super::http::ExportParams;
+
+/// Object-safe boxed future returned by [`JobStore`] methods.
+pub type JobStoreFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 /// Lifecycle status of a transcription job.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -129,26 +137,23 @@ impl Job {
 
 /// Persistence boundary for jobs. Handlers talk to this trait; the in-memory
 /// implementation is the default, but a SQLite-backed store can be dropped in.
-pub trait JobStore: Send + Sync {
+pub trait JobStore: Send + Sync + 'static {
     /// Persist a new job and return its id.
-    fn create(&self, job: Job) -> impl std::future::Future<Output = anyhow::Result<String>> + Send;
+    fn create<'a>(&'a self, job: Job) -> JobStoreFuture<'a, anyhow::Result<String>>;
     /// Return a clone of the job, if it exists.
-    fn get(
-        &self,
-        id: &str,
-    ) -> impl std::future::Future<Output = anyhow::Result<Option<Job>>> + Send;
+    fn get<'a>(&'a self, id: &str) -> JobStoreFuture<'a, anyhow::Result<Option<Job>>>;
     /// Apply an in-place mutation.
-    fn update(
-        &self,
+    fn update<'a>(
+        &'a self,
         id: &str,
         f: Box<dyn FnOnce(&mut Job) + Send>,
-    ) -> impl std::future::Future<Output = anyhow::Result<()>> + Send;
+    ) -> JobStoreFuture<'a, anyhow::Result<()>>;
     /// Pop the oldest queued job id whose status is still `Queued`.
-    fn next_queued(
-        &self,
-    ) -> impl std::future::Future<Output = anyhow::Result<Option<String>>> + Send;
+    fn next_queued<'a>(&'a self) -> JobStoreFuture<'a, anyhow::Result<Option<String>>>;
+    /// Push a job id to the back of the queue (used after a retryable failure).
+    fn requeue<'a>(&'a self, id: &str) -> JobStoreFuture<'a, anyhow::Result<()>>;
     /// Whether the store has reached its capacity limit.
-    fn is_full(&self) -> impl std::future::Future<Output = bool> + Send;
+    fn is_full<'a>(&'a self) -> JobStoreFuture<'a, bool>;
 }
 
 /// In-memory FIFO job store with TTL eviction.
@@ -188,51 +193,544 @@ impl InMemoryJobStore {
 }
 
 impl JobStore for InMemoryJobStore {
-    async fn create(&self, job: Job) -> anyhow::Result<String> {
-        let mut jobs = self.jobs.lock();
-        let mut queue = self.queue.lock();
-        self.evict_expired_locked(&mut jobs, &mut queue);
-        if jobs.len() >= self.limits.jobs_max {
-            return Err(anyhow::anyhow!("job store is full"));
+    fn create<'a>(&'a self, job: Job) -> JobStoreFuture<'a, anyhow::Result<String>> {
+        Box::pin(async move {
+            let mut jobs = self.jobs.lock();
+            let mut queue = self.queue.lock();
+            self.evict_expired_locked(&mut jobs, &mut queue);
+            if jobs.len() >= self.limits.jobs_max {
+                return Err(anyhow::anyhow!("job store is full"));
+            }
+            let id = job.id.clone();
+            jobs.insert(id.clone(), job);
+            queue.push_back(id.clone());
+            Ok(id)
+        })
+    }
+
+    fn get<'a>(&'a self, id: &str) -> JobStoreFuture<'a, anyhow::Result<Option<Job>>> {
+        let id = id.to_owned();
+        Box::pin(async move {
+            let jobs = self.jobs.lock();
+            Ok(jobs.get(&id).cloned())
+        })
+    }
+
+    fn update<'a>(
+        &'a self,
+        id: &str,
+        f: Box<dyn FnOnce(&mut Job) + Send>,
+    ) -> JobStoreFuture<'a, anyhow::Result<()>> {
+        let id = id.to_owned();
+        Box::pin(async move {
+            let mut jobs = self.jobs.lock();
+            let Some(job) = jobs.get_mut(&id) else {
+                return Err(anyhow::anyhow!("job not found"));
+            };
+            f(job);
+            job.updated_at = gigastt_core::inference::now_timestamp();
+            Ok(())
+        })
+    }
+
+    fn next_queued<'a>(&'a self) -> JobStoreFuture<'a, anyhow::Result<Option<String>>> {
+        Box::pin(async move {
+            let mut jobs = self.jobs.lock();
+            let mut queue = self.queue.lock();
+            self.evict_expired_locked(&mut jobs, &mut queue);
+            while let Some(id) = queue.pop_front() {
+                if let Some(job) = jobs.get(&id)
+                    && matches!(job.status, JobStatus::Queued)
+                {
+                    return Ok(Some(id));
+                }
+            }
+            Ok(None)
+        })
+    }
+
+    fn requeue<'a>(&'a self, id: &str) -> JobStoreFuture<'a, anyhow::Result<()>> {
+        let id = id.to_owned();
+        Box::pin(async move {
+            let mut queue = self.queue.lock();
+            queue.push_back(id);
+            Ok(())
+        })
+    }
+
+    fn is_full<'a>(&'a self) -> JobStoreFuture<'a, bool> {
+        Box::pin(async move {
+            let jobs = self.jobs.lock();
+            jobs.len() >= self.limits.jobs_max
+        })
+    }
+}
+
+/// Executor abstraction so unit tests can run the queue without loading ONNX.
+pub trait JobExecution: Send + Sync {
+    /// Run one transcription attempt. The executor may update progress via the
+    /// store and should return an error for retryable failures.
+    fn execute(
+        &self,
+        id: &str,
+        store: Arc<dyn JobStore>,
+        body: Bytes,
+        params: ExportParams,
+    ) -> impl std::future::Future<Output = anyhow::Result<gigastt_core::inference::TranscribeResult>>
+    + Send;
+}
+
+/// In-memory FIFO job queue. Spawns `concurrency` workers that pull from the
+/// store, run the executor, and retry up to `max_retries` on transient failures.
+pub struct JobQueue {
+    store: Arc<dyn JobStore>,
+    semaphore: Arc<tokio::sync::Semaphore>,
+    max_retries: u32,
+    shutdown: tokio_util::sync::CancellationToken,
+}
+
+impl JobQueue {
+    /// Create a new queue. `concurrency` is clamped to at least 1.
+    pub fn new(
+        store: Arc<dyn JobStore>,
+        concurrency: usize,
+        max_retries: u32,
+        shutdown: tokio_util::sync::CancellationToken,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            store,
+            semaphore: Arc::new(tokio::sync::Semaphore::new(concurrency.max(1))),
+            max_retries,
+            shutdown,
+        })
+    }
+
+    /// Spawn worker tasks. Each worker owns a clone of `executor`. Call once
+    /// after constructing the queue.
+    pub fn spawn<E>(&self, executor: E)
+    where
+        E: JobExecution + Clone + Send + Sync + 'static,
+    {
+        let permits = self.semaphore.available_permits();
+        for _ in 0..permits {
+            let worker = JobWorker {
+                store: self.store.clone(),
+                semaphore: self.semaphore.clone(),
+                max_retries: self.max_retries,
+                shutdown: self.shutdown.clone(),
+                executor: executor.clone(),
+            };
+            tokio::spawn(worker.run());
         }
-        let id = job.id.clone();
-        jobs.insert(id.clone(), job);
-        queue.push_back(id.clone());
-        Ok(id)
     }
 
-    async fn get(&self, id: &str) -> anyhow::Result<Option<Job>> {
-        let jobs = self.jobs.lock();
-        Ok(jobs.get(id).cloned())
+    /// Mark all queued jobs as cancelled. Called during graceful shutdown.
+    pub async fn cancel_all_queued(&self) {
+        loop {
+            let Ok(Some(id)) = self.store.next_queued().await else {
+                break;
+            };
+            let _ = self
+                .store
+                .update(
+                    &id,
+                    Box::new(|j| {
+                        j.status = JobStatus::Cancelled;
+                        j.updated_at = gigastt_core::inference::now_timestamp();
+                    }),
+                )
+                .await;
+            broadcast_event(&*self.store, &id, JobEvent::Cancelled).await;
+        }
     }
+}
 
-    async fn update(&self, id: &str, f: Box<dyn FnOnce(&mut Job) + Send>) -> anyhow::Result<()> {
-        let mut jobs = self.jobs.lock();
-        let Some(job) = jobs.get_mut(id) else {
-            return Err(anyhow::anyhow!("job not found"));
-        };
-        f(job);
-        job.updated_at = gigastt_core::inference::now_timestamp();
-        Ok(())
-    }
+struct JobWorker<E> {
+    store: Arc<dyn JobStore>,
+    semaphore: Arc<tokio::sync::Semaphore>,
+    max_retries: u32,
+    shutdown: tokio_util::sync::CancellationToken,
+    executor: E,
+}
 
-    async fn next_queued(&self) -> anyhow::Result<Option<String>> {
-        let mut jobs = self.jobs.lock();
-        let mut queue = self.queue.lock();
-        self.evict_expired_locked(&mut jobs, &mut queue);
-        while let Some(id) = queue.pop_front() {
-            if let Some(job) = jobs.get(&id)
-                && matches!(job.status, JobStatus::Queued)
+impl<E: JobExecution + 'static> JobWorker<E> {
+    async fn run(self) {
+        loop {
+            if self.shutdown.is_cancelled() {
+                break;
+            }
+            let permit = match tokio::time::timeout(
+                std::time::Duration::from_secs(1),
+                self.semaphore.clone().acquire_owned(),
+            )
+            .await
             {
-                return Ok(Some(id));
+                Ok(Ok(p)) => p,
+                _ => continue,
+            };
+            let Some(id) = self.store.next_queued().await.unwrap_or(None) else {
+                drop(permit);
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                continue;
+            };
+
+            let _ = self
+                .store
+                .update(
+                    &id,
+                    Box::new(|j| {
+                        j.status = JobStatus::Processing;
+                        j.attempts += 1;
+                    }),
+                )
+                .await;
+            broadcast_event(
+                &*self.store,
+                &id,
+                JobEvent::Progress {
+                    percent: 0,
+                    processed_seconds: 0.0,
+                },
+            )
+            .await;
+
+            let store = self.store.clone();
+            let body = match self.store.get(&id).await {
+                Ok(Some(job)) => job.body,
+                _ => {
+                    drop(permit);
+                    continue;
+                }
+            };
+            let params = match self.store.get(&id).await {
+                Ok(Some(job)) => job.params,
+                _ => {
+                    drop(permit);
+                    continue;
+                }
+            };
+
+            let result = self
+                .executor
+                .execute(&id, store.clone(), body, params)
+                .await;
+            drop(permit);
+
+            // If the job was cancelled while running, discard the result.
+            let cancelled = self
+                .store
+                .get(&id)
+                .await
+                .ok()
+                .flatten()
+                .map(|j| matches!(j.status, JobStatus::Cancelled))
+                .unwrap_or(false);
+            if cancelled {
+                continue;
+            }
+
+            match result {
+                Ok(res) => {
+                    let total = res.duration_s;
+                    let _ = self
+                        .store
+                        .update(
+                            &id,
+                            Box::new(move |j| {
+                                j.status = JobStatus::Done;
+                                j.result = Some(res);
+                                j.processed_seconds = total;
+                            }),
+                        )
+                        .await;
+                    broadcast_event(&*self.store, &id, JobEvent::Done).await;
+                }
+                Err(e) => {
+                    let attempts = self
+                        .store
+                        .get(&id)
+                        .await
+                        .ok()
+                        .flatten()
+                        .map(|j| j.attempts)
+                        .unwrap_or(0);
+                    let retryable = is_retryable_error(&e) && attempts <= self.max_retries;
+                    if retryable {
+                        let _ = self
+                            .store
+                            .update(
+                                &id,
+                                Box::new(|j| {
+                                    j.status = JobStatus::Queued;
+                                }),
+                            )
+                            .await;
+                        let _ = self.store.requeue(&id).await;
+                        broadcast_event(
+                            &*self.store,
+                            &id,
+                            JobEvent::Progress {
+                                percent: 0,
+                                processed_seconds: 0.0,
+                            },
+                        )
+                        .await;
+                    } else {
+                        let sanitized = sanitize_job_error(&e);
+                        let _ = self
+                            .store
+                            .update(
+                                &id,
+                                Box::new({
+                                    let sanitized = sanitized.clone();
+                                    move |j| {
+                                        j.status = JobStatus::Failed;
+                                        j.error = Some(sanitized);
+                                    }
+                                }),
+                            )
+                            .await;
+                        broadcast_event(&*self.store, &id, JobEvent::Failed { error: sanitized })
+                            .await;
+                    }
+                }
             }
         }
-        Ok(None)
     }
+}
 
-    async fn is_full(&self) -> bool {
-        let jobs = self.jobs.lock();
-        jobs.len() >= self.limits.jobs_max
+/// Send an event to all active listeners, pruning dead channels. Terminal
+/// events are fire-and-forget: the channel is dropped afterwards so the SSE
+/// stream ends naturally.
+pub(crate) async fn broadcast_event(store: &dyn JobStore, id: &str, event: JobEvent) {
+    let channels = match store.get(id).await {
+        Ok(Some(job)) => job.event_channels,
+        _ => return,
+    };
+    let terminal = event.is_terminal();
+    let mut keep = Vec::new();
+    for tx in channels {
+        if tx.send(event.clone()).is_ok() && !terminal {
+            keep.push(tx);
+        }
+    }
+    let _ = store
+        .update(
+            id,
+            Box::new(move |j| {
+                j.event_channels = keep;
+            }),
+        )
+        .await;
+}
+
+fn is_retryable_error(e: &anyhow::Error) -> bool {
+    let s = format!("{e:#}");
+    s.contains("inference_timeout") || s.contains("panicked")
+}
+
+fn sanitize_job_error(e: &anyhow::Error) -> String {
+    let msg = format!("{e:#}");
+    if msg.contains("inference_timeout") {
+        "Inference timed out.".into()
+    } else if msg.contains("Invalid audio") {
+        "Failed to decode audio file. Check format.".into()
+    } else {
+        "Transcription failed.".into()
+    }
+}
+
+/// Production executor: decodes audio to size the job, runs inference against
+/// the batch pool, and emits timer-based progress events.
+#[derive(Clone)]
+pub struct RealJobExecutor {
+    engine: Arc<ArcSwap<gigastt_core::inference::Engine>>,
+    limits: Arc<ArcSwap<RuntimeLimits>>,
+}
+
+impl RealJobExecutor {
+    /// Create an executor bound to the live engine and runtime limits.
+    pub fn new(
+        engine: Arc<ArcSwap<gigastt_core::inference::Engine>>,
+        limits: Arc<ArcSwap<RuntimeLimits>>,
+    ) -> Self {
+        Self { engine, limits }
+    }
+}
+
+impl JobExecution for RealJobExecutor {
+    async fn execute(
+        &self,
+        id: &str,
+        store: Arc<dyn JobStore>,
+        body: Bytes,
+        params: ExportParams,
+    ) -> anyhow::Result<gigastt_core::inference::TranscribeResult> {
+        let engine = self.engine.load_full();
+        let limits = self.limits.load();
+
+        // Decode audio (blocking) once to estimate duration for progress.
+        let samples = tokio::task::spawn_blocking({
+            let body = body.clone();
+            move || gigastt_core::inference::audio::decode_audio_bytes_shared(body)
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("audio decode task panicked: {e}"))?
+        .map_err(|e| anyhow::anyhow!("Invalid audio: {e:#}"))?;
+
+        let total_seconds = samples.len() as f64 / 16_000.0;
+        let _ = store
+            .update(id, Box::new(move |j| j.total_seconds = total_seconds))
+            .await;
+
+        // Validate per-request variant / knob overrides before holding a triplet.
+        if let Some(requested) = params.variant.as_deref() {
+            let matches = gigastt_core::model::ModelVariant::from_str(requested)
+                .map(|v| v == engine.variant())
+                .unwrap_or(false);
+            if !matches {
+                return Err(anyhow::anyhow!("Requested model variant is not loaded"));
+            }
+        }
+        let overrides = gigastt_core::inference::TranscribeOverrides {
+            punctuation: params.punctuation,
+            itn: params.itn,
+            vad: params.vad,
+        };
+        if let Err(e) = engine.validate_overrides(&overrides) {
+            return Err(anyhow::anyhow!("Invalid input: {}", e.message()));
+        }
+
+        // Timer-based progress updater. Assumes RTF ≈ 0.1 (10 s audio / 1 s wall).
+        let progress_cancel = tokio_util::sync::CancellationToken::new();
+        let progress_handle = {
+            let store = store.clone();
+            let id = id.to_string();
+            let cancel = progress_cancel.clone();
+            let total = total_seconds;
+            tokio::spawn(async move {
+                let start = std::time::Instant::now();
+                let rtf = 0.1_f64;
+                let mut interval = tokio::time::interval(std::time::Duration::from_millis(500));
+                interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+                loop {
+                    interval.tick().await;
+                    if cancel.is_cancelled() {
+                        break;
+                    }
+                    let elapsed = start.elapsed().as_secs_f64();
+                    let processed = (elapsed / rtf).min(total);
+                    let percent = if total > 0.0 {
+                        ((processed / total) * 100.0) as u32
+                    } else {
+                        100
+                    };
+                    let _ = store
+                        .update(&id, Box::new(move |j| j.processed_seconds = processed))
+                        .await;
+                    broadcast_event(
+                        &*store,
+                        &id,
+                        JobEvent::Progress {
+                            percent,
+                            processed_seconds: processed,
+                        },
+                    )
+                    .await;
+                    if processed >= total {
+                        break;
+                    }
+                }
+            })
+        };
+
+        // Check out a triplet from the batch pool and run inference.
+        let guard = match tokio::time::timeout(
+            std::time::Duration::from_secs(limits.pool_checkout_timeout_secs),
+            engine.pool_for_batch().checkout(),
+        )
+        .await
+        {
+            Ok(Ok(g)) => g,
+            Ok(Err(_)) => return Err(anyhow::anyhow!("pool closed")),
+            Err(_) => return Err(anyhow::anyhow!("pool checkout timed out")),
+        };
+        let mut reservation = guard.into_owned();
+
+        let inference_timeout_secs = limits.inference_timeout_secs;
+        let engine_for_inference = engine.clone();
+        let body_for_inference = body.clone();
+        let span = tracing::Span::current();
+        let handle = tokio::task::spawn_blocking(move || {
+            let _enter = span.enter();
+            let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                if params.channels.as_deref() == Some("split") {
+                    let channels =
+                        gigastt_core::inference::audio::decode_audio_bytes_shared_channels(
+                            body_for_inference.clone(),
+                        )
+                        .map_err(|e| {
+                            gigastt_core::error::GigasttError::InvalidAudio {
+                                reason: format!("{e:#}"),
+                            }
+                        })?;
+                    let fallback_reason = match channels.len() {
+                        0 => Some("no channels"),
+                        1 => Some("mono audio"),
+                        2 if gigastt_core::inference::audio::is_dual_mono(&channels) => {
+                            Some("dual-mono audio")
+                        }
+                        n if n > 2 => Some("more than two channels"),
+                        _ => None,
+                    };
+                    if let Some(reason) = fallback_reason {
+                        tracing::warn!(
+                            "channels=split requested but {reason} detected; falling back to mono transcription"
+                        );
+                        engine_for_inference.transcribe_bytes_shared_with_overrides(
+                            body_for_inference,
+                            &mut reservation,
+                            &overrides,
+                        )
+                    } else {
+                        engine_for_inference.transcribe_channels(&channels, &mut reservation)
+                    }
+                } else {
+                    engine_for_inference.transcribe_bytes_shared_with_overrides(
+                        body_for_inference,
+                        &mut reservation,
+                        &overrides,
+                    )
+                }
+            }));
+            match r {
+                Ok(result) => result,
+                Err(_) => Err(gigastt_core::error::GigasttError::Inference {
+                    source: anyhow::anyhow!("Inference thread panicked").into(),
+                }),
+            }
+        });
+
+        let result = if inference_timeout_secs == 0 {
+            handle.await
+        } else {
+            match tokio::time::timeout(
+                std::time::Duration::from_secs(inference_timeout_secs),
+                handle,
+            )
+            .await
+            {
+                Ok(r) => r,
+                Err(_) => return Err(anyhow::anyhow!("inference_timeout")),
+            }
+        };
+
+        progress_cancel.cancel();
+        let _ = progress_handle.await;
+
+        result
+            .map_err(|e| anyhow::anyhow!("spawn_blocking join error: {e}"))?
+            .map_err(anyhow::Error::from)
     }
 }
 
@@ -364,5 +862,197 @@ mod tests {
             .await
             .unwrap();
         assert!(store.get(&id).await.unwrap().is_none());
+    }
+
+    #[derive(Clone)]
+    struct MockExecutor {
+        results: Arc<Mutex<Vec<anyhow::Result<gigastt_core::inference::TranscribeResult>>>>,
+        delay_ms: u64,
+    }
+
+    impl JobExecution for MockExecutor {
+        async fn execute(
+            &self,
+            _id: &str,
+            _store: Arc<dyn JobStore>,
+            body: Bytes,
+            _params: ExportParams,
+        ) -> anyhow::Result<gigastt_core::inference::TranscribeResult> {
+            if self.delay_ms > 0 {
+                tokio::time::sleep(std::time::Duration::from_millis(self.delay_ms)).await;
+            }
+            let mut results = self.results.lock();
+            let result = results.remove(0);
+            // Use body length to make failures deterministic per test.
+            let _ = body.len();
+            result
+        }
+    }
+
+    fn ok_result() -> anyhow::Result<gigastt_core::inference::TranscribeResult> {
+        Ok(gigastt_core::inference::TranscribeResult {
+            text: "ok".into(),
+            words: vec![],
+            duration_s: 1.0,
+        })
+    }
+
+    #[tokio::test]
+    async fn test_queue_runs_jobs_in_fifo_order() {
+        let limits = test_limits();
+        let store: Arc<dyn JobStore> = Arc::new(InMemoryJobStore::new(limits));
+        let executor = MockExecutor {
+            results: Arc::new(Mutex::new(vec![ok_result(), ok_result()])),
+            delay_ms: 0,
+        };
+        let queue = JobQueue::new(
+            store.clone(),
+            2,
+            0,
+            tokio_util::sync::CancellationToken::new(),
+        );
+        queue.spawn(executor);
+
+        let id1 = store
+            .create(Job::queued(
+                Bytes::from_static(b"1"),
+                ExportParams::default(),
+            ))
+            .await
+            .unwrap();
+        let id2 = store
+            .create(Job::queued(
+                Bytes::from_static(b"2"),
+                ExportParams::default(),
+            ))
+            .await
+            .unwrap();
+
+        // Wait for both to finish.
+        for _ in 0..50 {
+            let j1 = store.get(&id1).await.unwrap().unwrap();
+            let j2 = store.get(&id2).await.unwrap().unwrap();
+            if matches!(j1.status, JobStatus::Done) && matches!(j2.status, JobStatus::Done) {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+
+        assert!(matches!(
+            store.get(&id1).await.unwrap().unwrap().status,
+            JobStatus::Done
+        ));
+        assert!(matches!(
+            store.get(&id2).await.unwrap().unwrap().status,
+            JobStatus::Done
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_queue_retry_then_fail() {
+        let limits = RuntimeLimits {
+            jobs_retry: 2,
+            ..test_limits()
+        };
+        let store: Arc<dyn JobStore> = Arc::new(InMemoryJobStore::new(limits));
+        let executor = MockExecutor {
+            results: Arc::new(Mutex::new(vec![
+                Err(anyhow::anyhow!("inference_timeout")),
+                Err(anyhow::anyhow!("inference_timeout")),
+                Err(anyhow::anyhow!("inference_timeout")),
+            ])),
+            delay_ms: 0,
+        };
+        let queue = JobQueue::new(
+            store.clone(),
+            1,
+            2,
+            tokio_util::sync::CancellationToken::new(),
+        );
+        queue.spawn(executor);
+
+        let id = store
+            .create(Job::queued(
+                Bytes::from_static(b"x"),
+                ExportParams::default(),
+            ))
+            .await
+            .unwrap();
+
+        for _ in 0..50 {
+            let job = store.get(&id).await.unwrap().unwrap();
+            if matches!(job.status, JobStatus::Failed) {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+
+        let job = store.get(&id).await.unwrap().unwrap();
+        assert!(matches!(job.status, JobStatus::Failed));
+        assert_eq!(job.attempts, 3);
+    }
+
+    #[tokio::test]
+    async fn test_queue_cancellation_discards_result() {
+        let store: Arc<dyn JobStore> = Arc::new(InMemoryJobStore::new(test_limits()));
+        let executor = MockExecutor {
+            results: Arc::new(Mutex::new(vec![ok_result()])),
+            delay_ms: 300,
+        };
+        let queue = JobQueue::new(
+            store.clone(),
+            1,
+            0,
+            tokio_util::sync::CancellationToken::new(),
+        );
+        queue.spawn(executor);
+
+        let id = store
+            .create(Job::queued(
+                Bytes::from_static(b"x"),
+                ExportParams::default(),
+            ))
+            .await
+            .unwrap();
+
+        // Wait until processing, then cancel while the executor is still running.
+        for _ in 0..50 {
+            let job = store.get(&id).await.unwrap().unwrap();
+            if matches!(job.status, JobStatus::Processing) {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        store
+            .update(&id, Box::new(|j| j.status = JobStatus::Cancelled))
+            .await
+            .unwrap();
+
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        let job = store.get(&id).await.unwrap().unwrap();
+        assert!(matches!(job.status, JobStatus::Cancelled));
+        assert!(job.result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_queue_cancel_all_queued_on_shutdown() {
+        let store: Arc<dyn JobStore> = Arc::new(InMemoryJobStore::new(test_limits()));
+        let token = tokio_util::sync::CancellationToken::new();
+        let queue = JobQueue::new(store.clone(), 1, 0, token.clone());
+        // Don't spawn workers so jobs stay queued.
+
+        let id = store
+            .create(Job::queued(
+                Bytes::from_static(b"x"),
+                ExportParams::default(),
+            ))
+            .await
+            .unwrap();
+
+        token.cancel();
+        queue.cancel_all_queued().await;
+
+        let job = store.get(&id).await.unwrap().unwrap();
+        assert!(matches!(job.status, JobStatus::Cancelled));
     }
 }

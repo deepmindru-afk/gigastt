@@ -289,6 +289,9 @@ pub struct ServerConfig {
     pub trust_proxy: bool,
     /// Path to TOML config file for runtime limits (reloaded on SIGHUP).
     pub config_path: Option<std::path::PathBuf>,
+    /// Size of the triplet pool reserved for batch REST / job transcription.
+    /// Split off from the interactive pool so long files can't starve WS/SSE.
+    pub batch_pool_size: usize,
 }
 
 impl ServerConfig {
@@ -304,6 +307,7 @@ impl ServerConfig {
             metrics_listen: default_metrics_listen(),
             trust_proxy: false,
             config_path: None,
+            batch_pool_size: 0,
         }
     }
 }
