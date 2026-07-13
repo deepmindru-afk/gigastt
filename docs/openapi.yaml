@@ -291,9 +291,12 @@ paths:
           schema:
             type: boolean
           description: >-
-            Request polyvoice speaker diarization. Mutually exclusive with
-            `channels=split`; returns 400 with code `conflicting_modes` if both
-            are set.
+            Set to `true` to request polyvoice speaker diarization. The
+            mutual-exclusion check with `channels=split` treats `diarization=true`
+            as an explicit request; returns 400 with code `conflicting_modes` if
+            both are set. Actual diarization output requires the speaker-encoder
+            model to be loaded on the server (downloaded automatically when the
+            `diarization` feature is enabled).
       requestBody:
         required: true
         content:
