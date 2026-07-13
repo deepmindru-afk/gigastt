@@ -204,6 +204,13 @@ pub struct ExportParams {
     /// only.
     #[serde(default)]
     pub variant: Option<String>,
+    /// Channel handling for file transcription. `split` transcribes left/right
+    /// channels as separate speakers. Defaults to mono mix.
+    #[serde(default)]
+    pub channels: Option<String>,
+    /// Request speaker diarization. Mutually exclusive with `channels=split`.
+    #[serde(default)]
+    pub diarization: Option<bool>,
 }
 
 /// Render a transcription result into the requested export format.
@@ -551,6 +558,16 @@ pub async fn transcribe(
         ));
     }
 
+    let split_channels = params.channels.as_deref() == Some("split");
+    let request_diarization = params.diarization == Some(true);
+    if split_channels && request_diarization {
+        return Err(api_error(
+            StatusCode::BAD_REQUEST,
+            "channels=split and diarization=true are mutually exclusive",
+            "conflicting_modes",
+        ));
+    }
+
     // Snapshot the current engine once at request start; a concurrent hot-reload
     // swaps the `ArcSwap`, but this request keeps the engine (and its pool) it
     // began with for its whole lifetime.
@@ -627,12 +644,38 @@ pub async fn transcribe(
         let _enter = span.enter();
         // catch_unwind ensures triplet is returned to pool even on panic
         let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            // `body` is an `axum::body::Bytes` (re-export of `bytes::Bytes`):
-            // `clone()` is a refcount bump, not a data copy, so the decode
-            // path shares the original upload buffer. `overrides` is `Copy`
-            // and already validated above; with all fields absent this is
-            // byte-identical to `transcribe_bytes_shared`.
-            engine.transcribe_bytes_shared_with_overrides(body, &mut reservation, &overrides)
+            if split_channels {
+                let channels = gigastt_core::inference::audio::decode_audio_bytes_shared_channels(
+                    body.clone(),
+                )
+                .map_err(|e| gigastt_core::error::GigasttError::InvalidAudio {
+                    reason: format!("{e:#}"),
+                })?;
+                let fallback_reason = match channels.len() {
+                    0 => Some("no channels"),
+                    1 => Some("mono audio"),
+                    2 if gigastt_core::inference::audio::is_dual_mono(&channels) => {
+                        Some("dual-mono audio")
+                    }
+                    n if n > 2 => Some("more than two channels"),
+                    _ => None,
+                };
+                if let Some(reason) = fallback_reason {
+                    tracing::warn!(
+                        "channels=split requested but {reason} detected; falling back to mono transcription"
+                    );
+                    engine.transcribe_bytes_shared(body, &mut reservation)
+                } else {
+                    engine.transcribe_channels(&channels, &mut reservation)
+                }
+            } else {
+                // `body` is an `axum::body::Bytes` (re-export of `bytes::Bytes`):
+                // `clone()` is a refcount bump, not a data copy, so the decode
+                // path shares the original upload buffer. `overrides` is `Copy`
+                // and already validated above; with all fields absent this is
+                // byte-identical to `transcribe_bytes_shared`.
+                engine.transcribe_bytes_shared_with_overrides(body, &mut reservation, &overrides)
+            }
         }));
         match r {
             Ok(inference_result) => inference_result,
@@ -1327,6 +1370,32 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "requires model"]
+    async fn test_transcribe_channels_split_diarization_conflict_returns_400() {
+        let state = Arc::new(AppState {
+            engine: engine_swap(test_engine()),
+            limits: Arc::new(ArcSwap::from_pointee(RuntimeLimits::default())),
+            metrics_registry: None,
+            engine_builder: None,
+            reload_lock: Arc::new(tokio::sync::Mutex::new(())),
+            shutdown: tokio_util::sync::CancellationToken::new(),
+            tracker: tokio_util::task::TaskTracker::new(),
+        });
+        let params = ExportParams {
+            channels: Some("split".into()),
+            diarization: Some(true),
+            ..ExportParams::default()
+        };
+        let resp = transcribe(State(state), Query(params), minimal_wav())
+            .await
+            .unwrap_err();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        let bytes = axum::body::to_bytes(resp.into_body(), 1024).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(v["code"], "conflicting_modes");
+    }
+
+    #[tokio::test]
+    #[ignore = "requires model"]
     async fn test_models_with_metrics() {
         let state = Arc::new(AppState {
             engine: engine_swap(test_engine()),
@@ -1858,7 +1927,7 @@ mod tests {
     fn test_export_params_deserialize_from_query() {
         // The query-param shape drives format negotiation; confirm axum's Query
         // extractor maps every field so the handler sees the caller's choices.
-        let uri: axum::http::Uri = "http://x/?format=srt&download=out.srt&max_chars_per_line=20&max_words_per_line=3&word_timestamps=true&segments=true"
+        let uri: axum::http::Uri = "http://x/?format=srt&download=out.srt&max_chars_per_line=20&max_words_per_line=3&word_timestamps=true&segments=true&channels=split&diarization=true"
             .parse()
             .unwrap();
         let Query(params): Query<ExportParams> = Query::try_from_uri(&uri).unwrap();
@@ -1868,6 +1937,8 @@ mod tests {
         assert_eq!(params.max_words_per_line, Some(3));
         assert_eq!(params.word_timestamps, Some(true));
         assert_eq!(params.segments, Some(true));
+        assert_eq!(params.channels.as_deref(), Some("split"));
+        assert_eq!(params.diarization, Some(true));
     }
 
     #[test]

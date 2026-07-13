@@ -95,6 +95,7 @@ $ gigastt serve
 | Execution providers | CPU (any platform) · CoreML EP (macOS ARM64) · CUDA 12+ (Linux x86_64) · NNAPI (Android) |
 | Streaming | incremental WebSocket partials · REST + SSE for files · single port 9876 |
 | Audio in | WAV · M4A/AAC · MP3 · OGG/Vorbis · FLAC (auto mono mix for multi-channel) |
+| Stereo telephony recordings | Optional channel-speaker mode (`--stereo-speakers` CLI / `channels=split` REST) labels the left/right channels as `speaker_0` and `speaker_1` |
 | Export | JSON · TXT · SRT · VTT · Markdown — per-word timings + confidence, or segment-level (`?segments=true` JSON, `### [mm:ss]` Markdown) |
 | Server hardening | loopback-only by default · origin allowlist · per-IP rate limiting · graceful drain · Prometheus `/metrics` on a separate port · loopback-only model hot-reload (`POST /v1/admin/reload`) |
 
