@@ -158,7 +158,7 @@ pub struct TranscribeResponse {
 }
 
 /// Query parameters for `/v1/transcribe` export formatting.
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Clone, Deserialize)]
 pub struct ExportParams {
     /// Export format: `json` (default), `txt`, `srt`, `vtt`, `md`.
     pub format: Option<String>,

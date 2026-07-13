@@ -5,6 +5,7 @@
 mod bootstrap;
 pub mod config;
 pub mod http;
+pub mod jobs;
 pub mod metrics;
 pub(crate) mod middleware;
 pub mod rate_limit;
