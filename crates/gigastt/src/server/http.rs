@@ -1372,9 +1372,11 @@ mod tests {
     #[ignore = "requires model"]
     async fn test_transcribe_channels_split_diarization_conflict_returns_400() {
         let state = Arc::new(AppState {
-            engine: test_engine(),
+            engine: engine_swap(test_engine()),
             limits: Arc::new(ArcSwap::from_pointee(RuntimeLimits::default())),
             metrics_registry: None,
+            engine_builder: None,
+            reload_lock: Arc::new(tokio::sync::Mutex::new(())),
             shutdown: tokio_util::sync::CancellationToken::new(),
             tracker: tokio_util::task::TaskTracker::new(),
         });
