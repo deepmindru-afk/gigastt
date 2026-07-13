@@ -1081,7 +1081,9 @@ async fn test_transcribe_channels_split_with_diarization_returns_400() {
 #[tokio::test]
 async fn test_transcribe_segments_true_returns_words_and_segments() {
     let (port, shutdown) = common::start_server(&common::model_dir()).await;
-    let wav = common::generate_wav(2, 16000);
+    // Real speech fixture: a synthetic tone transcribes to zero words, which
+    // would make the non-empty segments assertion below vacuously fail.
+    let wav = std::fs::read(GOLOS_FIXTURE).expect("read golos fixture");
 
     let resp = tokio::time::timeout(Duration::from_secs(60), async {
         reqwest::Client::new()
@@ -1185,7 +1187,8 @@ async fn test_transcribe_segments_true_with_channels_split_carries_speaker() {
 #[tokio::test]
 async fn test_transcribe_md_segments_emits_headers() {
     let (port, shutdown) = common::start_server(&common::model_dir()).await;
-    let wav = common::generate_wav(2, 16000);
+    // Real speech fixture: a tone yields no words, hence no "### [" headers.
+    let wav = std::fs::read(GOLOS_FIXTURE).expect("read golos fixture");
 
     let resp = tokio::time::timeout(Duration::from_secs(60), async {
         reqwest::Client::new()
