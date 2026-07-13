@@ -1072,3 +1072,140 @@ async fn test_transcribe_channels_split_with_diarization_returns_400() {
 
     let _ = shutdown.send(());
 }
+
+// ---------------------------------------------------------------------------
+// 18. Segment-level output (`segments=true`)
+// ---------------------------------------------------------------------------
+
+#[ignore]
+#[tokio::test]
+async fn test_transcribe_segments_true_returns_words_and_segments() {
+    let (port, shutdown) = common::start_server(&common::model_dir()).await;
+    let wav = common::generate_wav(2, 16000);
+
+    let resp = tokio::time::timeout(Duration::from_secs(60), async {
+        reqwest::Client::new()
+            .post(format!(
+                "http://127.0.0.1:{port}/v1/transcribe?segments=true&word_timestamps=true"
+            ))
+            .body(wav)
+            .send()
+            .await
+            .expect("POST /v1/transcribe failed")
+    })
+    .await
+    .expect("POST /v1/transcribe timed out");
+
+    assert_eq!(resp.status(), 200);
+    let text = resp.text().await.expect("expected text body");
+    let body: serde_json::Value = serde_json::from_str(&text).expect("expected JSON");
+
+    assert!(body["words"].is_array(), "words array must be present");
+    assert!(
+        body["segments"].is_array(),
+        "segments array must be present"
+    );
+
+    let words = body["words"].as_array().unwrap();
+    let segments = body["segments"].as_array().unwrap();
+    assert!(!segments.is_empty(), "segments must not be empty");
+
+    // Every word appears in exactly one segment, in order.
+    let segment_word_count: usize = segments
+        .iter()
+        .map(|s| s["words"].as_array().map(|w| w.len()).unwrap_or(0))
+        .sum();
+    assert_eq!(
+        segment_word_count,
+        words.len(),
+        "segment words must cover all top-level words"
+    );
+
+    // Segment timestamps are monotonic and non-overlapping.
+    let mut last_end = -1.0_f64;
+    for seg in segments {
+        let start = seg["start"].as_f64().expect("segment start number");
+        let end = seg["end"].as_f64().expect("segment end number");
+        assert!(
+            start >= last_end,
+            "segment start {start} < previous end {last_end}"
+        );
+        assert!(end >= start, "segment end {end} < start {start}");
+        last_end = end;
+    }
+
+    let _ = shutdown.send(());
+}
+
+#[ignore]
+#[tokio::test]
+async fn test_transcribe_segments_true_with_channels_split_carries_speaker() {
+    let (port, shutdown) = common::start_server(&common::model_dir()).await;
+    let wav = common::generate_stereo_wav_split(
+        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/golos_00.wav"),
+        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/golos_01.wav"),
+    );
+
+    let resp = tokio::time::timeout(Duration::from_secs(60), async {
+        reqwest::Client::new()
+            .post(format!(
+                "http://127.0.0.1:{port}/v1/transcribe?channels=split&segments=true"
+            ))
+            .body(wav)
+            .send()
+            .await
+            .expect("POST /v1/transcribe failed")
+    })
+    .await
+    .expect("POST /v1/transcribe timed out");
+
+    assert_eq!(resp.status(), 200);
+    let text = resp.text().await.expect("expected text body");
+    let body: serde_json::Value = serde_json::from_str(&text).expect("expected JSON");
+
+    let segments = body["segments"].as_array().expect("segments array");
+    assert!(!segments.is_empty());
+
+    let mut saw_speaker = false;
+    for seg in segments {
+        if let Some(speaker) = seg["speaker"].as_u64() {
+            assert!(speaker == 0 || speaker == 1);
+            saw_speaker = true;
+        }
+    }
+    assert!(
+        saw_speaker,
+        "at least one segment must carry a speaker label"
+    );
+
+    let _ = shutdown.send(());
+}
+
+#[ignore]
+#[tokio::test]
+async fn test_transcribe_md_segments_emits_headers() {
+    let (port, shutdown) = common::start_server(&common::model_dir()).await;
+    let wav = common::generate_wav(2, 16000);
+
+    let resp = tokio::time::timeout(Duration::from_secs(60), async {
+        reqwest::Client::new()
+            .post(format!(
+                "http://127.0.0.1:{port}/v1/transcribe?format=md&segments=true"
+            ))
+            .body(wav)
+            .send()
+            .await
+            .expect("POST /v1/transcribe failed")
+    })
+    .await
+    .expect("POST /v1/transcribe timed out");
+
+    assert_eq!(resp.status(), 200);
+    let md = resp.text().await.expect("expected text body");
+    assert!(
+        md.contains("### ["),
+        "segment-grouped Markdown must contain '### [' headers, got:\n{md}"
+    );
+
+    let _ = shutdown.send(());
+}

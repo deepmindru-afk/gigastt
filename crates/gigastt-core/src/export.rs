@@ -230,20 +230,49 @@ struct Cue {
     words: Vec<WordInfo>,
 }
 
-/// A grouped transcript segment: a cue-sized span of words with an aggregate
-/// start/end and text. Segments share their boundaries with the SRT/VTT cues
-/// (both come from `build_cues`), so `?segments=true` JSON, SRT, VTT, and the
-/// segment-grouped Markdown mode all agree on where segments begin and end.
+/// A grouped transcript segment: a span of words with an aggregate start/end,
+/// text, and optional speaker label. Used both for the natural-boundary
+/// segments returned by `?segments=true` and for the cue-based segments behind
+/// `format=md&segments=true`, SRT, and VTT.
 #[derive(Clone, Debug, Serialize)]
 pub struct Segment {
     /// Segment start time in seconds (start of its first word).
     pub start: f64,
     /// Segment end time in seconds (end of its last word).
     pub end: f64,
-    /// Rendered segment text (speaker label prefix included when diarized).
+    /// Rendered segment text (speaker label prefix included only for cue-based
+    /// caption exports; natural segments keep the label in `speaker`).
     pub text: String,
     /// The words that fall within this segment's span.
     pub words: Vec<WordInfo>,
+    /// Speaker label when the segment came from diarization or channel split.
+    /// Omitted from JSON for plain mono transcription to keep responses small.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub speaker: Option<u32>,
+}
+
+/// Pause gap that triggers a new natural segment (seconds). Chosen to split
+/// typical conversational pauses without fragmenting normal word spacing.
+const SEGMENT_PAUSE_THRESHOLD_S: f64 = 0.9;
+
+/// Maximum duration of a natural segment (seconds). Utterances longer than
+/// this are split even when no pause, punctuation, or speaker change occurred.
+const MAX_SEGMENT_DURATION_S: f64 = 30.0;
+
+/// Sentence-ending punctuation that forces a segment boundary after the word
+/// that carries it.
+const SEGMENT_SENTENCE_END_PUNCTUATION: &[char] = &['.', '!', '?'];
+
+/// Return the common speaker label for a group of words, if all words share
+/// the same non-`None` speaker. Used to populate `Segment::speaker` only when
+/// diarization or channel split produced labels.
+fn segment_speaker(words: &[WordInfo]) -> Option<u32> {
+    let first = words.first()?.speaker?;
+    if words.iter().all(|w| w.speaker == Some(first)) {
+        Some(first)
+    } else {
+        None
+    }
 }
 
 /// Group words into caption cues with speaker-aware line breaking.
@@ -331,9 +360,74 @@ pub fn to_segments(words: &[WordInfo], max_chars: usize, max_words: usize) -> Ve
             start: cue.start,
             end: cue.end,
             text: cue.text,
-            words: cue.words,
+            words: cue.words.clone(),
+            speaker: segment_speaker(&cue.words),
         })
         .collect()
+}
+
+/// Group a word list into natural transcript segments using pause, sentence-end
+/// punctuation, speaker change, and a maximum duration boundary.
+///
+/// This is the segmenter behind `POST /v1/transcribe?segments=true`. It is kept
+/// separate from the SRT/VTT cue builder so subtitle line-breaking can remain
+/// driven by `max_chars_per_line` / `max_words_per_line` while the JSON segment
+/// array uses conversation-level boundaries.
+pub fn to_transcript_segments(words: &[WordInfo]) -> Vec<Segment> {
+    build_segments(words)
+}
+
+fn build_segments(words: &[WordInfo]) -> Vec<Segment> {
+    if words.is_empty() {
+        return Vec::new();
+    }
+
+    let mut segments = Vec::new();
+    let mut current = Segment {
+        start: words[0].start,
+        end: words[0].end,
+        text: words[0].word.clone(),
+        words: vec![words[0].clone()],
+        speaker: words[0].speaker,
+    };
+
+    for i in 1..words.len() {
+        let word = &words[i];
+        let prev = &words[i - 1];
+
+        let pause = word.start - prev.end;
+        let speaker_changed = word.speaker != prev.speaker;
+        let prev_ended_sentence = prev
+            .word
+            .trim_end()
+            .ends_with(SEGMENT_SENTENCE_END_PUNCTUATION);
+        let would_exceed_duration = word.end - current.start > MAX_SEGMENT_DURATION_S;
+
+        if pause > SEGMENT_PAUSE_THRESHOLD_S
+            || speaker_changed
+            || prev_ended_sentence
+            || would_exceed_duration
+        {
+            current.speaker = segment_speaker(&current.words);
+            segments.push(current);
+            current = Segment {
+                start: word.start,
+                end: word.end,
+                text: word.word.clone(),
+                words: vec![word.clone()],
+                speaker: word.speaker,
+            };
+        } else {
+            current.text.push(' ');
+            current.text.push_str(&word.word);
+            current.end = word.end;
+            current.words.push(word.clone());
+        }
+    }
+
+    current.speaker = segment_speaker(&current.words);
+    segments.push(current);
+    segments
 }
 
 /// Segment-grouped Markdown: `### [mm:ss]` (or `[hh:mm:ss]` past one hour)
@@ -814,5 +908,113 @@ mod tests {
         let srt = to_srt(&words, 0, 5);
         let srt_cues = srt.matches("-->").count();
         assert_eq!(segments.len(), srt_cues);
+    }
+
+    // -----------------------------------------------------------------------
+    // Natural-boundary transcript segmenter (`to_transcript_segments`)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_to_transcript_segments_empty() {
+        let words: Vec<WordInfo> = Vec::new();
+        let segments = to_transcript_segments(&words);
+        assert!(segments.is_empty());
+    }
+
+    #[test]
+    fn test_to_transcript_segments_single_word() {
+        let words = vec![WordInfo::new("привет", 0.0, 0.5, 0.98, None)];
+        let segments = to_transcript_segments(&words);
+        assert_eq!(segments.len(), 1);
+        assert_eq!(segments[0].start, 0.0);
+        assert_eq!(segments[0].end, 0.5);
+        assert_eq!(segments[0].text, "привет");
+        assert_eq!(segments[0].words.len(), 1);
+        assert_eq!(segments[0].speaker, None);
+    }
+
+    #[test]
+    fn test_to_transcript_segments_split_on_pause() {
+        // 1.1 s gap between the two words crosses the 0.9 s pause threshold.
+        let words = vec![
+            WordInfo::new("привет", 0.0, 0.5, 0.98, None),
+            WordInfo::new("мир", 1.6, 2.0, 0.97, None),
+        ];
+        let segments = to_transcript_segments(&words);
+        assert_eq!(segments.len(), 2);
+        assert_eq!(segments[0].text, "привет");
+        assert_eq!(segments[1].text, "мир");
+    }
+
+    #[test]
+    fn test_to_transcript_segments_split_on_punctuation() {
+        // "привет." ends a sentence, so the next word starts a new segment.
+        let words = vec![
+            WordInfo::new("привет.", 0.0, 0.5, 0.98, None),
+            WordInfo::new("мир", 0.6, 1.0, 0.97, None),
+            WordInfo::new("как", 1.1, 1.5, 0.96, None),
+        ];
+        let segments = to_transcript_segments(&words);
+        assert_eq!(segments.len(), 2);
+        assert_eq!(segments[0].text, "привет.");
+        assert_eq!(segments[1].text, "мир как");
+    }
+
+    #[test]
+    fn test_to_transcript_segments_split_on_speaker_change() {
+        let words = vec![
+            WordInfo::new("привет", 0.0, 0.5, 0.98, Some(0)),
+            WordInfo::new("мир", 0.6, 1.0, 0.97, Some(1)),
+        ];
+        let segments = to_transcript_segments(&words);
+        assert_eq!(segments.len(), 2);
+        assert_eq!(segments[0].speaker, Some(0));
+        assert_eq!(segments[1].speaker, Some(1));
+    }
+
+    #[test]
+    fn test_to_transcript_segments_split_on_max_duration() {
+        // Generate 35 words with gaps just under the pause threshold so the
+        // only reason to split is the 30 s duration cap.
+        let words: Vec<WordInfo> = (0..35)
+            .map(|i| {
+                let start = i as f64 * 0.89;
+                WordInfo::new(format!("word{i}"), start, start + 0.1, 0.95, None)
+            })
+            .collect();
+        let segments = to_transcript_segments(&words);
+        assert_eq!(segments.len(), 2);
+        assert_eq!(segments[0].start, 0.0);
+        // The first segment ends where the 30 s cap is crossed.
+        assert!(segments[0].end <= 30.0, "first segment exceeds cap");
+        assert_eq!(
+            segments[1].start,
+            segments[0].words.last().unwrap().end + 0.79
+        );
+        // Every word is accounted for exactly once.
+        let total: usize = segments.iter().map(|s| s.words.len()).sum();
+        assert_eq!(total, 35);
+    }
+
+    #[test]
+    fn test_to_transcript_segments_speaker_omitted_when_none() {
+        let words = vec![
+            WordInfo::new("привет", 0.0, 0.5, 0.98, None),
+            WordInfo::new("мир", 0.6, 1.0, 0.97, None),
+        ];
+        let segments = to_transcript_segments(&words);
+        let json = serde_json::to_value(&segments).unwrap();
+        assert!(json[0].get("speaker").is_none());
+    }
+
+    #[test]
+    fn test_to_transcript_segments_speaker_present_when_diarized() {
+        let words = vec![
+            WordInfo::new("привет", 0.0, 0.5, 0.98, Some(0)),
+            WordInfo::new("мир", 0.6, 1.0, 0.97, Some(0)),
+        ];
+        let segments = to_transcript_segments(&words);
+        let json = serde_json::to_value(&segments).unwrap();
+        assert_eq!(json[0]["speaker"], 0);
     }
 }
