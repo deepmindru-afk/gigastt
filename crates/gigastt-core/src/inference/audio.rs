@@ -42,7 +42,7 @@ const MAX_DECODE_SAMPLE_RATE: u32 = 48_000;
 /// Some PBXs record the same mixed call to both channels of a "stereo" file.
 /// Transcribing them as independent speakers would duplicate every word, so
 /// when the two channels are nearly identical we fall back to the mono path.
-const DUAL_MONO_CORRELATION_THRESHOLD: f32 = 0.98;
+const DUAL_MONO_CORRELATION_THRESHOLD: f64 = 0.98;
 
 /// Maximum number of decoded samples allowed for `sample_rate`, the budget used
 /// by both the duration cap and the up-front capacity hint. The header rate is
@@ -339,6 +339,10 @@ fn decode_audio_inner_channels<'s>(
         let num_frames = decoded.frames();
         let ch = spec.channels().count();
 
+        if ch > per_channel.len() {
+            per_channel.resize_with(ch, Vec::new);
+        }
+
         if ch > 1 {
             let mut interleaved: Vec<f32> = Vec::with_capacity(num_frames * ch);
             decoded.copy_to_vec_interleaved(&mut interleaved);
@@ -383,6 +387,8 @@ fn decode_audio_inner_channels<'s>(
                     .context("Resampling failed")
             })
             .collect::<Result<Vec<_>>>()?;
+        let channels = per_channel.len();
+        tracing::info!("Resampled {channels} channel(s) to 16kHz");
     }
 
     Ok(per_channel)
@@ -413,7 +419,7 @@ pub fn is_dual_mono(channels: &[Vec<f32>]) -> bool {
         return false;
     }
     let len = left.len().min(right.len());
-    normalized_correlation(&left[..len], &right[..len]) > DUAL_MONO_CORRELATION_THRESHOLD as f64
+    normalized_correlation(&left[..len], &right[..len]) > DUAL_MONO_CORRELATION_THRESHOLD
 }
 
 fn normalized_correlation(a: &[f32], b: &[f32]) -> f64 {
@@ -1412,6 +1418,41 @@ mod tests {
         let mono = mix_channels_to_mono(&[left, right]);
         assert_eq!(mono.len(), 1);
         assert!(mono[0].abs() < 0.001);
+    }
+
+    #[test]
+    fn test_is_dual_mono_empty_channels_returns_false() {
+        assert!(!is_dual_mono(&[]));
+    }
+
+    #[test]
+    fn test_is_dual_mono_single_channel_returns_false() {
+        let samples: Vec<f32> = (0..100).map(|i| (i as f32 * 0.01).sin()).collect();
+        assert!(!is_dual_mono(&[samples]));
+    }
+
+    #[test]
+    fn test_mix_channels_to_mono_empty_input() {
+        let mono = mix_channels_to_mono(&[]);
+        assert!(mono.is_empty());
+    }
+
+    #[test]
+    fn test_decode_audio_bytes_shared_channels_mono_input() {
+        // A mono WAV fed through the split decoder must return exactly one
+        // channel whose samples match the regular mono decode path.
+        let samples: Vec<i16> = (0..8000).map(|i| (i as f32 * 0.1).sin() as i16).collect();
+        let wav = make_wav_bytes(&samples, 16000);
+        let mono = decode_audio_bytes(&wav).unwrap();
+        let channels = decode_audio_bytes_shared_channels(Bytes::copy_from_slice(&wav)).unwrap();
+        assert_eq!(channels.len(), 1);
+        assert_eq!(channels[0].len(), mono.len());
+        for (a, b) in channels[0].iter().zip(mono.iter()) {
+            assert!(
+                (a - b).abs() < 1e-5,
+                "split mono decode diverged: {a} vs {b}"
+            );
+        }
     }
 
     // --- resample_with_cache tests ---
