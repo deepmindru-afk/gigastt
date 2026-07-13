@@ -292,7 +292,8 @@ paths:
             type: boolean
           description: >-
             Request polyvoice speaker diarization. Mutually exclusive with
-            `channels=split`; returns 400 if both are set.
+            `channels=split`; returns 400 with code `conflicting_modes` if both
+            are set.
       requestBody:
         required: true
         content:
@@ -334,12 +335,15 @@ paths:
                   - word: "привет"
                     start: 0.5
                     end: 0.8
+                    speaker: 0
                   - word: "как"
                     start: 0.9
                     end: 1.0
+                    speaker: 1
                   - word: "дела"
                     start: 1.1
                     end: 1.4
+                    speaker: 0
                 duration: 2.5
             text/plain:
               schema:
