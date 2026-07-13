@@ -360,6 +360,7 @@ All CLI flags have corresponding env vars:
 | `GIGASTT_MAX_CHARS_PER_LINE` | `transcribe --max-chars-per-line` | — |
 | `GIGASTT_MAX_WORDS_PER_LINE` | `transcribe --max-words-per-line` | — |
 | `GIGASTT_WORD_TIMESTAMPS` | `transcribe --word-timestamps` | false |
+| `GIGASTT_STEREO_SPEAKERS` | `--stereo-speakers` | false |
 | `RUST_LOG` | — | `gigastt=info` |
 
 ## Useful Commands for Agents
