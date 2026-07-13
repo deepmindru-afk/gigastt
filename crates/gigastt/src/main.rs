@@ -1193,26 +1193,21 @@ async fn main() -> anyhow::Result<()> {
             log_rss();
             let mut guard = engine.pool.checkout().await?;
             let result = if stereo_speakers {
-                let channels = inference::audio::load_audio_channels(&file)
-                    .map_err(|e| anyhow::anyhow!("{e:#}"))?;
-                match channels.len() {
-                    1 => {
-                        tracing::warn!(
-                            "Mono audio with --stereo-speakers; falling back to mono transcription"
-                        );
-                        engine.transcribe_file(&file, &mut guard)
-                    }
-                    2 if inference::audio::is_dual_mono(&channels) => {
-                        tracing::warn!(
-                            "Dual-mono audio detected; falling back to mono transcription"
-                        );
-                        engine.transcribe_file(&file, &mut guard)
-                    }
-                    n if n > 2 => {
-                        tracing::warn!("{n} channels with --stereo-speakers; mixing to mono");
-                        engine.transcribe_file(&file, &mut guard)
-                    }
-                    _ => engine.transcribe_channels(&channels, &mut guard),
+                let channels = inference::audio::load_audio_channels(&file)?;
+                let fallback_reason = match channels.len() {
+                    0 => Some("no channels"),
+                    1 => Some("mono audio"),
+                    2 if inference::audio::is_dual_mono(&channels) => Some("dual-mono audio"),
+                    n if n > 2 => Some("more than two channels"),
+                    _ => None,
+                };
+                if let Some(reason) = fallback_reason {
+                    tracing::warn!(
+                        "--stereo-speakers requested but {reason} detected; falling back to mono transcription"
+                    );
+                    engine.transcribe_file(&file, &mut guard)
+                } else {
+                    engine.transcribe_channels(&channels, &mut guard)
                 }
             } else {
                 engine.transcribe_file(&file, &mut guard)
