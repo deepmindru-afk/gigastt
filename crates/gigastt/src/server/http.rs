@@ -15,6 +15,7 @@ use std::sync::Arc;
 use arc_swap::ArcSwap;
 
 use super::config::{RuntimeLimits, pool_retry_after_ms, pool_retry_after_secs};
+use super::jobs::{JobEvent, JobQueue, JobStatus, JobStore};
 use super::metrics::MetricsRegistry;
 use gigastt_core::export::{ExportFormat, RenderOpts, Segment};
 use gigastt_core::inference::Engine;
@@ -49,6 +50,18 @@ pub struct AppState {
     pub metrics_registry: Option<Arc<MetricsRegistry>>,
     pub shutdown: tokio_util::sync::CancellationToken,
     pub tracker: tokio_util::task::TaskTracker,
+    /// In-memory job store and queue. `Some` only when `--enable-jobs` is set;
+    /// handlers for `/v1/jobs` are registered conditionally and expect this to
+    /// be populated, but the shared state is `Option` so non-job builds compile.
+    pub jobs: Option<JobServerState>,
+}
+
+/// State shared by the `/v1/jobs` handlers. Kept behind `Arc` so the executor,
+/// queue, and handlers all reference the same store.
+#[derive(Clone)]
+pub struct JobServerState {
+    pub store: Arc<dyn JobStore>,
+    pub queue: Arc<JobQueue>,
 }
 
 /// Recipe that rebuilds a fully-configured [`Engine`] from the operator's boot
@@ -1099,6 +1112,304 @@ pub async fn reload(
         .into_response()
 }
 
+/// POST /v1/jobs response.
+#[derive(Serialize)]
+pub struct JobSubmitResponse {
+    pub job_id: String,
+    pub status: &'static str,
+    pub created_at: f64,
+}
+
+/// Build a public status view from a stored job.
+fn job_status_response(job: &super::jobs::Job) -> super::jobs::JobStatusResponse {
+    let percent = if job.total_seconds > 0.0 {
+        ((job.processed_seconds / job.total_seconds) * 100.0) as u32
+    } else {
+        0
+    };
+    super::jobs::JobStatusResponse {
+        job_id: job.id.clone(),
+        status: job.status,
+        processed_seconds: job.processed_seconds,
+        percent,
+        error: job.error.clone(),
+    }
+}
+
+/// POST /v1/jobs — enqueue a long audio file for asynchronous transcription.
+///
+/// Accepts the same body and query parameters as `/v1/transcribe`. Returns 202
+/// with the job id; use `GET /v1/jobs/{id}` to poll and
+/// `GET /v1/jobs/{id}/result` to fetch the finished transcript.
+pub async fn submit_job(
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<ExportParams>,
+    body: Bytes,
+) -> Result<Response, ApiError> {
+    let Some(ref jobs) = state.jobs else {
+        return Err(api_error(
+            StatusCode::NOT_FOUND,
+            "Job API is not enabled",
+            "jobs_disabled",
+        ));
+    };
+    let limits = state.limits.load();
+    if body.is_empty() {
+        return Err(api_error(
+            StatusCode::BAD_REQUEST,
+            "Empty request body",
+            "empty_body",
+        ));
+    }
+    if body.len() > limits.body_limit_bytes {
+        return Err(api_error(
+            StatusCode::PAYLOAD_TOO_LARGE,
+            "Request body exceeds the configured size limit",
+            "payload_too_large",
+        ));
+    }
+    if jobs.store.is_full().await {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            [(
+                header::RETRY_AFTER,
+                pool_retry_after_secs(&limits).to_string(),
+            )],
+            Json(serde_json::json!({
+                "error": "Job queue is full",
+                "code": "queue_full",
+                "retry_after_ms": pool_retry_after_ms(&limits),
+            })),
+        )
+            .into_response());
+    }
+    let job = super::jobs::Job::queued(body, params);
+    let created_at = job.created_at;
+    let id = match jobs.store.create(job).await {
+        Ok(id) => id,
+        Err(e) => {
+            tracing::error!("Failed to create job: {e:#}");
+            return Err(api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to enqueue job",
+                "internal",
+            ));
+        }
+    };
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(JobSubmitResponse {
+            job_id: id,
+            status: "queued",
+            created_at,
+        }),
+    )
+        .into_response())
+}
+
+/// GET /v1/jobs/{id} — poll job status and progress.
+pub async fn get_job(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Result<Response, ApiError> {
+    let Some(ref jobs) = state.jobs else {
+        return Err(api_error(
+            StatusCode::NOT_FOUND,
+            "Job API is not enabled",
+            "jobs_disabled",
+        ));
+    };
+    match jobs.store.get(&id).await {
+        Ok(Some(job)) => Ok(Json(job_status_response(&job)).into_response()),
+        Ok(None) => Err(api_error(
+            StatusCode::NOT_FOUND,
+            "Job not found",
+            "job_not_found",
+        )),
+        Err(e) => {
+            tracing::error!("Failed to get job {id}: {e:#}");
+            Err(api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to read job status",
+                "internal",
+            ))
+        }
+    }
+}
+
+/// GET /v1/jobs/{id}/result — fetch the finished transcription.
+pub async fn get_job_result(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Result<Response, ApiError> {
+    let Some(ref jobs) = state.jobs else {
+        return Err(api_error(
+            StatusCode::NOT_FOUND,
+            "Job API is not enabled",
+            "jobs_disabled",
+        ));
+    };
+    let job = match jobs.store.get(&id).await {
+        Ok(Some(job)) => job,
+        Ok(None) => {
+            return Err(api_error(
+                StatusCode::NOT_FOUND,
+                "Job not found",
+                "job_not_found",
+            ));
+        }
+        Err(e) => {
+            tracing::error!("Failed to get job {id}: {e:#}");
+            return Err(api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to read job result",
+                "internal",
+            ));
+        }
+    };
+    if !matches!(job.status, JobStatus::Done) {
+        return Err(api_error(
+            StatusCode::CONFLICT,
+            "Job is not finished",
+            "job_not_finished",
+        ));
+    }
+    let result = job.result.expect("Done job has result");
+    if let Some(rendered) = render_export_response(&result, &job.params)? {
+        Ok(rendered)
+    } else {
+        let segments = if job.params.segments.unwrap_or(false) {
+            Some(gigastt_core::export::to_transcript_segments(&result.words))
+        } else {
+            None
+        };
+        Ok(Json(TranscribeResponse {
+            text: result.text,
+            words: result.words,
+            duration: result.duration_s,
+            segments,
+        })
+        .into_response())
+    }
+}
+
+/// DELETE /v1/jobs/{id} — cancel a queued or processing job.
+pub async fn cancel_job(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Result<Response, ApiError> {
+    let Some(ref jobs) = state.jobs else {
+        return Err(api_error(
+            StatusCode::NOT_FOUND,
+            "Job API is not enabled",
+            "jobs_disabled",
+        ));
+    };
+    let job = match jobs.store.get(&id).await {
+        Ok(Some(job)) => job,
+        Ok(None) => {
+            return Err(api_error(
+                StatusCode::NOT_FOUND,
+                "Job not found",
+                "job_not_found",
+            ));
+        }
+        Err(e) => {
+            tracing::error!("Failed to get job {id}: {e:#}");
+            return Err(api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to read job status",
+                "internal",
+            ));
+        }
+    };
+    if !matches!(job.status, JobStatus::Queued | JobStatus::Processing) {
+        return Err(api_error(
+            StatusCode::CONFLICT,
+            "Job cannot be cancelled",
+            "job_not_cancellable",
+        ));
+    }
+    let _ = jobs
+        .store
+        .update(
+            &id,
+            Box::new(|j| {
+                j.status = JobStatus::Cancelled;
+            }),
+        )
+        .await;
+    super::jobs::broadcast_event(&*jobs.store, &id, JobEvent::Cancelled).await;
+    Ok(StatusCode::NO_CONTENT.into_response())
+}
+
+/// GET /v1/jobs/{id}/events — SSE stream of progress / done / failed / cancelled.
+pub async fn job_events(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Result<Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>, ApiError> {
+    let Some(ref jobs) = state.jobs else {
+        return Err(api_error(
+            StatusCode::NOT_FOUND,
+            "Job API is not enabled",
+            "jobs_disabled",
+        ));
+    };
+    let job = match jobs.store.get(&id).await {
+        Ok(Some(job)) => job,
+        Ok(None) => {
+            return Err(api_error(
+                StatusCode::NOT_FOUND,
+                "Job not found",
+                "job_not_found",
+            ));
+        }
+        Err(e) => {
+            tracing::error!("Failed to get job {id}: {e:#}");
+            return Err(api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to read job events",
+                "internal",
+            ));
+        }
+    };
+
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<JobEvent>();
+    if job.status.is_terminal() {
+        let event = match job.status {
+            JobStatus::Done => JobEvent::Done,
+            JobStatus::Failed => JobEvent::Failed {
+                error: job
+                    .error
+                    .clone()
+                    .unwrap_or_else(|| "Transcription failed.".into()),
+            },
+            JobStatus::Cancelled => JobEvent::Cancelled,
+            _ => unreachable!(),
+        };
+        let _ = tx.send(event);
+    } else {
+        let _ = jobs
+            .store
+            .update(
+                &id,
+                Box::new(move |j| {
+                    j.event_channels.push(tx);
+                }),
+            )
+            .await;
+    }
+
+    let stream = tokio_stream::wrappers::UnboundedReceiverStream::new(rx)
+        .map(|event| Ok(Event::default().data(serde_json::to_string(&event).unwrap_or_default())));
+
+    Ok(Sse::new(stream).keep_alive(
+        KeepAlive::new()
+            .interval(std::time::Duration::from_secs(15))
+            .text(""),
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1307,6 +1618,7 @@ mod tests {
             reload_lock: Arc::new(tokio::sync::Mutex::new(())),
             shutdown: tokio_util::sync::CancellationToken::new(),
             tracker: tokio_util::task::TaskTracker::new(),
+            jobs: None,
         });
         state.shutdown.cancel();
         let resp = readiness(State(state)).await;
@@ -1332,6 +1644,7 @@ mod tests {
             reload_lock: Arc::new(tokio::sync::Mutex::new(())),
             shutdown: tokio_util::sync::CancellationToken::new(),
             tracker: tokio_util::task::TaskTracker::new(),
+            jobs: None,
         });
         let resp = readiness(State(state)).await;
         assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
@@ -1355,6 +1668,7 @@ mod tests {
             reload_lock: Arc::new(tokio::sync::Mutex::new(())),
             shutdown: tokio_util::sync::CancellationToken::new(),
             tracker: tokio_util::task::TaskTracker::new(),
+            jobs: None,
         });
         let body = Bytes::from(vec![0u8; 100]);
         let result = transcribe(State(state), Query(ExportParams::default()), body).await;
@@ -1375,6 +1689,7 @@ mod tests {
             reload_lock: Arc::new(tokio::sync::Mutex::new(())),
             shutdown: tokio_util::sync::CancellationToken::new(),
             tracker: tokio_util::task::TaskTracker::new(),
+            jobs: None,
         });
         let params = ExportParams {
             channels: Some("split".into()),
@@ -1401,6 +1716,7 @@ mod tests {
             reload_lock: Arc::new(tokio::sync::Mutex::new(())),
             shutdown: tokio_util::sync::CancellationToken::new(),
             tracker: tokio_util::task::TaskTracker::new(),
+            jobs: None,
         });
         let resp = models(State(state)).await;
         let json = serde_json::to_value(&*resp).unwrap();
@@ -1432,6 +1748,7 @@ mod tests {
             reload_lock: Arc::new(tokio::sync::Mutex::new(())),
             shutdown: tokio_util::sync::CancellationToken::new(),
             tracker: tokio_util::task::TaskTracker::new(),
+            jobs: None,
         });
         let resp = readiness(State(state)).await;
         assert_eq!(resp.status(), StatusCode::OK);
@@ -1450,6 +1767,7 @@ mod tests {
             reload_lock: Arc::new(tokio::sync::Mutex::new(())),
             shutdown: tokio_util::sync::CancellationToken::new(),
             tracker: tokio_util::task::TaskTracker::new(),
+            jobs: None,
         });
         let body = Bytes::from(vec![0u8; 100]);
         let result = transcribe(State(state), Query(ExportParams::default()), body).await;
@@ -1470,6 +1788,7 @@ mod tests {
             reload_lock: Arc::new(tokio::sync::Mutex::new(())),
             shutdown: tokio_util::sync::CancellationToken::new(),
             tracker: tokio_util::task::TaskTracker::new(),
+            jobs: None,
         });
         let body = Bytes::from(vec![0u8; 100]);
         let result = transcribe_stream(State(state), body).await;
@@ -1493,6 +1812,7 @@ mod tests {
             reload_lock: Arc::new(tokio::sync::Mutex::new(())),
             shutdown: tokio_util::sync::CancellationToken::new(),
             tracker: tokio_util::task::TaskTracker::new(),
+            jobs: None,
         });
         let body = Bytes::from(vec![0u8; 100]);
         let result = transcribe_stream(State(state), body).await;
@@ -1515,6 +1835,7 @@ mod tests {
             reload_lock: Arc::new(tokio::sync::Mutex::new(())),
             shutdown: tokio_util::sync::CancellationToken::new(),
             tracker: tokio_util::task::TaskTracker::new(),
+            jobs: None,
         });
         let body = minimal_wav();
         let result = transcribe_stream(State(state), body).await;
@@ -1535,6 +1856,7 @@ mod tests {
             reload_lock: Arc::new(tokio::sync::Mutex::new(())),
             shutdown: tokio_util::sync::CancellationToken::new(),
             tracker: tokio_util::task::TaskTracker::new(),
+            jobs: None,
         });
         let body = short_wav();
         match transcribe(State(state), Query(ExportParams::default()), body).await {
@@ -1554,6 +1876,7 @@ mod tests {
             reload_lock: Arc::new(tokio::sync::Mutex::new(())),
             shutdown: tokio_util::sync::CancellationToken::new(),
             tracker: tokio_util::task::TaskTracker::new(),
+            jobs: None,
         });
         let body = short_wav();
         match transcribe_stream(State(state), body).await {
@@ -1576,6 +1899,7 @@ mod tests {
             reload_lock: Arc::new(tokio::sync::Mutex::new(())),
             shutdown: tokio_util::sync::CancellationToken::new(),
             tracker: tokio_util::task::TaskTracker::new(),
+            jobs: None,
         });
         let params = ExportParams {
             segments: Some(true),
@@ -2079,6 +2403,7 @@ mod tests {
             metrics_registry: None,
             shutdown: tokio_util::sync::CancellationToken::new(),
             tracker: tokio_util::task::TaskTracker::new(),
+            jobs: None,
         });
         let peer = SocketAddr::from((Ipv4Addr::new(203, 0, 113, 7), 40000));
         let resp = reload(axum::extract::ConnectInfo(peer), State(state)).await;
@@ -2102,6 +2427,7 @@ mod tests {
             metrics_registry: None,
             shutdown: tokio_util::sync::CancellationToken::new(),
             tracker: tokio_util::task::TaskTracker::new(),
+            jobs: None,
         });
         let peer = SocketAddr::from((Ipv4Addr::LOCALHOST, 40000));
         let resp = reload(axum::extract::ConnectInfo(peer), State(state)).await;
