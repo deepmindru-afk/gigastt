@@ -276,6 +276,23 @@ paths:
             expects. A single-model server can't switch heads, so any value
             other than the loaded variant returns `409 variant_not_loaded`;
             matching or absent proceeds. This endpoint only.
+        - name: channels
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [split]
+          description: >-
+            Use `split` to transcribe the left and right channels as separate
+            speakers (`speaker_0` and `speaker_1`). Defaults to mono mix.
+        - name: diarization
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: >-
+            Request polyvoice speaker diarization. Mutually exclusive with
+            `channels=split`; returns 400 if both are set.
       requestBody:
         required: true
         content:
@@ -658,6 +675,9 @@ components:
           format: double
           example: 0.8
           description: Word end time in seconds
+        speaker:
+          type: integer
+          description: Zero-based speaker index (only present when channel split or diarization produced speaker labels)
 
     ErrorResponse:
       type: object
