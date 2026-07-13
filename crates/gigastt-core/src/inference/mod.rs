@@ -1983,7 +1983,7 @@ impl Engine {
             }
         }
 
-        let mut result = self.finish_transcribe_result(words, duration_s, overrides);
+        let result = self.finish_transcribe_result(words, duration_s, overrides);
 
         let wall_s = wall_start.elapsed().as_secs_f64();
         let rtf = if duration_s > 0.0 {
