@@ -923,3 +923,152 @@ async fn test_transcribe_itn_false_overrides_boot_on() {
 
     let _ = shutdown.send(());
 }
+
+// ---------------------------------------------------------------------------
+// 17. Channel-split transcription (`channels=split`)
+// ---------------------------------------------------------------------------
+
+#[ignore]
+#[tokio::test]
+async fn test_transcribe_channels_split_returns_speakers_and_ordered_words() {
+    let (port, shutdown) = common::start_server(&common::model_dir()).await;
+    let wav = common::generate_stereo_wav_split(
+        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/golos_00.wav"),
+        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/golos_01.wav"),
+    );
+
+    let resp = tokio::time::timeout(Duration::from_secs(60), async {
+        reqwest::Client::new()
+            .post(format!(
+                "http://127.0.0.1:{port}/v1/transcribe?channels=split"
+            ))
+            .body(wav)
+            .send()
+            .await
+            .expect("POST /v1/transcribe failed")
+    })
+    .await
+    .expect("POST /v1/transcribe timed out");
+
+    assert_eq!(resp.status(), 200);
+    let text = resp.text().await.expect("expected text body");
+    let body: serde_json::Value = serde_json::from_str(&text).expect("expected JSON");
+    let words = body["words"].as_array().expect("words array");
+    assert!(!words.is_empty());
+
+    let mut last_start = -1.0_f64;
+    let mut saw_speaker_0 = false;
+    let mut saw_speaker_1 = false;
+    for w in words {
+        let speaker = w["speaker"].as_u64().expect("speaker should be present");
+        assert!(speaker == 0 || speaker == 1);
+        let start = w["start"].as_f64().expect("start number");
+        assert!(start >= last_start, "words must be ordered by start time");
+        last_start = start;
+        if speaker == 0 {
+            saw_speaker_0 = true;
+        } else {
+            saw_speaker_1 = true;
+        }
+    }
+    assert!(saw_speaker_0, "expected at least one speaker_0 word");
+    assert!(saw_speaker_1, "expected at least one speaker_1 word");
+
+    let _ = shutdown.send(());
+}
+
+#[ignore]
+#[tokio::test]
+async fn test_transcribe_channels_split_mono_fallback() {
+    let (port, shutdown) = common::start_server(&common::model_dir()).await;
+    let wav = common::generate_wav(1, 16000);
+
+    let resp = tokio::time::timeout(Duration::from_secs(60), async {
+        reqwest::Client::new()
+            .post(format!(
+                "http://127.0.0.1:{port}/v1/transcribe?channels=split"
+            ))
+            .body(wav)
+            .send()
+            .await
+            .expect("POST /v1/transcribe failed")
+    })
+    .await
+    .expect("POST /v1/transcribe timed out");
+
+    assert_eq!(resp.status(), 200);
+    let text = resp.text().await.expect("expected text body");
+    let body: serde_json::Value = serde_json::from_str(&text).expect("expected JSON");
+    let words = body["words"].as_array().expect("words array");
+    for w in words {
+        assert!(
+            w["speaker"].is_null(),
+            "mono fallback must not emit speaker"
+        );
+    }
+
+    let _ = shutdown.send(());
+}
+
+#[ignore]
+#[tokio::test]
+async fn test_transcribe_channels_split_dual_mono_fallback() {
+    let (port, shutdown) = common::start_server(&common::model_dir()).await;
+    let wav = common::generate_dual_mono_wav(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/golos_00.wav"
+    ));
+
+    let resp = tokio::time::timeout(Duration::from_secs(60), async {
+        reqwest::Client::new()
+            .post(format!(
+                "http://127.0.0.1:{port}/v1/transcribe?channels=split"
+            ))
+            .body(wav)
+            .send()
+            .await
+            .expect("POST /v1/transcribe failed")
+    })
+    .await
+    .expect("POST /v1/transcribe timed out");
+
+    assert_eq!(resp.status(), 200);
+    let text = resp.text().await.expect("expected text body");
+    let body: serde_json::Value = serde_json::from_str(&text).expect("expected JSON");
+    let words = body["words"].as_array().expect("words array");
+    for w in words {
+        assert!(
+            w["speaker"].is_null(),
+            "dual-mono fallback must not emit speaker"
+        );
+    }
+
+    let _ = shutdown.send(());
+}
+
+#[ignore]
+#[tokio::test]
+async fn test_transcribe_channels_split_with_diarization_returns_400() {
+    let (port, shutdown) = common::start_server(&common::model_dir()).await;
+    let wav = common::generate_wav(1, 16000);
+
+    let resp = tokio::time::timeout(Duration::from_secs(10), async {
+        reqwest::Client::new()
+            .post(format!(
+                "http://127.0.0.1:{port}/v1/transcribe?channels=split&diarization=true"
+            ))
+            .body(wav)
+            .send()
+            .await
+            .expect("POST /v1/transcribe failed")
+    })
+    .await
+    .expect("POST /v1/transcribe timed out");
+
+    assert_eq!(resp.status(), 400);
+    let text = resp.text().await.expect("expected text body");
+    let body: serde_json::Value = serde_json::from_str(&text).expect("expected JSON");
+    assert_eq!(body["code"], "conflicting_modes");
+
+    let _ = shutdown.send(());
+}
