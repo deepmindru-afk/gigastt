@@ -291,6 +291,88 @@ pub fn generate_pcm16_tone(duration_s: f32, sample_rate: u32, freq_hz: f32) -> V
     bytes
 }
 
+/// Build a stereo WAV where the left channel plays `left_path` in the first half
+/// and the right channel plays `right_path` in the second half. This gives a
+/// deterministic time-based speaker separation for channel-split tests.
+pub fn generate_stereo_wav_split(left_path: &str, right_path: &str) -> Vec<u8> {
+    let left = gigastt::inference::audio::decode_audio_file(left_path)
+        .expect("failed to decode left fixture");
+    let right = gigastt::inference::audio::decode_audio_file(right_path)
+        .expect("failed to decode right fixture");
+
+    let half = left.len().min(right.len());
+    let left = &left[..half];
+    let right = &right[..half];
+    let num_samples = half * 2;
+    let sample_rate = 16000u32;
+
+    let mut left_channel = vec![0.0_f32; num_samples];
+    let mut right_channel = vec![0.0_f32; num_samples];
+    left_channel[..half].copy_from_slice(left);
+    right_channel[half..].copy_from_slice(right);
+
+    let data_size = (num_samples * 4) as u32; // stereo 16-bit
+    let file_size = 44 + data_size;
+    let mut wav = Vec::with_capacity(file_size as usize);
+    wav.extend_from_slice(b"RIFF");
+    wav.extend_from_slice(&(file_size - 8).to_le_bytes());
+    wav.extend_from_slice(b"WAVE");
+    wav.extend_from_slice(b"fmt ");
+    wav.extend_from_slice(&16u32.to_le_bytes());
+    wav.extend_from_slice(&1u16.to_le_bytes()); // PCM
+    wav.extend_from_slice(&2u16.to_le_bytes()); // stereo
+    wav.extend_from_slice(&sample_rate.to_le_bytes());
+    wav.extend_from_slice(&(sample_rate * 4).to_le_bytes());
+    wav.extend_from_slice(&4u16.to_le_bytes());
+    wav.extend_from_slice(&16u16.to_le_bytes());
+    wav.extend_from_slice(b"data");
+    wav.extend_from_slice(&data_size.to_le_bytes());
+
+    for i in 0..num_samples {
+        let l = (left_channel[i] * 32767.0).clamp(-32768.0, 32767.0) as i16;
+        let r = (right_channel[i] * 32767.0).clamp(-32768.0, 32767.0) as i16;
+        wav.extend_from_slice(&l.to_le_bytes());
+        wav.extend_from_slice(&r.to_le_bytes());
+    }
+    wav
+}
+
+/// Build a dual-mono stereo WAV by copying the same mono fixture to both channels.
+pub fn generate_dual_mono_wav(path: &str) -> Vec<u8> {
+    let samples =
+        gigastt::inference::audio::decode_audio_file(path).expect("failed to decode fixture");
+    let i16_samples: Vec<i16> = samples
+        .iter()
+        .map(|&s| (s * 32767.0).clamp(-32768.0, 32767.0) as i16)
+        .collect();
+    make_stereo_wav_from_mono(&i16_samples, 16000)
+}
+
+fn make_stereo_wav_from_mono(samples: &[i16], sample_rate: u32) -> Vec<u8> {
+    let num_samples = samples.len();
+    let data_size = (num_samples * 4) as u32;
+    let file_size = 44 + data_size;
+    let mut wav = Vec::with_capacity(file_size as usize);
+    wav.extend_from_slice(b"RIFF");
+    wav.extend_from_slice(&(file_size - 8).to_le_bytes());
+    wav.extend_from_slice(b"WAVE");
+    wav.extend_from_slice(b"fmt ");
+    wav.extend_from_slice(&16u32.to_le_bytes());
+    wav.extend_from_slice(&1u16.to_le_bytes());
+    wav.extend_from_slice(&2u16.to_le_bytes());
+    wav.extend_from_slice(&sample_rate.to_le_bytes());
+    wav.extend_from_slice(&(sample_rate * 4).to_le_bytes());
+    wav.extend_from_slice(&4u16.to_le_bytes());
+    wav.extend_from_slice(&16u16.to_le_bytes());
+    wav.extend_from_slice(b"data");
+    wav.extend_from_slice(&data_size.to_le_bytes());
+    for &s in samples {
+        wav.extend_from_slice(&s.to_le_bytes());
+        wav.extend_from_slice(&s.to_le_bytes());
+    }
+    wav
+}
+
 /// Connect to WebSocket, receive Ready message, return (sink, stream, ready_value).
 pub async fn ws_connect(
     port: u16,

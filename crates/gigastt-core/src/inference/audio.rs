@@ -38,6 +38,12 @@ const MAX_SAMPLE_RATE: u32 = 192_000;
 #[cfg(feature = "file-decode")]
 const MAX_DECODE_SAMPLE_RATE: u32 = 48_000;
 
+/// Normalized cross-correlation threshold for dual-mono detection.
+/// Some PBXs record the same mixed call to both channels of a "stereo" file.
+/// Transcribing them as independent speakers would duplicate every word, so
+/// when the two channels are nearly identical we fall back to the mono path.
+const DUAL_MONO_CORRELATION_THRESHOLD: f64 = 0.98;
+
 /// Maximum number of decoded samples allowed for `sample_rate`, the budget used
 /// by both the duration cap and the up-front capacity hint. The header rate is
 /// clamped to [`MAX_DECODE_SAMPLE_RATE`] so a crafted header cannot inflate the
@@ -228,6 +234,216 @@ pub fn decode_audio_bytes_shared(data: Bytes) -> Result<Vec<f32>> {
     let mss = MediaSourceStream::new(Box::new(source), Default::default());
     let hint = Hint::new();
     decode_audio_inner(mss, hint, "bytes")
+}
+
+/// Decode an audio file to one f32 sample vector per channel at 16 kHz.
+///
+/// Same probe/decode/resample pipeline as [`decode_audio_file`], but keeps
+/// channels separate. The mono mix path remains unchanged.
+#[cfg(feature = "file-decode")]
+pub fn load_audio_channels(path: &str) -> Result<Vec<Vec<f32>>> {
+    let file =
+        std::fs::File::open(path).with_context(|| format!("Failed to open audio file: {path}"))?;
+    let mss = MediaSourceStream::new(Box::new(file), Default::default());
+
+    let mut hint = Hint::new();
+    if let Some(ext) = std::path::Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+    {
+        hint.with_extension(ext);
+    }
+
+    let source_label = format!(
+        "format={}",
+        std::path::Path::new(path)
+            .extension()
+            .unwrap_or_default()
+            .to_string_lossy()
+    );
+
+    decode_audio_inner_channels(mss, hint, &source_label)
+}
+
+/// Decode raw audio bytes to one f32 sample vector per channel at 16 kHz.
+#[cfg(feature = "file-decode")]
+pub fn decode_audio_bytes_shared_channels(data: Bytes) -> Result<Vec<Vec<f32>>> {
+    let source = BytesMediaSource::new(data);
+    let mss = MediaSourceStream::new(Box::new(source), Default::default());
+    decode_audio_inner_channels(mss, Hint::new(), "bytes")
+}
+
+/// Shared non-mixing decode: probe → format → decode → per-channel resample.
+#[cfg(feature = "file-decode")]
+fn decode_audio_inner_channels<'s>(
+    mss: MediaSourceStream<'s>,
+    hint: Hint,
+    source_label: &str,
+) -> Result<Vec<Vec<f32>>> {
+    let mut format = symphonia::default::get_probe()
+        .probe(
+            &hint,
+            mss,
+            FormatOptions::default(),
+            MetadataOptions::default(),
+        )
+        .context("Unsupported audio format")?;
+
+    let track = format
+        .default_track(TrackType::Audio)
+        .context("No audio track found")?;
+    let track_id = track.id;
+    let audio_params = track
+        .codec_params
+        .as_ref()
+        .and_then(|p| p.audio())
+        .context("No audio codec parameters")?;
+    let sample_rate = audio_params.sample_rate.context("Unknown sample rate")?;
+    if sample_rate == 0 || sample_rate > MAX_SAMPLE_RATE {
+        anyhow::bail!("Unsupported sample rate: {sample_rate}Hz");
+    }
+    let channels = audio_params
+        .channels
+        .as_ref()
+        .map(|c| c.count())
+        .unwrap_or(1);
+    let n_frames_hint = track.num_frames;
+    let max_samples = max_decode_samples(sample_rate);
+
+    tracing::info!("Audio ({source_label}): {sample_rate}Hz, {channels}ch (split)");
+
+    let mut decoder = symphonia::default::get_codecs()
+        .make_audio_decoder(audio_params, &AudioDecoderOptions::default())
+        .context("Unsupported audio codec")?;
+
+    let mut per_channel: Vec<Vec<f32>> = (0..channels)
+        .map(|_| match n_frames_hint {
+            Some(n) if n > 0 && n <= max_samples as u64 => Vec::with_capacity(n as usize),
+            _ => Vec::new(),
+        })
+        .collect();
+
+    loop {
+        let packet = match format.next_packet() {
+            Ok(Some(p)) => p,
+            Ok(None) => break,
+            Err(e) => return Err(anyhow::anyhow!("Error reading packet: {e}")),
+        };
+
+        if packet.track_id != track_id {
+            continue;
+        }
+
+        let decoded = decoder.decode(&packet).context("Decode error")?;
+        let spec = decoded.spec().clone();
+        let num_frames = decoded.frames();
+        let ch = spec.channels().count();
+
+        if ch > per_channel.len() {
+            per_channel.resize_with(ch, Vec::new);
+        }
+
+        if ch > 1 {
+            let mut interleaved: Vec<f32> = Vec::with_capacity(num_frames * ch);
+            decoded.copy_to_vec_interleaved(&mut interleaved);
+            for frame in 0..num_frames {
+                for c in 0..ch {
+                    per_channel[c].push(interleaved[frame * ch + c]);
+                }
+            }
+        } else if !per_channel.is_empty() {
+            let offset = per_channel[0].len();
+            per_channel[0].resize(offset + num_frames, 0.0);
+            decoded.copy_to_slice_interleaved(&mut per_channel[0][offset..]);
+        }
+
+        if per_channel.first().map(|v| v.len()).unwrap_or(0) > max_samples {
+            let observed_s =
+                per_channel.first().map(|v| v.len()).unwrap_or(0) as f64 / sample_rate as f64;
+            anyhow::bail!(
+                "Audio file too long ({:.0}s). Maximum supported: {MAX_DURATION_S:.0}s.",
+                observed_s
+            );
+        }
+    }
+
+    let duration_s = per_channel
+        .first()
+        .map(|v| v.len() as f64 / sample_rate as f64)
+        .unwrap_or(0.0);
+    tracing::info!(
+        "Decoded {} channel(s), first channel {} samples at {}Hz ({:.1}s)",
+        per_channel.len(),
+        per_channel.first().map(|v| v.len()).unwrap_or(0),
+        sample_rate,
+        duration_s
+    );
+
+    if sample_rate != 16000 {
+        per_channel = per_channel
+            .into_iter()
+            .map(|ch| {
+                resample(&ch, SampleRate(sample_rate), SampleRate(16000))
+                    .context("Resampling failed")
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let channels = per_channel.len();
+        tracing::info!("Resampled {channels} channel(s) to 16kHz");
+    }
+
+    Ok(per_channel)
+}
+
+/// Average multiple channels into a single mono vector.
+pub fn mix_channels_to_mono(channels: &[Vec<f32>]) -> Vec<f32> {
+    if channels.is_empty() {
+        return Vec::new();
+    }
+    if channels.len() == 1 {
+        return channels[0].clone();
+    }
+    let n = channels.iter().map(|c| c.len()).min().unwrap_or(0);
+    (0..n)
+        .map(|i| channels.iter().map(|c| c[i]).sum::<f32>() / channels.len() as f32)
+        .collect()
+}
+
+/// Return `true` if a two-channel stream is dual-mono (both channels nearly
+/// identical). Empty or single-channel input returns `false`.
+pub fn is_dual_mono(channels: &[Vec<f32>]) -> bool {
+    if channels.len() != 2 {
+        return false;
+    }
+    let (left, right) = (&channels[0], &channels[1]);
+    if left.is_empty() || right.is_empty() {
+        return false;
+    }
+    let len = left.len().min(right.len());
+    normalized_correlation(&left[..len], &right[..len]) > DUAL_MONO_CORRELATION_THRESHOLD
+}
+
+fn normalized_correlation(a: &[f32], b: &[f32]) -> f64 {
+    let n = a.len();
+    if n == 0 || n != b.len() {
+        return 0.0;
+    }
+    let mean_a = a.iter().map(|&x| x as f64).sum::<f64>() / n as f64;
+    let mean_b = b.iter().map(|&x| x as f64).sum::<f64>() / n as f64;
+    let mut cov = 0.0;
+    let mut var_a = 0.0;
+    let mut var_b = 0.0;
+    for (&x, &y) in a.iter().zip(b) {
+        let dx = x as f64 - mean_a;
+        let dy = y as f64 - mean_b;
+        cov += dx * dy;
+        var_a += dx * dx;
+        var_b += dy * dy;
+    }
+    let denom = var_a.sqrt() * var_b.sqrt();
+    if denom < 1e-12 {
+        return 0.0;
+    }
+    cov / denom
 }
 
 /// Shared decode logic: probe → format → decode → mono mix → duration check → resample.
@@ -1063,7 +1279,7 @@ mod tests {
 
     // --- stereo WAV helper + multi-channel mixing tests ---
 
-    fn make_stereo_wav_bytes(frames: &[(i16, i16)], sample_rate: u32) -> Vec<u8> {
+    fn make_stereo_wav_from_frames(frames: &[(i16, i16)], sample_rate: u32) -> Vec<u8> {
         let data_size = (frames.len() * 4) as u32; // 2 channels * 2 bytes
         let file_size = 36 + data_size;
         let mut buf = Vec::new();
@@ -1087,12 +1303,38 @@ mod tests {
         buf
     }
 
+    fn make_stereo_wav_bytes(left: &[i16], right: &[i16], sample_rate: u32) -> Vec<u8> {
+        assert_eq!(left.len(), right.len());
+        let num_samples = left.len();
+        let data_size = (num_samples * 4) as u32; // 2 channels * 2 bytes
+        let file_size = 36 + data_size;
+        let mut buf = Vec::with_capacity(file_size as usize);
+        buf.extend_from_slice(b"RIFF");
+        buf.extend_from_slice(&file_size.to_le_bytes());
+        buf.extend_from_slice(b"WAVE");
+        buf.extend_from_slice(b"fmt ");
+        buf.extend_from_slice(&16u32.to_le_bytes()); // chunk size
+        buf.extend_from_slice(&1u16.to_le_bytes()); // PCM
+        buf.extend_from_slice(&2u16.to_le_bytes()); // stereo
+        buf.extend_from_slice(&sample_rate.to_le_bytes());
+        buf.extend_from_slice(&(sample_rate * 4).to_le_bytes()); // byte rate
+        buf.extend_from_slice(&4u16.to_le_bytes()); // block align
+        buf.extend_from_slice(&16u16.to_le_bytes()); // bits per sample
+        buf.extend_from_slice(b"data");
+        buf.extend_from_slice(&data_size.to_le_bytes());
+        for i in 0..num_samples {
+            buf.extend_from_slice(&left[i].to_le_bytes());
+            buf.extend_from_slice(&right[i].to_le_bytes());
+        }
+        buf
+    }
+
     #[test]
     fn test_decode_stereo_mixes_to_mono() {
         // Left = +16384 (0.5), Right = -16384 (-0.5) → mono average ≈ 0.0.
         // Exercises the multi-channel mixing branch in decode_audio_inner.
         let frames: Vec<(i16, i16)> = vec![(16384, -16384); 16000];
-        let wav = make_stereo_wav_bytes(&frames, 16000);
+        let wav = make_stereo_wav_from_frames(&frames, 16000);
         let samples = decode_audio_bytes(&wav).unwrap();
         assert!(!samples.is_empty());
         // Output is mono (one sample per frame), not interleaved.
@@ -1107,7 +1349,7 @@ mod tests {
     fn test_decode_stereo_constant_preserves_value() {
         // Both channels carry the same value → mono mix preserves it.
         let frames: Vec<(i16, i16)> = vec![(8192, 8192); 8000];
-        let wav = make_stereo_wav_bytes(&frames, 16000);
+        let wav = make_stereo_wav_from_frames(&frames, 16000);
         let samples = decode_audio_bytes(&wav).unwrap();
         assert!(!samples.is_empty());
         for &s in &samples {
@@ -1130,6 +1372,87 @@ mod tests {
             "expected ~16000 after resample, got {}",
             samples.len()
         );
+    }
+
+    #[test]
+    fn test_decode_audio_bytes_shared_channels_8khz() {
+        let sample_rate = 8000u32;
+        let num_samples = sample_rate as usize;
+        let left: Vec<i16> = (0..num_samples)
+            .map(|i| ((i as f32 / num_samples as f32) * 6000.0) as i16)
+            .collect();
+        let right: Vec<i16> = (0..num_samples)
+            .map(|i| ((1.0 - i as f32 / num_samples as f32) * 6000.0) as i16)
+            .collect();
+        let wav = make_stereo_wav_bytes(&left, &right, sample_rate);
+        let channels = decode_audio_bytes_shared_channels(Bytes::from(wav)).unwrap();
+        assert_eq!(channels.len(), 2);
+        // Resampled to 16 kHz: expect roughly twice the length (allow FIR delay slack).
+        assert!(
+            channels[0].len() > num_samples * 15 / 10 && channels[0].len() < num_samples * 25 / 10
+        );
+        assert!(
+            channels[1].len() > num_samples * 15 / 10 && channels[1].len() < num_samples * 25 / 10
+        );
+        // Channels should differ once the FIR resampler has passed its delay.
+        assert!((channels[0][1000] - channels[1][1000]).abs() > 0.01);
+    }
+
+    #[test]
+    fn test_is_dual_mono_identical_channels() {
+        let samples: Vec<f32> = (0..1000).map(|i| (i as f32 * 0.01).sin()).collect();
+        assert!(is_dual_mono(&[samples.clone(), samples]));
+    }
+
+    #[test]
+    fn test_is_dual_mono_independent_channels() {
+        let left: Vec<f32> = (0..1000).map(|i| (i as f32 * 0.01).sin()).collect();
+        let right: Vec<f32> = (0..1000).map(|i| (i as f32 * 0.03).cos()).collect();
+        assert!(!is_dual_mono(&[left, right]));
+    }
+
+    #[test]
+    fn test_mix_channels_to_mono() {
+        let left = vec![1.0_f32];
+        let right = vec![-1.0_f32];
+        let mono = mix_channels_to_mono(&[left, right]);
+        assert_eq!(mono.len(), 1);
+        assert!(mono[0].abs() < 0.001);
+    }
+
+    #[test]
+    fn test_is_dual_mono_empty_channels_returns_false() {
+        assert!(!is_dual_mono(&[]));
+    }
+
+    #[test]
+    fn test_is_dual_mono_single_channel_returns_false() {
+        let samples: Vec<f32> = (0..100).map(|i| (i as f32 * 0.01).sin()).collect();
+        assert!(!is_dual_mono(&[samples]));
+    }
+
+    #[test]
+    fn test_mix_channels_to_mono_empty_input() {
+        let mono = mix_channels_to_mono(&[]);
+        assert!(mono.is_empty());
+    }
+
+    #[test]
+    fn test_decode_audio_bytes_shared_channels_mono_input() {
+        // A mono WAV fed through the split decoder must return exactly one
+        // channel whose samples match the regular mono decode path.
+        let samples: Vec<i16> = (0..8000).map(|i| (i as f32 * 0.1).sin() as i16).collect();
+        let wav = make_wav_bytes(&samples, 16000);
+        let mono = decode_audio_bytes(&wav).unwrap();
+        let channels = decode_audio_bytes_shared_channels(Bytes::copy_from_slice(&wav)).unwrap();
+        assert_eq!(channels.len(), 1);
+        assert_eq!(channels[0].len(), mono.len());
+        for (a, b) in channels[0].iter().zip(mono.iter()) {
+            assert!(
+                (a - b).abs() < 1e-5,
+                "split mono decode diverged: {a} vs {b}"
+            );
+        }
     }
 
     // --- resample_with_cache tests ---

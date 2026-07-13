@@ -52,6 +52,34 @@ The default `rnnt` head emits bare lowercase; punctuation, casing, and Russian I
 applied per server configuration (`--punctuation` / `--itn`). The `e2e_rnnt` head bakes
 them in.
 
+### Query parameters
+
+`/v1/transcribe` accepts the following query parameters:
+
+- `channels` (optional, string) — use `split` to transcribe the left and right channels
+  as separate speakers (`speaker_0`, `speaker_1`). Defaults to mono mix.
+- `diarization` (optional, boolean) — set to `true` to request polyvoice speaker
+  diarization. The mutual-exclusion check with `channels=split` treats `diarization=true`
+  as an explicit request; returns `400` with code `conflicting_modes` if both are set.
+  Actual diarization output requires the speaker-encoder model to be loaded on the
+  server (downloaded automatically when the `diarization` feature is enabled).
+
+When either channel split or diarization produces speaker labels, each word object
+includes a `speaker` integer:
+
+```json
+{
+  "text": "привет да как дела",
+  "words": [
+    {"word": "привет", "start": 0.0, "end": 0.4, "confidence": 0.95, "speaker": 0},
+    {"word": "да", "start": 0.5, "end": 0.8, "confidence": 0.91, "speaker": 1},
+    {"word": "как", "start": 1.0, "end": 1.3, "confidence": 0.93, "speaker": 0},
+    {"word": "дела", "start": 1.4, "end": 1.8, "confidence": 0.94, "speaker": 1}
+  ],
+  "duration": 2.0
+}
+```
+
 ### Export formats
 
 `/v1/transcribe` supports alternative output formats via the `format` query
@@ -114,6 +142,7 @@ it backs off on `503` pool saturation instead of failing mid-job.
 |---|---|---|
 | 400 | `empty_body` | Request body is empty |
 | 400 | `invalid_format` | Unsupported `format` query value |
+| 400 | `conflicting_modes` | Both `channels=split` and `diarization=true` were requested |
 | 413 | `payload_too_large` | Body exceeds `--body-limit-bytes` (default 50 MiB) |
 | 422 | `invalid_audio` | Audio could not be decoded (unsupported/corrupt format) |
 | 422 | `transcription_error` | Audio decoded but inference failed |

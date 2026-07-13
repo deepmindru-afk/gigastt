@@ -435,6 +435,12 @@ enum Commands {
         /// Include per-word timestamps in Markdown output
         #[arg(long, env = "GIGASTT_WORD_TIMESTAMPS", default_value_t = false)]
         word_timestamps: bool,
+
+        /// Transcribe left/right channels as separate speakers (channel 0 = speaker_0,
+        /// channel 1 = speaker_1). Falls back to mono for mono files, dual-mono stereo
+        /// files, and files with more than two channels. Env: GIGASTT_STEREO_SPEAKERS.
+        #[arg(long, env = "GIGASTT_STEREO_SPEAKERS", default_value_t = false)]
+        stereo_speakers: bool,
     },
 }
 
@@ -1150,6 +1156,7 @@ async fn main() -> anyhow::Result<()> {
             max_chars_per_line,
             max_words_per_line,
             word_timestamps,
+            stereo_speakers,
         } => {
             let resolved = model::ensure_model_variant(model_variant, &model_dir).await?;
             maybe_download_punct_model(punctuation, &punct_model_dir, resolved).await;
@@ -1185,7 +1192,26 @@ async fn main() -> anyhow::Result<()> {
             }
             log_rss();
             let mut guard = engine.pool.checkout().await?;
-            let result = engine.transcribe_file(&file, &mut guard);
+            let result = if stereo_speakers {
+                let channels = inference::audio::load_audio_channels(&file)?;
+                let fallback_reason = match channels.len() {
+                    0 => Some("no channels"),
+                    1 => Some("mono audio"),
+                    2 if inference::audio::is_dual_mono(&channels) => Some("dual-mono audio"),
+                    n if n > 2 => Some("more than two channels"),
+                    _ => None,
+                };
+                if let Some(reason) = fallback_reason {
+                    tracing::warn!(
+                        "--stereo-speakers requested but {reason} detected; falling back to mono transcription"
+                    );
+                    engine.transcribe_file(&file, &mut guard)
+                } else {
+                    engine.transcribe_channels(&channels, &mut guard)
+                }
+            } else {
+                engine.transcribe_file(&file, &mut guard)
+            };
             drop(guard);
             let result = result?;
 
@@ -1540,6 +1566,32 @@ mod tests {
                 assert_eq!(max_chars_per_line, Some(60));
                 assert_eq!(max_words_per_line, Some(10));
                 assert!(word_timestamps);
+            }
+            _ => panic!("expected Transcribe"),
+        }
+    }
+
+    #[test]
+    fn test_cli_transcribe_stereo_speakers_flag() {
+        let cli = Cli::parse_from(["gigastt", "transcribe", "audio.wav", "--stereo-speakers"]);
+        match cli.command {
+            Commands::Transcribe {
+                stereo_speakers, ..
+            } => {
+                assert!(stereo_speakers);
+            }
+            _ => panic!("expected Transcribe"),
+        }
+    }
+
+    #[test]
+    fn test_cli_transcribe_stereo_speakers_defaults_off() {
+        let cli = Cli::parse_from(["gigastt", "transcribe", "audio.wav"]);
+        match cli.command {
+            Commands::Transcribe {
+                stereo_speakers, ..
+            } => {
+                assert!(!stereo_speakers);
             }
             _ => panic!("expected Transcribe"),
         }

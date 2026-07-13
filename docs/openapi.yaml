@@ -276,6 +276,27 @@ paths:
             expects. A single-model server can't switch heads, so any value
             other than the loaded variant returns `409 variant_not_loaded`;
             matching or absent proceeds. This endpoint only.
+        - name: channels
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [split]
+          description: >-
+            Use `split` to transcribe the left and right channels as separate
+            speakers (`speaker_0` and `speaker_1`). Defaults to mono mix.
+        - name: diarization
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: >-
+            Set to `true` to request polyvoice speaker diarization. The
+            mutual-exclusion check with `channels=split` treats `diarization=true`
+            as an explicit request; returns 400 with code `conflicting_modes` if
+            both are set. Actual diarization output requires the speaker-encoder
+            model to be loaded on the server (downloaded automatically when the
+            `diarization` feature is enabled).
       requestBody:
         required: true
         content:
@@ -317,12 +338,15 @@ paths:
                   - word: "привет"
                     start: 0.5
                     end: 0.8
+                    speaker: 0
                   - word: "как"
                     start: 0.9
                     end: 1.0
+                    speaker: 1
                   - word: "дела"
                     start: 1.1
                     end: 1.4
+                    speaker: 0
                 duration: 2.5
             text/plain:
               schema:
@@ -658,6 +682,9 @@ components:
           format: double
           example: 0.8
           description: Word end time in seconds
+        speaker:
+          type: integer
+          description: Zero-based speaker index (only present when channel split or diarization produced speaker labels)
 
     ErrorResponse:
       type: object
