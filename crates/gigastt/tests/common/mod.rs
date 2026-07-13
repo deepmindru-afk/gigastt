@@ -312,7 +312,7 @@ pub fn generate_stereo_wav_split(left_path: &str, right_path: &str) -> Vec<u8> {
     right_channel[half..].copy_from_slice(right);
 
     let data_size = (num_samples * 4) as u32; // stereo 16-bit
-    let file_size = 36 + data_size;
+    let file_size = 44 + data_size;
     let mut wav = Vec::with_capacity(file_size as usize);
     wav.extend_from_slice(b"RIFF");
     wav.extend_from_slice(&(file_size - 8).to_le_bytes());
@@ -351,7 +351,7 @@ pub fn generate_dual_mono_wav(path: &str) -> Vec<u8> {
 fn make_stereo_wav_from_mono(samples: &[i16], sample_rate: u32) -> Vec<u8> {
     let num_samples = samples.len();
     let data_size = (num_samples * 4) as u32;
-    let file_size = 36 + data_size;
+    let file_size = 44 + data_size;
     let mut wav = Vec::with_capacity(file_size as usize);
     wav.extend_from_slice(b"RIFF");
     wav.extend_from_slice(&(file_size - 8).to_le_bytes());
