@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.0] - 2026-07-14
+
+### Changed
+
+- **`?segments=true` groups words at natural boundaries and carries speaker labels.**
+  Segment grouping on `POST /v1/transcribe` moves from the cue-sized windows shared with
+  the `srt` / `vtt` exports to natural boundaries: a new segment starts on an inter-word
+  pause (> 0.9 s), after sentence-ending punctuation (`.` `!` `?`), on a speaker change,
+  or at a 30 s duration cap. When diarization or the stereo channel-speaker mode supplied
+  labels, each segment gains an additive `speaker` field; `format=md&segments=true`
+  section headers follow the same boundaries. The `srt` / `vtt` caption exports keep
+  their cue-sized grouping unchanged, and the default response without `segments=true`
+  stays byte-for-byte identical.
+
 ## [2.8.0] - 2026-07-10
 
 ### Added
