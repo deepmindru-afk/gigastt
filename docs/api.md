@@ -80,6 +80,46 @@ includes a `speaker` integer:
 }
 ```
 
+- `segments` (optional, boolean) — set to `true` to add a `segments` array to the
+  default JSON response. Segments are grouped from word timestamps by pause
+  (≈0.9 s), sentence-ending punctuation (`.`, `!`, `?`), speaker change, or a
+  maximum segment length of ≈30 s. Each segment carries `start`, `end`, `text`,
+  `words`, and an optional `speaker` when channel split or diarization is active.
+  With `format=md`, `segments=true` switches Markdown output to `### [mm:ss]`
+  section headers instead of a single flat transcript blob.
+
+```sh
+# JSON with word timestamps and grouped segments
+curl -X POST "http://127.0.0.1:9876/v1/transcribe?segments=true&word_timestamps=true" \
+  -H "Content-Type: application/octet-stream" --data-binary @recording.wav
+# {
+#   "text": "Привет. Как дела?",
+#   "words": [...],
+#   "segments": [
+#     {"start": 0.0, "end": 0.9, "text": "Привет.", "words": [...]},
+#     {"start": 1.6, "end": 2.8, "text": "Как дела?", "words": [...]}
+#   ],
+#   "duration": 3.5
+# }
+
+# Markdown with segment headers
+curl -X POST "http://127.0.0.1:9876/v1/transcribe?format=md&segments=true" \
+  -H "Content-Type: application/octet-stream" --data-binary @recording.wav
+# ---
+# duration: 3.5
+# language: ru
+# speakers: 0
+# ---
+#
+# ### [00:00]
+#
+# Привет.
+#
+# ### [00:01]
+#
+# Как дела?
+```
+
 ### Export formats
 
 `/v1/transcribe` supports alternative output formats via the `format` query

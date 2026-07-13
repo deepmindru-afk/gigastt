@@ -232,9 +232,11 @@ paths:
             type: boolean
             default: false
           description: |
-            Add a cue-grouped `segments` array to the default JSON response, or
-            (with `format=md`) emit `### [mm:ss]` segment headers. Ignored for
-            `txt` / `srt` / `vtt`.
+            Add a `segments` array to the default JSON response. Segments are
+            grouped from word timestamps by pause (≈0.9 s), sentence-ending
+            punctuation (`.`, `!`, `?`), speaker change, or a maximum segment
+            length of ≈30 s. With `format=md` the same segments are rendered as
+            `### [mm:ss]` section headers. Ignored for `txt` / `srt` / `vtt`.
         - name: punctuation
           in: query
           required: false
@@ -629,9 +631,12 @@ components:
           items:
             $ref: "#/components/schemas/Segment"
           description: |
-            Cue-grouped segments. Present only when the request passed
-            `segments=true`; omitted otherwise so existing clients are
-            unaffected. Segments share their boundaries with the SRT/VTT exports.
+            Transcript segments grouped from word timestamps. Present only when
+            the request passed `segments=true`; omitted otherwise so existing
+            clients are unaffected. Segments split on pause (≈0.9 s),
+            sentence-ending punctuation (`.`, `!`, `?`), speaker change, or a
+            maximum segment length of ≈30 s. With `format=md&segments=true`
+            these same boundaries are rendered as `### [mm:ss]` sections.
 
     Segment:
       type: object
@@ -654,12 +659,18 @@ components:
         text:
           type: string
           example: "привет как дела"
-          description: Rendered segment text (speaker label prefix when diarized)
+          description: Rendered segment text
         words:
           type: array
           items:
             $ref: "#/components/schemas/WordInfo"
           description: The words that fall within this segment's span
+        speaker:
+          type: integer
+          example: 0
+          description: |
+            Zero-based speaker index. Present only when the segment came from
+            channel split (`channels=split`) or polyvoice diarization.
 
     WordInfo:
       type: object

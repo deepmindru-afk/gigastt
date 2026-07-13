@@ -150,9 +150,9 @@ pub struct TranscribeResponse {
     pub words: Vec<gigastt_core::inference::WordInfo>,
     /// Duration of the submitted audio in seconds.
     pub duration: f64,
-    /// Cue-sized segments, present only when the caller passed `?segments=true`.
-    /// Additive: absent from the default response, so existing clients that read
-    /// `text` / `words` / `duration` are unaffected.
+    /// Transcript segments grouped from word timestamps, present only when the
+    /// caller passed `?segments=true`. Additive: absent from the default response,
+    /// so existing clients that read `text` / `words` / `duration` are unaffected.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub segments: Option<Vec<Segment>>,
 }
@@ -731,11 +731,7 @@ pub async fn transcribe(
                 // unchanged top-level `text` / `words` / `duration`; absent
                 // otherwise so existing clients see the exact same shape.
                 let segments = if params.segments.unwrap_or(false) {
-                    Some(gigastt_core::export::to_segments(
-                        &result.words,
-                        params.max_chars_per_line.unwrap_or(80),
-                        params.max_words_per_line.unwrap_or(14),
-                    ))
+                    Some(gigastt_core::export::to_transcript_segments(&result.words))
                 } else {
                     None
                 };
