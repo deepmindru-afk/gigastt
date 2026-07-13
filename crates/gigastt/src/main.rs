@@ -435,6 +435,12 @@ enum Commands {
         /// Include per-word timestamps in Markdown output
         #[arg(long, env = "GIGASTT_WORD_TIMESTAMPS", default_value_t = false)]
         word_timestamps: bool,
+
+        /// Transcribe left/right channels as separate speakers (channel 0 = speaker_0,
+        /// channel 1 = speaker_1). Falls back to mono for mono files and for dual-mono
+        /// stereo files. Env: GIGASTT_STEREO_SPEAKERS.
+        #[arg(long, env = "GIGASTT_STEREO_SPEAKERS", default_value_t = false)]
+        stereo_speakers: bool,
     },
 }
 
@@ -1150,6 +1156,7 @@ async fn main() -> anyhow::Result<()> {
             max_chars_per_line,
             max_words_per_line,
             word_timestamps,
+            stereo_speakers,
         } => {
             let resolved = model::ensure_model_variant(model_variant, &model_dir).await?;
             maybe_download_punct_model(punctuation, &punct_model_dir, resolved).await;
@@ -1185,7 +1192,31 @@ async fn main() -> anyhow::Result<()> {
             }
             log_rss();
             let mut guard = engine.pool.checkout().await?;
-            let result = engine.transcribe_file(&file, &mut guard);
+            let result = if stereo_speakers {
+                let channels = inference::audio::load_audio_channels(&file)
+                    .map_err(|e| anyhow::anyhow!("{e:#}"))?;
+                match channels.len() {
+                    1 => {
+                        tracing::warn!(
+                            "Mono audio with --stereo-speakers; falling back to mono transcription"
+                        );
+                        engine.transcribe_file(&file, &mut guard)
+                    }
+                    2 if inference::audio::is_dual_mono(&channels) => {
+                        tracing::warn!(
+                            "Dual-mono audio detected; falling back to mono transcription"
+                        );
+                        engine.transcribe_file(&file, &mut guard)
+                    }
+                    n if n > 2 => {
+                        tracing::warn!("{n} channels with --stereo-speakers; mixing to mono");
+                        engine.transcribe_file(&file, &mut guard)
+                    }
+                    _ => engine.transcribe_channels(&channels, &mut guard),
+                }
+            } else {
+                engine.transcribe_file(&file, &mut guard)
+            };
             drop(guard);
             let result = result?;
 
