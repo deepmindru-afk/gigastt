@@ -437,8 +437,8 @@ enum Commands {
         word_timestamps: bool,
 
         /// Transcribe left/right channels as separate speakers (channel 0 = speaker_0,
-        /// channel 1 = speaker_1). Falls back to mono for mono files and for dual-mono
-        /// stereo files. Env: GIGASTT_STEREO_SPEAKERS.
+        /// channel 1 = speaker_1). Falls back to mono for mono files, dual-mono stereo
+        /// files, and files with more than two channels. Env: GIGASTT_STEREO_SPEAKERS.
         #[arg(long, env = "GIGASTT_STEREO_SPEAKERS", default_value_t = false)]
         stereo_speakers: bool,
     },
@@ -1566,6 +1566,32 @@ mod tests {
                 assert_eq!(max_chars_per_line, Some(60));
                 assert_eq!(max_words_per_line, Some(10));
                 assert!(word_timestamps);
+            }
+            _ => panic!("expected Transcribe"),
+        }
+    }
+
+    #[test]
+    fn test_cli_transcribe_stereo_speakers_flag() {
+        let cli = Cli::parse_from(["gigastt", "transcribe", "audio.wav", "--stereo-speakers"]);
+        match cli.command {
+            Commands::Transcribe {
+                stereo_speakers, ..
+            } => {
+                assert!(stereo_speakers);
+            }
+            _ => panic!("expected Transcribe"),
+        }
+    }
+
+    #[test]
+    fn test_cli_transcribe_stereo_speakers_defaults_off() {
+        let cli = Cli::parse_from(["gigastt", "transcribe", "audio.wav"]);
+        match cli.command {
+            Commands::Transcribe {
+                stereo_speakers, ..
+            } => {
+                assert!(!stereo_speakers);
             }
             _ => panic!("expected Transcribe"),
         }

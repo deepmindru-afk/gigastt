@@ -58,9 +58,11 @@ them in.
 
 - `channels` (optional, string) — use `split` to transcribe the left and right channels
   as separate speakers (`speaker_0`, `speaker_1`). Defaults to mono mix.
-- `diarization` (optional, boolean) — request polyvoice speaker diarization. Mutually
-  exclusive with `channels=split`; returns `400` with code `conflicting_modes` if both
-  are set.
+- `diarization` (optional, boolean) — set to `true` to request polyvoice speaker
+  diarization. The mutual-exclusion check with `channels=split` treats `diarization=true`
+  as an explicit request; returns `400` with code `conflicting_modes` if both are set.
+  Actual diarization output requires the speaker-encoder model to be loaded on the
+  server (downloaded automatically when the `diarization` feature is enabled).
 
 When either channel split or diarization produces speaker labels, each word object
 includes a `speaker` integer:
