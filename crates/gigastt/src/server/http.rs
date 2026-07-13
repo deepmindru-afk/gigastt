@@ -1370,6 +1370,30 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "requires model"]
+    async fn test_transcribe_channels_split_diarization_conflict_returns_400() {
+        let state = Arc::new(AppState {
+            engine: test_engine(),
+            limits: Arc::new(ArcSwap::from_pointee(RuntimeLimits::default())),
+            metrics_registry: None,
+            shutdown: tokio_util::sync::CancellationToken::new(),
+            tracker: tokio_util::task::TaskTracker::new(),
+        });
+        let params = ExportParams {
+            channels: Some("split".into()),
+            diarization: Some(true),
+            ..ExportParams::default()
+        };
+        let resp = transcribe(State(state), Query(params), minimal_wav())
+            .await
+            .unwrap_err();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        let bytes = axum::body::to_bytes(resp.into_body(), 1024).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(v["code"], "conflicting_modes");
+    }
+
+    #[tokio::test]
+    #[ignore = "requires model"]
     async fn test_models_with_metrics() {
         let state = Arc::new(AppState {
             engine: engine_swap(test_engine()),
