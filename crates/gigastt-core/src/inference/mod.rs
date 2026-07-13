@@ -1891,6 +1891,9 @@ impl Engine {
     /// checking for dual-mono). Channel 0 becomes `speaker_0`, channel 1
     /// `speaker_1`, and so on. Results are merged into a single chronologically
     /// ordered transcript.
+    ///
+    /// Per-channel `text` fields are ignored: the merged transcript's text is
+    /// rebuilt from the merged words after the final ITN/punctuation pass.
     #[cfg(feature = "file-decode")]
     pub fn transcribe_channels(
         &self,
@@ -2786,6 +2789,30 @@ mod tests {
         assert_eq!(merged.words[0].speaker, Some(0));
         assert_eq!(merged.words[1].word, "б");
         assert_eq!(merged.words[1].speaker, Some(1));
+    }
+
+    #[test]
+    fn test_merge_channel_results_no_channels() {
+        let merged = merge_channel_results(vec![]);
+        assert!(merged.words.is_empty());
+        assert!(merged.text.is_empty());
+        assert_eq!(merged.duration_s, 0.0);
+    }
+
+    #[test]
+    fn test_merge_channel_results_max_duration() {
+        let ch0 = TranscribeResult {
+            text: String::new(),
+            words: vec![sample_word("a", 0.0, 0.5, None)],
+            duration_s: 5.0,
+        };
+        let ch1 = TranscribeResult {
+            text: String::new(),
+            words: vec![sample_word("b", 0.5, 1.0, None)],
+            duration_s: 12.0,
+        };
+        let merged = merge_channel_results(vec![ch0, ch1]);
+        assert_eq!(merged.duration_s, 12.0);
     }
 
     #[test]
