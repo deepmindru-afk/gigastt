@@ -206,6 +206,45 @@ pub async fn start_server_with_limits(
         metrics_listen: gigastt::server::config::default_metrics_listen(),
         trust_proxy: false,
         config_path: None,
+        batch_pool_size: 0,
+    };
+    tokio::spawn(gigastt::server::run_with_config_listener(
+        engine,
+        config,
+        Some(shutdown_rx),
+        listener,
+    ));
+
+    wait_for_ready(port, Duration::from_secs(30)).await;
+    (port, shutdown_tx)
+}
+
+/// Start the server with the asynchronous `/v1/jobs` API enabled. Uses a
+/// dedicated batch pool of size `batch_pool_size` (minimum 1) so job workers do
+/// not contend with the interactive pool used by WebSocket / synchronous REST.
+pub async fn start_server_with_jobs(
+    model_dir: &str,
+    batch_pool_size: usize,
+) -> (u16, oneshot::Sender<()>) {
+    let (port, listener) = free_port().await;
+    let (shutdown_tx, shutdown_rx) = oneshot::channel();
+
+    let engine = gigastt::inference::Engine::load(model_dir).unwrap();
+    let limits = gigastt::server::RuntimeLimits {
+        jobs_enabled: true,
+        jobs_max: 10,
+        ..Default::default()
+    };
+    let config = gigastt::server::ServerConfig {
+        port,
+        host: "127.0.0.1".into(),
+        origin_policy: gigastt::server::OriginPolicy::loopback_only(),
+        limits,
+        metrics_enabled: false,
+        metrics_listen: gigastt::server::config::default_metrics_listen(),
+        trust_proxy: false,
+        config_path: None,
+        batch_pool_size: batch_pool_size.max(1),
     };
     tokio::spawn(gigastt::server::run_with_config_listener(
         engine,
