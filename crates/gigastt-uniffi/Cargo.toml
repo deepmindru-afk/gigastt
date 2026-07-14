@@ -29,7 +29,7 @@ nnapi = ["gigastt-core/nnapi"]
 # Lean core: file decoding only — no HTTP download, no async runtime (the
 # bindings side-load models and use the synchronous checkout_blocking path).
 gigastt-core = { version = "2.4.0", path = "../gigastt-core", default-features = false, features = ["file-decode"] }
-uniffi = { version = "0.28", features = ["cli"] }
+uniffi = { version = "0.32", features = ["cli"] }
 thiserror = "2"
 
 # Pin the bindgen generator to this crate's uniffi version.
