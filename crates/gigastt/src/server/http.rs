@@ -1258,7 +1258,14 @@ pub async fn get_job_result(
             "job_not_finished",
         ));
     }
-    let result = job.result.expect("Done job has result");
+    let Some(result) = job.result else {
+        tracing::error!(job_id = %id, "Done job is missing result");
+        return Err(api_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Job result is missing",
+            "internal",
+        ));
+    };
     if let Some(rendered) = render_export_response(&result, &job.params)? {
         Ok(rendered)
     } else {
@@ -1319,7 +1326,9 @@ pub async fn cancel_job(
         .update(
             &id,
             Box::new(|j| {
-                j.status = JobStatus::Cancelled;
+                if matches!(j.status, JobStatus::Queued | JobStatus::Processing) {
+                    j.status = JobStatus::Cancelled;
+                }
             }),
         )
         .await;
