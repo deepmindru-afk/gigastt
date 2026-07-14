@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.0] - 2026-07-15
+
+### Added
+
+- **Asynchronous Job API for long-file and batch transcription (`/v1/jobs`).** Disabled by
+  default; enable with `--enable-jobs` or `GIGASTT_ENABLE_JOBS=1`. When disabled the
+  `/v1/jobs` routes are not registered and return 404.
+  - `POST /v1/jobs` accepts the same body and query parameters as `/v1/transcribe`
+    (`format`, `word_timestamps`, `segments`, `channels`, `punctuation`, `itn`, `vad`, etc.)
+    and returns `202 {"job_id","status":"queued","created_at"}`.
+  - `GET /v1/jobs/{id}` returns the job lifecycle (`queued|processing|done|failed|cancelled`),
+    an estimate of processed audio seconds, and a `percent` derived from `processed/total`.
+    Errors are sanitized and never leak paths or model internals.
+  - `GET /v1/jobs/{id}/result` returns the finished transcript in the format requested at
+    submission; `409 job_not_finished` while running, `404` for unknown/expired jobs.
+  - `DELETE /v1/jobs/{id}` cancels queued or processing jobs and broadcasts a `cancelled`
+    event to any SSE listeners.
+  - `GET /v1/jobs/{id}/events` is an SSE stream of `progress`, `done`, `failed`, and
+    `cancelled` events; the stream closes automatically after a terminal event.
+  - The in-memory FIFO queue respects `--batch-pool-size` (default 0, clamped to at least 1
+    job worker), limits concurrent batch jobs so they cannot starve WebSocket / synchronous
+    REST traffic, and retries up to `--jobs-retry` (default 3) on `inference_timeout` or panic.
+    Finished/failed/cancelled jobs are evicted after `--jobs-ttl-secs` (default 3600) or when
+    `--jobs-max` (default 100) is reached, at which point `POST /v1/jobs` returns
+    `429 queue_full` with `Retry-After`.
+  - Graceful shutdown cancels all queued jobs; any in-flight job is allowed to finish within
+    the existing drain window and its triplet is returned to the pool.
+
 ## [2.9.0] - 2026-07-14
 
 ### Changed

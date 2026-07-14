@@ -58,7 +58,7 @@ jobs:
           [[ "$TAG" =~ ^ane-v3- ]] || { echo "::error ::tag must match ane-v3-*"; exit 1; }
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
 
       # Build the per-bucket palettized encoders. uv pins Python 3.12 and pulls
       # the conversion deps (torch + coremltools + gigaam) on the fly. The GigaAM
