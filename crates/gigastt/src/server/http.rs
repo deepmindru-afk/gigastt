@@ -1120,22 +1120,6 @@ pub struct JobSubmitResponse {
     pub created_at: f64,
 }
 
-/// Build a public status view from a stored job.
-fn job_status_response(job: &super::jobs::Job) -> super::jobs::JobStatusResponse {
-    let percent = if job.total_seconds > 0.0 {
-        ((job.processed_seconds / job.total_seconds) * 100.0) as u32
-    } else {
-        0
-    };
-    super::jobs::JobStatusResponse {
-        job_id: job.id.clone(),
-        status: job.status,
-        processed_seconds: job.processed_seconds,
-        percent,
-        error: job.error.clone(),
-    }
-}
-
 /// POST /v1/jobs — enqueue a long audio file for asynchronous transcription.
 ///
 /// Accepts the same body and query parameters as `/v1/transcribe`. Returns 202
@@ -1220,7 +1204,7 @@ pub async fn get_job(
         ));
     };
     match jobs.store.get(&id).await {
-        Ok(Some(job)) => Ok(Json(job_status_response(&job)).into_response()),
+        Ok(Some(job)) => Ok(Json(super::jobs::job_status_response(&job)).into_response()),
         Ok(None) => Err(api_error(
             StatusCode::NOT_FOUND,
             "Job not found",

@@ -90,6 +90,22 @@ pub struct JobStatusResponse {
     pub error: Option<String>,
 }
 
+/// Build a public status view from a stored job.
+pub(crate) fn job_status_response(job: &Job) -> JobStatusResponse {
+    let percent = if job.total_seconds > 0.0 {
+        ((job.processed_seconds / job.total_seconds) * 100.0) as u32
+    } else {
+        0
+    };
+    JobStatusResponse {
+        job_id: job.id.clone(),
+        status: job.status,
+        processed_seconds: job.processed_seconds,
+        percent,
+        error: job.error.clone(),
+    }
+}
+
 /// A transcription job.
 #[derive(Debug, Clone)]
 pub struct Job {
@@ -1051,5 +1067,221 @@ mod tests {
 
         let job = store.get(&id).await.unwrap().unwrap();
         assert!(matches!(job.status, JobStatus::Cancelled));
+    }
+
+    #[test]
+    fn test_sanitize_job_error_maps_known_errors() {
+        assert_eq!(
+            sanitize_job_error(&anyhow::anyhow!("inference_timeout")),
+            "Inference timed out."
+        );
+        assert_eq!(
+            sanitize_job_error(&anyhow::anyhow!("Invalid audio: unsupported format")),
+            "Failed to decode audio file. Check format."
+        );
+        assert_eq!(
+            sanitize_job_error(&anyhow::anyhow!("some internal onnx path /foo/bar")),
+            "Transcription failed."
+        );
+    }
+
+    #[test]
+    fn test_is_retryable_error_recognizes_transient_failures() {
+        assert!(is_retryable_error(&anyhow::anyhow!("inference_timeout")));
+        assert!(is_retryable_error(&anyhow::anyhow!(
+            "worker thread panicked"
+        )));
+        assert!(!is_retryable_error(&anyhow::anyhow!("Invalid audio")));
+    }
+
+    #[tokio::test]
+    async fn test_store_get_missing_returns_none() {
+        let store = InMemoryJobStore::new(test_limits());
+        assert!(store.get("no-such-id").await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_store_update_missing_returns_error() {
+        let store = InMemoryJobStore::new(test_limits());
+        assert!(
+            store
+                .update("no-such-id", Box::new(|j| j.status = JobStatus::Done))
+                .await
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_broadcast_event_prunes_dead_channels() {
+        let store: Arc<dyn JobStore> = Arc::new(InMemoryJobStore::new(test_limits()));
+        let id = store
+            .create(Job::queued(
+                Bytes::from_static(b"x"),
+                ExportParams::default(),
+            ))
+            .await
+            .unwrap();
+
+        // Add a live channel and a channel that will be dropped before broadcast.
+        let (live_tx, mut live_rx) = tokio::sync::mpsc::unbounded_channel::<JobEvent>();
+        {
+            let (dead_tx, _dead_rx) = tokio::sync::mpsc::unbounded_channel::<JobEvent>();
+            store
+                .update(
+                    &id,
+                    Box::new(move |j| {
+                        j.event_channels.push(live_tx);
+                        j.event_channels.push(dead_tx);
+                    }),
+                )
+                .await
+                .unwrap();
+        }
+
+        broadcast_event(
+            &*store,
+            &id,
+            JobEvent::Progress {
+                percent: 50,
+                processed_seconds: 1.0,
+            },
+        )
+        .await;
+
+        let job = store.get(&id).await.unwrap().unwrap();
+        assert_eq!(job.event_channels.len(), 1);
+        assert!(matches!(live_rx.try_recv(), Ok(JobEvent::Progress { .. })));
+    }
+
+    #[tokio::test]
+    async fn test_queue_concurrency_clamped_to_one() {
+        let store: Arc<dyn JobStore> = Arc::new(InMemoryJobStore::new(test_limits()));
+        let executor = MockExecutor {
+            results: Arc::new(Mutex::new(vec![ok_result(), ok_result()])),
+            delay_ms: 0,
+        };
+        // Pass 0; the queue must still spawn at least one worker.
+        let queue = JobQueue::new(
+            store.clone(),
+            0,
+            0,
+            tokio_util::sync::CancellationToken::new(),
+        );
+        queue.spawn(executor);
+
+        let id = store
+            .create(Job::queued(
+                Bytes::from_static(b"x"),
+                ExportParams::default(),
+            ))
+            .await
+            .unwrap();
+
+        for _ in 0..50 {
+            let job = store.get(&id).await.unwrap().unwrap();
+            if matches!(job.status, JobStatus::Done) {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+
+        assert!(matches!(
+            store.get(&id).await.unwrap().unwrap().status,
+            JobStatus::Done
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_queue_non_retryable_error_fails_immediately() {
+        let store: Arc<dyn JobStore> = Arc::new(InMemoryJobStore::new(test_limits()));
+        let executor = MockExecutor {
+            results: Arc::new(Mutex::new(vec![Err(anyhow::anyhow!(
+                "Invalid audio: bad header"
+            ))])),
+            delay_ms: 0,
+        };
+        let queue = JobQueue::new(
+            store.clone(),
+            1,
+            3,
+            tokio_util::sync::CancellationToken::new(),
+        );
+        queue.spawn(executor);
+
+        let id = store
+            .create(Job::queued(
+                Bytes::from_static(b"x"),
+                ExportParams::default(),
+            ))
+            .await
+            .unwrap();
+
+        for _ in 0..50 {
+            let job = store.get(&id).await.unwrap().unwrap();
+            if matches!(job.status, JobStatus::Failed) {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+
+        let job = store.get(&id).await.unwrap().unwrap();
+        assert!(matches!(job.status, JobStatus::Failed));
+        assert_eq!(job.attempts, 1);
+    }
+
+    #[tokio::test]
+    async fn test_queue_retry_boundary_exhausted_after_max_retries() {
+        // max_retries=1 means one retry is allowed: attempts 1 (retry), 2 (fail).
+        let limits = RuntimeLimits {
+            jobs_retry: 1,
+            ..test_limits()
+        };
+        let store: Arc<dyn JobStore> = Arc::new(InMemoryJobStore::new(limits));
+        let executor = MockExecutor {
+            results: Arc::new(Mutex::new(vec![
+                Err(anyhow::anyhow!("inference_timeout")),
+                Err(anyhow::anyhow!("inference_timeout")),
+            ])),
+            delay_ms: 0,
+        };
+        let queue = JobQueue::new(
+            store.clone(),
+            1,
+            1,
+            tokio_util::sync::CancellationToken::new(),
+        );
+        queue.spawn(executor);
+
+        let id = store
+            .create(Job::queued(
+                Bytes::from_static(b"x"),
+                ExportParams::default(),
+            ))
+            .await
+            .unwrap();
+
+        for _ in 0..50 {
+            let job = store.get(&id).await.unwrap().unwrap();
+            if matches!(job.status, JobStatus::Failed) {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+
+        let job = store.get(&id).await.unwrap().unwrap();
+        assert!(matches!(job.status, JobStatus::Failed));
+        assert_eq!(job.attempts, 2);
+    }
+
+    #[test]
+    fn test_job_status_response_percent() {
+        let mut job = Job::queued(Bytes::new(), ExportParams::default());
+        job.id = "test".into();
+        job.total_seconds = 10.0;
+        job.processed_seconds = 3.5;
+        job.status = JobStatus::Processing;
+        let resp = job_status_response(&job);
+        assert_eq!(resp.percent, 35);
+        assert_eq!(resp.processed_seconds, 3.5);
     }
 }
