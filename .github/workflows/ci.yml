@@ -218,7 +218,7 @@ jobs:
       - name: Cache model
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         id: cache-model
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.gigastt/models
           key: gigastt-model-v3-onnx-${{ hashFiles('crates/gigastt-core/src/model/mod.rs') }}
@@ -329,7 +329,7 @@ jobs:
 
       - name: Cache model
         id: cache-model
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.gigastt/models
           key: gigastt-model-v3-onnx-${{ hashFiles('crates/gigastt-core/src/model/mod.rs') }}
@@ -359,7 +359,7 @@ jobs:
 
       - name: Cache model
         id: cache-model
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.gigastt/models
           key: gigastt-model-v3-onnx-${{ hashFiles('crates/gigastt-core/src/model/mod.rs') }}
@@ -704,7 +704,7 @@ jobs:
 
       - name: Cache model
         id: cache-model
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.gigastt/models
           key: gigastt-model-v3-onnx-${{ hashFiles('crates/gigastt-core/src/model/mod.rs') }}
