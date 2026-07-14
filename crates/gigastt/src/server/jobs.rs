@@ -687,11 +687,8 @@ impl JobExecution for RealJobExecutor {
                         tracing::warn!(
                             "channels=split requested but {reason} detected; falling back to mono transcription"
                         );
-                        engine_for_inference.transcribe_bytes_shared_with_overrides(
-                            body_for_inference,
-                            &mut reservation,
-                            &overrides,
-                        )
+                        engine_for_inference
+                            .transcribe_bytes_shared(body_for_inference, &mut reservation)
                     } else {
                         engine_for_inference.transcribe_channels(&channels, &mut reservation)
                     }
