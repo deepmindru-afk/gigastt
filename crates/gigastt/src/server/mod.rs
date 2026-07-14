@@ -5,6 +5,7 @@
 mod bootstrap;
 pub mod config;
 pub mod http;
+pub mod jobs;
 pub mod metrics;
 pub(crate) mod middleware;
 pub mod rate_limit;
@@ -18,7 +19,7 @@ use arc_swap::ArcSwap;
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use axum::http::StatusCode;
-use axum::routing::{get, options, post};
+use axum::routing::{delete, get, options, post};
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -62,6 +63,7 @@ pub async fn run_with_shutdown(
         metrics_listen: config::default_metrics_listen(),
         trust_proxy: false,
         config_path: None,
+        batch_pool_size: 0,
     };
     run_with_config(engine, config, shutdown).await
 }
@@ -382,14 +384,43 @@ pub async fn run_with_config_listener_reloadable(
     let shutdown_root = tokio_util::sync::CancellationToken::new();
     let tracker = tokio_util::task::TaskTracker::new();
 
+    let engine_swap = Arc::new(ArcSwap::from_pointee(engine));
+    let limits_swap = Arc::new(ArcSwap::from_pointee(config.limits.clone()));
+
+    // Stand up the asynchronous job queue when the operator enabled it.
+    // We build it before `AppState` so the handlers can hold a clone.
+    let jobs_state = if config.limits.jobs_enabled {
+        let store: Arc<dyn jobs::JobStore> =
+            Arc::new(jobs::InMemoryJobStore::new(config.limits.clone()));
+        let concurrency = config.batch_pool_size.max(1);
+        let max_retries = config.limits.jobs_retry;
+        let queue = jobs::JobQueue::new(
+            store.clone(),
+            concurrency,
+            max_retries,
+            shutdown_root.clone(),
+        );
+        let executor = jobs::RealJobExecutor::new(engine_swap.clone(), limits_swap.clone());
+        queue.spawn(executor);
+        tracing::info!(
+            concurrency,
+            max_retries,
+            "asynchronous /v1/jobs API enabled"
+        );
+        Some(http::JobServerState { store, queue })
+    } else {
+        None
+    };
+
     let state = Arc::new(http::AppState {
-        engine: Arc::new(ArcSwap::from_pointee(engine)),
+        engine: engine_swap,
         engine_builder: engine_builder.clone(),
         reload_lock: Arc::new(tokio::sync::Mutex::new(())),
-        limits: Arc::new(ArcSwap::from_pointee(config.limits.clone())),
+        limits: limits_swap,
         metrics_registry: metrics_registry.clone(),
         shutdown: shutdown_root.clone(),
         tracker: tracker.clone(),
+        jobs: jobs_state.clone(),
     });
 
     let rate_limiter_swap = if config.limits.rate_limit_per_minute > 0 {
@@ -505,7 +536,31 @@ pub async fn run_with_config_listener_reloadable(
         .route(
             "/v1/admin/reload",
             options(|| async { StatusCode::NO_CONTENT }),
-        )
+        );
+
+    // Asynchronous job API routes. Only registered when `--enable-jobs` is set;
+    // without the flag the paths fall through to axum's default 404.
+    let protected = if config.limits.jobs_enabled {
+        protected
+            .route("/v1/jobs", post(http::submit_job))
+            .route("/v1/jobs", options(|| async { StatusCode::NO_CONTENT }))
+            .route("/v1/jobs/{id}", get(http::get_job))
+            .route("/v1/jobs/{id}", delete(http::cancel_job))
+            .route(
+                "/v1/jobs/{id}",
+                options(|| async { StatusCode::NO_CONTENT }),
+            )
+            .route("/v1/jobs/{id}/result", get(http::get_job_result))
+            .route(
+                "/v1/jobs/{id}/result",
+                options(|| async { StatusCode::NO_CONTENT }),
+            )
+            .route("/v1/jobs/{id}/events", get(http::job_events))
+    } else {
+        protected
+    };
+
+    let protected = protected
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             middleware::http_metrics_middleware,
@@ -625,6 +680,7 @@ pub async fn run_with_config_listener_reloadable(
 
     let shutdown_fut = {
         let shutdown_root = shutdown_root.clone();
+        let jobs_state = jobs_state.clone();
         async move {
             match shutdown {
                 Some(rx) => {
@@ -665,6 +721,12 @@ pub async fn run_with_config_listener_reloadable(
             // draining while axum is still completing the in-flight HTTP
             // futures.
             shutdown_root.cancel();
+            // Mark every queued job as cancelled so workers don't start new work
+            // during the drain window. In-flight jobs are allowed to finish within
+            // `shutdown_drain_secs` (their triplet is returned when they complete).
+            if let Some(ref jobs) = jobs_state {
+                jobs.queue.cancel_all_queued().await;
+            }
             // Wake every waiter still blocked on `pool.checkout()` with
             // PoolError::Closed so they fall through to a 503 / `pool_closed`
             // response instead of being stranded for the full checkout timeout.

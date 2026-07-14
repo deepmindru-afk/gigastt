@@ -32,6 +32,11 @@ are additive only.
 | `/v1/models` | GET | Model info (encoder type, pool size, capabilities) |
 | `/v1/transcribe` | POST | File transcription, full JSON response or export format |
 | `/v1/transcribe/stream` | POST | File transcription with SSE streaming |
+| `/v1/jobs` | POST | Submit an asynchronous transcription job (requires `--enable-jobs`) |
+| `/v1/jobs/{id}` | GET | Poll job status and progress |
+| `/v1/jobs/{id}` | DELETE | Cancel a queued or processing job |
+| `/v1/jobs/{id}/result` | GET | Fetch the finished transcription |
+| `/v1/jobs/{id}/events` | GET | SSE stream of progress / done / failed / cancelled |
 | `/v1/ws` | GET | WebSocket upgrade for real-time streaming |
 | `/metrics` | GET | Prometheus metrics (enabled with `--metrics`). Served on the separate `--metrics-listen` port (default `127.0.0.1:9090`), not the main API port. |
 
@@ -47,6 +52,65 @@ curl -X POST http://127.0.0.1:9876/v1/transcribe/stream \
 # data: {"type":"partial","text":"привет как"}
 # data: {"type":"final","text":"Привет, как дела?"}
 ```
+
+## Asynchronous jobs
+
+For long files or batch ingestion, `POST /v1/jobs` enqueues a transcription job
+and returns immediately with a `job_id`:
+
+```sh
+curl -X POST http://127.0.0.1:9876/v1/jobs \
+  -H "Content-Type: application/octet-stream" --data-binary @recording.wav
+# {"job_id":"...","status":"queued","created_at":1712700000.5}
+```
+
+The endpoint is disabled by default. Enable it with `--enable-jobs` or
+`GIGASTT_ENABLE_JOBS=1`. When disabled, all `/v1/jobs` paths return `404`.
+
+Poll for status:
+
+```sh
+curl http://127.0.0.1:9876/v1/jobs/{job_id}
+# {"job_id":"...","status":"processing","processed_seconds":12.5,"percent":42}
+```
+
+Fetch the result once `status` is `done`:
+
+```sh
+curl http://127.0.0.1:9876/v1/jobs/{job_id}/result
+# {"text":"Привет, как дела?", ...}
+```
+
+Cancel a queued or processing job:
+
+```sh
+curl -X DELETE http://127.0.0.1:9876/v1/jobs/{job_id}
+```
+
+Subscribe to SSE events:
+
+```sh
+curl http://127.0.0.1:9876/v1/jobs/{job_id}/events
+# data: {"type":"progress","percent":42,"processed_seconds":12.5}
+# data: {"type":"done"}
+```
+
+Job submission accepts the same query parameters as `POST /v1/transcribe`
+(`format`, `word_timestamps`, `segments`, `channels`, `diarization`,
+`punctuation`, `itn`, `vad`). The result is rendered in the requested format
+when `/v1/jobs/{id}/result` is called.
+
+Queue behavior is controlled by:
+
+- `--batch-pool-size` (default 0, clamped to at least 1 when jobs are enabled) —
+  triplet slots reserved for batch/job work so long files do not starve
+  real-time WebSocket or synchronous REST sessions.
+- `--jobs-ttl-secs` (default 3600) — how long finished/failed/cancelled jobs are
+  kept before eviction.
+- `--jobs-max` (default 100) — maximum number of jobs kept in memory; when full,
+  `POST /v1/jobs` returns `429 queue_full` with `Retry-After`.
+- `--jobs-retry` (default 3) — maximum retry attempts for jobs that hit an
+  inference timeout or worker panic.
 
 The default `rnnt` head emits bare lowercase; punctuation, casing, and Russian ITN are
 applied per server configuration (`--punctuation` / `--itn`). The `e2e_rnnt` head bakes
@@ -183,9 +247,14 @@ it backs off on `503` pool saturation instead of failing mid-job.
 | 400 | `empty_body` | Request body is empty |
 | 400 | `invalid_format` | Unsupported `format` query value |
 | 400 | `conflicting_modes` | Both `channels=split` and `diarization=true` were requested |
+| 404 | `jobs_disabled` | `POST /v1/jobs` called without `--enable-jobs` |
+| 404 | `job_not_found` | Unknown or expired job id |
+| 409 | `job_not_finished` | `GET /v1/jobs/{id}/result` called before the job is done |
+| 409 | `job_not_cancellable` | `DELETE /v1/jobs/{id}` called on a terminal job |
 | 413 | `payload_too_large` | Body exceeds `--body-limit-bytes` (default 50 MiB) |
 | 422 | `invalid_audio` | Audio could not be decoded (unsupported/corrupt format) |
 | 422 | `transcription_error` | Audio decoded but inference failed |
+| 429 | `queue_full` | In-memory job store is full; `Retry-After` header included |
 | 429 | `rate_limited` | Per-IP token bucket exhausted; `Retry-After` header included |
 | 503 | `timeout` | All inference sessions busy; `Retry-After` + `retry_after_ms` |
 | 503 | `pool_closed` | Server is shutting down, pool closed to new checkouts |
