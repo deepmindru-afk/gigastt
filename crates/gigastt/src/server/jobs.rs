@@ -276,7 +276,9 @@ impl JobStore for InMemoryJobStore {
 
     fn is_full<'a>(&'a self) -> JobStoreFuture<'a, bool> {
         Box::pin(async move {
-            let jobs = self.jobs.lock();
+            let mut jobs = self.jobs.lock();
+            let mut queue = self.queue.lock();
+            self.evict_expired_locked(&mut jobs, &mut queue);
             jobs.len() >= self.limits.jobs_max
         })
     }
@@ -586,15 +588,23 @@ impl JobExecution for RealJobExecutor {
         let limits = self.limits.load();
 
         // Decode audio (blocking) once to estimate duration for progress.
+        // Wrap the decoder in catch_unwind so a malformed file cannot be
+        // retried as a transient inference panic.
         let samples = tokio::task::spawn_blocking({
             let body = body.clone();
-            move || gigastt_core::inference::audio::decode_audio_bytes_shared(body)
+            move || {
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    gigastt_core::inference::audio::decode_audio_bytes_shared(body)
+                }))
+            }
         })
         .await
         .map_err(|e| anyhow::anyhow!("audio decode task panicked: {e}"))?
+        .map_err(|_| anyhow::anyhow!("Invalid audio: decoder panicked"))?
         .map_err(|e| anyhow::anyhow!("Invalid audio: {e:#}"))?;
 
-        let total_seconds = samples.len() as f64 / 16_000.0;
+        const TARGET_SAMPLE_RATE: f64 = 16_000.0;
+        let total_seconds = samples.len() as f64 / TARGET_SAMPLE_RATE;
         let _ = store
             .update(id, Box::new(move |j| j.total_seconds = total_seconds))
             .await;
@@ -661,89 +671,94 @@ impl JobExecution for RealJobExecutor {
         };
 
         // Check out a triplet from the batch pool and run inference.
-        let guard = match tokio::time::timeout(
-            std::time::Duration::from_secs(limits.pool_checkout_timeout_secs),
-            engine.pool_for_batch().checkout(),
-        )
-        .await
-        {
-            Ok(Ok(g)) => g,
-            Ok(Err(_)) => return Err(anyhow::anyhow!("pool closed")),
-            Err(_) => return Err(anyhow::anyhow!("pool checkout timed out")),
-        };
-        let mut reservation = guard.into_owned();
-
-        let inference_timeout_secs = limits.inference_timeout_secs;
-        let engine_for_inference = engine.clone();
-        let body_for_inference = body.clone();
-        let span = tracing::Span::current();
-        let handle = tokio::task::spawn_blocking(move || {
-            let _enter = span.enter();
-            let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                if params.channels.as_deref() == Some("split") {
-                    let channels =
-                        gigastt_core::inference::audio::decode_audio_bytes_shared_channels(
-                            body_for_inference.clone(),
-                        )
-                        .map_err(|e| {
-                            gigastt_core::error::GigasttError::InvalidAudio {
-                                reason: format!("{e:#}"),
-                            }
-                        })?;
-                    let fallback_reason = match channels.len() {
-                        0 => Some("no channels"),
-                        1 => Some("mono audio"),
-                        2 if gigastt_core::inference::audio::is_dual_mono(&channels) => {
-                            Some("dual-mono audio")
-                        }
-                        n if n > 2 => Some("more than two channels"),
-                        _ => None,
-                    };
-                    if let Some(reason) = fallback_reason {
-                        tracing::warn!(
-                            "channels=split requested but {reason} detected; falling back to mono transcription"
-                        );
-                        engine_for_inference
-                            .transcribe_bytes_shared(body_for_inference, &mut reservation)
-                    } else {
-                        engine_for_inference.transcribe_channels(&channels, &mut reservation)
-                    }
-                } else {
-                    engine_for_inference.transcribe_bytes_shared_with_overrides(
-                        body_for_inference,
-                        &mut reservation,
-                        &overrides,
-                    )
-                }
-            }));
-            match r {
-                Ok(result) => result,
-                Err(_) => Err(gigastt_core::error::GigasttError::Inference {
-                    source: anyhow::anyhow!("Inference thread panicked").into(),
-                }),
-            }
-        });
-
-        let result = if inference_timeout_secs == 0 {
-            handle.await
-        } else {
-            match tokio::time::timeout(
-                std::time::Duration::from_secs(inference_timeout_secs),
-                handle,
+        // This is wrapped in its own async block so the progress updater is
+        // always cancelled and awaited before the function returns, even on
+        // the early-return error paths below.
+        let inference_result: anyhow::Result<gigastt_core::inference::TranscribeResult> = async {
+            let guard = tokio::time::timeout(
+                std::time::Duration::from_secs(limits.pool_checkout_timeout_secs),
+                engine.pool_for_batch().checkout(),
             )
             .await
-            {
-                Ok(r) => r,
-                Err(_) => return Err(anyhow::anyhow!("inference_timeout")),
+            .map_err(|_| anyhow::anyhow!("pool checkout timed out"))?
+            .map_err(|_| anyhow::anyhow!("pool closed"))?;
+            let mut reservation = guard.into_owned();
+
+            let inference_timeout_secs = limits.inference_timeout_secs;
+            let engine_for_inference = engine.clone();
+            let body_for_inference = body.clone();
+            let span = tracing::Span::current();
+            let handle = tokio::task::spawn_blocking(move || {
+                let _enter = span.enter();
+                let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    if params.channels.as_deref() == Some("split") {
+                        let channels =
+                            gigastt_core::inference::audio::decode_audio_bytes_shared_channels(
+                                body_for_inference.clone(),
+                            )
+                            .map_err(|e| {
+                                gigastt_core::error::GigasttError::InvalidAudio {
+                                    reason: format!("{e:#}"),
+                                }
+                            })?;
+                        let fallback_reason = match channels.len() {
+                            0 => Some("no channels"),
+                            1 => Some("mono audio"),
+                            2 if gigastt_core::inference::audio::is_dual_mono(&channels) => {
+                                Some("dual-mono audio")
+                            }
+                            n if n > 2 => Some("more than two channels"),
+                            _ => None,
+                        };
+                        if let Some(reason) = fallback_reason {
+                            tracing::warn!(
+                                "channels=split requested but {reason} detected; falling back to mono transcription"
+                            );
+                            engine_for_inference
+                                .transcribe_bytes_shared(body_for_inference, &mut reservation)
+                        } else {
+                            engine_for_inference.transcribe_channels(&channels, &mut reservation)
+                        }
+                    } else {
+                        engine_for_inference.transcribe_bytes_shared_with_overrides(
+                            body_for_inference,
+                            &mut reservation,
+                            &overrides,
+                        )
+                    }
+                }));
+                match r {
+                    Ok(result) => result,
+                    Err(_) => Err(gigastt_core::error::GigasttError::Inference {
+                        source: anyhow::anyhow!("Inference thread panicked").into(),
+                    }),
+                }
+            });
+
+            if inference_timeout_secs == 0 {
+                handle
+                    .await
+                    .map_err(|e| anyhow::anyhow!("spawn_blocking join error: {e}"))?
+                    .map_err(anyhow::Error::from)
+            } else {
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(inference_timeout_secs),
+                    handle,
+                )
+                .await
+                {
+                    Ok(r) => r.map_err(|e| anyhow::anyhow!("spawn_blocking join error: {e}"))?
+                        .map_err(anyhow::Error::from),
+                    Err(_) => Err(anyhow::anyhow!("inference_timeout")),
+                }
             }
-        };
+        }
+        .await;
 
         progress_cancel.cancel();
         let _ = progress_handle.await;
 
-        result
-            .map_err(|e| anyhow::anyhow!("spawn_blocking join error: {e}"))?
-            .map_err(anyhow::Error::from)
+        inference_result
     }
 }
 
@@ -843,6 +858,30 @@ mod tests {
             ))
             .await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_store_is_full_evicts_expired() {
+        let limits = RuntimeLimits {
+            jobs_ttl_secs: 1,
+            jobs_max: 1,
+            ..test_limits()
+        };
+        let store = InMemoryJobStore::new(limits);
+        let id = store
+            .create(Job::queued(
+                Bytes::from_static(b"a"),
+                ExportParams::default(),
+            ))
+            .await
+            .unwrap();
+        store
+            .update(&id, Box::new(|j| j.status = JobStatus::Done))
+            .await
+            .unwrap();
+        store.backdate(&id, 2.0).await;
+        // is_full should evict the expired terminal job and report capacity.
+        assert!(!store.is_full().await);
     }
 
     #[tokio::test]
