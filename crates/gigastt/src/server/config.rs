@@ -137,6 +137,18 @@ pub struct RuntimeLimits {
     /// 10-minute (600 s audio) file on the CPU EP without tripping, while
     /// still bounding a genuinely wedged run.
     pub inference_timeout_secs: u64,
+    /// Whether the asynchronous `/v1/jobs` API is enabled. Off by default so
+    /// existing single-user installs see no change.
+    pub jobs_enabled: bool,
+    /// TTL in seconds for completed/failed/cancelled jobs before eviction.
+    /// Default: 3600 (1 hour).
+    pub jobs_ttl_secs: u64,
+    /// Maximum number of jobs kept in memory (queued + finished). When full,
+    /// POST /v1/jobs returns 429 + Retry-After. Default: 100.
+    pub jobs_max: usize,
+    /// Maximum retry attempts for a job that hits inference_timeout or panics.
+    /// Default: 3.
+    pub jobs_retry: u32,
 }
 
 impl Default for RuntimeLimits {
@@ -151,6 +163,10 @@ impl Default for RuntimeLimits {
             shutdown_drain_secs: 10,
             pool_checkout_timeout_secs: 30,
             inference_timeout_secs: 600,
+            jobs_enabled: false,
+            jobs_ttl_secs: 3600,
+            jobs_max: 100,
+            jobs_retry: 3,
         }
     }
 }
@@ -179,6 +195,14 @@ pub struct RuntimeLimitsConfig {
     pub pool_checkout_timeout_secs: u64,
     /// Per-request inference timeout in seconds (`0` disables).
     pub inference_timeout_secs: u64,
+    /// Enable the asynchronous `/v1/jobs` API.
+    pub jobs_enabled: bool,
+    /// TTL in seconds for completed/failed/cancelled jobs.
+    pub jobs_ttl_secs: u64,
+    /// Maximum number of jobs kept in memory.
+    pub jobs_max: usize,
+    /// Maximum retry attempts for inference-timeout / panic.
+    pub jobs_retry: u32,
 }
 
 impl Default for RuntimeLimitsConfig {
@@ -194,6 +218,10 @@ impl Default for RuntimeLimitsConfig {
             shutdown_drain_secs: d.shutdown_drain_secs,
             pool_checkout_timeout_secs: d.pool_checkout_timeout_secs,
             inference_timeout_secs: d.inference_timeout_secs,
+            jobs_enabled: d.jobs_enabled,
+            jobs_ttl_secs: d.jobs_ttl_secs,
+            jobs_max: d.jobs_max,
+            jobs_retry: d.jobs_retry,
         }
     }
 }
@@ -210,6 +238,10 @@ impl From<RuntimeLimitsConfig> for RuntimeLimits {
             shutdown_drain_secs: cfg.shutdown_drain_secs,
             pool_checkout_timeout_secs: cfg.pool_checkout_timeout_secs,
             inference_timeout_secs: cfg.inference_timeout_secs,
+            jobs_enabled: cfg.jobs_enabled,
+            jobs_ttl_secs: cfg.jobs_ttl_secs,
+            jobs_max: cfg.jobs_max,
+            jobs_retry: cfg.jobs_retry,
         }
     }
 }
@@ -257,6 +289,9 @@ pub struct ServerConfig {
     pub trust_proxy: bool,
     /// Path to TOML config file for runtime limits (reloaded on SIGHUP).
     pub config_path: Option<std::path::PathBuf>,
+    /// Size of the triplet pool reserved for batch REST / job transcription.
+    /// Split off from the interactive pool so long files can't starve WS/SSE.
+    pub batch_pool_size: usize,
 }
 
 impl ServerConfig {
@@ -272,6 +307,7 @@ impl ServerConfig {
             metrics_listen: default_metrics_listen(),
             trust_proxy: false,
             config_path: None,
+            batch_pool_size: 0,
         }
     }
 }
@@ -288,6 +324,15 @@ mod tests {
             "rate limiting must be off by default (privacy-first)"
         );
         assert_eq!(limits.rate_limit_burst, 10, "default burst size must be 10");
+    }
+
+    #[test]
+    fn test_runtime_limits_default_jobs() {
+        let limits = RuntimeLimits::default();
+        assert!(!limits.jobs_enabled);
+        assert_eq!(limits.jobs_ttl_secs, 3600);
+        assert_eq!(limits.jobs_max, 100);
+        assert_eq!(limits.jobs_retry, 3);
     }
 
     #[test]
