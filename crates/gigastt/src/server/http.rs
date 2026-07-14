@@ -1120,6 +1120,38 @@ pub struct JobSubmitResponse {
     pub created_at: f64,
 }
 
+/// Return the job server state or a 404 if the async job API is disabled.
+#[allow(clippy::result_large_err)]
+fn require_jobs(state: &AppState) -> Result<&JobServerState, ApiError> {
+    state.jobs.as_ref().ok_or_else(|| {
+        api_error(
+            StatusCode::NOT_FOUND,
+            "Job API is not enabled",
+            "jobs_disabled",
+        )
+    })
+}
+
+/// Fetch a job by id, mapping store errors to the standard HTTP responses.
+async fn load_job(store: &dyn JobStore, id: &str) -> Result<super::jobs::Job, ApiError> {
+    match store.get(id).await {
+        Ok(Some(job)) => Ok(job),
+        Ok(None) => Err(api_error(
+            StatusCode::NOT_FOUND,
+            "Job not found",
+            "job_not_found",
+        )),
+        Err(e) => {
+            tracing::error!("Failed to get job {id}: {e:#}");
+            Err(api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to read job status",
+                "internal",
+            ))
+        }
+    }
+}
+
 /// POST /v1/jobs — enqueue a long audio file for asynchronous transcription.
 ///
 /// Accepts the same body and query parameters as `/v1/transcribe`. Returns 202
@@ -1130,13 +1162,7 @@ pub async fn submit_job(
     Query(params): Query<ExportParams>,
     body: Bytes,
 ) -> Result<Response, ApiError> {
-    let Some(ref jobs) = state.jobs else {
-        return Err(api_error(
-            StatusCode::NOT_FOUND,
-            "Job API is not enabled",
-            "jobs_disabled",
-        ));
-    };
+    let jobs = require_jobs(&state)?;
     let limits = state.limits.load();
     if body.is_empty() {
         return Err(api_error(
@@ -1167,6 +1193,16 @@ pub async fn submit_job(
         )
             .into_response());
     }
+    let split_channels = params.channels.as_deref() == Some("split");
+    let request_diarization = params.diarization == Some(true);
+    if split_channels && request_diarization {
+        return Err(api_error(
+            StatusCode::BAD_REQUEST,
+            "channels=split and diarization=true are mutually exclusive",
+            "conflicting_modes",
+        ));
+    }
+
     let job = super::jobs::Job::queued(body, params);
     let created_at = job.created_at;
     let id = match jobs.store.create(job).await {
@@ -1196,29 +1232,9 @@ pub async fn get_job(
     State(state): State<Arc<AppState>>,
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Result<Response, ApiError> {
-    let Some(ref jobs) = state.jobs else {
-        return Err(api_error(
-            StatusCode::NOT_FOUND,
-            "Job API is not enabled",
-            "jobs_disabled",
-        ));
-    };
-    match jobs.store.get(&id).await {
-        Ok(Some(job)) => Ok(Json(super::jobs::job_status_response(&job)).into_response()),
-        Ok(None) => Err(api_error(
-            StatusCode::NOT_FOUND,
-            "Job not found",
-            "job_not_found",
-        )),
-        Err(e) => {
-            tracing::error!("Failed to get job {id}: {e:#}");
-            Err(api_error(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to read job status",
-                "internal",
-            ))
-        }
-    }
+    let jobs = require_jobs(&state)?;
+    let job = load_job(&*jobs.store, &id).await?;
+    Ok(Json(super::jobs::job_status_response(&job)).into_response())
 }
 
 /// GET /v1/jobs/{id}/result — fetch the finished transcription.
@@ -1226,31 +1242,8 @@ pub async fn get_job_result(
     State(state): State<Arc<AppState>>,
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Result<Response, ApiError> {
-    let Some(ref jobs) = state.jobs else {
-        return Err(api_error(
-            StatusCode::NOT_FOUND,
-            "Job API is not enabled",
-            "jobs_disabled",
-        ));
-    };
-    let job = match jobs.store.get(&id).await {
-        Ok(Some(job)) => job,
-        Ok(None) => {
-            return Err(api_error(
-                StatusCode::NOT_FOUND,
-                "Job not found",
-                "job_not_found",
-            ));
-        }
-        Err(e) => {
-            tracing::error!("Failed to get job {id}: {e:#}");
-            return Err(api_error(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to read job result",
-                "internal",
-            ));
-        }
-    };
+    let jobs = require_jobs(&state)?;
+    let job = load_job(&*jobs.store, &id).await?;
     if !matches!(job.status, JobStatus::Done) {
         return Err(api_error(
             StatusCode::CONFLICT,
@@ -1289,31 +1282,8 @@ pub async fn cancel_job(
     State(state): State<Arc<AppState>>,
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Result<Response, ApiError> {
-    let Some(ref jobs) = state.jobs else {
-        return Err(api_error(
-            StatusCode::NOT_FOUND,
-            "Job API is not enabled",
-            "jobs_disabled",
-        ));
-    };
-    let job = match jobs.store.get(&id).await {
-        Ok(Some(job)) => job,
-        Ok(None) => {
-            return Err(api_error(
-                StatusCode::NOT_FOUND,
-                "Job not found",
-                "job_not_found",
-            ));
-        }
-        Err(e) => {
-            tracing::error!("Failed to get job {id}: {e:#}");
-            return Err(api_error(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to read job status",
-                "internal",
-            ));
-        }
-    };
+    let jobs = require_jobs(&state)?;
+    let job = load_job(&*jobs.store, &id).await?;
     if !matches!(job.status, JobStatus::Queued | JobStatus::Processing) {
         return Err(api_error(
             StatusCode::CONFLICT,
@@ -1341,31 +1311,8 @@ pub async fn job_events(
     State(state): State<Arc<AppState>>,
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>, ApiError> {
-    let Some(ref jobs) = state.jobs else {
-        return Err(api_error(
-            StatusCode::NOT_FOUND,
-            "Job API is not enabled",
-            "jobs_disabled",
-        ));
-    };
-    let job = match jobs.store.get(&id).await {
-        Ok(Some(job)) => job,
-        Ok(None) => {
-            return Err(api_error(
-                StatusCode::NOT_FOUND,
-                "Job not found",
-                "job_not_found",
-            ));
-        }
-        Err(e) => {
-            tracing::error!("Failed to get job {id}: {e:#}");
-            return Err(api_error(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to read job events",
-                "internal",
-            ));
-        }
-    };
+    let jobs = require_jobs(&state)?;
+    let job = load_job(&*jobs.store, &id).await?;
 
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<JobEvent>();
     if job.status.is_terminal() {

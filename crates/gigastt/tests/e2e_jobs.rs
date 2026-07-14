@@ -224,3 +224,51 @@ async fn test_job_sse_events() {
 
     let _ = shutdown.send(());
 }
+
+/// A job with invalid audio eventually fails with a sanitized, client-safe error.
+#[ignore = "requires model"]
+#[tokio::test]
+async fn test_job_invalid_audio_fails_with_sanitized_error() {
+    let (port, shutdown) = common::start_server_with_jobs(&common::model_dir(), 1).await;
+    let client = reqwest::Client::new();
+
+    let submit = client
+        .post(format!("http://127.0.0.1:{port}/v1/jobs"))
+        .body(b"not-a-wav-file".to_vec())
+        .send()
+        .await
+        .expect("POST /v1/jobs failed");
+    assert_eq!(submit.status(), 202);
+    let text = submit
+        .text()
+        .await
+        .expect("submit response should have text");
+    let body: serde_json::Value =
+        serde_json::from_str(&text).expect("submit response should be JSON");
+    let job_id = body["job_id"].as_str().expect("job_id should be a string");
+
+    let mut final_status = serde_json::Value::Null;
+    for _ in 0..60 {
+        let resp = client
+            .get(format!("http://127.0.0.1:{port}/v1/jobs/{job_id}"))
+            .send()
+            .await
+            .expect("GET /v1/jobs/{id} failed");
+        assert_eq!(resp.status(), 200);
+        let text = resp.text().await.expect("status response should have text");
+        let status: serde_json::Value = serde_json::from_str(&text).expect("status should be JSON");
+        if status["status"] == "failed" {
+            final_status = status;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+
+    assert_eq!(final_status["status"], "failed");
+    assert!(
+        final_status["error"].as_str().unwrap().contains("decode"),
+        "error should be sanitized for clients: {final_status:?}"
+    );
+
+    let _ = shutdown.send(());
+}
