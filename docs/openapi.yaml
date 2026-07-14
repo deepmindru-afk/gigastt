@@ -457,7 +457,248 @@ paths:
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
 
+  /v1/jobs:
+    post:
+      summary: Submit an asynchronous transcription job
+      description: |
+        Enqueue a long audio file for asynchronous transcription. The endpoint
+        accepts the same body and query parameters as `POST /v1/transcribe`.
+        When the job API is disabled (`--enable-jobs` not set), this path returns
+        `404`.
+      operationId: submitJob
+      parameters:
+        - $ref: "#/components/parameters/Format"
+        - $ref: "#/components/parameters/WordTimestamps"
+        - $ref: "#/components/parameters/Segments"
+        - $ref: "#/components/parameters/Channels"
+        - $ref: "#/components/parameters/Diarization"
+        - $ref: "#/components/parameters/Punctuation"
+        - $ref: "#/components/parameters/Itn"
+        - $ref: "#/components/parameters/Vad"
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "202":
+          description: Job accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobSubmitResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "429":
+          description: Job queue is full
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Seconds to wait before retry
+              example: 30
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: "Job queue is full"
+                code: queue_full
+                retry_after_ms: 30000
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /v1/jobs/{id}:
+    get:
+      summary: Poll job status and progress
+      description: |
+        Returns the current status of an asynchronous transcription job. When the
+        job API is disabled, this path returns `404`.
+      operationId: getJob
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Job status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobStatusResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    delete:
+      summary: Cancel a queued or processing job
+      description: |
+        Cancels a job that is still `queued` or `processing`. Cancelling a queued
+        job immediately frees its slot; cancelling a processing job stops result
+        propagation but the in-flight triplet is released only when the worker
+        finishes. When the job API is disabled, this path returns `404`.
+      operationId: cancelJob
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Job cancelled
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Job cannot be cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: "Job cannot be cancelled"
+                code: job_not_cancellable
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /v1/jobs/{id}/result:
+    get:
+      summary: Fetch the finished transcription
+      description: |
+        Returns the transcription result in the format requested at submission
+        time. If the job has not finished, returns `409 job_not_finished`.
+      operationId: getJobResult
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Transcription result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TranscribeResponse"
+            text/plain:
+              schema:
+                type: string
+            application/x-subrip:
+              schema:
+                type: string
+            text/vtt:
+              schema:
+                type: string
+            text/markdown:
+              schema:
+                type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Job is not finished
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: "Job is not finished"
+                code: job_not_finished
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /v1/jobs/{id}/events:
+    get:
+      summary: SSE stream of job events
+      description: |
+        Server-Sent Events stream emitting `progress`, `done`, `failed`, and
+        `cancelled` events. The stream closes automatically after a terminal
+        event. When the job API is disabled, this path returns `404`.
+      operationId: getJobEvents
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: SSE event stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+              example: |
+                data: {"type":"progress","percent":25,"processed_seconds":5.0}
+
+                data: {"type":"done"}
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
 components:
+  parameters:
+    Format:
+      name: format
+      in: query
+      schema:
+        type: string
+        enum: [json, txt, srt, vtt, md]
+      description: Export format for the finished result
+    WordTimestamps:
+      name: word_timestamps
+      in: query
+      schema:
+        type: boolean
+      description: Include per-word timestamps
+    Segments:
+      name: segments
+      in: query
+      schema:
+        type: boolean
+      description: Group words into natural-boundary segments
+    Channels:
+      name: channels
+      in: query
+      schema:
+        type: string
+        enum: [split]
+      description: Transcribe left/right channels as separate speakers
+    Diarization:
+      name: diarization
+      in: query
+      schema:
+        type: boolean
+      description: Request speaker diarization
+    Punctuation:
+      name: punctuation
+      in: query
+      schema:
+        type: string
+        enum: [on, off, auto]
+      description: Override punctuation policy
+    Itn:
+      name: itn
+      in: query
+      schema:
+        type: string
+        enum: [on, off, auto]
+      description: Override inverse text normalization policy
+    Vad:
+      name: vad
+      in: query
+      schema:
+        type: string
+        enum: [on, off, auto]
+      description: Override voice activity detection policy
+
   schemas:
     HealthResponse:
       type: object
@@ -697,6 +938,124 @@ components:
           type: integer
           description: Zero-based speaker index (only present when channel split or diarization produced speaker labels)
 
+    JobSubmitResponse:
+      type: object
+      required:
+        - job_id
+        - status
+        - created_at
+      properties:
+        job_id:
+          type: string
+          example: 018f...-
+          description: Unique job identifier
+        status:
+          type: string
+          enum: [queued]
+          example: queued
+        created_at:
+          type: number
+          example: 1712700000.5
+          description: Unix timestamp (seconds with fractional part)
+
+    JobStatusResponse:
+      type: object
+      required:
+        - job_id
+        - status
+        - processed_seconds
+        - percent
+      properties:
+        job_id:
+          type: string
+        status:
+          type: string
+          enum: [queued, processing, done, failed, cancelled]
+        processed_seconds:
+          type: number
+          example: 12.5
+          description: Seconds of audio considered processed so far
+        percent:
+          type: integer
+          example: 42
+          description: Approximate completion percentage (0-100)
+        error:
+          type: string
+          example: "Transcription failed."
+          description: Sanitized error message for failed jobs
+
+    JobEvent:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum: [progress, done, failed, cancelled]
+      discriminator:
+        propertyName: type
+        mapping:
+          progress: "#/components/schemas/JobProgressEvent"
+          done: "#/components/schemas/JobDoneEvent"
+          failed: "#/components/schemas/JobFailedEvent"
+          cancelled: "#/components/schemas/JobCancelledEvent"
+
+    JobProgressEvent:
+      allOf:
+        - $ref: "#/components/schemas/JobEvent"
+      type: object
+      required:
+        - type
+        - percent
+        - processed_seconds
+      properties:
+        type:
+          type: string
+          enum: [progress]
+        percent:
+          type: integer
+          example: 42
+        processed_seconds:
+          type: number
+          example: 12.5
+
+    JobDoneEvent:
+      allOf:
+        - $ref: "#/components/schemas/JobEvent"
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum: [done]
+
+    JobFailedEvent:
+      allOf:
+        - $ref: "#/components/schemas/JobEvent"
+      type: object
+      required:
+        - type
+        - error
+      properties:
+        type:
+          type: string
+          enum: [failed]
+        error:
+          type: string
+          example: "Transcription failed."
+
+    JobCancelledEvent:
+      allOf:
+        - $ref: "#/components/schemas/JobEvent"
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum: [cancelled]
+
     ErrorResponse:
       type: object
       required:
@@ -826,3 +1185,21 @@ components:
           example:
             error: "Inference timed out."
             code: inference_timeout
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            job_not_found:
+              summary: Unknown job id
+              value:
+                error: "Job not found"
+                code: job_not_found
+            jobs_disabled:
+              summary: Job API is disabled
+              value:
+                error: "Job API is not enabled"
+                code: jobs_disabled
