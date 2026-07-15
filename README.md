@@ -96,6 +96,7 @@ $ gigastt serve
 | Streaming | incremental WebSocket partials · REST + SSE for files · single port 9876 |
 | Audio in | WAV · M4A/AAC · MP3 · OGG/Vorbis · FLAC (auto mono mix for multi-channel) |
 | Stereo telephony recordings | Optional channel-speaker mode (`--stereo-speakers` CLI / `channels=split` REST) labels the left/right channels as `speaker_0` and `speaker_1` |
+| Async jobs | Long-file / batch transcription queue via `/v1/jobs` (opt-in with `--enable-jobs`): submit, poll, cancel, SSE progress, retry, and TTL eviction |
 | Export | JSON · TXT · SRT · VTT · Markdown — per-word timings + confidence, or segment-level (`?segments=true` JSON, `### [mm:ss]` Markdown) |
 | Server hardening | loopback-only by default · origin allowlist · per-IP rate limiting · graceful drain · Prometheus `/metrics` on a separate port · loopback-only model hot-reload (`POST /v1/admin/reload`) |
 
@@ -111,7 +112,7 @@ $ gigastt serve
 
 ## Requirements
 
-Rust **1.88+**, `protoc` on `PATH`. macOS 14+ (Apple Silicon, CoreML) or Linux x86_64 (optional NVIDIA CUDA 12+). ~1.5 GB disk, ~790 MB RAM at the default `--pool-size 2` (~400 MB single-session). The `gigastt-core` crate has no server dependencies — embed it directly: `gigastt-core = "2.8"`.
+Rust **1.88+**, `protoc` on `PATH`. macOS 14+ (Apple Silicon, CoreML) or Linux x86_64 (optional NVIDIA CUDA 12+). ~1.5 GB disk, ~790 MB RAM at the default `--pool-size 2` (~400 MB single-session). The `gigastt-core` crate has no server dependencies — embed it directly: `gigastt-core = "2.10"`.
 
 ## License
 
