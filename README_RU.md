@@ -95,6 +95,7 @@ $ gigastt serve
 | Провайдеры исполнения | CPU (любая платформа) · CoreML / Neural Engine (macOS ARM64) · CUDA 12+ (Linux x86_64) · NNAPI (Android) |
 | Стриминг | инкрементальные partial'ы по WebSocket · REST + SSE для файлов · один порт 9876 |
 | Аудио на вход | WAV · M4A/AAC · MP3 · OGG/Vorbis · FLAC (авто-микс в моно) |
+| Асинхронные задачи | Очередь для длинных файлов / batch-распознавания через `/v1/jobs` (включается `--enable-jobs`): submit, poll, отмена, SSE-прогресс, retry и TTL-евикция |
 | Экспорт | JSON · TXT · SRT · VTT · Markdown — пословные тайминги + confidence или посегментно (`?segments=true` JSON, `### [mm:ss]` Markdown) |
 | Защита сервера | loopback по умолчанию · origin-allowlist · rate-limiting по IP · graceful drain · Prometheus `/metrics` на отдельном порту · loopback-only горячая перезагрузка модели (`POST /v1/admin/reload`) |
 
@@ -110,7 +111,7 @@ $ gigastt serve
 
 ## Требования
 
-Rust **1.88+**, `protoc` в `PATH`. macOS 14+ (Apple Silicon, CoreML) или Linux x86_64 (опц. NVIDIA CUDA 12+). ~1.5 ГБ диска, ~790 МБ RAM при дефолтном `--pool-size 2` (~400 МБ на одну сессию). Крейт `gigastt-core` без серверных зависимостей: `gigastt-core = "2.8"`.
+Rust **1.88+**, `protoc` в `PATH`. macOS 14+ (Apple Silicon, CoreML) или Linux x86_64 (опц. NVIDIA CUDA 12+). ~1.5 ГБ диска, ~790 МБ RAM при дефолтном `--pool-size 2` (~400 МБ на одну сессию). Крейт `gigastt-core` без серверных зависимостей: `gigastt-core = "2.10"`.
 
 ## Лицензия
 
