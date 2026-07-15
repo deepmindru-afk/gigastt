@@ -1516,7 +1516,16 @@ _Release candidate for v0.9.0 — bundles five P0 fixes plus two supporting item
 - Multi-format audio support: WAV, MP3, M4A/AAC, OGG/Vorbis, FLAC (via symphonia).
 - 39 unit tests (tokenizer, features, decode, inference, protocol).
 
-[Unreleased]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.14...HEAD
+[Unreleased]: https://github.com/ekhodzitsky/gigastt/compare/v2.10.0...HEAD
+[2.10.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.9.0...v2.10.0
+[2.9.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.8.0...v2.9.0
+[2.8.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.7.0...v2.8.0
+[2.7.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.6.0...v2.7.0
+[2.6.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.5.0...v2.6.0
+[2.5.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.4.0...v2.5.0
+[2.4.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.3.0...v2.4.0
+[2.3.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.1.0...v2.3.0
+[2.1.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.14...v2.1.0
 [2.0.14]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.13...v2.0.14
 [2.0.13]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.12...v2.0.13
 [2.0.12]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.11...v2.0.12

@@ -6,7 +6,7 @@ Core inference engine for [gigastt](https://github.com/ekhodzitsky/gigastt) — 
 
 ```toml
 [dependencies]
-gigastt-core = "2.3"
+gigastt-core = "2.10"
 ```
 
 ```rust,ignore

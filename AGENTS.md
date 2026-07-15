@@ -298,6 +298,11 @@ This guarantees that a regression like a broken `cargo test` cannot reach `main`
   - `--inference-timeout-secs` (default 600) — per-request inference timeout; 0 disables
   - `--max-session-secs` (default 3600) — wall-clock session cap
   - `--shutdown-drain-secs` (default 10) — graceful shutdown drain window
+  - `--enable-jobs` (default false) — enable the asynchronous `/v1/jobs` API for long-file
+    and batch transcription; when disabled the routes are not registered and return 404
+  - `--jobs-ttl-secs` (default 3600) — TTL for finished/failed/cancelled jobs in the store
+  - `--jobs-max` (default 100) — max jobs kept in memory; `POST /v1/jobs` returns 429 when full
+  - `--jobs-retry` (default 3) — max retries for a job on `inference_timeout` or panic
 - **Per-IP rate limiting** (opt-in, off by default): `--rate-limit-per-minute N`
   enables token-bucket limiter on `/v1/*`; `/health` is exempt. Returns HTTP 429
   + `Retry-After` when exhausted.
@@ -348,6 +353,10 @@ All CLI flags have corresponding env vars:
 | `GIGASTT_INFERENCE_TIMEOUT_SECS` | `--inference-timeout-secs` | 600 |
 | `GIGASTT_MAX_SESSION_SECS` | `--max-session-secs` | 3600 |
 | `GIGASTT_SHUTDOWN_DRAIN_SECS` | `--shutdown-drain-secs` | 10 |
+| `GIGASTT_ENABLE_JOBS` | `--enable-jobs` | false |
+| `GIGASTT_JOBS_TTL_SECS` | `--jobs-ttl-secs` | 3600 |
+| `GIGASTT_JOBS_MAX` | `--jobs-max` | 100 |
+| `GIGASTT_JOBS_RETRY` | `--jobs-retry` | 3 |
 | `GIGASTT_SKIP_QUANTIZE` | `--skip-quantize` | false |
 | `GIGASTT_METRICS` | `--metrics` | false |
 | `GIGASTT_METRICS_LISTEN` | `--metrics-listen` | 127.0.0.1:9090 |
