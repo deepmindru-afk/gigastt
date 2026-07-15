@@ -399,6 +399,9 @@ jobs:
     name: Semver Checks
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Full history so cargo-semver-checks can resolve the baseline ref.
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
@@ -410,6 +413,11 @@ jobs:
         with:
           # coreml+cuda are mutually exclusive; --all-features is impossible.
           feature-group: default-features
+          # Compare against the target branch instead of the last crates.io
+          # release. This keeps the baseline in sync with the repo: a change
+          # already merged to `main` (e.g. the additive `Segment.speaker` field
+          # in 2.9.0) is not re-flagged on every subsequent PR.
+          baseline-rev: origin/main
           # Check only the published *library* crates' API stability. `gigastt`
           # is a server binary / `cargo install` target whose Rust library
           # surface (ServerConfig, RuntimeLimits, http handlers) is an internal
