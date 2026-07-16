@@ -806,50 +806,17 @@ pub async fn transcribe_stream(
         ));
     }
 
-    // Decode audio first (in spawn_blocking since symphonia is blocking).
-    // `body` is `axum::body::Bytes`, so the move into the blocking closure is
-    // a refcount bump and `decode_audio_bytes_shared` reads the upload
-    // buffer in place.
-    let samples = tokio::task::spawn_blocking(move || {
-        // catch_unwind mirrors the REST handler: a panic inside the blocking
-        // decode (e.g. a crafted container that trips an upstream arithmetic
-        // panic) is absorbed and surfaced as a normal decode error instead of a
-        // `JoinError`, so the SSE path returns a clean 422 rather than a 500.
-        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            gigastt_core::inference::audio::decode_audio_bytes_shared(body)
-        })) {
-            Ok(inner) => inner,
-            Err(_) => {
-                tracing::error!("Panic in SSE audio decode — treated as decode error");
-                Err(anyhow::anyhow!("Audio decode thread panicked"))
-            }
-        }
-    })
-    .await
-    .map_err(|e| {
-        tracing::error!("spawn_blocking join error: {e}");
-        api_error(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Internal server error",
-            "internal",
-        )
-    })?
-    .map_err(|e| {
-        tracing::error!("Audio decode error: {e:#}");
-        api_error(
-            StatusCode::UNPROCESSABLE_ENTITY,
-            "Failed to decode audio file. Check format (WAV, MP3, M4A, OGG, FLAC supported).",
-            "invalid_audio",
-        )
-    })?;
-
-    // Checkout a session triplet from the batch pool — SSE file transcription
-    // decodes and transcribes the *entire* upload (holding the triplet for the
-    // whole file), so it is a batch workload, not interactive streaming. Draw
-    // from the dedicated batch pool when one exists (falling back to the
-    // interactive pool otherwise) so it can't starve real-time WebSocket
-    // streaming, matching `/v1/transcribe`. Strip the lifetime via `into_owned`
-    // so the triplet can travel through `spawn_blocking`.
+    // Checkout a session triplet from the batch pool BEFORE decoding. SSE file
+    // transcription decodes and transcribes the *entire* upload (holding the
+    // triplet for the whole file), so it is a batch workload, not interactive
+    // streaming. Reserving first — like `/v1/transcribe` — is load-bearing: it
+    // caps the number of *concurrent decodes* at the pool size, so a burst of
+    // large (compressed) uploads can't each expand into a full f32 PCM buffer at
+    // once and exhaust memory. A saturated pool yields 503 / `Retry-After` here,
+    // before any decode. Draw from the dedicated batch pool when one exists
+    // (falling back to the interactive pool otherwise) so it can't starve
+    // real-time WebSocket streaming. Strip the lifetime via `into_owned` so the
+    // triplet can travel through `spawn_blocking`.
     // Snapshot the current engine once; a concurrent hot-reload swap only
     // affects later requests, so this stream rides the pool it started on.
     let engine = state.engine.load_full();
@@ -882,6 +849,46 @@ pub async fn transcribe_stream(
         );
     }
     let mut reservation = guard.into_owned();
+
+    // Decode audio now that a slot is reserved (in spawn_blocking since symphonia
+    // is blocking). Holding the reservation across the decode is what bounds the
+    // number of concurrent PCM expansions to the pool size. `body` is
+    // `axum::body::Bytes`, so the move into the blocking closure is a refcount
+    // bump and `decode_audio_bytes_shared` reads the upload buffer in place. On a
+    // decode error the early `?` return drops `reservation`, returning the
+    // triplet to the pool.
+    let samples = tokio::task::spawn_blocking(move || {
+        // catch_unwind mirrors the REST handler: a panic inside the blocking
+        // decode (e.g. a crafted container that trips an upstream arithmetic
+        // panic) is absorbed and surfaced as a normal decode error instead of a
+        // `JoinError`, so the SSE path returns a clean 422 rather than a 500.
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            gigastt_core::inference::audio::decode_audio_bytes_shared(body)
+        })) {
+            Ok(inner) => inner,
+            Err(_) => {
+                tracing::error!("Panic in SSE audio decode — treated as decode error");
+                Err(anyhow::anyhow!("Audio decode thread panicked"))
+            }
+        }
+    })
+    .await
+    .map_err(|e| {
+        tracing::error!("spawn_blocking join error: {e}");
+        api_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error",
+            "internal",
+        )
+    })?
+    .map_err(|e| {
+        tracing::error!("Audio decode error: {e:#}");
+        api_error(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Failed to decode audio file. Check format (WAV, MP3, M4A, OGG, FLAC supported).",
+            "invalid_audio",
+        )
+    })?;
 
     // Create mpsc channel for streaming segments from the inference task to SSE.
     let (tx, rx) = tokio::sync::mpsc::channel::<
