@@ -4,6 +4,7 @@
 
 pub mod audio;
 mod bias;
+mod ctc;
 mod decode;
 mod features;
 #[cfg(not(feature = "__internals"))]
@@ -1432,8 +1433,22 @@ impl Engine {
         min_size: usize,
     ) -> anyhow::Result<Vec<SessionTriplet>> {
         let encoder_path = Self::encoder_model_path(dir, variant);
-        let decoder_path = dir.join(variant.decoder_file());
-        let joiner_path = dir.join(variant.joint_file());
+        // CTC is encoder-only: no decoder/joiner ONNX exists on disk. Keep the
+        // 3-session SessionTriplet shape but load the encoder into all three
+        // slots — for CTC they are never `.run()` (the CTC branch in
+        // `run_inference` returns right after the encoder run).
+        // TODO: make decoder/joiner Option to avoid 3x encoder RAM for CTC.
+        let is_ctc = variant == ModelVariant::MlCtc;
+        let decoder_path = if is_ctc {
+            encoder_path.clone()
+        } else {
+            dir.join(variant.decoder_file())
+        };
+        let joiner_path = if is_ctc {
+            encoder_path.clone()
+        } else {
+            dir.join(variant.joint_file())
+        };
 
         let results: Vec<anyhow::Result<SessionTriplet>> = std::thread::scope(|s| {
             let handles: Vec<_> = (0..pool_size)
@@ -2239,6 +2254,26 @@ impl Engine {
 
         tracing::debug!("Encoder output: {} frames", enc_len);
 
+        // CTC head: the single encoder emits per-frame class log-probs
+        // (`[1, T', 71]`, row-major). Greedy-decode them directly — there is no
+        // prediction network / joiner, so we return before the RNN-T block
+        // borrows `encoder_outputs` for the decode loop.
+        if self.variant == ModelVariant::MlCtc {
+            let log_probs = encoder_outputs[0]
+                .view()
+                .data()
+                .as_f32()
+                .context("CTC log_probs tensor is not f32")?;
+            let tokens = ctc::ctc_greedy_decode(
+                log_probs,
+                enc_len,
+                self.tokenizer.vocab_size(),
+                self.tokenizer.blank_id(),
+            );
+            let words = self.ctc_tokens_to_words(&tokens, frame_offset);
+            return Ok((words, false)); // CTC has no endpoint signal
+        }
+
         // RNN-T greedy decode — the encoder output is borrowed for the decode loop.
         let dec_start = std::time::Instant::now();
         let result = decode::greedy_decode(
@@ -2271,6 +2306,80 @@ impl Engine {
     /// Convert decoded tokens into words with timestamps and confidence.
     fn tokens_to_words(&self, tokens: &[decode::TokenInfo], frame_offset: usize) -> Vec<WordInfo> {
         TokenFormatter::tokens_to_words(&self.tokenizer, tokens, frame_offset)
+    }
+
+    /// Group CTC-decoded tokens into words with timestamps and confidence.
+    ///
+    /// Mirrors [`TokenFormatter::tokens_to_words`] but splits on the CTC vocab's
+    /// literal SPACE token (`" "`, `vocab[0]`) instead of the BPE `▁` boundary
+    /// marker — the CTC head emits one char per token with no per-word prefix.
+    /// The blank token never appears here (dropped in [`ctc::ctc_greedy_decode`]).
+    fn ctc_tokens_to_words(
+        &self,
+        tokens: &[decode::TokenInfo],
+        frame_offset: usize,
+    ) -> Vec<WordInfo> {
+        let mut words = Vec::new();
+        let mut current_word = String::new();
+        let mut word_start_frame: Option<usize> = None;
+        let mut word_end_frame: usize = 0;
+        let mut word_confidences: Vec<f32> = Vec::new();
+
+        let flush = |word: &mut String,
+                     start: &mut Option<usize>,
+                     end: usize,
+                     confs: &mut Vec<f32>,
+                     out: &mut Vec<WordInfo>| {
+            if word.is_empty() {
+                return;
+            }
+            let avg_conf: f32 = if confs.is_empty() {
+                1.0
+            } else {
+                confs.iter().sum::<f32>() / confs.len() as f32
+            };
+            out.push(WordInfo {
+                word: std::mem::take(word),
+                start: (start.unwrap_or(0) + frame_offset) as f64 * SECONDS_PER_FRAME,
+                end: (end + frame_offset) as f64 * SECONDS_PER_FRAME,
+                confidence: avg_conf,
+                speaker: None,
+            });
+            *start = None;
+            confs.clear();
+        };
+
+        for token in tokens {
+            let ch = self.tokenizer.token_text(token.token_id);
+            if ch == " " {
+                flush(
+                    &mut current_word,
+                    &mut word_start_frame,
+                    word_end_frame,
+                    &mut word_confidences,
+                    &mut words,
+                );
+                continue;
+            }
+            if !ch.is_empty() {
+                current_word.push_str(ch);
+                if word_start_frame.is_none() {
+                    word_start_frame = Some(token.frame_index);
+                }
+                word_end_frame = token.frame_index;
+                word_confidences.push(token.confidence);
+            }
+        }
+
+        flush(
+            &mut current_word,
+            &mut word_start_frame,
+            word_end_frame,
+            &mut word_confidences,
+            &mut words,
+        );
+
+        words
     }
 }
 

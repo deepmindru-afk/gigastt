@@ -171,6 +171,9 @@ pub enum ModelVariant {
     Rnnt,
     /// End-to-end RNN-T head with punctuation / casing / ITN.
     E2eRnnt,
+    /// GigaAM Multilingual CTC head; single encoder-only ONNX, 71-class char
+    /// vocab, blank id 70.
+    MlCtc,
 }
 
 impl ModelVariant {
@@ -179,6 +182,7 @@ impl ModelVariant {
         match self {
             ModelVariant::Rnnt => "v3_rnnt_encoder.onnx",
             ModelVariant::E2eRnnt => "v3_e2e_rnnt_encoder.onnx",
+            ModelVariant::MlCtc => "multilingual_ctc_encoder.onnx",
         }
     }
 
@@ -187,6 +191,7 @@ impl ModelVariant {
         match self {
             ModelVariant::Rnnt => "v3_rnnt_encoder_int8.onnx",
             ModelVariant::E2eRnnt => "v3_e2e_rnnt_encoder_int8.onnx",
+            ModelVariant::MlCtc => "multilingual_ctc_encoder_int8.onnx",
         }
     }
 
@@ -195,6 +200,10 @@ impl ModelVariant {
         match self {
             ModelVariant::Rnnt => "v3_rnnt_decoder.onnx",
             ModelVariant::E2eRnnt => "v3_e2e_rnnt_decoder.onnx",
+            // CTC is encoder-only: no decoder/joiner ONNX exists. This empty
+            // path is never loaded — the CTC branch in `run_inference` returns
+            // before the decoder/joiner sessions are touched (see task C).
+            ModelVariant::MlCtc => "",
         }
     }
 
@@ -203,6 +212,9 @@ impl ModelVariant {
         match self {
             ModelVariant::Rnnt => "v3_rnnt_joint.onnx",
             ModelVariant::E2eRnnt => "v3_e2e_rnnt_joint.onnx",
+            // CTC is encoder-only: no decoder/joiner ONNX exists (see
+            // `decoder_file`). Never loaded.
+            ModelVariant::MlCtc => "",
         }
     }
 
@@ -214,18 +226,24 @@ impl ModelVariant {
         match self {
             ModelVariant::Rnnt => "v3_vocab.txt",
             ModelVariant::E2eRnnt => "v3_e2e_rnnt_vocab.txt",
+            ModelVariant::MlCtc => "multilingual_ctc_vocab.txt",
         }
     }
 
-    /// Files downloaded from HuggingFace for this variant (encoder, decoder,
-    /// joiner, vocab). The INT8 encoder is generated locally, not downloaded.
-    pub fn download_files(self) -> [&'static str; 4] {
-        [
-            self.encoder_file(),
-            self.decoder_file(),
-            self.joint_file(),
-            self.vocab_file(),
-        ]
+    /// Files downloaded from HuggingFace for this variant. RNN-T heads ship
+    /// encoder + decoder + joiner + vocab; the CTC head is encoder-only, so it
+    /// downloads only encoder + vocab. The INT8 encoder is generated locally,
+    /// not downloaded.
+    pub fn download_files(self) -> Vec<&'static str> {
+        match self {
+            ModelVariant::Rnnt | ModelVariant::E2eRnnt => vec![
+                self.encoder_file(),
+                self.decoder_file(),
+                self.joint_file(),
+                self.vocab_file(),
+            ],
+            ModelVariant::MlCtc => vec![self.encoder_file(), self.vocab_file()],
+        }
     }
 
     /// Pinned SHA-256 checksum for a downloaded file, or `None` when no checksum
@@ -234,6 +252,7 @@ impl ModelVariant {
         let table = match self {
             ModelVariant::Rnnt => RNNT_CHECKSUMS,
             ModelVariant::E2eRnnt => E2E_RNNT_CHECKSUMS,
+            ModelVariant::MlCtc => ML_CTC_CHECKSUMS,
         };
         table
             .iter()
@@ -253,6 +272,9 @@ impl ModelVariant {
             ModelVariant::E2eRnnt => {
                 "cf51b300af47cea099e17c806f8fecce2c46e9e8deb4709ec203f8970a067389"
             }
+            // TODO: fill after HF upload (only used on the prequantized path,
+            // not exercised yet).
+            ModelVariant::MlCtc => "",
         }
     }
 
@@ -260,13 +282,16 @@ impl ModelVariant {
     /// encoder (no FP32 download, no on-device quantization) plus the decoder,
     /// joiner, and vocab. The engine runs from these alone — it prefers the INT8
     /// encoder when present.
-    pub fn prequantized_files(self) -> [&'static str; 4] {
-        [
-            self.encoder_int8_file(),
-            self.decoder_file(),
-            self.joint_file(),
-            self.vocab_file(),
-        ]
+    pub fn prequantized_files(self) -> Vec<&'static str> {
+        match self {
+            ModelVariant::Rnnt | ModelVariant::E2eRnnt => vec![
+                self.encoder_int8_file(),
+                self.decoder_file(),
+                self.joint_file(),
+                self.vocab_file(),
+            ],
+            ModelVariant::MlCtc => vec![self.encoder_int8_file(), self.vocab_file()],
+        }
     }
 
     /// Pinned SHA-256 for a pre-quantized bundle file. The INT8 encoder uses
@@ -286,12 +311,16 @@ impl ModelVariant {
     /// variant's encoder is present. `Rnnt` takes precedence when (anomalously)
     /// both encoders coexist, mirroring the engine's default.
     pub fn detect_in_dir(dir: &Path) -> Option<Self> {
-        [ModelVariant::Rnnt, ModelVariant::E2eRnnt]
-            .into_iter()
-            .find(|&variant| {
-                dir.join(variant.encoder_file()).exists()
-                    || dir.join(variant.encoder_int8_file()).exists()
-            })
+        [
+            ModelVariant::Rnnt,
+            ModelVariant::E2eRnnt,
+            ModelVariant::MlCtc,
+        ]
+        .into_iter()
+        .find(|&variant| {
+            dir.join(variant.encoder_file()).exists()
+                || dir.join(variant.encoder_int8_file()).exists()
+        })
     }
 
     /// Stable model identifier surfaced by the REST API (`/health`,
@@ -301,6 +330,7 @@ impl ModelVariant {
         match self {
             ModelVariant::Rnnt => "gigaam-v3-rnnt",
             ModelVariant::E2eRnnt => "gigaam-v3-e2e-rnnt",
+            ModelVariant::MlCtc => "gigaam-multilingual-ctc",
         }
     }
 
@@ -310,6 +340,7 @@ impl ModelVariant {
         match self {
             ModelVariant::Rnnt => "rnnt",
             ModelVariant::E2eRnnt => "e2e_rnnt",
+            ModelVariant::MlCtc => "ml_ctc",
         }
     }
 
@@ -318,6 +349,7 @@ impl ModelVariant {
         match self {
             ModelVariant::Rnnt => "GigaAM v3 RNN-T",
             ModelVariant::E2eRnnt => "GigaAM v3 E2E RNN-T",
+            ModelVariant::MlCtc => "GigaAM Multilingual CTC",
         }
     }
 }
@@ -329,8 +361,9 @@ impl std::str::FromStr for ModelVariant {
         match s.trim().to_ascii_lowercase().as_str() {
             "rnnt" => Ok(ModelVariant::Rnnt),
             "e2e_rnnt" | "e2e-rnnt" => Ok(ModelVariant::E2eRnnt),
+            "ml_ctc" | "ml-ctc" => Ok(ModelVariant::MlCtc),
             other => Err(format!(
-                "unknown model variant '{other}' (expected 'rnnt' or 'e2e_rnnt')"
+                "unknown model variant '{other}' (expected 'rnnt', 'e2e_rnnt', or 'ml_ctc')"
             )),
         }
     }
@@ -375,6 +408,14 @@ const E2E_RNNT_CHECKSUMS: &[(&str, Option<&str>)] = &[
         "v3_e2e_rnnt_vocab.txt",
         Some("39abae20e692998290c574e606f11a9edef2902a1995463fcff63d1490cf22b7"),
     ),
+];
+
+/// SHA-256 checksums for the GigaAM Multilingual CTC head's downloaded files
+/// (encoder + vocab; it is encoder-only). Both entries are `None` until the
+/// ONNX is uploaded to HuggingFace — `None` skips verification for now.
+const ML_CTC_CHECKSUMS: &[(&str, Option<&str>)] = &[
+    ("multilingual_ctc_encoder.onnx", None),
+    ("multilingual_ctc_vocab.txt", None),
 ];
 
 #[cfg(feature = "diarization")]
