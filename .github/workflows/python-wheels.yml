@@ -63,9 +63,11 @@ jobs:
         with:
           working-directory: crates/gigastt-uniffi
           target: ${{ matrix.target }}
-          # `--release` honours the workspace LTO profile; `-b uniffi` is also in
-          # pyproject but passed explicitly for clarity.
-          args: --release --out dist -b uniffi
+          # `--profile wheel` honours the workspace LTO profile but keeps symbols
+          # (strip = false) so UniFFI's library-mode bindgen can find the interface
+          # metadata on Linux; `-b uniffi` is also in pyproject but passed
+          # explicitly for clarity.
+          args: --profile wheel --out dist -b uniffi
           manylinux: ${{ matrix.manylinux }}
           # Download a protoc binary matching the container arch (manylinux_2_28
           # has no protobuf-compiler package). Runs before each Linux build.

@@ -15,6 +15,17 @@ lto = true
 codegen-units = 1
 strip = true
 
+# Wheel-build profile for the UniFFI Python bindings. Identical to `release`
+# except symbols are NOT stripped: UniFFI's library-mode bindgen (uniffi >= 0.29)
+# locates the interface metadata via exported symbols, and GNU `strip` removes
+# them on ELF/Linux — producing "No UniFFI metadata found" during the maturin
+# wheel build (macOS/Windows keep the symbols even when stripped). Keeping the
+# server release binaries stripped, the wheels use this profile via
+# `maturin --profile wheel` (see .github/workflows/python-wheels.yml).
+[profile.wheel]
+inherits = "release"
+strip = false
+
 # Local overflow-guard patch for symphonia-metadata: a crafted APEv2 tag header
 # (APE tags ride on MP3 uploads) overflows `size + 32` in ape.rs and panics with
 # "attempt to add with overflow". The vendored copy saturates instead. Drop this
