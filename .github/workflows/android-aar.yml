@@ -52,14 +52,48 @@ jobs:
       - name: Locate Android NDK
         run: echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
 
-      # Native libraries: one libgigastt_uniffi.so per ABI, placed where the
-      # Gradle module expects them (src/main/jniLibs/<abi>/).
-      - name: Build native libs (3 ABIs)
+      # ort's pyke prebuilts cover only aarch64-linux-android for Android;
+      # armeabi-v7a and x86_64-linux-android have no prebuilt, so the plain
+      # `cargo ndk` build fails on those ABIs. Pull the ABI-matched official
+      # Microsoft AAR (onnxruntime 1.24.2 — the version ort 2.0.0-rc.12 pins) and
+      # expose one lib dir per ABI. ort then dynamic-links libonnxruntime.so via
+      # ORT_LIB_LOCATION + ORT_PREFER_DYNAMIC_LINK, and the .so is packaged into
+      # jniLibs next to our cdylib. Using the AAR for all three ABIs keeps them
+      # on one ABI-identical onnxruntime build.
+      - name: Fetch onnxruntime 1.24.2 Android libs
         run: |
-          cargo ndk \
-            -t arm64-v8a -t armeabi-v7a -t x86_64 \
-            -o packaging/android/gigastt/src/main/jniLibs \
-            build --release -p gigastt-uniffi
+          set -euo pipefail
+          ORT_VER=1.24.2
+          curl -fsSL -o ort-android.aar \
+            "https://repo1.maven.org/maven2/com/microsoft/onnxruntime/onnxruntime-android/${ORT_VER}/onnxruntime-android-${ORT_VER}.aar"
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            d="$RUNNER_TEMP/ort-lib/$abi"
+            mkdir -p "$d"
+            unzip -p ort-android.aar "jni/$abi/libonnxruntime.so" > "$d/libonnxruntime.so"
+            test -s "$d/libonnxruntime.so"
+          done
+          echo "ORT_ANDROID_LIB_ROOT=$RUNNER_TEMP/ort-lib" >> "$GITHUB_ENV"
+
+      # Native libraries: one libgigastt_uniffi.so per ABI, placed where the
+      # Gradle module expects them (src/main/jniLibs/<abi>/). Each ABI is built
+      # separately so it can point ORT_LIB_LOCATION at its own onnxruntime .so
+      # (a single 3-target `cargo ndk` call cannot vary env per target). The
+      # onnxruntime .so is then shipped alongside our cdylib in each ABI dir;
+      # Android's dynamic linker resolves libonnxruntime.so from the same
+      # jniLibs/<abi>/ folder at load time.
+      - name: Build native libs (3 ABIs)
+        env:
+          ORT_PREFER_DYNAMIC_LINK: "1"
+        run: |
+          set -euo pipefail
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            ORT_LIB_LOCATION="$ORT_ANDROID_LIB_ROOT/$abi" \
+            cargo ndk -t "$abi" \
+              -o packaging/android/gigastt/src/main/jniLibs \
+              build --release -p gigastt-uniffi
+            cp "$ORT_ANDROID_LIB_ROOT/$abi/libonnxruntime.so" \
+               "packaging/android/gigastt/src/main/jniLibs/$abi/"
+          done
 
       # UniFFI Kotlin bindings: read the metadata from a HOST build of the
       # cdylib (arch-independent) and generate into the Gradle module's source.

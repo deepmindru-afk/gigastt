@@ -52,8 +52,30 @@ jobs:
       - name: Build staticlib (simulator arm64)
         run: cargo build --release -p gigastt-ffi --target aarch64-apple-ios-sim
 
+      # ort's pyke prebuilts miss x86_64-apple-ios (Intel simulator), and
+      # ort-sys's apple.rs only wires ORT_IOS_XCFWK_PATH for the arm64 device/sim
+      # triples — the Intel-sim slice falls through to the "no prebuilt" error.
+      # Extract the x86_64 slice of onnxruntime 1.24.2 (the version ort
+      # 2.0.0-rc.12 pins) from the official simulator xcframework and point
+      # ORT_LIB_LOCATION + ORT_PREFER_DYNAMIC_LINK at it, so ort-sys emits a plain
+      # `-l onnxruntime` for the eventual consumer link instead of erroring.
+      - name: Fetch onnxruntime 1.24.2 lib (x86_64 simulator)
+        run: |
+          set -euo pipefail
+          curl -fsSL -o ort-ios-pod.zip \
+            "https://download.onnxruntime.ai/pod-archive-onnxruntime-c-1.24.2.zip"
+          unzip -q ort-ios-pod.zip -d "$RUNNER_TEMP/ort-ios"
+          FW="$RUNNER_TEMP/ort-ios/onnxruntime.xcframework/ios-arm64_x86_64-simulator/onnxruntime.framework/onnxruntime"
+          test -f "$FW"
+          mkdir -p "$RUNNER_TEMP/ort-ios-x64"
+          lipo "$FW" -thin x86_64 -output "$RUNNER_TEMP/ort-ios-x64/libonnxruntime.a"
+          lipo -info "$RUNNER_TEMP/ort-ios-x64/libonnxruntime.a"
+          echo "ORT_IOS_X64_LIB=$RUNNER_TEMP/ort-ios-x64" >> "$GITHUB_ENV"
+
       - name: Build staticlib (simulator x86_64)
-        run: cargo build --release -p gigastt-ffi --target x86_64-apple-ios
+        env:
+          ORT_PREFER_DYNAMIC_LINK: "1"
+        run: ORT_LIB_LOCATION="$ORT_IOS_X64_LIB" cargo build --release -p gigastt-ffi --target x86_64-apple-ios
 
       # Regenerate the C header from the FFI crate, then stage a Headers/ dir
       # (gigastt.h + module.modulemap) shared by every xcframework slice.
