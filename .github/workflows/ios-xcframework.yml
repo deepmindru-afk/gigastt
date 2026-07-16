@@ -54,28 +54,22 @@ jobs:
 
       # ort's pyke prebuilts miss x86_64-apple-ios (Intel simulator), and
       # ort-sys's apple.rs only wires ORT_IOS_XCFWK_PATH for the arm64 device/sim
-      # triples — the Intel-sim slice falls through to the "no prebuilt" error.
-      # Extract the x86_64 slice of onnxruntime 1.24.2 (the version ort
-      # 2.0.0-rc.12 pins) from the official simulator xcframework and point
-      # ORT_LIB_LOCATION + ORT_PREFER_DYNAMIC_LINK at it, so ort-sys emits a plain
-      # `-l onnxruntime` for the eventual consumer link instead of erroring.
-      - name: Fetch onnxruntime 1.24.2 lib (x86_64 simulator)
-        run: |
-          set -euo pipefail
-          curl -fsSL -o ort-ios-pod.zip \
-            "https://download.onnxruntime.ai/pod-archive-onnxruntime-c-1.24.2.zip"
-          unzip -q ort-ios-pod.zip -d "$RUNNER_TEMP/ort-ios"
-          FW="$RUNNER_TEMP/ort-ios/onnxruntime.xcframework/ios-arm64_x86_64-simulator/onnxruntime.framework/onnxruntime"
-          test -f "$FW"
-          mkdir -p "$RUNNER_TEMP/ort-ios-x64"
-          lipo "$FW" -thin x86_64 -output "$RUNNER_TEMP/ort-ios-x64/libonnxruntime.a"
-          lipo -info "$RUNNER_TEMP/ort-ios-x64/libonnxruntime.a"
-          echo "ORT_IOS_X64_LIB=$RUNNER_TEMP/ort-ios-x64" >> "$GITHUB_ENV"
-
+      # triples — the Intel-sim slice otherwise falls through to the "no prebuilt"
+      # error. ORT_LIB_LOCATION + ORT_PREFER_DYNAMIC_LINK make ort-sys emit a
+      # plain `-l onnxruntime` (deferred to the consumer's app link) instead of
+      # erroring. We build ONLY the staticlib crate-type here: the xcframework
+      # consumes the .a (onnxruntime is resolved at the consumer link, exactly
+      # like the arm64 slices), whereas `cargo build` would also link the cdylib,
+      # which needs onnxruntime's full x86_64 symbol closure that the pyke prebuilt
+      # doesn't ship for this target.
       - name: Build staticlib (simulator x86_64)
         env:
           ORT_PREFER_DYNAMIC_LINK: "1"
-        run: ORT_LIB_LOCATION="$ORT_IOS_X64_LIB" cargo build --release -p gigastt-ffi --target x86_64-apple-ios
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ort-x64-stub"
+          ORT_LIB_LOCATION="$RUNNER_TEMP/ort-x64-stub" \
+            cargo rustc --release -p gigastt-ffi --target x86_64-apple-ios --crate-type staticlib
 
       # Regenerate the C header from the FFI crate, then stage a Headers/ dir
       # (gigastt.h + module.modulemap) shared by every xcframework slice.
