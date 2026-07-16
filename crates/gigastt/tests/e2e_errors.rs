@@ -248,6 +248,82 @@ async fn test_rest_saturated_pool_returns_503() {
     let _ = shutdown.send(());
 }
 
+// ─── 4b. SSE /v1/transcribe/stream reserves a pool slot BEFORE decoding ──────
+
+/// Regression for the SSE memory-exhaustion ordering bug: `/v1/transcribe/stream`
+/// must check out a pool slot *before* decoding the upload, exactly like the
+/// synchronous `/v1/transcribe`. We prove the ordering behaviourally: with the
+/// pool saturated, a stream request carrying *invalid* audio must block on the
+/// pool checkout and time out with 503 `timeout` — NOT decode first and fail
+/// fast with 422 `invalid_audio`. If decode ran before checkout (the old bug),
+/// an unbounded number of concurrent decodes could each expand a compressed
+/// upload into a full f32 PCM buffer and exhaust memory.
+///
+/// Takes ~30 s (the pool checkout timeout), like `test_rest_saturated_pool_returns_503`.
+#[ignore]
+#[tokio::test]
+async fn test_sse_stream_reserves_pool_before_decode() {
+    const POOL: usize = 2;
+    let model_dir = common::model_dir();
+    let (port, shutdown) = common::start_server_with_pool(&model_dir, POOL).await;
+
+    // Saturate the pool with WebSocket sessions (the SSE handler draws from the
+    // same batch pool, falling back to the interactive pool).
+    let mut clients = Vec::new();
+    for _ in 0..POOL {
+        let (sink, stream, _ready) = common::ws_connect(port).await;
+        clients.push((sink, stream));
+    }
+
+    // Deliberately invalid audio: if the handler decoded before reserving, this
+    // would 422 immediately; reserving first makes it wait on the saturated pool.
+    let not_audio = b"this is definitely not a valid audio container".to_vec();
+    let client = reqwest::Client::new();
+
+    // Allow 35 seconds so the 30-second server checkout timeout has room to expire.
+    let response = tokio::time::timeout(
+        Duration::from_secs(35),
+        client
+            .post(format!("http://127.0.0.1:{port}/v1/transcribe/stream"))
+            .body(not_audio)
+            .send(),
+    )
+    .await
+    .expect(
+        "Test timed out before server returned 503 — check checkout ordering in transcribe_stream",
+    )
+    .expect("HTTP request failed");
+
+    assert_eq!(
+        response.status().as_u16(),
+        503,
+        "SSE stream must reserve the pool before decoding: a saturated pool must \
+         yield 503, not decode the (invalid) upload first and return 422"
+    );
+
+    let body_text = response
+        .text()
+        .await
+        .expect("Response body should be readable");
+    let body: serde_json::Value =
+        serde_json::from_str(&body_text).expect("Response body should be JSON");
+    assert_eq!(
+        body["code"], "timeout",
+        "Expected code='timeout' (blocked on pool checkout, upload never decoded), got: {body}"
+    );
+
+    // Release pool slots.
+    let stop_json = serde_json::to_string(&serde_json::json!({"type": "stop"})).unwrap();
+    for (mut sink, mut stream) in clients {
+        sink.send(Message::Text(stop_json.clone().into()))
+            .await
+            .unwrap();
+        let _ = tokio::time::timeout(Duration::from_secs(5), stream.next()).await;
+    }
+
+    let _ = shutdown.send(());
+}
+
 // ─── 5. WebSocket idle timeout ──────────────────────────────────────────────
 
 /// Connect a WebSocket client, receive Ready, then send nothing.
