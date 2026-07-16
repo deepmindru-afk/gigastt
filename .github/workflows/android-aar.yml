@@ -97,7 +97,14 @@ jobs:
 
       # UniFFI Kotlin bindings: read the metadata from a HOST build of the
       # cdylib (arch-independent) and generate into the Gradle module's source.
+      # CARGO_PROFILE_RELEASE_STRIP=false: uniffi >= 0.29 library-mode bindgen
+      # finds the interface metadata via exported symbols that `strip = true`
+      # removes on ELF/Linux ("No UniFFI metadata found"); the host lib scanned
+      # here must keep them. The shipped per-ABI jniLibs stay stripped (built by
+      # the earlier step) — they don't need metadata at runtime.
       - name: Generate Kotlin bindings
+        env:
+          CARGO_PROFILE_RELEASE_STRIP: "false"
         run: |
           cargo build --release -p gigastt-uniffi
           HOST_LIB=$(ls target/release/libgigastt_uniffi.so target/release/libgigastt_uniffi.dylib 2>/dev/null | head -1)
