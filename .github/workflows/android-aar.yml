@@ -16,13 +16,18 @@ name: Android AAR
 on:
   workflow_dispatch:
     inputs:
+      tag:
+        description: 'Existing release tag to attach the AAR to (e.g. v2.10.0)'
+        required: false
+        type: string
       publish:
         description: 'Publish the AAR to Maven (requires Maven/Sonatype secrets)'
         type: boolean
         default: false
 
+# contents: write so the built AAR can be attached to an existing GitHub release.
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   aar:
@@ -124,6 +129,27 @@ jobs:
           name: gigastt-aar
           path: packaging/android/gigastt/build/outputs/aar/*.aar
           if-no-files-found: error
+
+      # Attach the built AAR to the given GitHub release (mirrors the iOS
+      # xcframework distribution). Consumers download the .aar directly — no
+      # Maven Central / Sonatype namespace / GPG signing required.
+      - name: Stage AAR for release
+        if: ${{ inputs.tag != '' }}
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          cp "$(ls packaging/android/gigastt/build/outputs/aar/*.aar | head -1)" "gigastt-${VERSION}.aar"
+          ls -la gigastt-*.aar
+
+      - name: Attach AAR to release
+        if: ${{ inputs.tag != '' }}
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ inputs.tag }}
+          fail_on_unmatched_files: true
+          files: gigastt-*.aar
 
       - name: Warn on missing Maven credentials
         if: ${{ inputs.publish && env.HAS_MAVEN_CREDS != 'true' }}
