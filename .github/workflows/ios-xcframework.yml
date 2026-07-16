@@ -18,6 +18,12 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+# softprops/action-gh-release updates the existing release to attach the
+# xcframework zip; the GITHUB_TOKEN needs `contents: write` or the API call
+# 403s with "Resource not accessible by integration".
+permissions:
+  contents: write
+
 jobs:
   build-xcframework:
     name: Build GigasttFFI.xcframework
