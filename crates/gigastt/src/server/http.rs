@@ -361,6 +361,55 @@ fn api_inference_timeout_error() -> ApiError {
     )
 }
 
+/// Check out a session triplet from the engine's batch pool with the configured
+/// timeout and record the pool metrics, returning an owned reservation whose
+/// lifetime is detached (`into_owned`) so it can travel through `spawn_blocking`.
+///
+/// Both `/v1/transcribe` and `/v1/transcribe/stream` reserve a slot *before*
+/// decoding the upload; sharing the acquisition here keeps that backpressure —
+/// and the "reserve before decode" ordering that caps concurrent decodes at the
+/// pool size — identical across the two untrusted entry points. A saturated pool
+/// yields a 503 (`timeout`, with `Retry-After`) or `pool_closed`; the caller
+/// propagates it with `?`.
+async fn reserve_batch_slot(
+    engine: &Engine,
+    limits: &RuntimeLimits,
+    metrics: Option<&Arc<MetricsRegistry>>,
+) -> Result<
+    gigastt_core::inference::OwnedReservation<gigastt_core::inference::SessionTriplet>,
+    ApiError,
+> {
+    let checkout_start = std::time::Instant::now();
+    let guard = match tokio::time::timeout(
+        std::time::Duration::from_secs(limits.pool_checkout_timeout_secs),
+        engine.pool_for_batch().checkout(),
+    )
+    .await
+    {
+        Ok(Ok(guard)) => guard,
+        Ok(Err(_pool_closed)) => return Err(api_pool_closed_error()),
+        Err(_timeout) => {
+            if let Some(reg) = metrics {
+                reg.counter_inc("gigastt_pool_timeouts_total", &[], 1);
+                reg.histogram_record(
+                    "gigastt_pool_checkout_duration_seconds",
+                    &[],
+                    checkout_start.elapsed().as_secs_f64(),
+                );
+            }
+            return Err(api_timeout_error(limits));
+        }
+    };
+    if let Some(reg) = metrics {
+        reg.histogram_record(
+            "gigastt_pool_checkout_duration_seconds",
+            &[],
+            checkout_start.elapsed().as_secs_f64(),
+        );
+    }
+    Ok(guard.into_owned())
+}
+
 /// Per-segment error carried over the SSE channel: a stable machine-readable
 /// code plus a sanitized message, mirroring the WebSocket error contract so
 /// SSE clients get the same codes (`inference_error`, `inference_panic`,
@@ -615,41 +664,13 @@ pub async fn transcribe(
         return Err(api_error(StatusCode::CONFLICT, e.message(), e.code()));
     }
 
-    // Checkout a session triplet from the batch pool (blocks if none
-    // available) — this is a long file-transcription job, so it draws from the
-    // dedicated batch pool when one exists (falling back to the interactive
-    // pool otherwise) to avoid starving WebSocket / SSE streaming. The guard's
-    // lifetime is stripped via `into_owned` so the triplet can travel through
-    // `spawn_blocking`; the reservation handles checkin.
-    let checkout_start = std::time::Instant::now();
-    let guard = match tokio::time::timeout(
-        std::time::Duration::from_secs(limits.pool_checkout_timeout_secs),
-        engine.pool_for_batch().checkout(),
-    )
-    .await
-    {
-        Ok(Ok(guard)) => guard,
-        Ok(Err(_pool_closed)) => return Err(api_pool_closed_error()),
-        Err(_timeout) => {
-            if let Some(ref reg) = state.metrics_registry {
-                reg.counter_inc("gigastt_pool_timeouts_total", &[], 1);
-                reg.histogram_record(
-                    "gigastt_pool_checkout_duration_seconds",
-                    &[],
-                    checkout_start.elapsed().as_secs_f64(),
-                );
-            }
-            return Err(api_timeout_error(&limits));
-        }
-    };
-    if let Some(ref reg) = state.metrics_registry {
-        reg.histogram_record(
-            "gigastt_pool_checkout_duration_seconds",
-            &[],
-            checkout_start.elapsed().as_secs_f64(),
-        );
-    }
-    let mut reservation = guard.into_owned();
+    // Checkout a session triplet from the batch pool (blocks if none available)
+    // — this is a long file-transcription job, so it draws from the dedicated
+    // batch pool when one exists (falling back to the interactive pool otherwise)
+    // to avoid starving WebSocket / SSE streaming. Shared with the SSE handler
+    // (`reserve_batch_slot`) so both reserve identically, and before decoding.
+    let mut reservation =
+        reserve_batch_slot(&engine, &limits, state.metrics_registry.as_ref()).await?;
 
     let inference_start = std::time::Instant::now();
     let span = tracing::Span::current();
@@ -809,46 +830,16 @@ pub async fn transcribe_stream(
     // Checkout a session triplet from the batch pool BEFORE decoding. SSE file
     // transcription decodes and transcribes the *entire* upload (holding the
     // triplet for the whole file), so it is a batch workload, not interactive
-    // streaming. Reserving first — like `/v1/transcribe` — is load-bearing: it
-    // caps the number of *concurrent decodes* at the pool size, so a burst of
-    // large (compressed) uploads can't each expand into a full f32 PCM buffer at
-    // once and exhaust memory. A saturated pool yields 503 / `Retry-After` here,
-    // before any decode. Draw from the dedicated batch pool when one exists
-    // (falling back to the interactive pool otherwise) so it can't starve
-    // real-time WebSocket streaming. Strip the lifetime via `into_owned` so the
-    // triplet can travel through `spawn_blocking`.
-    // Snapshot the current engine once; a concurrent hot-reload swap only
-    // affects later requests, so this stream rides the pool it started on.
+    // streaming. Reserving first — via the same `reserve_batch_slot` the
+    // synchronous `/v1/transcribe` uses — is load-bearing: it caps the number of
+    // *concurrent decodes* at the pool size, so a burst of large (compressed)
+    // uploads can't each expand into a full f32 PCM buffer at once and exhaust
+    // memory. A saturated pool yields 503 / `Retry-After` here, before any decode.
+    // Snapshot the current engine once; a concurrent hot-reload swap only affects
+    // later requests, so this stream rides the pool it started on.
     let engine = state.engine.load_full();
-    let checkout_start = std::time::Instant::now();
-    let guard = match tokio::time::timeout(
-        std::time::Duration::from_secs(limits.pool_checkout_timeout_secs),
-        engine.pool_for_batch().checkout(),
-    )
-    .await
-    {
-        Ok(Ok(guard)) => guard,
-        Ok(Err(_pool_closed)) => return Err(api_pool_closed_error()),
-        Err(_timeout) => {
-            if let Some(ref reg) = state.metrics_registry {
-                reg.counter_inc("gigastt_pool_timeouts_total", &[], 1);
-                reg.histogram_record(
-                    "gigastt_pool_checkout_duration_seconds",
-                    &[],
-                    checkout_start.elapsed().as_secs_f64(),
-                );
-            }
-            return Err(api_timeout_error(&limits));
-        }
-    };
-    if let Some(ref reg) = state.metrics_registry {
-        reg.histogram_record(
-            "gigastt_pool_checkout_duration_seconds",
-            &[],
-            checkout_start.elapsed().as_secs_f64(),
-        );
-    }
-    let mut reservation = guard.into_owned();
+    let mut reservation =
+        reserve_batch_slot(&engine, &limits, state.metrics_registry.as_ref()).await?;
 
     // Decode audio now that a slot is reserved (in spawn_blocking since symphonia
     // is blocking). Holding the reservation across the decode is what bounds the
