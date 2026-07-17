@@ -35,6 +35,18 @@ head (`rnnt` 34-token char — the v2.3 default — or `e2e_rnnt` 1025-token BPE
 mono input, MIT licensed. Download ~850 MB (encoder 844 MB, decoder 4.4 MB, joiner
 2.6 MB); INT8 encoder ~215 MB. Trained on 700K+ hours of Russian speech.
 
+Two opt-in heads (`--model-variant ml_ctc` / `ml_ctc_large`) use
+[**GigaAM Multilingual**](https://huggingface.co/istupakov/gigaam-multilingual-ctc-onnx)
+instead: an encoder-only charwise-CTC model (no LSTM decoder / joiner, greedy CTC
+decoding), MIT licensed, sharing the 64-mel / FFT 320 / hop 160 / 16 kHz frontend above.
+`ml_ctc` has a 220M-param encoder, `ml_ctc_large`
+([`istupakov/gigaam-multilingual-large-ctc-onnx`](https://huggingface.co/istupakov/gigaam-multilingual-large-ctc-onnx))
+600M; both use a shared 71-class multilingual character vocabulary (blank id 70) and
+emit bare lowercase text. Trained across 70+ languages, best-in-class on Russian,
+Kazakh, Kyrgyz, and Uzbek. Both download istupakov's pre-quantized INT8 encoder
+directly — no FP32 download, no on-device quantization (`ml_ctc` ~225 MB, `ml_ctc_large`
+~592 MB).
+
 ## Hardware acceleration
 
 | Platform | Feature flag | Execution Provider |

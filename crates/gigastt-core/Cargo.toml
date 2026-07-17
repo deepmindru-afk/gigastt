@@ -10,6 +10,13 @@ description = "Core inference engine for gigastt — GigaAM v3 ONNX Runtime, mod
 keywords = ["stt", "speech-recognition", "gigaam", "onnx", "russian"]
 categories = ["multimedia::audio"]
 
+# Recognition heads are an additive, opt-in catalog, and `ModelVariant` is
+# `#[non_exhaustive]` so new heads ship as minor releases (downstream must use a
+# wildcard match arm). Allow the one-time `#[non_exhaustive]` marking, which
+# cargo-semver-checks otherwise flags as a major-only change.
+[package.metadata.cargo-semver-checks.lints]
+enum_marked_non_exhaustive = "allow"
+
 [lib]
 crate-type = ["rlib"]
 # The library's unit-test harness is not a benchmark; without this, plain

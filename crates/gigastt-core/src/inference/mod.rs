@@ -4,6 +4,7 @@
 
 pub mod audio;
 mod bias;
+mod ctc;
 mod decode;
 mod features;
 #[cfg(not(feature = "__internals"))]
@@ -215,10 +216,15 @@ const POOL_RAM_FRACTION_DENOM: u64 = 2;
 ///
 /// Moved out of the pool on checkout and returned on checkin.
 /// Each triplet is independent and can run inference concurrently with others.
+///
+/// The RNN-T heads populate all three sessions. The encoder-only CTC heads leave
+/// `decoder` / `joiner` as `None` — the CTC branch in `run_inference` decodes
+/// straight from the encoder output and never touches them, so loading them would
+/// only waste encoder-sized RAM.
 pub struct SessionTriplet {
     pub(crate) encoder: Box<dyn RuntimeSession>,
-    pub(crate) decoder: Box<dyn RuntimeSession>,
-    pub(crate) joiner: Box<dyn RuntimeSession>,
+    pub(crate) decoder: Option<Box<dyn RuntimeSession>>,
+    pub(crate) joiner: Option<Box<dyn RuntimeSession>>,
     /// Reusable encoder input tensors: `[audio_signal [1, N_MELS, num_frames], length [1]]`.
     /// Resized and overwritten in `run_inference` to avoid per-call allocations.
     pub(crate) encoder_inputs: Vec<Tensor>,
@@ -1432,6 +1438,11 @@ impl Engine {
         min_size: usize,
     ) -> anyhow::Result<Vec<SessionTriplet>> {
         let encoder_path = Self::encoder_model_path(dir, variant);
+        // CTC is encoder-only: no decoder/joiner ONNX exists on disk, and the CTC
+        // branch in `run_inference` returns right after the encoder run without
+        // touching them. Load them only for the RNN-T heads (leaving `None` for
+        // CTC avoids holding an unused, never-run session per pool triplet).
+        let is_ctc = variant.is_ctc();
         let decoder_path = dir.join(variant.decoder_file());
         let joiner_path = dir.join(variant.joint_file());
 
@@ -1450,12 +1461,17 @@ impl Engine {
                             let encoder = runtime
                                 .load_session(encoder_path, true)
                                 .map_err(|e| anyhow::anyhow!(e))?;
-                            let decoder = runtime
-                                .load_session(decoder_path, false)
-                                .map_err(|e| anyhow::anyhow!(e))?;
-                            let joiner = runtime
-                                .load_session(joiner_path, false)
-                                .map_err(|e| anyhow::anyhow!(e))?;
+                            let (decoder, joiner) = if is_ctc {
+                                (None, None)
+                            } else {
+                                let decoder = runtime
+                                    .load_session(decoder_path, false)
+                                    .map_err(|e| anyhow::anyhow!(e))?;
+                                let joiner = runtime
+                                    .load_session(joiner_path, false)
+                                    .map_err(|e| anyhow::anyhow!(e))?;
+                                (Some(decoder), Some(joiner))
+                            };
                             Ok(SessionTriplet {
                                 encoder,
                                 decoder,
@@ -2239,11 +2255,37 @@ impl Engine {
 
         tracing::debug!("Encoder output: {} frames", enc_len);
 
+        // CTC head: the single encoder emits per-frame class log-probs
+        // (`[1, T', 71]`, row-major). Greedy-decode them directly — there is no
+        // prediction network / joiner, so we return before the RNN-T block
+        // borrows `encoder_outputs` for the decode loop.
+        if self.variant.is_ctc() {
+            let log_probs = encoder_outputs[0]
+                .view()
+                .data()
+                .as_f32()
+                .context("CTC log_probs tensor is not f32")?;
+            let tokens = ctc::ctc_greedy_decode(
+                log_probs,
+                enc_len,
+                self.tokenizer.vocab_size(),
+                self.tokenizer.blank_id(),
+            );
+            let words = ctc::ctc_tokens_to_words(&self.tokenizer, &tokens, frame_offset);
+            return Ok((words, false)); // CTC has no endpoint signal
+        }
+
         // RNN-T greedy decode — the encoder output is borrowed for the decode loop.
         let dec_start = std::time::Instant::now();
         let result = decode::greedy_decode(
-            &*triplet.decoder,
-            &*triplet.joiner,
+            triplet
+                .decoder
+                .as_deref()
+                .expect("RNN-T decoder session must be loaded for a non-CTC head"),
+            triplet
+                .joiner
+                .as_deref()
+                .expect("RNN-T joiner session must be loaded for a non-CTC head"),
             &encoder_outputs[0].view(),
             enc_len,
             self.tokenizer.blank_id(),
