@@ -11,6 +11,8 @@
 //! `[1, D, T]` layout (see [`super::decode::extract_encoder_frame`]).
 
 use super::decode::{TokenInfo, argmax_with_confidence};
+use super::tokenizer::{Tokenizer, WORD_BOUNDARY};
+use super::{SECONDS_PER_FRAME, WordInfo};
 
 /// Greedy CTC decode over a flat `log_probs` buffer of shape `[t_total, vocab]`
 /// (row-major). Returns the collapsed, blank-stripped tokens with a per-token
@@ -54,6 +56,81 @@ pub(crate) fn ctc_greedy_decode(
         });
     }
     out
+}
+
+/// Group CTC-decoded tokens into words with timestamps and confidence.
+///
+/// istupakov's CTC vocab encodes the inter-word space as the `▁` word-boundary
+/// marker at `vocab[0]` (mirroring the RNN-T vocab), NOT a literal `' '`. Words
+/// split on that marker; every other token is a single character concatenated
+/// into the current word. The blank token never appears here (it is dropped in
+/// [`ctc_greedy_decode`]).
+pub(crate) fn ctc_tokens_to_words(
+    tokenizer: &Tokenizer,
+    tokens: &[TokenInfo],
+    frame_offset: usize,
+) -> Vec<WordInfo> {
+    let mut words = Vec::new();
+    let mut current_word = String::new();
+    let mut word_start_frame: Option<usize> = None;
+    let mut word_end_frame: usize = 0;
+    let mut word_confidences: Vec<f32> = Vec::new();
+
+    let flush = |word: &mut String,
+                 start: &mut Option<usize>,
+                 end: usize,
+                 confs: &mut Vec<f32>,
+                 out: &mut Vec<WordInfo>| {
+        if word.is_empty() {
+            return;
+        }
+        let avg_conf: f32 = if confs.is_empty() {
+            1.0
+        } else {
+            confs.iter().sum::<f32>() / confs.len() as f32
+        };
+        out.push(WordInfo {
+            word: std::mem::take(word),
+            start: (start.unwrap_or(0) + frame_offset) as f64 * SECONDS_PER_FRAME,
+            end: (end + frame_offset) as f64 * SECONDS_PER_FRAME,
+            confidence: avg_conf,
+            speaker: None,
+        });
+        *start = None;
+        confs.clear();
+    };
+
+    for token in tokens {
+        let ch = tokenizer.token_text(token.token_id);
+        if ch.starts_with(WORD_BOUNDARY) {
+            flush(
+                &mut current_word,
+                &mut word_start_frame,
+                word_end_frame,
+                &mut word_confidences,
+                &mut words,
+            );
+            continue;
+        }
+        if !ch.is_empty() {
+            current_word.push_str(ch);
+            if word_start_frame.is_none() {
+                word_start_frame = Some(token.frame_index);
+            }
+            word_end_frame = token.frame_index;
+            word_confidences.push(token.confidence);
+        }
+    }
+
+    flush(
+        &mut current_word,
+        &mut word_start_frame,
+        word_end_frame,
+        &mut word_confidences,
+        &mut words,
+    );
+
+    words
 }
 
 #[cfg(test)]
@@ -107,5 +184,62 @@ mod tests {
     fn all_blank_is_empty() {
         let lp = logits(&[2, 2, 2], 3);
         assert!(ctc_greedy_decode(&lp, 3, 3, 2).is_empty());
+    }
+
+    /// Build a CTC-style char tokenizer whose vocab[0] is the `▁` word-boundary
+    /// marker (matching istupakov's `multilingual_vocab.txt`), followed by the
+    /// letters used below and a trailing `<blk>`.
+    fn ctc_tokenizer(letters: &[&str]) -> Tokenizer {
+        let mut toks = vec!["\u{2581}".to_string()];
+        toks.extend(letters.iter().map(|s| s.to_string()));
+        toks.push("<blk>".to_string());
+        Tokenizer::from_tokens(toks)
+    }
+
+    fn tok(id: usize, frame: usize) -> TokenInfo {
+        TokenInfo {
+            token_id: id,
+            frame_index: frame,
+            confidence: 1.0,
+        }
+    }
+
+    #[test]
+    fn groups_words_on_boundary_marker() {
+        // vocab: 0=▁, 1..=6 = п р и в е т, 7..=9 = м и р, 10=<blk>
+        let t = ctc_tokenizer(&["п", "р", "и", "в", "е", "т", "м", "и", "р"]);
+        // "привет мир": п р и в е т ▁ м и р
+        let toks = [
+            tok(1, 0),
+            tok(2, 1),
+            tok(3, 2),
+            tok(4, 3),
+            tok(5, 4),
+            tok(6, 5),
+            tok(0, 6), // ▁ separator
+            tok(7, 7),
+            tok(8, 8),
+            tok(9, 9),
+        ];
+        let words = ctc_tokens_to_words(&t, &toks, 0);
+        assert_eq!(
+            words.iter().map(|w| w.word.as_str()).collect::<Vec<_>>(),
+            vec!["привет", "мир"]
+        );
+        // Timestamps come from the first/last frame of each word.
+        assert!((words[0].start - 0.0).abs() < 1e-9);
+        assert!(words[1].start > words[0].end);
+    }
+
+    #[test]
+    fn leading_and_trailing_boundaries_emit_no_empty_words() {
+        let t = ctc_tokenizer(&["а", "б"]);
+        // ▁ а б ▁  → one word "аб", no empty words from the edge separators.
+        let toks = [tok(0, 0), tok(1, 1), tok(2, 2), tok(0, 3)];
+        let words = ctc_tokens_to_words(&t, &toks, 0);
+        assert_eq!(
+            words.iter().map(|w| w.word.as_str()).collect::<Vec<_>>(),
+            vec!["аб"]
+        );
     }
 }

@@ -272,7 +272,7 @@ paths:
           required: false
           schema:
             type: string
-            enum: [rnnt, e2e_rnnt]
+            enum: [rnnt, e2e_rnnt, ml_ctc, ml_ctc_large]
           description: |
             Forward-compatibility guard naming the recognition head the request
             expects. A single-model server can't switch heads, so any value
@@ -719,11 +719,11 @@ components:
           example: gigaam-v3-rnnt
           description: >-
             Stable identifier of the head actually loaded
-            (`gigaam-v3-rnnt` or `gigaam-v3-e2e-rnnt`). During first-run model
+            (`gigaam-v3-rnnt`, `gigaam-v3-e2e-rnnt`, `gigaam-multilingual-ctc`, or `gigaam-multilingual-large-ctc`). During first-run model
             download / quantization the bootstrap responder reports `loading`.
         variant:
           type: string
-          enum: [rnnt, e2e_rnnt]
+          enum: [rnnt, e2e_rnnt, ml_ctc, ml_ctc_large]
           example: rnnt
           description: Recognition head in use
         version:
@@ -790,13 +790,13 @@ components:
           example: gigaam-v3-rnnt
           description: >-
             Stable identifier of the head actually loaded
-            (`gigaam-v3-rnnt` or `gigaam-v3-e2e-rnnt`).
+            (`gigaam-v3-rnnt`, `gigaam-v3-e2e-rnnt`, `gigaam-multilingual-ctc`, or `gigaam-multilingual-large-ctc`).
         name:
           type: string
           example: GigaAM v3 RNN-T
         variant:
           type: string
-          enum: [rnnt, e2e_rnnt]
+          enum: [rnnt, e2e_rnnt, ml_ctc, ml_ctc_large]
           example: rnnt
           description: Recognition head in use
         version:

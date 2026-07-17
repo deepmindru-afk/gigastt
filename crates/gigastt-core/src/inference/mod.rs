@@ -216,10 +216,15 @@ const POOL_RAM_FRACTION_DENOM: u64 = 2;
 ///
 /// Moved out of the pool on checkout and returned on checkin.
 /// Each triplet is independent and can run inference concurrently with others.
+///
+/// The RNN-T heads populate all three sessions. The encoder-only CTC heads leave
+/// `decoder` / `joiner` as `None` — the CTC branch in `run_inference` decodes
+/// straight from the encoder output and never touches them, so loading them would
+/// only waste encoder-sized RAM.
 pub struct SessionTriplet {
     pub(crate) encoder: Box<dyn RuntimeSession>,
-    pub(crate) decoder: Box<dyn RuntimeSession>,
-    pub(crate) joiner: Box<dyn RuntimeSession>,
+    pub(crate) decoder: Option<Box<dyn RuntimeSession>>,
+    pub(crate) joiner: Option<Box<dyn RuntimeSession>>,
     /// Reusable encoder input tensors: `[audio_signal [1, N_MELS, num_frames], length [1]]`.
     /// Resized and overwritten in `run_inference` to avoid per-call allocations.
     pub(crate) encoder_inputs: Vec<Tensor>,
@@ -1433,22 +1438,13 @@ impl Engine {
         min_size: usize,
     ) -> anyhow::Result<Vec<SessionTriplet>> {
         let encoder_path = Self::encoder_model_path(dir, variant);
-        // CTC is encoder-only: no decoder/joiner ONNX exists on disk. Keep the
-        // 3-session SessionTriplet shape but load the encoder into all three
-        // slots — for CTC they are never `.run()` (the CTC branch in
-        // `run_inference` returns right after the encoder run).
-        // TODO: make decoder/joiner Option to avoid 3x encoder RAM for CTC.
-        let is_ctc = variant == ModelVariant::MlCtc;
-        let decoder_path = if is_ctc {
-            encoder_path.clone()
-        } else {
-            dir.join(variant.decoder_file())
-        };
-        let joiner_path = if is_ctc {
-            encoder_path.clone()
-        } else {
-            dir.join(variant.joint_file())
-        };
+        // CTC is encoder-only: no decoder/joiner ONNX exists on disk, and the CTC
+        // branch in `run_inference` returns right after the encoder run without
+        // touching them. Load them only for the RNN-T heads (leaving `None` for
+        // CTC avoids holding an unused, never-run session per pool triplet).
+        let is_ctc = variant.is_ctc();
+        let decoder_path = dir.join(variant.decoder_file());
+        let joiner_path = dir.join(variant.joint_file());
 
         let results: Vec<anyhow::Result<SessionTriplet>> = std::thread::scope(|s| {
             let handles: Vec<_> = (0..pool_size)
@@ -1465,12 +1461,17 @@ impl Engine {
                             let encoder = runtime
                                 .load_session(encoder_path, true)
                                 .map_err(|e| anyhow::anyhow!(e))?;
-                            let decoder = runtime
-                                .load_session(decoder_path, false)
-                                .map_err(|e| anyhow::anyhow!(e))?;
-                            let joiner = runtime
-                                .load_session(joiner_path, false)
-                                .map_err(|e| anyhow::anyhow!(e))?;
+                            let (decoder, joiner) = if is_ctc {
+                                (None, None)
+                            } else {
+                                let decoder = runtime
+                                    .load_session(decoder_path, false)
+                                    .map_err(|e| anyhow::anyhow!(e))?;
+                                let joiner = runtime
+                                    .load_session(joiner_path, false)
+                                    .map_err(|e| anyhow::anyhow!(e))?;
+                                (Some(decoder), Some(joiner))
+                            };
                             Ok(SessionTriplet {
                                 encoder,
                                 decoder,
@@ -2258,7 +2259,7 @@ impl Engine {
         // (`[1, T', 71]`, row-major). Greedy-decode them directly — there is no
         // prediction network / joiner, so we return before the RNN-T block
         // borrows `encoder_outputs` for the decode loop.
-        if self.variant == ModelVariant::MlCtc {
+        if self.variant.is_ctc() {
             let log_probs = encoder_outputs[0]
                 .view()
                 .data()
@@ -2270,15 +2271,21 @@ impl Engine {
                 self.tokenizer.vocab_size(),
                 self.tokenizer.blank_id(),
             );
-            let words = self.ctc_tokens_to_words(&tokens, frame_offset);
+            let words = ctc::ctc_tokens_to_words(&self.tokenizer, &tokens, frame_offset);
             return Ok((words, false)); // CTC has no endpoint signal
         }
 
         // RNN-T greedy decode — the encoder output is borrowed for the decode loop.
         let dec_start = std::time::Instant::now();
         let result = decode::greedy_decode(
-            &*triplet.decoder,
-            &*triplet.joiner,
+            triplet
+                .decoder
+                .as_deref()
+                .expect("RNN-T decoder session must be loaded for a non-CTC head"),
+            triplet
+                .joiner
+                .as_deref()
+                .expect("RNN-T joiner session must be loaded for a non-CTC head"),
             &encoder_outputs[0].view(),
             enc_len,
             self.tokenizer.blank_id(),
@@ -2306,80 +2313,6 @@ impl Engine {
     /// Convert decoded tokens into words with timestamps and confidence.
     fn tokens_to_words(&self, tokens: &[decode::TokenInfo], frame_offset: usize) -> Vec<WordInfo> {
         TokenFormatter::tokens_to_words(&self.tokenizer, tokens, frame_offset)
-    }
-
-    /// Group CTC-decoded tokens into words with timestamps and confidence.
-    ///
-    /// Mirrors [`TokenFormatter::tokens_to_words`] but splits on the CTC vocab's
-    /// literal SPACE token (`" "`, `vocab[0]`) instead of the BPE `▁` boundary
-    /// marker — the CTC head emits one char per token with no per-word prefix.
-    /// The blank token never appears here (dropped in [`ctc::ctc_greedy_decode`]).
-    fn ctc_tokens_to_words(
-        &self,
-        tokens: &[decode::TokenInfo],
-        frame_offset: usize,
-    ) -> Vec<WordInfo> {
-        let mut words = Vec::new();
-        let mut current_word = String::new();
-        let mut word_start_frame: Option<usize> = None;
-        let mut word_end_frame: usize = 0;
-        let mut word_confidences: Vec<f32> = Vec::new();
-
-        let flush = |word: &mut String,
-                     start: &mut Option<usize>,
-                     end: usize,
-                     confs: &mut Vec<f32>,
-                     out: &mut Vec<WordInfo>| {
-            if word.is_empty() {
-                return;
-            }
-            let avg_conf: f32 = if confs.is_empty() {
-                1.0
-            } else {
-                confs.iter().sum::<f32>() / confs.len() as f32
-            };
-            out.push(WordInfo {
-                word: std::mem::take(word),
-                start: (start.unwrap_or(0) + frame_offset) as f64 * SECONDS_PER_FRAME,
-                end: (end + frame_offset) as f64 * SECONDS_PER_FRAME,
-                confidence: avg_conf,
-                speaker: None,
-            });
-            *start = None;
-            confs.clear();
-        };
-
-        for token in tokens {
-            let ch = self.tokenizer.token_text(token.token_id);
-            if ch == " " {
-                flush(
-                    &mut current_word,
-                    &mut word_start_frame,
-                    word_end_frame,
-                    &mut word_confidences,
-                    &mut words,
-                );
-                continue;
-            }
-            if !ch.is_empty() {
-                current_word.push_str(ch);
-                if word_start_frame.is_none() {
-                    word_start_frame = Some(token.frame_index);
-                }
-                word_end_frame = token.frame_index;
-                word_confidences.push(token.confidence);
-            }
-        }
-
-        flush(
-            &mut current_word,
-            &mut word_start_frame,
-            word_end_frame,
-            &mut word_confidences,
-            &mut words,
-        );
-
-        words
     }
 }
 
