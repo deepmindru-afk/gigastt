@@ -100,6 +100,34 @@ reference set (Common Voice 16.1 was removed from the Hub).
 > 70+ languages and LibriSpeech is a common English ASR corpus, so read this as a best-case
 > in-distribution upper bound, not WER on unseen English.
 
+## Kazakh / Kyrgyz / Uzbek — WER % (FLEURS)
+
+The Multilingual CTC heads' other three supported languages, on FLEURS test splits (read
+speech, CC BY 4.0; Kazakh 856 · Kyrgyz 977 · Uzbek 862 utterances). WER is computed with a
+Unicode-complete verbatim normalizer ([`scripts/wer_unicode.py`](../scripts/wer_unicode.py)) —
+the Russian harness normalizer keeps only `[a-zа-я0-9]` and would strip the Turkic Cyrillic
+letters (`ә ғ қ ң ө ұ ү һ і`) these languages need.
+
+Two normalization confounds are removed so the number reflects recognition, not writing
+convention: **(1)** the charwise-CTC heads spell numbers out while ~19% of FLEURS references
+keep digits, and there is no reliable words↔digits ITN for these languages (`num2words` has
+no support) — so the headline **digit-free** WER excludes number-bearing sentences; **(2)**
+apostrophe variants are folded, so Uzbek `oʻ` / `gʻ` (U+02BB) and the model's `o'` / `g'`
+(U+0027) compare equal. The **full** figure is the upper bound over all utterances.
+
+| Head | Kazakh | Kyrgyz | Uzbek |
+|---|---|---|---|
+| **gigastt** (`ml_ctc_large`, 600M, INT8) | **6.52 (5.9–7.1)** | **7.39 (6.7–8.0)** | **9.21 (8.5–9.9)** |
+| gigastt (`ml_ctc`, 220M, INT8) | 7.21 (6.6–7.9) | 8.82 (8.1–9.5) | 11.96 (11.1–12.8) |
+
+*Full-set upper bounds (all utterances, incl. the digit-format mismatch): 600M — kk 11.35 /
+ky 12.50 / uz 14.04; 220M — kk 12.14 / ky 13.88 / uz 17.06.*
+
+Across all five supported languages the 600M head lands at **4.4–9.2% clean-read WER**
+(Russian 4.44 · English 4.63 · Kazakh 6.52 · Kyrgyz 7.39 · Uzbek 9.21) — a genuinely strong
+multilingual result. Same caveat as above: FLEURS overlaps common multilingual ASR training
+data, so read these as in-distribution upper bounds.
+
 ## Speed — RTF (processing ÷ audio; lower = faster; M1 CPU)
 
 | Engine | Clean | Far-field | Phone | YouTube |
