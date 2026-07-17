@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Benchmarks: measured Russian WER for the GigaAM Multilingual CTC heads.** Through the
+  same Python harness, manifests, and normalization as the other engines
+  (`docs/benchmarks.md`): `ml_ctc_large` (600M) 4.44% clean read / 5.70% far-field,
+  `ml_ctc` (220M) 6.15% / 8.28% — the 600M head approaches the Russian-specialized `rnnt`
+  (3.55% / 4.08%) and beats the old `e2e_rnnt` (8.60% clean). Adds `gigastt-ml-ctc` /
+  `gigastt-ml-ctc-large` benchmark runners. Phone / YouTube and Kazakh / Kyrgyz / Uzbek WER
+  are not measured (no local reference audio).
+
 ## [2.11.0] - 2026-07-17
 
 ### Added

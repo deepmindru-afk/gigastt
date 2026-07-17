@@ -24,6 +24,8 @@ Domains: **Clean read** `golos_crowd_1k` · **Far-field** `golos_farfield` ·
 | Engine | Clean read | Far-field | Phone calls | YouTube |
 |---|---|---|---|---|
 | **gigastt** (GigaAM v3 `rnnt`, INT8) | 3.55 (2.9–4.2) | **4.08 (3.4–4.8)** | **18.50 (17.1–19.9)** | **10.91 (9.9–11.8)** |
+| gigastt (GigaAM Multilingual `ml_ctc_large`, 600M, INT8) | 4.44 (3.7–5.2) | 5.70 (4.9–6.6) | — ² | — ² |
+| gigastt (GigaAM Multilingual `ml_ctc`, 220M, INT8) | 6.15 (5.4–7.0) | 8.28 (7.3–9.4) | — ² | — ² |
 | Vosk 0.54 (Zipformer2) | **2.97 (2.4–3.6)** | 6.29 (5.4–7.3) | 22.74 (21.3–24.2) | 17.24 (16.0–18.4) |
 | Vosk 0.42 | 4.82 (4.0–5.6) | 13.93 (12.5–15.5) | 38.57 (36.7–40.6) | 20.65 (19.4–22.0) |
 | T-one (beam+LM) | 6.61 (5.4–7.9) | 14.62 (12.5–17.0) | 21.73 (20.0–23.7) | 23.23 (21.5–25.1) |
@@ -34,6 +36,11 @@ Domains: **Clean read** `golos_crowd_1k` · **Far-field** `golos_farfield` ·
 
 ¹ turbo clean read is a 300-sample slice (wider CI); the rest are 1000.
 
+² the Multilingual CTC heads were measured only on the two Russian domains whose audio was
+locally available (clean read `golos_crowd_1k`, far-field `golos_farfield`); the OpenSTT
+phone / YouTube sets were not on hand. Their Kazakh / Kyrgyz / Uzbek accuracy is not
+measured here (no reference set).
+
 > The pre-v2.3 default was the `e2e_rnnt` head (clean read 8.60%, far-field 5.90,
 > phone 19.28, YouTube 11.35); the `rnnt` head above more than halves clean-read WER
 > and edges the others. Both heads share the encoder — `rnnt` emits bare lowercase
@@ -41,6 +48,14 @@ Domains: **Clean read** `golos_crowd_1k` · **Far-field** `golos_farfield` ·
 > punctuation/casing. WER is identical whether `rnnt` is run with `--itn` or not: the
 > harness normalizes number-words ↔ digits symmetrically on every engine, so word vs
 > digit output is neither rewarded nor penalized.
+
+> **Multilingual heads.** `ml_ctc` (220M) and `ml_ctc_large` (600M) are the opt-in GigaAM
+> Multilingual charwise-CTC heads (ru/en/kk/ky/uz). On Russian they trade some accuracy for
+> language coverage: the 600M head (4.44% clean / 5.70% far-field) approaches the
+> Russian-specialized `rnnt` and comfortably beats the old `e2e_rnnt` (8.60% clean), while
+> the 220M head (6.15% / 8.28%) is the smaller, faster option. Measured through the same
+> harness, manifests, and normalization as the rows above; bare lowercase output, so pair
+> with `--punctuation` / `--itn` for readable text.
 
 **Honest reading:**
 
