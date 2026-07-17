@@ -29,6 +29,8 @@ from common import (
 from runners import (
     FasterWhisperRunner,
     FasterWhisperTurboRunner,
+    GigasttMlCtcLargeRunner,
+    GigasttMlCtcRunner,
     GigasttRunner,
     TOneRunner,
     VoskRunner,
@@ -42,6 +44,8 @@ PROGRESS_INTERVAL = 10
 
 ALL_RUNNERS = [
     GigasttRunner,
+    GigasttMlCtcRunner,
+    GigasttMlCtcLargeRunner,
     WhisperCppRunner,
     FasterWhisperRunner,
     FasterWhisperTurboRunner,
