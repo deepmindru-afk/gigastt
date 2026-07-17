@@ -30,6 +30,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     from the encoder present on disk. REST `/v1/models` reports them as
     `gigaam-multilingual-ctc` / `gigaam-multilingual-large-ctc`.
 
+### Fixed
+
+- **The SSE streaming endpoint (`POST /v1/transcribe/stream`) now reserves a batch-pool
+  slot before decoding the upload**, capping the number of concurrent audio decodes at the
+  pool size. Previously the handler expanded each compressed upload to f32 PCM before
+  checking out a pool slot, so a burst of large uploads (up to the body-size limit) could
+  each inflate into a multi-hundred-megabyte buffer simultaneously and exhaust memory. The
+  endpoint now returns `503` + `Retry-After` under pool saturation, matching the synchronous
+  `/v1/transcribe` handler.
+
 ## [2.10.0] - 2026-07-15
 
 ### Added
