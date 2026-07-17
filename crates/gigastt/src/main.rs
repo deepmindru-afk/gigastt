@@ -47,8 +47,10 @@ enum Commands {
         /// Recognition head to use. Omit to auto-detect from the model
         /// directory: if a model is already installed its variant is used as-is
         /// (no download). Only required when the directory is empty or you want
-        /// to switch variants. `rnnt` (lower WER, bare lowercase) or
-        /// `e2e_rnnt` (punctuation / casing / ITN). Env: GIGASTT_MODEL_VARIANT.
+        /// to switch variants. `rnnt` (lower WER, bare lowercase), `e2e_rnnt`
+        /// (punctuation / casing / ITN), or `ml_ctc` / `ml_ctc_large` (GigaAM
+        /// Multilingual charwise CTC, 220M / 600M — ru/en/kk/ky/uz, bare
+        /// lowercase). Env: GIGASTT_MODEL_VARIANT.
         #[arg(
             long,
             env = "GIGASTT_MODEL_VARIANT",
@@ -288,7 +290,9 @@ enum Commands {
         model_dir: String,
 
         /// Recognition head to download: `rnnt` (default — lower WER, bare
-        /// lowercase) or `e2e_rnnt` (punctuation / casing / ITN).
+        /// lowercase), `e2e_rnnt` (punctuation / casing / ITN), or `ml_ctc` /
+        /// `ml_ctc_large` (GigaAM Multilingual charwise CTC, 220M / 600M —
+        /// ru/en/kk/ky/uz, pre-quantized INT8 fetched directly).
         #[arg(
             long,
             env = "GIGASTT_MODEL_VARIANT",
@@ -347,8 +351,10 @@ enum Commands {
 
         /// Recognition head to use. Omit to auto-detect from the model
         /// directory (existing install used as-is; only downloads if empty).
-        /// `rnnt` (lower WER, bare lowercase) or `e2e_rnnt` (punctuation /
-        /// casing / ITN). Env: GIGASTT_MODEL_VARIANT.
+        /// `rnnt` (lower WER, bare lowercase), `e2e_rnnt` (punctuation /
+        /// casing / ITN), or `ml_ctc` / `ml_ctc_large` (GigaAM Multilingual
+        /// charwise CTC, 220M / 600M — ru/en/kk/ky/uz, bare lowercase).
+        /// Env: GIGASTT_MODEL_VARIANT.
         #[arg(
             long,
             env = "GIGASTT_MODEL_VARIANT",
@@ -651,8 +657,8 @@ fn resolve_encoder_intra_threads(
     }
 }
 
-/// clap value parser for `--model-variant`. Accepts `rnnt` / `e2e_rnnt`
-/// (case-insensitive); see [`ModelVariant::from_str`].
+/// clap value parser for `--model-variant`. Accepts `rnnt` / `e2e_rnnt` /
+/// `ml_ctc` / `ml_ctc_large` (case-insensitive); see [`ModelVariant::from_str`].
 fn parse_model_variant(s: &str) -> Result<ModelVariant, String> {
     s.parse()
 }
@@ -1148,11 +1154,16 @@ async fn main() -> anyhow::Result<()> {
             // `download` is an explicit action: the requested variant maps to
             // the default (Rnnt) so a bare `gigastt download` fetches something
             // useful.
-            if prequantized {
+            if prequantized && !model_variant.is_ctc() {
                 // Lean path: fetch the INT8 bundle from the pinned Release — no
                 // FP32 download, no on-device quantization, no protoc.
                 model::ensure_prequantized_model_variant(Some(model_variant), &model_dir).await?;
             } else {
+                // The Multilingual CTC heads' standard download already fetches
+                // istupakov's pre-quantized INT8 encoder directly from HuggingFace,
+                // so `--prequantized` is a no-op refinement for them (no separate
+                // GitHub-Release bundle). `ensure_int8_encoder` then finds the INT8
+                // encoder already present and skips on-device quantization.
                 let resolved = model::ensure_model_variant(Some(model_variant), &model_dir).await?;
                 ensure_int8_encoder(resolved, &model_dir, skip_quantize)?;
             }

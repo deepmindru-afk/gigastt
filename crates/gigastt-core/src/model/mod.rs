@@ -62,7 +62,8 @@ impl DownloadProgress {
     }
 }
 
-#[cfg(feature = "net")]
+/// HuggingFace repo hosting the RNN-T heads' shared v3 ONNX files. The
+/// Multilingual CTC head ships from its own repo (see [`ModelVariant::hf_repo`]).
 const HF_REPO: &str = "istupakov/gigaam-v3-onnx";
 
 /// Base URL of the pinned GitHub Release hosting the **pre-quantized** INT8
@@ -150,30 +151,43 @@ const PUNCT_FILES: &[(&str, &str)] = &[
     ),
 ];
 
-/// Selectable GigaAM v3 recognition head.
+/// Selectable GigaAM recognition head.
 ///
-/// Both heads ship in the same HuggingFace repo (`HF_REPO`) and share the
-/// inference pipeline; they differ only in their ONNX files and vocabulary.
+/// The RNN-T heads ship in the shared v3 HuggingFace repo (`HF_REPO`); the
+/// Multilingual CTC head ships from its own repo (see [`ModelVariant::hf_repo`]).
+/// All heads share the mel frontend and inference pipeline; they differ in their
+/// ONNX files, vocabulary, and recognition head.
 ///
 /// - [`ModelVariant::Rnnt`] (default): plain RNN-T head. Lower WER on the
 ///   golos_crowd_1k set (3.29% vs 9.65%) but emits bare lowercase Russian with
 ///   no punctuation / casing / ITN. Uses a 34-token character vocabulary.
 /// - [`ModelVariant::E2eRnnt`]: end-to-end head with punctuation, casing, and
 ///   inverse text normalization baked in. Uses a 1025-token BPE vocabulary.
+/// - [`ModelVariant::MlCtc`]: GigaAM Multilingual charwise-CTC head (220M),
+///   encoder-only, 71-class multilingual char vocab (ru/en/kk/ky/uz), bare
+///   lowercase output. Downloads istupakov's pre-quantized INT8 encoder.
 ///
 /// Real upstream filenames are kept on disk (no canonical-prefix rename), and
 /// the engine auto-detects the variant from the encoder file present in the
 /// model directory, so on-disk layout fully determines which head runs.
+///
+/// `#[non_exhaustive]`: recognition heads are added over time (this is an
+/// opt-in, additive catalog), so downstream matches must include a wildcard arm.
+/// New heads are shipped as minor releases, not breaking changes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum ModelVariant {
     /// Plain RNN-T head (default). Bare lowercase output, lower WER.
     #[default]
     Rnnt,
     /// End-to-end RNN-T head with punctuation / casing / ITN.
     E2eRnnt,
-    /// GigaAM Multilingual CTC head; single encoder-only ONNX, 71-class char
-    /// vocab, blank id 70.
+    /// GigaAM Multilingual CTC head (220M); single encoder-only ONNX, 71-class
+    /// char vocab, blank id 70.
     MlCtc,
+    /// GigaAM Multilingual CTC head, large (600M) encoder; same 71-class char
+    /// vocab and CTC decoding as [`ModelVariant::MlCtc`], higher WER headroom.
+    MlCtcLarge,
 }
 
 impl ModelVariant {
@@ -182,16 +196,20 @@ impl ModelVariant {
         match self {
             ModelVariant::Rnnt => "v3_rnnt_encoder.onnx",
             ModelVariant::E2eRnnt => "v3_e2e_rnnt_encoder.onnx",
-            ModelVariant::MlCtc => "multilingual_ctc_encoder.onnx",
+            ModelVariant::MlCtc => "multilingual_ctc.onnx",
+            ModelVariant::MlCtcLarge => "multilingual_large_ctc.onnx",
         }
     }
 
-    /// Basename of the locally-generated INT8 quantized encoder ONNX file.
+    /// Basename of the INT8 quantized encoder ONNX file. For the RNN-T heads
+    /// this is generated locally by the native quantizer; for the Multilingual
+    /// CTC head it is downloaded pre-quantized from HuggingFace.
     pub fn encoder_int8_file(self) -> &'static str {
         match self {
             ModelVariant::Rnnt => "v3_rnnt_encoder_int8.onnx",
             ModelVariant::E2eRnnt => "v3_e2e_rnnt_encoder_int8.onnx",
-            ModelVariant::MlCtc => "multilingual_ctc_encoder_int8.onnx",
+            ModelVariant::MlCtc => "multilingual_ctc.int8.onnx",
+            ModelVariant::MlCtcLarge => "multilingual_large_ctc.int8.onnx",
         }
     }
 
@@ -202,8 +220,8 @@ impl ModelVariant {
             ModelVariant::E2eRnnt => "v3_e2e_rnnt_decoder.onnx",
             // CTC is encoder-only: no decoder/joiner ONNX exists. This empty
             // path is never loaded — the CTC branch in `run_inference` returns
-            // before the decoder/joiner sessions are touched (see task C).
-            ModelVariant::MlCtc => "",
+            // before the decoder/joiner sessions are touched.
+            ModelVariant::MlCtc | ModelVariant::MlCtcLarge => "",
         }
     }
 
@@ -214,7 +232,7 @@ impl ModelVariant {
             ModelVariant::E2eRnnt => "v3_e2e_rnnt_joint.onnx",
             // CTC is encoder-only: no decoder/joiner ONNX exists (see
             // `decoder_file`). Never loaded.
-            ModelVariant::MlCtc => "",
+            ModelVariant::MlCtc | ModelVariant::MlCtcLarge => "",
         }
     }
 
@@ -226,14 +244,16 @@ impl ModelVariant {
         match self {
             ModelVariant::Rnnt => "v3_vocab.txt",
             ModelVariant::E2eRnnt => "v3_e2e_rnnt_vocab.txt",
-            ModelVariant::MlCtc => "multilingual_ctc_vocab.txt",
+            // Both CTC heads share the identical 71-token multilingual vocab.
+            ModelVariant::MlCtc | ModelVariant::MlCtcLarge => "multilingual_vocab.txt",
         }
     }
 
     /// Files downloaded from HuggingFace for this variant. RNN-T heads ship
-    /// encoder + decoder + joiner + vocab; the CTC head is encoder-only, so it
-    /// downloads only encoder + vocab. The INT8 encoder is generated locally,
-    /// not downloaded.
+    /// encoder (FP32) + decoder + joiner + vocab, and the INT8 encoder is
+    /// generated locally. The Multilingual CTC head is encoder-only and ships a
+    /// ready-made INT8 encoder upstream, so it downloads that INT8 encoder + vocab
+    /// directly (no FP32 download, no on-device quantization).
     pub fn download_files(self) -> Vec<&'static str> {
         match self {
             ModelVariant::Rnnt | ModelVariant::E2eRnnt => vec![
@@ -242,7 +262,20 @@ impl ModelVariant {
                 self.joint_file(),
                 self.vocab_file(),
             ],
-            ModelVariant::MlCtc => vec![self.encoder_file(), self.vocab_file()],
+            ModelVariant::MlCtc | ModelVariant::MlCtcLarge => {
+                vec![self.encoder_int8_file(), self.vocab_file()]
+            }
+        }
+    }
+
+    /// HuggingFace repo hosting this variant's ONNX files. The RNN-T heads live
+    /// in the shared v3 repo; the Multilingual CTC head ships from istupakov's
+    /// dedicated `gigaam-multilingual-ctc-onnx` repo.
+    pub fn hf_repo(self) -> &'static str {
+        match self {
+            ModelVariant::Rnnt | ModelVariant::E2eRnnt => HF_REPO,
+            ModelVariant::MlCtc => "istupakov/gigaam-multilingual-ctc-onnx",
+            ModelVariant::MlCtcLarge => "istupakov/gigaam-multilingual-large-ctc-onnx",
         }
     }
 
@@ -253,6 +286,7 @@ impl ModelVariant {
             ModelVariant::Rnnt => RNNT_CHECKSUMS,
             ModelVariant::E2eRnnt => E2E_RNNT_CHECKSUMS,
             ModelVariant::MlCtc => ML_CTC_CHECKSUMS,
+            ModelVariant::MlCtcLarge => ML_CTC_LARGE_CHECKSUMS,
         };
         table
             .iter()
@@ -260,10 +294,11 @@ impl ModelVariant {
             .and_then(|(_, hash)| *hash)
     }
 
-    /// SHA-256 of the pre-quantized INT8 encoder for this variant, as published
-    /// in the pinned GitHub Release (`PREQUANT_RELEASE_BASE`). Produced by
-    /// gigastt's deterministic quantizer; bump this together with the release
-    /// tag if the model is ever re-quantized.
+    /// SHA-256 of the pre-quantized INT8 encoder for this variant. For the RNN-T
+    /// heads this is gigastt's own quantizer output, published in the pinned
+    /// GitHub Release (`PREQUANT_RELEASE_BASE`); bump it together with the release
+    /// tag on re-quantization. For the Multilingual CTC head it is istupakov's
+    /// upstream INT8 encoder, downloaded directly from HuggingFace.
     pub fn encoder_int8_checksum(self) -> &'static str {
         match self {
             ModelVariant::Rnnt => {
@@ -272,9 +307,16 @@ impl ModelVariant {
             ModelVariant::E2eRnnt => {
                 "cf51b300af47cea099e17c806f8fecce2c46e9e8deb4709ec203f8970a067389"
             }
-            // TODO: fill after HF upload (only used on the prequantized path,
-            // not exercised yet).
-            ModelVariant::MlCtc => "",
+            // Downloaded pre-quantized from istupakov's HuggingFace repo (not our
+            // GitHub Release); this is the SHA-256 of `multilingual_ctc.int8.onnx`.
+            ModelVariant::MlCtc => {
+                "e08e27ae5669b39f0c378fae101bbbb9a80505f74f9b66719c309bf5b894a480"
+            }
+            // SHA-256 of `multilingual_large_ctc.int8.onnx`, from
+            // istupakov/gigaam-multilingual-large-ctc-onnx.
+            ModelVariant::MlCtcLarge => {
+                "b2ad9c38fc04197ba758105d33f7404fd13d977958722e0f49e3f3e22521f1c6"
+            }
         }
     }
 
@@ -290,7 +332,9 @@ impl ModelVariant {
                 self.joint_file(),
                 self.vocab_file(),
             ],
-            ModelVariant::MlCtc => vec![self.encoder_int8_file(), self.vocab_file()],
+            ModelVariant::MlCtc | ModelVariant::MlCtcLarge => {
+                vec![self.encoder_int8_file(), self.vocab_file()]
+            }
         }
     }
 
@@ -315,6 +359,7 @@ impl ModelVariant {
             ModelVariant::Rnnt,
             ModelVariant::E2eRnnt,
             ModelVariant::MlCtc,
+            ModelVariant::MlCtcLarge,
         ]
         .into_iter()
         .find(|&variant| {
@@ -331,6 +376,7 @@ impl ModelVariant {
             ModelVariant::Rnnt => "gigaam-v3-rnnt",
             ModelVariant::E2eRnnt => "gigaam-v3-e2e-rnnt",
             ModelVariant::MlCtc => "gigaam-multilingual-ctc",
+            ModelVariant::MlCtcLarge => "gigaam-multilingual-large-ctc",
         }
     }
 
@@ -341,6 +387,7 @@ impl ModelVariant {
             ModelVariant::Rnnt => "rnnt",
             ModelVariant::E2eRnnt => "e2e_rnnt",
             ModelVariant::MlCtc => "ml_ctc",
+            ModelVariant::MlCtcLarge => "ml_ctc_large",
         }
     }
 
@@ -350,7 +397,14 @@ impl ModelVariant {
             ModelVariant::Rnnt => "GigaAM v3 RNN-T",
             ModelVariant::E2eRnnt => "GigaAM v3 E2E RNN-T",
             ModelVariant::MlCtc => "GigaAM Multilingual CTC",
+            ModelVariant::MlCtcLarge => "GigaAM Multilingual CTC (large)",
         }
+    }
+
+    /// True for the encoder-only CTC heads (greedy CTC decode, no prediction
+    /// network / joiner). Both the 220M and 600M Multilingual heads are CTC.
+    pub fn is_ctc(self) -> bool {
+        matches!(self, ModelVariant::MlCtc | ModelVariant::MlCtcLarge)
     }
 }
 
@@ -362,8 +416,10 @@ impl std::str::FromStr for ModelVariant {
             "rnnt" => Ok(ModelVariant::Rnnt),
             "e2e_rnnt" | "e2e-rnnt" => Ok(ModelVariant::E2eRnnt),
             "ml_ctc" | "ml-ctc" => Ok(ModelVariant::MlCtc),
+            "ml_ctc_large" | "ml-ctc-large" => Ok(ModelVariant::MlCtcLarge),
             other => Err(format!(
-                "unknown model variant '{other}' (expected 'rnnt', 'e2e_rnnt', or 'ml_ctc')"
+                "unknown model variant '{other}' \
+                 (expected 'rnnt', 'e2e_rnnt', 'ml_ctc', or 'ml_ctc_large')"
             )),
         }
     }
@@ -411,11 +467,33 @@ const E2E_RNNT_CHECKSUMS: &[(&str, Option<&str>)] = &[
 ];
 
 /// SHA-256 checksums for the GigaAM Multilingual CTC head's downloaded files
-/// (encoder + vocab; it is encoder-only). Both entries are `None` until the
-/// ONNX is uploaded to HuggingFace — `None` skips verification for now.
+/// (the pre-quantized INT8 encoder + vocab; it is encoder-only). Computed from
+/// the canonical copies at `istupakov/gigaam-multilingual-ctc-onnx` on
+/// 2026-07-17.
 const ML_CTC_CHECKSUMS: &[(&str, Option<&str>)] = &[
-    ("multilingual_ctc_encoder.onnx", None),
-    ("multilingual_ctc_vocab.txt", None),
+    (
+        "multilingual_ctc.int8.onnx",
+        Some("e08e27ae5669b39f0c378fae101bbbb9a80505f74f9b66719c309bf5b894a480"),
+    ),
+    (
+        "multilingual_vocab.txt",
+        Some("4d130287892e1099fedfb3f93c4b4cf8a263151158801680b28977d1be4133f4"),
+    ),
+];
+
+/// SHA-256 checksums for the GigaAM Multilingual CTC *large* (600M) head's
+/// downloaded files (pre-quantized INT8 encoder + the shared vocab, which is
+/// byte-identical to the 220M head's). Computed from the canonical copies at
+/// `istupakov/gigaam-multilingual-large-ctc-onnx` on 2026-07-17.
+const ML_CTC_LARGE_CHECKSUMS: &[(&str, Option<&str>)] = &[
+    (
+        "multilingual_large_ctc.int8.onnx",
+        Some("b2ad9c38fc04197ba758105d33f7404fd13d977958722e0f49e3f3e22521f1c6"),
+    ),
+    (
+        "multilingual_vocab.txt",
+        Some("4d130287892e1099fedfb3f93c4b4cf8a263151158801680b28977d1be4133f4"),
+    ),
 ];
 
 #[cfg(feature = "diarization")]
@@ -1094,7 +1172,10 @@ fn finalize_download(
 
 #[cfg(feature = "net")]
 async fn download_file(variant: ModelVariant, filename: &str, dir: &Path) -> Result<()> {
-    let url = format!("https://huggingface.co/{HF_REPO}/resolve/main/{filename}");
+    let url = format!(
+        "https://huggingface.co/{}/resolve/main/{filename}",
+        variant.hf_repo()
+    );
     let final_dest = dir.join(filename);
     let expected = variant.checksum(filename);
     stream_to_partial_then_finalize(&url, &final_dest, expected, filename).await
@@ -1618,14 +1699,110 @@ mod tests {
             ModelVariant::from_str(" RNNT ").unwrap(),
             ModelVariant::Rnnt
         );
+        assert_eq!(
+            ModelVariant::from_str("ml_ctc").unwrap(),
+            ModelVariant::MlCtc
+        );
+        assert_eq!(
+            ModelVariant::from_str("ML-CTC").unwrap(),
+            ModelVariant::MlCtc
+        );
+        assert_eq!(
+            ModelVariant::from_str("ml_ctc_large").unwrap(),
+            ModelVariant::MlCtcLarge
+        );
+        assert_eq!(
+            ModelVariant::from_str("ML-CTC-LARGE").unwrap(),
+            ModelVariant::MlCtcLarge
+        );
         assert!(ModelVariant::from_str("whisper").is_err());
     }
 
     #[test]
+    fn test_model_variant_ml_ctc_file_mapping() {
+        let v = ModelVariant::MlCtc;
+        // Real istupakov filenames (gigaam-multilingual-ctc-onnx).
+        assert_eq!(v.encoder_file(), "multilingual_ctc.onnx");
+        assert_eq!(v.encoder_int8_file(), "multilingual_ctc.int8.onnx");
+        assert_eq!(v.vocab_file(), "multilingual_vocab.txt");
+        // Encoder-only: no decoder/joiner ONNX exists.
+        assert_eq!(v.decoder_file(), "");
+        assert_eq!(v.joint_file(), "");
+        // Downloads the pre-quantized INT8 encoder directly + vocab.
+        assert_eq!(
+            v.download_files(),
+            ["multilingual_ctc.int8.onnx", "multilingual_vocab.txt"]
+        );
+        assert_eq!(v.hf_repo(), "istupakov/gigaam-multilingual-ctc-onnx");
+        assert_eq!(v.as_str(), "ml_ctc");
+        assert_eq!(v.model_id(), "gigaam-multilingual-ctc");
+    }
+
+    #[test]
+    fn test_hf_repo_per_variant() {
+        assert_eq!(ModelVariant::Rnnt.hf_repo(), "istupakov/gigaam-v3-onnx");
+        assert_eq!(ModelVariant::E2eRnnt.hf_repo(), "istupakov/gigaam-v3-onnx");
+        assert_eq!(
+            ModelVariant::MlCtc.hf_repo(),
+            "istupakov/gigaam-multilingual-ctc-onnx"
+        );
+        assert_eq!(
+            ModelVariant::MlCtcLarge.hf_repo(),
+            "istupakov/gigaam-multilingual-large-ctc-onnx"
+        );
+    }
+
+    #[test]
+    fn test_model_variant_ml_ctc_large_file_mapping() {
+        let v = ModelVariant::MlCtcLarge;
+        assert_eq!(v.encoder_file(), "multilingual_large_ctc.onnx");
+        assert_eq!(v.encoder_int8_file(), "multilingual_large_ctc.int8.onnx");
+        // Vocab is byte-identical to (and shares the filename with) the 220M head.
+        assert_eq!(v.vocab_file(), "multilingual_vocab.txt");
+        assert_eq!(v.vocab_file(), ModelVariant::MlCtc.vocab_file());
+        assert_eq!(v.decoder_file(), "");
+        assert_eq!(v.joint_file(), "");
+        assert_eq!(
+            v.download_files(),
+            ["multilingual_large_ctc.int8.onnx", "multilingual_vocab.txt"]
+        );
+        assert_eq!(v.as_str(), "ml_ctc_large");
+        assert_eq!(v.model_id(), "gigaam-multilingual-large-ctc");
+        assert!(v.is_ctc());
+        assert!(ModelVariant::MlCtc.is_ctc());
+        assert!(!ModelVariant::Rnnt.is_ctc());
+    }
+
+    #[test]
+    fn test_detect_in_dir_ml_ctc_large_by_int8_encoder() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        std::fs::write(tmp.path().join("multilingual_large_ctc.int8.onnx"), b"int8").unwrap();
+        assert_eq!(
+            ModelVariant::detect_in_dir(tmp.path()),
+            Some(ModelVariant::MlCtcLarge)
+        );
+    }
+
+    #[test]
+    fn test_detect_in_dir_ml_ctc_by_int8_encoder() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        std::fs::write(tmp.path().join("multilingual_ctc.int8.onnx"), b"int8").unwrap();
+        assert_eq!(
+            ModelVariant::detect_in_dir(tmp.path()),
+            Some(ModelVariant::MlCtc)
+        );
+    }
+
+    #[test]
     fn test_model_variant_checksums_are_pinned() {
-        // Every downloaded file for both variants has a pinned 64-char hex
+        // Every downloaded file for every variant has a pinned 64-char hex
         // checksum — security parity, no placeholder slipping into a release.
-        for variant in [ModelVariant::Rnnt, ModelVariant::E2eRnnt] {
+        for variant in [
+            ModelVariant::Rnnt,
+            ModelVariant::E2eRnnt,
+            ModelVariant::MlCtc,
+            ModelVariant::MlCtcLarge,
+        ] {
             for file in variant.download_files() {
                 let sum = variant
                     .checksum(file)
@@ -1989,11 +2166,25 @@ mod tests {
                 "v3_e2e_rnnt_vocab.txt",
             ]
         );
+        // CTC is encoder-only: pre-quantized set is just the INT8 encoder + vocab.
+        assert_eq!(
+            ModelVariant::MlCtc.prequantized_files(),
+            ["multilingual_ctc.int8.onnx", "multilingual_vocab.txt"]
+        );
+        assert_eq!(
+            ModelVariant::MlCtcLarge.prequantized_files(),
+            ["multilingual_large_ctc.int8.onnx", "multilingual_vocab.txt"]
+        );
     }
 
     #[test]
     fn test_encoder_int8_checksums_are_pinned() {
-        for variant in [ModelVariant::Rnnt, ModelVariant::E2eRnnt] {
+        for variant in [
+            ModelVariant::Rnnt,
+            ModelVariant::E2eRnnt,
+            ModelVariant::MlCtc,
+            ModelVariant::MlCtcLarge,
+        ] {
             let sum = variant.encoder_int8_checksum();
             assert_eq!(
                 sum.len(),

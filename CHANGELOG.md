@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.0] - 2026-07-17
+
+### Added
+
+- **GigaAM Multilingual charwise-CTC recognition heads (`--model-variant ml_ctc` /
+  `ml_ctc_large`).** Two opt-in heads alongside `rnnt` and `e2e_rnnt`, built on Salute's
+  GigaAM Multilingual encoders (220M and 600M, released June 2026; MIT). Trained across 70+
+  languages with best-in-class WER on Russian, Kazakh, Kyrgyz, and Uzbek (moderate on
+  English); the recognition vocabulary is a 71-class multilingual character set (Latin +
+  Cyrillic + Kazakh/Turkic letters). Output is bare lowercase (no punctuation / casing /
+  ITN), so pair it with `--punctuation` / `--itn` for readable Russian text, the same as the
+  `rnnt` head.
+  - `gigastt download --model-variant ml_ctc` (220M, ~225 MB) or `ml_ctc_large` (600M,
+    ~592 MB) fetches the pre-quantized INT8 encoder and vocabulary directly from
+    `istupakov/gigaam-multilingual-ctc-onnx` / `-large-ctc-onnx` on HuggingFace — no FP32
+    download and no on-device quantization (the upstream INT8 encoder is used as-is). Both
+    files are SHA-256-verified. The two heads share a byte-identical vocabulary.
+  - The heads share the existing 64-mel / FFT 320 / hop 160 frontend, so no audio-pipeline
+    changes are needed; they are encoder-only (a single ONNX with a CTC projection, greedy
+    CTC decoding — no prediction network / joiner).
+  - `serve`, `download`, and `transcribe` accept `ml_ctc` / `ml_ctc_large` (with `-` aliases)
+    via `--model-variant` (or `GIGASTT_MODEL_VARIANT`); the engine also auto-detects the head
+    from the encoder present on disk. REST `/v1/models` reports them as
+    `gigaam-multilingual-ctc` / `gigaam-multilingual-large-ctc`.
+
 ## [2.10.0] - 2026-07-15
 
 ### Added
@@ -1516,7 +1541,8 @@ _Release candidate for v0.9.0 — bundles five P0 fixes plus two supporting item
 - Multi-format audio support: WAV, MP3, M4A/AAC, OGG/Vorbis, FLAC (via symphonia).
 - 39 unit tests (tokenizer, features, decode, inference, protocol).
 
-[Unreleased]: https://github.com/ekhodzitsky/gigastt/compare/v2.10.0...HEAD
+[Unreleased]: https://github.com/ekhodzitsky/gigastt/compare/v2.11.0...HEAD
+[2.11.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.10.0...v2.11.0
 [2.10.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.9.0...v2.10.0
 [2.9.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.8.0...v2.9.0
 [2.8.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.7.0...v2.8.0

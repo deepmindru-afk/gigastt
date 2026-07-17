@@ -20,10 +20,12 @@ gigastt serve [OPTIONS]
   --port <PORT>             Listen port [default: 9876]
   --host <HOST>             Bind address [default: 127.0.0.1]
   --model-dir <DIR>         Model directory [default: ~/.gigastt/models]
-  --model-variant <V>       Recognition head: rnnt | e2e_rnnt. Omit to use the model
-                            already installed; fresh installs default to rnnt (lower WER,
-                            no punctuation). e2e_rnnt keeps punctuation/casing/ITN.
-                            Env: GIGASTT_MODEL_VARIANT.
+  --model-variant <V>       Recognition head: rnnt | e2e_rnnt | ml_ctc | ml_ctc_large.
+                            Omit to use the model already installed; fresh installs
+                            default to rnnt (lower WER, no punctuation). e2e_rnnt keeps
+                            punctuation/casing/ITN. ml_ctc / ml_ctc_large are the GigaAM
+                            Multilingual charwise-CTC heads (220M / 600M encoder,
+                            ru/en/kk/ky/uz, bare lowercase). Env: GIGASTT_MODEL_VARIANT.
   --punctuation <MODE>      Restore punctuation/casing on output: auto | on | off
                             [default: auto = on for rnnt, off for e2e_rnnt].
                             Optional ONNX pass; absent model → text unchanged.
@@ -80,14 +82,15 @@ gigastt serve [OPTIONS]
 
 gigastt download [OPTIONS]
   --model-dir <DIR>      Model directory [default: ~/.gigastt/models]
-  --model-variant <V>    Head to download: rnnt (default) | e2e_rnnt. Env: GIGASTT_MODEL_VARIANT.
+  --model-variant <V>    Head to download: rnnt (default) | e2e_rnnt | ml_ctc | ml_ctc_large.
+                         Env: GIGASTT_MODEL_VARIANT.
   --skip-diarization     Skip downloading the speaker diarization model
   --skip-quantize        Skip auto-quantization after download (FP32 only)
 
 gigastt transcribe [OPTIONS] <FILE>
   --model-dir <DIR>           Model directory [default: ~/.gigastt/models]
-  --model-variant <V>         Recognition head: rnnt | e2e_rnnt. Omit to auto-detect.
-                              Env: GIGASTT_MODEL_VARIANT.
+  --model-variant <V>         Recognition head: rnnt | e2e_rnnt | ml_ctc | ml_ctc_large.
+                              Omit to auto-detect. Env: GIGASTT_MODEL_VARIANT.
   --punctuation <MODE>        Restore punctuation/casing: auto | on | off
                               [default: auto = on for rnnt, off for e2e_rnnt].
                               Env: GIGASTT_PUNCTUATION.
