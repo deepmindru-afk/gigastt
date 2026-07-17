@@ -220,7 +220,10 @@ components:
         model:
           type: string
           example: gigaam-v3-e2e-rnnt
-          description: Identifier of the loaded speech recognition model
+          description: >-
+            Identifier of the loaded speech recognition model
+            (`gigaam-v3-rnnt`, `gigaam-v3-e2e-rnnt`, `gigaam-multilingual-ctc`, or
+            `gigaam-multilingual-large-ctc`).
         sample_rate:
           type: integer
           example: 48000

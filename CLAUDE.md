@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**gigastt** — local speech-to-text server powered by GigaAM v3 (default `rnnt` head, optional `e2e_rnnt`). On-device Russian speech recognition via ONNX Runtime. No cloud APIs, no API keys, full privacy.
+**gigastt** — local speech-to-text server powered by GigaAM v3 (default `rnnt` head, optional `e2e_rnnt`), with an optional GigaAM Multilingual `ml_ctc` head (ru/en/kk/ky/uz). On-device speech recognition via ONNX Runtime. No cloud APIs, no API keys, full privacy.
 
 - **Repository**: https://github.com/ekhodzitsky/gigastt
 - **crates.io**: https://crates.io/crates/gigastt
@@ -103,7 +103,7 @@ crates/
 
 ### Key constants (defined in `crates/gigastt-core/src/inference/mod.rs`)
 - `N_MELS = 64`, `N_FFT = 320`, `HOP_LENGTH = 160`, `PRED_HIDDEN = 320`
-- Encoder dim: 768 (shared across heads). Vocab depends on the head: `rnnt` 34 tokens (char, default) / `e2e_rnnt` 1025 tokens (BPE)
+- Encoder dim: 768 (shared across heads). Vocab depends on the head: `rnnt` 34 tokens (char, default) / `e2e_rnnt` 1025 tokens (BPE) / `ml_ctc` 71 tokens (multilingual char, blank id 70)
 
 ### Data flow
 ```
@@ -201,9 +201,10 @@ Three-tier test architecture:
 
 ## Model
 
-GigaAM v3 from `istupakov/gigaam-v3-onnx` on HuggingFace. Two selectable heads (`--model-variant`, auto-detected from the files on disk):
+GigaAM v3 from `istupakov/gigaam-v3-onnx` on HuggingFace. Three selectable heads (`--model-variant`, auto-detected from the files on disk):
 - **`rnnt`** (default since v2.3): `v3_rnnt_{encoder,decoder,joint}.onnx` + `v3_vocab.txt` (34-token char vocab). Much lower WER than e2e (clean read 3.55% on `golos_crowd_1k` via the cross-engine harness vs e2e 8.60%; leads far-field/phone/YouTube — see `docs/benchmarks.md`); bare lowercase output, so pair with `--punctuation` / `--itn` for readable text.
 - **`e2e_rnnt`**: `v3_e2e_rnnt_{encoder,decoder,joint}.onnx` + `v3_e2e_rnnt_vocab.txt` (1025-token BPE). Punctuation/casing/ITN baked in.
+- **`ml_ctc`**: GigaAM Multilingual charwise-CTC head (220M) from `istupakov/gigaam-multilingual-ctc-onnx`. Encoder-only: `multilingual_ctc.int8.onnx` + `multilingual_vocab.txt` (71-class multilingual char vocab; blank id 70). Downloads the upstream pre-quantized INT8 encoder directly (~225MB; no FP32 download, no on-device quantize). Best-in-class WER on ru/kk/ky/uz (moderate on en); bare lowercase output. Shares the 64-mel frontend; file transcription (greedy CTC decode, no prediction network / joiner).
 - Encoder (shared arch): 844MB (FP32) or 215MB (INT8 quantized, 3.9×); decoder/joiner a few MB each.
 - Sample rate: 16kHz, Features: 64 mel bins
 - ONNX tensors: encoder out `[1, 768, T]` (channels-first), decoder state `[1, 1, 320]`
