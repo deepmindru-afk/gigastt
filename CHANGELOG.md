@@ -14,14 +14,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`docs/benchmarks.md`): `ml_ctc_large` (600M) 4.44% clean read / 5.70% far-field,
   `ml_ctc` (220M) 6.15% / 8.28% — the 600M head approaches the Russian-specialized `rnnt`
   (3.55% / 4.08%) and beats the old `e2e_rnnt` (8.60% clean). Adds `gigastt-ml-ctc` /
-  `gigastt-ml-ctc-large` benchmark runners. Phone / YouTube and Kazakh / Kyrgyz / Uzbek WER
-  are not measured (no local reference audio).
+  `gigastt-ml-ctc-large` benchmark runners. Phone / YouTube WER are not measured (no local
+  reference audio).
 - **Benchmarks: measured English WER for the GigaAM Multilingual CTC heads.** On a
   1000-sample slice of LibriSpeech `test-clean` (verbatim WER; `docs/benchmarks.md`):
   `ml_ctc_large` (600M) **4.63%**, `ml_ctc` (220M) 6.67% — only ~0.2 pp behind their Russian
   clean-read WER, so the model card's "moderate on English" understates them on clean read.
   The Russian-only `rnnt` / `e2e_rnnt` heads are Cyrillic-only and score 100% on English.
   Adds `scripts/prepare_librispeech.py`.
+- **Benchmarks: measured Kazakh / Kyrgyz / Uzbek WER for the GigaAM Multilingual CTC heads.**
+  On FLEURS test splits (`docs/benchmarks.md`), digit-free Unicode-verbatim WER: `ml_ctc_large`
+  (600M) Kazakh **6.52%** / Kyrgyz **7.39%** / Uzbek **9.21%**, `ml_ctc` (220M) 7.21 / 8.82 /
+  11.96. Across all five supported languages the 600M head is 4.4–9.2% clean-read WER. Adds
+  `scripts/prepare_fleurs.py` and `scripts/wer_unicode.py` (Unicode-complete WER that keeps the
+  Turkic Cyrillic letters, folds Uzbek apostrophe variants, and excludes number-bearing
+  sentences where the charwise heads spell digits out and no words↔digits ITN exists).
 
 ## [2.11.0] - 2026-07-17
 
