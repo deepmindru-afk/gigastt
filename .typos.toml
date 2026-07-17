@@ -7,7 +7,16 @@
 # the symphonia-metadata APE-overflow guard). Their comments/docs are upstream's
 # and carry pre-existing typos we don't own or fix — skip them so our own
 # sources stay the only thing typos gates.
-extend-exclude = ["vendor/"]
+#
+# The benchmark manifests and result artifacts are verbatim ASR reference and
+# hypothesis transcripts (LibriSpeech, Golos, OpenSTT, ...). They contain
+# dialect / archaic / misrecognized spellings ("nothin", "answerd", "jus") that
+# are the data, not typos we own — spell-checking them is meaningless.
+extend-exclude = [
+    "vendor/",
+    "benchmark/manifests/",
+    "benchmark/results_full/",
+]
 
 [default.extend-words]
 # "mis-sized" / "mis-ordered" — legitimate hyphenated prefix usage.

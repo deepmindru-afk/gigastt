@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (3.55% / 4.08%) and beats the old `e2e_rnnt` (8.60% clean). Adds `gigastt-ml-ctc` /
   `gigastt-ml-ctc-large` benchmark runners. Phone / YouTube and Kazakh / Kyrgyz / Uzbek WER
   are not measured (no local reference audio).
+- **Benchmarks: measured English WER for the GigaAM Multilingual CTC heads.** On a
+  1000-sample slice of LibriSpeech `test-clean` (verbatim WER; `docs/benchmarks.md`):
+  `ml_ctc_large` (600M) **4.63%**, `ml_ctc` (220M) 6.67% — only ~0.2 pp behind their Russian
+  clean-read WER, so the model card's "moderate on English" understates them on clean read.
+  The Russian-only `rnnt` / `e2e_rnnt` heads are Cyrillic-only and score 100% on English.
+  Adds `scripts/prepare_librispeech.py`.
 
 ## [2.11.0] - 2026-07-17
 

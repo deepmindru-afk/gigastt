@@ -75,6 +75,31 @@ but the head switch turned the old "concedes clean read" story into a near-tie. 
 durable advantage remains the packaging — see Footprint and the
 [README](../README.md#how-it-compares).
 
+## English — WER % (LibriSpeech test-clean)
+
+The **Multilingual CTC heads** (`ml_ctc` / `ml_ctc_large`) also transcribe English. Measured
+on a 1000-sample seed-42 slice of **LibriSpeech `test-clean`** (read English, the standard
+clean-English ASR benchmark; CC BY 4.0), verbatim WER — the Russian words-to-digits ITN /
+anglicism normalization used in the Russian table does not apply to English (and here
+normalized vs verbatim agree to within 0.2 pp anyway).
+
+| Engine | WER % (95% CI) |
+|---|---|
+| **gigastt** (GigaAM Multilingual `ml_ctc_large`, 600M, INT8) | **4.63 (4.4–5.1)** |
+| gigastt (GigaAM Multilingual `ml_ctc`, 220M, INT8) | 6.67 (6.4–7.3) |
+| gigastt (GigaAM v3 `rnnt` / `e2e_rnnt`, Russian-only) | 100 |
+
+The 600M head (4.63%) is only ~0.2 pp behind its own Russian clean-read WER (4.44%), so the
+model card's "moderate on English" understates it on clean read; the 220M head is at 6.67%.
+The Russian-specialized `rnnt` / `e2e_rnnt` heads have a **Cyrillic-only** vocabulary and
+cannot produce English at all (100% WER), so the Multilingual heads are the only option for
+English — and for Kazakh / Kyrgyz / Uzbek, which are not measured here for lack of a
+reference set (Common Voice 16.1 was removed from the Hub).
+
+> Same caveat as the Russian table: GigaAM Multilingual is pre-trained on 2M hours across
+> 70+ languages and LibriSpeech is a common English ASR corpus, so read this as a best-case
+> in-distribution upper bound, not WER on unseen English.
+
 ## Speed — RTF (processing ÷ audio; lower = faster; M1 CPU)
 
 | Engine | Clean | Far-field | Phone | YouTube |
