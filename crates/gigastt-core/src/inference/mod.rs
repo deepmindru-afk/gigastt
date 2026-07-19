@@ -16,7 +16,7 @@ pub mod tokenizer;
 
 #[cfg(feature = "diarization")]
 use polyvoice::streaming::StreamingPipeline;
-// `EmbeddingError`, `EmbeddingExtractor`, and `OnnxEmbeddingExtractor` were
+// `EmbeddingError`, `EmbeddingExtractor`, and `FbankOnnxExtractor` were
 // deprecated in polyvoice 0.7.0 in favour of the v1.0 `polyvoice::embedder`
 // `Embedder` trait. We keep them because our per-session diarization path,
 // `StreamingPipeline`, is itself bound on the legacy `EmbeddingExtractor` trait
@@ -28,22 +28,20 @@ use polyvoice::streaming::StreamingPipeline;
 #[allow(deprecated)]
 use polyvoice::{
     ClusterConfig, DiarizationConfig as DiaConfig, EmbeddingError, EmbeddingExtractor, EnergyVad,
-    OnnxEmbeddingExtractor, Pipeline, VadConfig,
+    FbankOnnxExtractor, Pipeline, VadConfig,
 };
 
 #[cfg(feature = "diarization")]
 const SPEAKER_EMBEDDING_DIM: usize = 256;
 #[cfg(feature = "diarization")]
-const SPEAKER_SEGMENT_SAMPLES: usize = 24000;
-#[cfg(feature = "diarization")]
 const SPEAKER_POOL_SIZE: usize = 4;
 
-/// Adapter that lets a single shared [`OnnxEmbeddingExtractor`] back the
+/// Adapter that lets a single shared [`FbankOnnxExtractor`] back the
 /// per-session [`StreamingPipeline`]s, which take ownership of their extractor.
 /// The ONNX session pool inside the extractor is shared across sessions via `Arc`.
 #[cfg(feature = "diarization")]
-#[allow(deprecated)] // legacy OnnxEmbeddingExtractor — see import note above
-pub struct SharedExtractor(std::sync::Arc<OnnxEmbeddingExtractor>);
+#[allow(deprecated)] // legacy FbankOnnxExtractor — see import note above
+pub struct SharedExtractor(std::sync::Arc<FbankOnnxExtractor>);
 
 #[cfg(feature = "diarization")]
 #[allow(deprecated)] // legacy EmbeddingExtractor trait — see import note above
@@ -76,6 +74,12 @@ use crate::runtime::tensor::{Shape, Tensor, TensorData, TensorDataView};
 
 use features::MelSpectrogram;
 use tokenizer::Tokenizer;
+
+#[cfg(feature = "diarization")]
+#[allow(deprecated)] // legacy FbankOnnxExtractor — see import note above
+fn load_speaker_encoder(model_path: &Path, pool_size: usize) -> anyhow::Result<FbankOnnxExtractor> {
+    FbankOnnxExtractor::new(model_path, SPEAKER_EMBEDDING_DIM, pool_size)
+}
 
 /// Number of mel frequency bins used for spectrogram features.
 pub const N_MELS: usize = 64;
@@ -877,8 +881,8 @@ pub struct Engine {
     /// Wrapped in `Arc` so per-session streaming pipelines can share the
     /// underlying ONNX session pool without each owning their own copy.
     #[cfg(feature = "diarization")]
-    #[allow(deprecated)] // legacy OnnxEmbeddingExtractor — see import note above
-    pub speaker_encoder: Option<std::sync::Arc<OnnxEmbeddingExtractor>>,
+    #[allow(deprecated)] // legacy FbankOnnxExtractor — see import note above
+    pub speaker_encoder: Option<std::sync::Arc<FbankOnnxExtractor>>,
 }
 
 impl Engine {
@@ -1239,16 +1243,10 @@ impl Engine {
         );
 
         #[cfg(feature = "diarization")]
-        #[allow(deprecated)] // legacy OnnxEmbeddingExtractor::new — see import note above
         let speaker_encoder = {
             let model_path = model_dir.join("wespeaker_resnet34.onnx");
             if model_path.exists() {
-                match OnnxEmbeddingExtractor::new(
-                    &model_path,
-                    SPEAKER_EMBEDDING_DIM,
-                    SPEAKER_SEGMENT_SAMPLES,
-                    SPEAKER_POOL_SIZE,
-                ) {
+                match load_speaker_encoder(&model_path, SPEAKER_POOL_SIZE) {
                     Ok(enc) => {
                         tracing::info!("Speaker encoder loaded (diarization available)");
                         Some(std::sync::Arc::new(enc))
@@ -3829,6 +3827,29 @@ mod tests {
             .expect("engine should load");
         let state = engine.create_state(true);
         assert!(state.audio_buffer.is_empty());
+    }
+
+    #[cfg(feature = "diarization")]
+    #[test]
+    #[ignore = "requires the WeSpeaker diarization model"]
+    #[allow(deprecated)] // legacy EmbeddingExtractor — see import note above
+    fn test_speaker_encoder_accepts_waveform_audio() {
+        let model_path =
+            Path::new(&crate::model::default_model_dir()).join("wespeaker_resnet34.onnx");
+        let encoder = load_speaker_encoder(&model_path, 1).expect("speaker encoder should load");
+        let samples: Vec<f32> = (0..24_000)
+            .map(|i| {
+                let phase = std::f32::consts::TAU * 220.0 * i as f32 / 16_000.0;
+                0.1 * phase.sin()
+            })
+            .collect();
+
+        let embedding = encoder
+            .extract(&samples, &DiaConfig::default())
+            .expect("waveform must be converted to rank-3 fbank features");
+
+        assert_eq!(embedding.len(), SPEAKER_EMBEDDING_DIM);
+        assert!(embedding.iter().all(|value| value.is_finite()));
     }
 
     #[test]
