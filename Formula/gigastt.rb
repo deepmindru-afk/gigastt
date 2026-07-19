@@ -12,27 +12,27 @@
 class Gigastt < Formula
   desc "On-device Russian speech recognition server powered by GigaAM v3"
   homepage "https://github.com/ekhodzitsky/gigastt"
-  version "2.11.0"
+  version "2.11.1"
   license "MIT"
 
   on_macos do
     # Apple Silicon only — GitHub retired the macos-13 Intel runners, so there is
     # no prebuilt x86_64-apple-darwin tarball. Intel Macs: `cargo install gigastt`.
     if Hardware::CPU.arm?
-      url "https://github.com/ekhodzitsky/gigastt/releases/download/v2.11.0/gigastt-2.11.0-aarch64-apple-darwin.tar.gz"
-      sha256 "2fd07baf9f7358baee29326be6e51d0579dbe5e676b5d86c360c9888aa604e4f"
+      url "https://github.com/ekhodzitsky/gigastt/releases/download/v2.11.1/gigastt-2.11.1-aarch64-apple-darwin.tar.gz"
+      sha256 "aaad8a881ae5bd20e222f643666819832a9dd9dbae0c6125d2f82d0df3b234a8"
     end
   end
 
   on_linux do
     if Hardware::CPU.intel?
-      url "https://github.com/ekhodzitsky/gigastt/releases/download/v2.11.0/gigastt-2.11.0-x86_64-unknown-linux-gnu.tar.gz"
-      sha256 "c2126221a951bf96235b2debf2535f02c882344bb4b4d1ebc72cccb407668733"
+      url "https://github.com/ekhodzitsky/gigastt/releases/download/v2.11.1/gigastt-2.11.1-x86_64-unknown-linux-gnu.tar.gz"
+      sha256 "366c19aa722c28bc93fc9da584b2cb41fb8586a9fc6f5198c6abc7277c99d8d6"
     elsif Hardware::CPU.arm?
       # sha256 is a placeholder; .github/workflows/homebrew.yml overwrites it
       # from SHA256SUMS.txt after the first release carrying this target.
-      url "https://github.com/ekhodzitsky/gigastt/releases/download/v2.11.0/gigastt-2.11.0-aarch64-unknown-linux-gnu.tar.gz"
-      sha256 "e39e68e29332976f1fe852e670ebae1dafcc7f9e7aa65b2dd4d254975f7d0878"
+      url "https://github.com/ekhodzitsky/gigastt/releases/download/v2.11.1/gigastt-2.11.1-aarch64-unknown-linux-gnu.tar.gz"
+      sha256 "4548bcf261b05dd08a765838a2288c47b44664b828a351c0b5e6cef37a1db7a1"
     end
   end
 
