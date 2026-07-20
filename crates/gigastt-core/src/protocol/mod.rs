@@ -59,6 +59,12 @@ pub enum ClientMessage {
     /// Request server to stop and finalize.
     Stop,
     /// Configure session parameters (must be sent before first audio frame).
+    ///
+    /// `#[non_exhaustive]`: the wire protocol evolves by adding optional
+    /// fields only (existing fields are never renamed or removed), so this
+    /// variant gains fields in minor releases — always match it with a `..`
+    /// rest pattern.
+    #[non_exhaustive]
     Configure {
         /// Audio sample rate in Hz (e.g., 8000, 16000, 24000, 44100, 48000). Optional.
         #[serde(default)]
@@ -72,6 +78,18 @@ pub enum ClientMessage {
         /// (`unsupported_protocol_version`) listing the supported range.
         #[serde(default)]
         protocol_version: Option<String>,
+        /// Per-session punctuation/casing-restoration override applied to
+        /// `final` segments only (`partial` payloads always stay raw).
+        /// Omitted = server default (on iff the server has a punctuator
+        /// attached). A `true` on a server without a punctuation model is a
+        /// graceful no-op. Optional.
+        #[serde(default)]
+        punctuation: Option<bool>,
+        /// Per-session inverse text normalization override (number-words →
+        /// digits) applied to `final` segments only. Omitted = server default.
+        /// Optional.
+        #[serde(default)]
+        itn: Option<bool>,
     },
 }
 
@@ -284,6 +302,38 @@ mod tests {
             ClientMessage::Configure {
                 protocol_version, ..
             } => assert_eq!(protocol_version, None),
+            _ => panic!("Expected Configure"),
+        }
+    }
+
+    #[test]
+    fn test_configure_punctuation_itn_deserialize() {
+        let json = r#"{"type":"configure","punctuation":false,"itn":true}"#;
+        let msg: ClientMessage = serde_json::from_str(json).unwrap();
+        match msg {
+            ClientMessage::Configure {
+                punctuation, itn, ..
+            } => {
+                assert_eq!(punctuation, Some(false));
+                assert_eq!(itn, Some(true));
+            }
+            _ => panic!("Expected Configure"),
+        }
+    }
+
+    #[test]
+    fn test_configure_punctuation_itn_absent() {
+        // Older clients omit the post-processing knobs entirely; both must
+        // deserialize to None (server default) — additive backward compat.
+        let json = r#"{"type":"configure","sample_rate":16000}"#;
+        let msg: ClientMessage = serde_json::from_str(json).unwrap();
+        match msg {
+            ClientMessage::Configure {
+                punctuation, itn, ..
+            } => {
+                assert_eq!(punctuation, None);
+                assert_eq!(itn, None);
+            }
             _ => panic!("Expected Configure"),
         }
     }
