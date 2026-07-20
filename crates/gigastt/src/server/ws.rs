@@ -364,15 +364,22 @@ async fn handle_binary_frame(
             .await?;
             Ok(FrameOutcome::Continue)
         }
-        Ok((Err(_panic), _state_back, reservation_back)) => {
+        Ok((Err(_panic), state_back, reservation_back)) => {
             // Inference panicked: reservation is recovered, but the streaming
             // state (LSTM h/c buffers) may be mid-update and unsafe to reuse.
-            // Drop it and install a fresh state so the session continues.
+            // Drop it and install a fresh state so the session continues. The
+            // per-session post-processing overrides are plain session policy
+            // (never touched by inference), and configure-after-audio is
+            // rejected, so they must survive the reset — the client has no
+            // way to re-send them.
             tracing::error!(
                 "Panic in WS inference for {peer} — triplet recovered, streaming state reset"
             );
             *reservation = Some(reservation_back);
-            *state_opt = Some(engine.create_state(false));
+            let mut fresh = engine.create_state(false);
+            fresh.punctuation = state_back.punctuation;
+            fresh.itn = state_back.itn;
+            *state_opt = Some(fresh);
             send_server_message(
                 sink,
                 &ServerMessage::Error {
@@ -395,8 +402,9 @@ async fn handle_binary_frame(
 }
 
 /// Handle `{"type":"configure",…}`. Rejects configure-after-first-audio,
-/// validates sample rate against `SUPPORTED_RATES`, and (with diarization
-/// feature) recreates the streaming state.
+/// validates sample rate against `SUPPORTED_RATES`, (with diarization
+/// feature) recreates the streaming state, and stores the per-session
+/// post-processing overrides (`punctuation` / `itn`) on it.
 #[allow(clippy::too_many_arguments)]
 async fn handle_configure_message(
     sink: &mut WsSink,
@@ -407,6 +415,8 @@ async fn handle_configure_message(
     sample_rate: Option<u32>,
     diarization: Option<bool>,
     protocol_version: Option<String>,
+    punctuation: Option<bool>,
+    itn: Option<bool>,
     peer: SocketAddr,
 ) -> Result<FrameOutcome> {
     if audio_received {
@@ -459,11 +469,31 @@ async fn handle_configure_message(
     #[cfg(feature = "diarization")]
     if let Some(enable_dia) = diarization {
         tracing::info!("Client {peer} configured diarization: {enable_dia}");
-        *state_opt = Some(engine.create_state(enable_dia));
+        let mut new_state = engine.create_state(enable_dia);
+        // The state is recreated wholesale; carry over any post-processing
+        // overrides an earlier Configure already set on this session.
+        if let Some(old) = state_opt.as_ref() {
+            new_state.punctuation = old.punctuation;
+            new_state.itn = old.itn;
+        }
+        *state_opt = Some(new_state);
     }
     #[cfg(not(feature = "diarization"))]
-    {
-        let _ = (engine, state_opt, diarization);
+    let _ = (engine, diarization);
+
+    // Post-processing overrides apply to whatever state the session now holds
+    // (the diarization branch above may have just recreated it). An absent
+    // field leaves the previous value, so repeated Configures compose the same
+    // way `sample_rate` does.
+    if let Some(state) = state_opt.as_mut() {
+        if let Some(p) = punctuation {
+            tracing::info!("Client {peer} configured punctuation: {p}");
+            state.punctuation = Some(p);
+        }
+        if let Some(i) = itn {
+            tracing::info!("Client {peer} configured itn: {i}");
+            state.itn = Some(i);
+        }
     }
     Ok(FrameOutcome::Continue)
 }
@@ -746,6 +776,9 @@ async fn handle_ws_inner(
                             sample_rate,
                             diarization,
                             protocol_version,
+                            punctuation,
+                            itn,
+                            ..
                         }) => {
                             handle_configure_message(
                                 &mut sink,
@@ -756,6 +789,8 @@ async fn handle_ws_inner(
                                 sample_rate,
                                 diarization,
                                 protocol_version,
+                                punctuation,
+                                itn,
                                 peer,
                             )
                             .await
