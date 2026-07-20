@@ -397,3 +397,221 @@ fn cli_serve_boots_and_graceful_shutdown() {
         }
     }
 }
+
+// ─── model-gated: download --progress=json (NDJSON contract) ────────────────
+
+/// Symlink the named files from the real model dir into `dst`. Returns `false`
+/// (test must self-skip) when any of them is absent — e.g. a machine installed
+/// via `download --prequantized` has no FP32 encoder; running anyway would
+/// silently turn the test into a live ~850 MB network download.
+#[cfg(unix)]
+#[must_use]
+fn link_model_files(dst: &std::path::Path, names: &[&str]) -> bool {
+    let src = std::path::PathBuf::from(common::model_dir());
+    for name in names {
+        let from = src.join(name);
+        if !from.exists() {
+            eprintln!("skipping: {} not present in {}", name, src.display());
+            return false;
+        }
+        std::os::unix::fs::symlink(&from, dst.join(name)).expect("symlink model file");
+    }
+    true
+}
+
+/// Kill the child on drop so a panicking assertion can never leak a running
+/// subprocess (nor let a TempDir be deleted out from under it mid-quantize).
+struct KillOnDrop(std::process::Child);
+
+impl Drop for KillOnDrop {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+/// Happy path with everything already present: stdout must be pure NDJSON —
+/// every line parses as a JSON object with a `phase` tag and the final line is
+/// `{"phase":"done",…}`. Human `\r`-progress and tracing logs must not leak
+/// into stdout.
+#[cfg(unix)]
+#[ignore = "requires the GigaAM model (~850MB)"]
+#[test]
+fn cli_download_json_happy_path_stdout_is_pure_ndjson() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    if !link_model_files(
+        tmp.path(),
+        &[
+            "v3_rnnt_encoder.onnx",
+            "v3_rnnt_decoder.onnx",
+            "v3_rnnt_joint.onnx",
+            "v3_vocab.txt",
+            "v3_rnnt_encoder_int8.onnx",
+        ],
+    ) {
+        return;
+    }
+
+    let out = Command::new(bin())
+        .args([
+            "download",
+            "--model-dir",
+            tmp.path().to_str().unwrap(),
+            "--model-variant",
+            "rnnt",
+            "--progress=json",
+            "--skip-diarization",
+        ])
+        .output()
+        .expect("run");
+    assert!(
+        out.status.success(),
+        "download failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    let stdout = String::from_utf8(out.stdout).expect("stdout must be UTF-8");
+    let lines: Vec<&str> = stdout.lines().filter(|l| !l.is_empty()).collect();
+    assert!(!lines.is_empty(), "json mode must emit at least one event");
+    for line in &lines {
+        let v: serde_json::Value = serde_json::from_str(line)
+            .unwrap_or_else(|e| panic!("non-JSON stdout line {line:?}: {e}"));
+        assert!(
+            v.get("phase").and_then(|p| p.as_str()).is_some(),
+            "every event carries a phase tag: {line}"
+        );
+    }
+    let last: serde_json::Value = serde_json::from_str(lines.last().unwrap()).unwrap();
+    assert_eq!(last["phase"], "done", "final event must be done: {last}");
+    assert!(
+        last["model_dir"].as_str().is_some(),
+        "done event carries model_dir: {last}"
+    );
+}
+
+/// The ~2-minute INT8 quantization pass must announce itself as its own
+/// `quantize` phase as soon as it starts (a sidecar reading the stream would
+/// otherwise mistake it for a hang). FP32 weights are linked in without the
+/// INT8 encoder to force the pass; the subprocess is killed right after the
+/// event arrives — the test asserts the emission, not the quantization.
+#[cfg(unix)]
+#[ignore = "requires the GigaAM model (~850MB)"]
+#[test]
+fn cli_download_json_emits_quantize_phase() {
+    use std::io::BufRead;
+
+    let tmp = tempfile::tempdir().expect("tempdir");
+    if !link_model_files(
+        tmp.path(),
+        &[
+            "v3_rnnt_encoder.onnx",
+            "v3_rnnt_decoder.onnx",
+            "v3_rnnt_joint.onnx",
+            "v3_vocab.txt",
+        ],
+    ) {
+        return;
+    }
+
+    let mut child = KillOnDrop(
+        Command::new(bin())
+            .args([
+                "download",
+                "--model-dir",
+                tmp.path().to_str().unwrap(),
+                "--model-variant",
+                "rnnt",
+                "--progress=json",
+                "--skip-diarization",
+            ])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn"),
+    );
+
+    let stdout = child.0.stdout.take().expect("piped stdout");
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        for line in std::io::BufReader::new(stdout).lines() {
+            let Ok(line) = line else { break };
+            if tx.send(line).is_err() {
+                break;
+            }
+        }
+    });
+
+    let deadline = Instant::now() + Duration::from_secs(120);
+    let mut saw_quantize = false;
+    while Instant::now() < deadline {
+        match rx.recv_timeout(Duration::from_millis(500)) {
+            Ok(line) if line.is_empty() => continue,
+            Ok(line) => {
+                let v: serde_json::Value = serde_json::from_str(&line)
+                    .unwrap_or_else(|e| panic!("non-JSON stdout line {line:?}: {e}"));
+                if v["phase"] == "quantize" {
+                    assert_eq!(
+                        v["file"], "v3_rnnt_encoder.onnx",
+                        "quantize event names the encoder being quantized: {v}"
+                    );
+                    saw_quantize = true;
+                    break;
+                }
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                if let Some(status) = child.0.try_wait().expect("try_wait") {
+                    panic!("download exited ({status}) before emitting a quantize event");
+                }
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+        }
+    }
+    drop(child);
+    assert!(
+        saw_quantize,
+        "quantize phase event must be emitted when the INT8 encoder is missing"
+    );
+}
+
+/// The json error contract end-to-end without a model or network: an
+/// impossible `--model-dir` (a path under `/dev/null`) makes the download flow
+/// fail locally; stdout must then carry a single `{"phase":"error",…}` event
+/// whose `kind` matches the documented per-kind process exit code.
+#[cfg(unix)]
+#[test]
+fn cli_download_json_error_event_and_exit_code_are_consistent() {
+    let out = Command::new(bin())
+        .args([
+            "download",
+            "--model-dir",
+            "/dev/null/impossible",
+            "--model-variant",
+            "rnnt",
+            "--progress=json",
+            "--skip-diarization",
+        ])
+        .output()
+        .expect("run");
+    assert!(!out.status.success(), "impossible model dir must fail");
+
+    let stdout = String::from_utf8(out.stdout).expect("stdout must be UTF-8");
+    let lines: Vec<&str> = stdout.lines().filter(|l| !l.is_empty()).collect();
+    let last: serde_json::Value =
+        serde_json::from_str(lines.last().expect("json mode must emit an error event"))
+            .expect("last stdout line must be JSON");
+    assert_eq!(last["phase"], "error", "final event must be error: {last}");
+    let kind = last["kind"].as_str().expect("error event carries kind");
+    let expected_exit = match kind {
+        "network" => 69,
+        "disk" => 74,
+        "checksum" => 65,
+        "interrupted" => 130,
+        "other" => 1,
+        other => panic!("unknown error kind {other}"),
+    };
+    assert_eq!(
+        out.status.code(),
+        Some(expected_exit),
+        "exit code must match the documented mapping for kind={kind}"
+    );
+}
