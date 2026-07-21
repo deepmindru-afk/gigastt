@@ -1368,7 +1368,7 @@ pub async fn job_events(
             .update(
                 &id,
                 Box::new(move |j| {
-                    j.event_channels.push(tx);
+                    j.subscribe(tx);
                 }),
             )
             .await;
