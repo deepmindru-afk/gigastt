@@ -216,6 +216,19 @@ pub struct ExportParams {
     /// the whole buffer, absent = boot default. `POST /v1/transcribe` only.
     #[serde(default)]
     pub vad: Option<bool>,
+    /// Per-request hotword phrases, comma-separated
+    /// (`?hotwords=сбер,тинькофф`). Absent = keep the engine boot biaser;
+    /// present with an empty value (or only empty segments) forces biasing
+    /// off for this request; non-empty replaces the biaser for this request
+    /// only. Capped at 64 phrases / 64 chars each (400 on overflow).
+    /// `POST /v1/transcribe` only.
+    #[serde(default)]
+    pub hotwords: Option<String>,
+    /// Additive logit boost for per-request hotwords. Only applied when
+    /// `hotwords` is also present; absent defaults to 5.0.
+    /// `POST /v1/transcribe` only.
+    #[serde(default)]
+    pub hotwords_boost: Option<f32>,
     /// Forward-compatibility guard for a future multi-model server: names the
     /// recognition head the request expects. A single-variant engine can't
     /// switch, so any value other than the loaded variant returns 409
@@ -243,6 +256,44 @@ pub struct ExportParams {
     /// accepted for it.
     #[serde(default)]
     pub sample_rate: Option<u32>,
+}
+
+/// Split a comma-separated `?hotwords=` value into trimmed non-empty phrases.
+/// Empty input (or only empty segments) yields an empty list, which the engine
+/// treats as force-off for this request.
+pub(crate) fn parse_hotwords_query(raw: &str) -> Vec<String> {
+    raw.split(',')
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+/// Build [`TranscribeOverrides`] from REST query params. Absent knob params
+/// leave the corresponding override field as `None` (engine boot default).
+pub(crate) fn overrides_from_export_params(
+    params: &ExportParams,
+) -> gigastt_core::inference::TranscribeOverrides {
+    gigastt_core::inference::TranscribeOverrides {
+        punctuation: params.punctuation,
+        itn: params.itn,
+        vad: params.vad,
+    }
+}
+
+/// Build optional [`HotwordOverride`] from REST query params. `None` when the
+/// `hotwords` key is absent (engine boot biaser). `Some` when the key is
+/// present — even empty — so `?hotwords=` can force biasing off.
+pub(crate) fn hotwords_from_export_params(
+    params: &ExportParams,
+) -> Option<gigastt_core::inference::HotwordOverride> {
+    params.hotwords.as_ref().map(|raw| {
+        gigastt_core::inference::HotwordOverride::new(
+            parse_hotwords_query(raw),
+            // Boost only applies when hotwords is present; ignore alone.
+            params.hotwords_boost,
+        )
+    })
 }
 
 /// Render a transcription result into the requested export format.
@@ -767,13 +818,15 @@ pub async fn transcribe(
             ));
         }
     }
-    let overrides = gigastt_core::inference::TranscribeOverrides {
-        punctuation: params.punctuation,
-        itn: params.itn,
-        vad: params.vad,
-    };
+    let overrides = overrides_from_export_params(&params);
     if let Err(e) = engine.validate_overrides(&overrides) {
         return Err(api_error(StatusCode::CONFLICT, e.message(), e.code()));
+    }
+    let hotwords = hotwords_from_export_params(&params);
+    if let Some(ref hw) = hotwords
+        && let Err(e) = engine.validate_hotwords(hw)
+    {
+        return Err(api_error(StatusCode::BAD_REQUEST, e.message(), e.code()));
     }
 
     // Checkout a session triplet from the batch pool (blocks if none available)
@@ -825,15 +878,21 @@ pub async fn transcribe(
                 // Diarization is opt-in (`?diarization=true`): only then run the
                 // offline speaker pass. `body` is `axum::body::Bytes` (a
                 // `bytes::Bytes` re-export) so the decode shares the upload buffer.
-                engine.transcribe_bytes_shared_with_overrides_diarized(
+                engine.transcribe_bytes_shared_with_overrides_diarized_hotwords(
                     body,
                     &mut reservation,
                     &overrides,
+                    hotwords.as_ref(),
                 )
             } else {
                 // No diarization requested: byte-identical to the pre-existing
-                // zero-copy path. `overrides` is `Copy` and already validated above.
-                engine.transcribe_bytes_shared_with_overrides(body, &mut reservation, &overrides)
+                // zero-copy path. `overrides` is already validated above.
+                engine.transcribe_bytes_shared_with_overrides_hotwords(
+                    body,
+                    &mut reservation,
+                    &overrides,
+                    hotwords.as_ref(),
+                )
             }
         }));
         match r {
@@ -1577,6 +1636,17 @@ mod tests {
             OverrideError::PunctuationNotAvailable.code(),
             "punctuation_not_available"
         );
+
+        // Hotword DoS limit violations map to 400 (not 409).
+        use gigastt_core::inference::HotwordError;
+        for err in [HotwordError::TooManyHotwords, HotwordError::PhraseTooLong] {
+            let resp = api_error(StatusCode::BAD_REQUEST, err.message(), err.code());
+            let (parts, body) = resp.into_parts();
+            assert_eq!(parts.status, StatusCode::BAD_REQUEST);
+            let bytes = axum::body::to_bytes(body, 1024).await.unwrap();
+            let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+            assert_eq!(v["code"], err.code());
+        }
 
         // The variant guard is a standalone literal (no engine needed to check
         // the code/status contract it emits).
@@ -2573,6 +2643,8 @@ mod tests {
         assert!(params.punctuation.is_none());
         assert!(params.itn.is_none());
         assert!(params.vad.is_none());
+        assert!(params.hotwords.is_none());
+        assert!(params.hotwords_boost.is_none());
         assert!(params.variant.is_none());
     }
 
@@ -2598,6 +2670,41 @@ mod tests {
         assert_eq!(params.punctuation, Some(true));
         assert_eq!(params.itn, Some(true));
         assert_eq!(params.vad, Some(true));
+    }
+
+    #[test]
+    fn test_hotwords_query_param_parsing() {
+        // Comma-separated phrases + optional boost deserialize from the query
+        // string and map to HotwordOverride via hotwords_from_export_params.
+        let uri: axum::http::Uri =
+            "http://x/?hotwords=%D1%81%D0%B1%D0%B5%D1%80,%D1%82%D0%B8%D0%BD%D1%8C%D0%BA%D0%BE%D1%84%D1%84&hotwords_boost=3.5"
+                .parse()
+                .unwrap();
+        let Query(params): Query<ExportParams> = Query::try_from_uri(&uri).unwrap();
+        assert_eq!(params.hotwords.as_deref(), Some("сбер,тинькофф"));
+        assert_eq!(params.hotwords_boost, Some(3.5));
+
+        let hw = hotwords_from_export_params(&params).expect("hotwords present");
+        assert_eq!(hw.phrases, vec!["сбер".to_string(), "тинькофф".to_string()]);
+        assert_eq!(hw.boost, Some(3.5));
+
+        // Absent hotwords → engine default (None), even if boost is set alone.
+        let uri: axum::http::Uri = "http://x/?hotwords_boost=9".parse().unwrap();
+        let Query(params): Query<ExportParams> = Query::try_from_uri(&uri).unwrap();
+        assert!(hotwords_from_export_params(&params).is_none());
+
+        // Empty key present → Some(empty) force-off.
+        let uri: axum::http::Uri = "http://x/?hotwords=".parse().unwrap();
+        let Query(params): Query<ExportParams> = Query::try_from_uri(&uri).unwrap();
+        let hw = hotwords_from_export_params(&params).expect("key present means override");
+        assert!(hw.phrases.is_empty());
+
+        assert_eq!(
+            parse_hotwords_query(" сбер , , тинькофф "),
+            vec!["сбер".to_string(), "тинькофф".to_string()]
+        );
+        assert!(parse_hotwords_query("").is_empty());
+        assert!(parse_hotwords_query(",,,").is_empty());
     }
 
     #[test]
