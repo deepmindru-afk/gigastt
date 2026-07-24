@@ -196,8 +196,8 @@ gracefully.
    Connection-refused means the process is dead or not yet spawned — not that
    it is stuck.
 6. **Version handshake over HTTP.** `GET /health` returns 200 in *both*
-   phases — `{"status":"ok","model":"loading","version":"2.13.0"}` during
-   bootstrap, then `{"status":"ok","model":"gigaam-v3-rnnt","variant":"rnnt","version":"2.13.0","punctuation":true,"itn":true}`.
+   phases — `{"status":"ok","model":"loading","version":"2.14.1"}` during
+   bootstrap, then `{"status":"ok","model":"gigaam-v3-rnnt","variant":"rnnt","version":"2.14.1","punctuation":true,"itn":true}`.
    Gate your minimum engine version on the `version` field instead of running
    `gigastt --version` in a subprocess.
 7. **Transcribe.** For live partial results open a WebSocket session on
@@ -438,6 +438,10 @@ Reference material (do not duplicate — read here):
 - [docs/embedding-packaging.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/embedding-packaging.md) — onnxruntime static vs dynamic linking
 - [docs/api.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/api.md) — `/health`, `/ready`, REST/WS/SSE reference
 - [docs/cli.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/cli.md) — `serve` and `download` flags (lifecycle knobs used above)
+- [Appendix A — Error codes](appendix-error-codes.md) — HTTP/WS codes when the sidecar misbehaves
 
-A dedicated embedding & distribution guide (`docs/embedding.md`, covering
-topics like macOS notarization) is in progress.
+**macOS distribution note.** Shipping a notarized `.app` / Developer ID build
+is **out of band** for this workbook: use Apple's notarization tooling on your
+signed app + the sidecar or embedded framework you ship. The engine itself is
+an unsigned open-source binary from GitHub Releases — gate version with
+`/health` → `version`, not with code-signature assumptions.

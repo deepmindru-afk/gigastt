@@ -225,15 +225,26 @@ The UI rule of thumb: render the latest `partial` in a "preview" style
 replace the preview with `final.text` and append it to the committed
 transcript. Never persist partial text.
 
-A `final` fires when an utterance ends: the built-in endpointing triggers
-on roughly 0.6 s of trailing silence, and with the optional Silero VAD
-(server `--vad`, model auto-downloads) the VAD takes over endpointing
-entirely — the built-in 0.6 s heuristic is disabled and the endpoint
-follows `--vad-min-silence-ms` (default 500 ms). Continuous speech without
+A `final` fires when an utterance ends. **Endpointing ownership** (since
+2.14.1):
+
+| Server flags | Who ends an utterance | Knob |
+|---|---|---|
+| default (no `--vad`) | Decoder blank-run heuristic (~0.6 s trailing silence) | not configurable |
+| `--vad` | **Silero VAD only** — blank-run heuristic is ignored | `--vad-min-silence-ms` (default 500) |
+
+With VAD attached you can raise the silence threshold so natural pauses no
+longer split phrases mid-sentence (the pre-2.14.1 bug was that blank-run
+still fired at ~600 ms even when VAD was on). Continuous speech without
 pauses is also finalized — the streaming window caps out at ~2.5 s and
 slides, so the transcript keeps committing even through a monologue. A
 `final` also arrives on `stop` (Recipe 3) and before a server-initiated
 close (Recipe 4).
+
+```sh
+# Longer silence before committing a final — better for deliberate dictation
+gigastt serve --vad --vad-min-silence-ms 900
+```
 
 Per-session post-processing overrides compose with the same `configure`
 message (finals only; partials always stay raw). Asking for
@@ -248,6 +259,8 @@ an error:
 `привет как дела` in lowercase; the committed line arrives as
 `Привет, как дела?` (when the punctuation model is attached — verify with
 `curl -s http://127.0.0.1:9876/health` showing `"punctuation":true`).
+With `--vad --vad-min-silence-ms 900`, a deliberate ~0.7 s pause between
+words should **not** force a premature `final`.
 
 ### Recipe 3: end the session cleanly — `stop` is the drain
 
@@ -674,11 +687,12 @@ You have a healthy streaming integration when all of these hold:
 
 ## Common pitfalls
 
-Symptom → cause, with a pointer to the fix — the full operator table lives
-in [docs/troubleshooting.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/troubleshooting.md)
-and the error/close code tables in
-[docs/api.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/api.md#error-codes);
-do not debug from memory.
+Symptom → cause, with a pointer to the fix — the cookbook jump table is
+[Appendix A — Error codes](appendix-error-codes.md); the full operator table
+lives in
+[docs/troubleshooting.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/troubleshooting.md)
+and the field-level tables in
+[docs/api.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/api.md#error-codes).
 
 | Symptom | Cause | Where to look |
 |---|---|---|
@@ -712,4 +726,5 @@ clients) is in progress; this chapter covers the native protocol only.
   punctuation/ITN behavior, [CLI and batch processing](02-cli-batch.md)
   for REST/jobs alternatives to live streaming,
   [Deployment & ops](06-deployment-ops.md) for running `serve` in
-  production.
+  production, [Appendix A — Error codes](appendix-error-codes.md) for
+  REST/WS/close jump table.
