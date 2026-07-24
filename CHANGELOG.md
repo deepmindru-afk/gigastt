@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **OpenAI-compatible `POST /v1/audio/transcriptions`.** Multipart form with
+  required `file` and optional `model` (accepted for client compatibility,
+  ignored — the loaded engine is always used). Supports OpenAI
+  `response_format` (`json` · `text` · `srt` · `vtt` · `verbose_json`),
+  `language` (echoed in verbose), `timestamp_granularities[]` (`word` /
+  `segment`), and `stream=true` (SSE: `transcript.text.delta` /
+  `transcript.text.done` / `[DONE]`, progressive chunked encoder path). Default
+  remains `{"text":"..."}`. Same pipeline as `/v1/transcribe` for llama-swap,
+  Hermes Agent, and OpenAI SDKs with a custom `base_url` (#214).
+
 ### Changed
 
 - **Documentation hygiene pass.** Supported versions in `SECURITY.md` track
