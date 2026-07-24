@@ -262,6 +262,7 @@ progress); the onnxruntime linking trade-offs are in
 | `/v1/models` | GET | Model info (encoder type, pool size, capabilities) |
 | `/v1/transcribe` | POST | File transcription, full JSON response or export format |
 | `/v1/transcribe/stream` | POST | File transcription with SSE streaming |
+| `/v1/audio/transcriptions` | POST | OpenAI-compatible file transcription (`multipart` `file` + `model` → `{"text":"..."}`) |
 | `/v1/jobs` | POST | Submit an asynchronous transcription job (requires `--enable-jobs`) |
 | `/v1/jobs/{id}` | GET | Poll job status and progress |
 | `/v1/jobs/{id}` | DELETE | Cancel a queued or processing job |
@@ -282,12 +283,81 @@ curl -X POST http://127.0.0.1:9876/v1/transcribe/stream \
   -H "Content-Type: application/octet-stream" --data-binary @recording.wav
 # data: {"type":"partial","text":"привет как"}
 # data: {"type":"final","text":"Привет, как дела?","confidence":0.94}
+
+# OpenAI-compatible (llama-swap, Hermes Agent, OpenAI SDKs with custom base_url)
+curl -X POST http://127.0.0.1:9876/v1/audio/transcriptions \
+  -F model=whisper-1 \
+  -F file=@recording.wav
+# {"text":"Привет, как дела?"}
 ```
 
 The full-JSON response, SSE `final` events, and job results also carry an
 optional top-level `confidence` — the duration-weighted mean of
 `words[].confidence` (an average of per-word softmax scores, not a calibrated
 probability; omitted when there are no words).
+
+### OpenAI-compatible transcriptions
+
+`POST /v1/audio/transcriptions` is a compatibility layer over the same
+inference pipeline as `/v1/transcribe`, shaped for the
+[OpenAI Audio Transcriptions API](https://developers.openai.com/api/reference/resources/audio/subresources/transcriptions/methods/create)
+(llama-swap, Hermes Agent, OpenAI SDKs with a custom `base_url`).
+
+| Input | Notes |
+|---|---|
+| `Content-Type` | `multipart/form-data` |
+| `file` | Required. Audio bytes (same formats as `/v1/transcribe`) |
+| `model` | Accepted for client compatibility; **ignored**. Pass any string (`whisper-1`, a local alias, or the real model id). |
+| `response_format` | `json` (default) · `text` · `srt` · `vtt` · `verbose_json`. Unknown → `400 invalid_response_format`. |
+| `language` | Accepted; echoed in `verbose_json` (default `ru`). Does not switch the loaded head. |
+| `timestamp_granularities[]` | With `verbose_json`: `word` and/or `segment`. Default (neither set) = segments only. |
+| `stream` | `true`/`false`. When true, SSE of OpenAI transcript events (only with `json`/`text`). |
+| `prompt`, `temperature` | Accepted and ignored (SDK compatibility). |
+
+| `response_format` | Body |
+|---|---|
+| `json` | `{"text":"..."}` only |
+| `text` | plain text (`text/plain`) |
+| `srt` / `vtt` | captions |
+| `verbose_json` | Whisper-style: `task`, `language`, `duration`, `text`, optional `segments` / `words` |
+
+**Streaming (`stream=true`).** Response is `text/event-stream`:
+
+```
+data: {"type":"transcript.text.delta","delta":"Привет"}
+data: {"type":"transcript.text.delta","delta":" мир"}
+data: {"type":"transcript.text.done","text":"Привет мир"}
+data: [DONE]
+```
+
+Deltas are append-only progressive text from the real chunked encoder path
+(same pipeline as `/v1/transcribe/stream`). Incompatible with `srt` / `vtt` /
+`verbose_json` → `400 invalid_stream_options`.
+
+```sh
+# Default JSON
+curl -X POST http://127.0.0.1:9876/v1/audio/transcriptions \
+  -F model=whisper-1 -F file=@recording.wav
+# {"text":"…"}
+
+# Verbose with word + segment timestamps
+curl -X POST http://127.0.0.1:9876/v1/audio/transcriptions \
+  -F model=whisper-1 -F file=@recording.wav \
+  -F response_format=verbose_json \
+  -F language=ru \
+  -F 'timestamp_granularities[]=word' \
+  -F 'timestamp_granularities[]=segment'
+
+# Plain text / SRT
+curl -X POST http://127.0.0.1:9876/v1/audio/transcriptions \
+  -F model=whisper-1 -F file=@recording.wav -F response_format=text
+curl -X POST http://127.0.0.1:9876/v1/audio/transcriptions \
+  -F model=whisper-1 -F file=@recording.wav -F response_format=srt
+```
+
+Point llama-swap / Hermes Agent `base_url` at `http://127.0.0.1:9876/v1`
+(path suffix `/audio/transcriptions` is appended by the client). For
+diarization, telephony codecs, or native export knobs use `POST /v1/transcribe`.
 
 ## Admin reload
 
