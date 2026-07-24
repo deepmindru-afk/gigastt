@@ -647,12 +647,14 @@ impl JobExecution for RealJobExecutor {
                 return Err(anyhow::anyhow!("Requested model variant is not loaded"));
             }
         }
-        let overrides = gigastt_core::inference::TranscribeOverrides {
-            punctuation: params.punctuation,
-            itn: params.itn,
-            vad: params.vad,
-        };
+        let overrides = super::http::overrides_from_export_params(&params);
         if let Err(e) = engine.validate_overrides(&overrides) {
+            return Err(anyhow::anyhow!("Invalid input: {}", e.message()));
+        }
+        let hotwords = super::http::hotwords_from_export_params(&params);
+        if let Some(ref hw) = hotwords
+            && let Err(e) = engine.validate_hotwords(hw)
+        {
             return Err(anyhow::anyhow!("Invalid input: {}", e.message()));
         }
 
@@ -751,16 +753,19 @@ impl JobExecution for RealJobExecutor {
                     } else if params.diarization == Some(true) {
                         // Diarization is opt-in (`?diarization=true`): only then run
                         // the offline speaker pass, matching the sync REST path.
-                        engine_for_inference.transcribe_bytes_shared_with_overrides_diarized(
-                            body_for_inference,
-                            &mut reservation,
-                            &overrides,
-                        )
+                        engine_for_inference
+                            .transcribe_bytes_shared_with_overrides_diarized_hotwords(
+                                body_for_inference,
+                                &mut reservation,
+                                &overrides,
+                                hotwords.as_ref(),
+                            )
                     } else {
-                        engine_for_inference.transcribe_bytes_shared_with_overrides(
+                        engine_for_inference.transcribe_bytes_shared_with_overrides_hotwords(
                             body_for_inference,
                             &mut reservation,
                             &overrides,
+                            hotwords.as_ref(),
                         )
                     }
                 }));
