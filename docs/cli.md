@@ -71,10 +71,13 @@ gigastt serve [OPTIONS]
   --endpoint-mode <MODE>    WS utterance end: auto|assistant|manual [default: auto].
                             Env: GIGASTT_ENDPOINT_MODE. Window cap never emits final.
   --pool-size <N>           Concurrent inference sessions [default: 2].
-                            Each extra slot costs hundreds of MiB RSS; pool>1 also
-                            splits encoder threads (~+10–20% single-job RTF).
+                            Multi-connection default; edge / low-RAM hosts should
+                            use 1 (~400 MB RSS). Pool > 1 costs RAM and can cost
+                            ~10–20% single-job RTF (encoder threads split across slots).
   --encoder-intra-threads <N>  Intra-op threads for the encoder session (CPU build
                             only). Unset: logical CPUs divided across the pool.
+                            Avoid `1` on multi-core (~3× slower than auto); explicit
+                            `1` is still allowed for debugging.
                             Env: GIGASTT_ENCODER_INTRA_THREADS.
   --pool-checkout-timeout-secs <S>  Seconds a handler waits for a free session triplet
                             before returning 503 + retry_after_ms [default: 30].
@@ -204,7 +207,10 @@ gigastt transcribe [OPTIONS] <FILE>
   --endpoint-mode <MODE>      WS utterance end: auto|assistant|manual [default: auto].
                               Env: GIGASTT_ENDPOINT_MODE. Cap never emits final.
   --encoder-intra-threads <N>  Intra-op threads for the encoder session (CPU build
-                              only). Env: GIGASTT_ENCODER_INTRA_THREADS.
+                              only). Unset: logical CPUs (single triplet). Avoid
+                              `1` on multi-core (~3× slower than auto); explicit
+                              `1` still allowed for debugging.
+                              Env: GIGASTT_ENCODER_INTRA_THREADS.
   -f, --format <FORMAT>       Export format: json, txt, srt, vtt, md [default: txt].
                               Env: GIGASTT_FORMAT.
   -o, --output <FILE>         Write rendered output to file instead of stdout.
@@ -247,7 +253,9 @@ gigastt transcribe-batch [OPTIONS] <INPUT_DIR> <OUTPUT_DIR>
   --itn <MODE>                Inverse text normalization: auto | on | off. Env: GIGASTT_ITN.
   -f, --format <LIST>         Export formats, comma-separated: txt, json, md, srt, vtt
                               [default: txt,json]. Env: GIGASTT_FORMAT.
-  --pool-size <N>             Concurrent transcription workers [default: 2]
+  --pool-size <N>             Concurrent transcription workers [default: 2].
+                              Edge / low-RAM: use 1. Pool > 1 costs RAM and can
+                              cost ~10–20% single-job RTF (thread split).
   --retries <N>               Extra attempts per file after a failure [default: 0].
                               Env: GIGASTT_BATCH_RETRIES.
   --move-to <DIR>             Move each successfully transcribed source into DIR

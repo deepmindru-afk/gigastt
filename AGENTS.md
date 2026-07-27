@@ -416,7 +416,7 @@ reference: [`docs/cli.md`](docs/cli.md) (enforced by `scripts/check-docs-drift.p
 | `GIGASTT_SOAK_DURATION_SECS` | soak test duration (tests only) | 300 |
 | `RUST_LOG` | tracing filter | `gigastt=info` |
 
-`--pool-size` is CLI-only (no `GIGASTT_POOL_SIZE`); raise it when RAM allows.
+`--pool-size` is CLI-only (no `GIGASTT_POOL_SIZE`); default 2 for multi-connection hosts — use `--pool-size 1` on edge / low-RAM (~400 MB RSS). Pool > 1 costs RAM and can cost ~10–20% single-job RTF (thread split). Leave `--encoder-intra-threads` unset (auto); avoid `1` on multi-core (~3× slower; explicit `1` still allowed for debug).
 
 ## Useful Commands for Agents
 
