@@ -362,16 +362,17 @@ diarization, telephony codecs, or native export knobs use `POST /v1/transcribe`.
 ## Admin reload
 
 `POST /v1/admin/reload` rebuilds the inference engine from the server's boot
-recipe (model dir, pool sizes, punctuation / ITN / VAD / hotwords), runs
-warmup, then atomically swaps the live `Arc<Engine>`. In-flight requests keep
-the engine they started with; a failed rebuild leaves the previous model
-serving.
+recipe (model dir, pool sizes, punctuation / ITN / VAD / hotwords), **swaps**
+the live `Arc<Engine>`, then warms the new engine. In-flight requests keep the
+engine they started with; a failed rebuild leaves the previous model serving.
 
-**RAM:** rebuild keeps the old engine live until the new one is warm, so peak
-RSS during reload is about **+0.5× ready** on top of steady state (lab:
-**~+536 MiB** at `--pool-size 1`, INT8 `rnnt`). Ensure free memory before
-calling reload on edge hosts; otherwise restart the process instead of
-hot-reloading. Operator notes: [runbook — Admin reload headroom](runbook.md#admin-reload-headroom).
+**RAM:** peak during **build** can still approach about **+0.5× ready** (lab:
+**~+536 MiB** at `--pool-size 1`, INT8 `rnnt`) while the old engine is still
+live. Warmup runs after swap so it need not stack on the previous copy once
+in-flight work finishes. Soft mode: `POST /v1/admin/reload?soft=true` waits up
+to ~5 s for the old engine to drain before warming (`soft` / `soft_drained` in
+the JSON body). Ensure free memory before reload on edge hosts; otherwise
+restart. Operator notes: [runbook — Admin reload headroom](runbook.md#admin-reload-headroom).
 
 **Security:** the handler accepts **loopback peers only** (`403 loopback_only`
 otherwise), even when `--bind-all` or `--cors-allow-any` is enabled. Concurrent
@@ -380,6 +381,7 @@ rebuild recipe return `503 reload_unsupported`.
 
 ```sh
 curl -X POST http://127.0.0.1:9876/v1/admin/reload
+# edge: curl -X POST 'http://127.0.0.1:9876/v1/admin/reload?soft=true'
 # {"reloaded":true,"variant":"rnnt","encoder":"int8"}
 ```
 
