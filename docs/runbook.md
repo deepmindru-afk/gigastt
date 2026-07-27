@@ -141,6 +141,11 @@ bounded redirect policy.
 - *Air-gapped / repeatable deploys* — bake the model into the image
   (`GIGASTT_BAKE_MODEL=1`, see `docs/deployment.md`) or pre-populate
   `~/.gigastt/models/` from a trusted copy.
+- *Lean INT8-only tree* — four files for default `rnnt` (~220 MB class):
+  `v3_rnnt_encoder_int8.onnx`, `v3_rnnt_decoder.onnx`, `v3_rnnt_joint.onnx`,
+  `v3_vocab.txt`. Use `gigastt download --prequantized` or copy those files;
+  serve accepts this set offline without demanding the FP32 encoder. See
+  [Lean INT8-only install](deployment.md#lean-int8-only-install).
 
 To force a clean re-download, remove `~/.gigastt/models/` and re-run.
 

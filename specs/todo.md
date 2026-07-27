@@ -72,7 +72,7 @@ Confirmed-impact work only. Full task list with DoD / order:
 | ID | Task (short) | Priority | Status |
 |----|--------------|----------|--------|
 | TTX-01 | ensure accepts INT8-only prequantized (T-026) | P0 | **done** |
-| TTX-02 | lean install docs (T-001) | P0 | **todo** |
+| TTX-02 | lean install docs (T-001) | P0 | **done** |
 | TTX-03 | edge `pool-size 1` (T-009) | P0 | done (docs+CLI; default stays 2) |
 | TTX-04 | never threads=1 on multi-core (T-044) | P0 | done |
 | TTX-05 | prequantized download default | P0 | **todo** |
