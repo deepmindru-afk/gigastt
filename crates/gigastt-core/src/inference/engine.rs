@@ -29,7 +29,7 @@ use super::types::{
 use super::{ENCODER_SUBSAMPLING, HOP_LENGTH, N_FFT, N_MELS, SECONDS_PER_FRAME, now_timestamp};
 
 #[cfg(feature = "diarization")]
-use super::diarization::{self, SpeakerEncoder};
+use super::diarization::{self, LazySpeakerEncoder};
 
 /// Total physical RAM in bytes, or `0` if it can't be determined (in which case
 /// the pool RAM cap is a no-op). macOS: `sysctl HW_MEMSIZE`; Linux/other unix:
@@ -321,12 +321,14 @@ pub struct Engine {
     /// the loaded encoder session at boot, not from compile-time features alone,
     /// so non-rnnt heads on an `ane`-feature binary still use the ort window.
     ane_encoder: bool,
-    /// Speaker encoder for diarization (None if model file is absent).
+    /// Lazy speaker encoder for diarization (`None` if model file is absent).
     ///
-    /// Wrapped in `Arc` so per-session streaming pipelines can share the
-    /// underlying ONNX session pool without each owning their own copy.
+    /// Boot only probes for `wespeaker_resnet34.onnx`; the ONNX session is
+    /// opened on the first diarization request so unused speaker files do not
+    /// inflate ready RSS (~+39 MiB when loaded). Shared across sessions via
+    /// the `Arc` inside the loaded encoder.
     #[cfg(feature = "diarization")]
-    pub speaker_encoder: Option<SpeakerEncoder>,
+    speaker_encoder: Option<LazySpeakerEncoder>,
 }
 
 impl Engine {
@@ -762,8 +764,10 @@ impl Engine {
             tokenizer.vocab_size()
         );
 
+        // Probe only — do not open the WeSpeaker ONNX session at boot. The
+        // encoder is loaded on the first diarization request.
         #[cfg(feature = "diarization")]
-        let speaker_encoder = diarization::try_load_speaker_encoder(model_dir);
+        let speaker_encoder = diarization::probe_speaker_encoder(model_dir);
 
         // Detect ANE from the loaded encoder session (not compile-time alone) so
         // non-rnnt heads / injected factories keep the ort chunk window.
@@ -1122,7 +1126,9 @@ impl Engine {
         }
     }
 
-    /// Return `true` if a speaker encoder is loaded and diarization is available.
+    /// Return `true` if a speaker model file was present at boot and diarization
+    /// can be requested. The ONNX session may still be unloaded until the first
+    /// diarization request (lazy load).
     #[cfg(feature = "diarization")]
     pub fn has_speaker_encoder(&self) -> bool {
         self.speaker_encoder.is_some()
@@ -1131,15 +1137,20 @@ impl Engine {
     /// Create a fresh streaming state for a new connection.
     ///
     /// Pass `diarization_enabled = true` to activate speaker diarization for
-    /// this session. Without the `diarization` feature or a loaded speaker
-    /// encoder, the flag is silently ignored (a `warn!` is emitted when the
-    /// caller asked for diarization but the build does not support it, so the
-    /// contract mismatch is visible in logs).
+    /// this session. Without the `diarization` feature or a speaker model file,
+    /// the flag is silently ignored (a `warn!` is emitted when the caller asked
+    /// for diarization but the build does not support it, so the contract
+    /// mismatch is visible in logs). Enabling diarization loads the speaker
+    /// encoder on first use if it was only probed at boot.
     pub fn create_state(&self, diarization_enabled: bool) -> StreamingState {
         #[cfg(feature = "diarization")]
-        let diarization_state = match (diarization_enabled, &self.speaker_encoder) {
-            (true, Some(enc)) => diarization::open_streaming(enc),
-            _ => None,
+        let diarization_state = if diarization_enabled {
+            self.speaker_encoder
+                .as_ref()
+                .and_then(|lazy| lazy.get_or_load())
+                .and_then(|enc| diarization::open_streaming(&enc))
+        } else {
+            None
         };
 
         #[cfg(not(feature = "diarization"))]
@@ -1786,8 +1797,11 @@ impl Engine {
 
         #[cfg(feature = "diarization")]
         if diarize
-            && let Some(ref enc) = self.speaker_encoder
-            && let Some(turns) = diarization::run_offline(enc, float_samples)
+            && let Some(enc) = self
+                .speaker_encoder
+                .as_ref()
+                .and_then(|lazy| lazy.get_or_load())
+            && let Some(turns) = diarization::run_offline(&enc, float_samples)
         {
             diarization::assign_speakers_by_midpoint(&turns, &mut words);
         }
