@@ -237,7 +237,7 @@ Defaults; every limit is a CLI flag with a matching `GIGASTT_*` env var
 
 | Limit | Default | Behavior at the limit |
 |---|---|---|
-| `--pool-size` | 2 | Concurrent inference sessions; the next connect waits up to 30 s, then `timeout` + `retry_after_ms` (WS) or 503 + `Retry-After` (REST) |
+| `--pool-size` | 2 | Concurrent inference sessions (edge / low-RAM: use `1`); the next connect waits up to 30 s, then `timeout` + `retry_after_ms` (WS) or 503 + `Retry-After` (REST). Pool > 1 costs RAM and can cost ~10–20% single-job RTF |
 | `--idle-timeout-secs` | 300 | No frames for 5 min → `idle_timeout` + close 1001. Streaming silence (quiet PCM) keeps the session alive — silence is still audio |
 | `--max-session-secs` | 3600 | Wall-clock cap → `max_session_duration_exceeded` + flushed `final` + close 1008. `0` disables |
 | `--ws-frame-max-bytes` | 512 KiB | Larger frame → close 1009 |

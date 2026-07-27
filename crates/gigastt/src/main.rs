@@ -118,13 +118,17 @@ struct OfflineEngineArgs {
 
     /// Intra-op thread count for the encoder session on the CPU build. When
     /// unset, defaults to the logical CPU count divided across the pool.
+    /// Do not set `1` on multi-core hosts unless debugging — it is ~3× slower
+    /// than auto. Explicit `1` is still honoured for debug passthrough.
     /// Env: GIGASTT_ENCODER_INTRA_THREADS.
     #[arg(long, env = "GIGASTT_ENCODER_INTRA_THREADS")]
     encoder_intra_threads: Option<usize>,
 
     /// Number of concurrent transcription workers (engine session pool). Each
     /// session loads its own encoder copy (~0.4 GB resident for the INT8
-    /// encoder), so the default is 2 to bound the memory footprint.
+    /// encoder). Default 2 suits multi-file hosts; use `--pool-size 1` on
+    /// edge / low-RAM (~400 MB RSS). Pool > 1 costs RAM and can cost ~10–20%
+    /// single-job RTF (threads split across slots).
     #[arg(long, default_value_t = 2)]
     pool_size: usize,
 }
@@ -295,10 +299,12 @@ enum Commands {
         endpoint_mode: String,
 
         /// Number of concurrent inference sessions. Each session deserializes
-        /// its own encoder copy (~0.4 GB resident for the INT8 encoder), so the
-        /// default is 2 to bound the idle footprint; raise it for higher
-        /// concurrency when RAM allows. The server auto-caps this by available
-        /// RAM at load and logs a warning if it has to clamp.
+        /// its own encoder copy (~0.4 GB resident for the INT8 encoder). Default
+        /// 2 suits multi-connection / multi-user hosts; raise when RAM allows.
+        /// Edge / low-RAM: use `--pool-size 1` (~400 MB RSS, full cores for one
+        /// job). Pool > 1 costs extra RAM and can cost ~10–20% single-job RTF
+        /// because encoder threads are split across slots. The server auto-caps
+        /// by available RAM at load and logs a warning if it clamps.
         #[arg(long, default_value_t = 2)]
         pool_size: usize,
 
@@ -343,9 +349,11 @@ enum Commands {
         /// weak CPUs / long single-file jobs. When unset, defaults to the logical
         /// CPU count divided across the concurrently-running pool triplets
         /// (`pool_size + batch_pool_size`), so a default install uses every core.
-        /// An explicit value (flag or env, including `1`) is honoured as-is. The
-        /// resolved value is still auto-clamped so `pool_size * threads` can't
-        /// exceed the logical CPU count. No effect on CoreML / CUDA builds.
+        /// Do not set `1` on multi-core hosts unless debugging — it is ~3× slower
+        /// than auto. An explicit value (flag or env, including `1`) is still
+        /// honoured as-is for debug passthrough. The resolved value is auto-
+        /// clamped so `pool_size * threads` can't exceed the logical CPU count.
+        /// No effect on CoreML / CUDA builds.
         #[arg(long, env = "GIGASTT_ENCODER_INTRA_THREADS")]
         encoder_intra_threads: Option<usize>,
 
@@ -607,9 +615,10 @@ enum Commands {
         /// Intra-op thread count for the encoder session on the CPU build. The
         /// encoder dominates the single-utterance cost, so more threads speed up
         /// long single-file jobs on weak CPUs. When unset, defaults to the logical
-        /// CPU count (offline transcription runs a single triplet). An explicit
-        /// value (flag or env, including `1`) is honoured as-is. No effect on
-        /// CoreML / CUDA builds.
+        /// CPU count (offline transcription runs a single triplet). Do not set
+        /// `1` on multi-core hosts unless debugging — it is ~3× slower than auto.
+        /// An explicit value (flag or env, including `1`) is still honoured as-is
+        /// for debug passthrough. No effect on CoreML / CUDA builds.
         #[arg(long, env = "GIGASTT_ENCODER_INTRA_THREADS")]
         encoder_intra_threads: Option<usize>,
 
