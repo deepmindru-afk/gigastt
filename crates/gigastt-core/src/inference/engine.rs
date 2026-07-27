@@ -34,6 +34,7 @@ use super::diarization::{self, LazySpeakerEncoder};
 /// Parse a cgroup memory limit file body (`memory.max` v2 or
 /// `memory.limit_in_bytes` v1). Returns `None` for missing/unbounded/`max`.
 /// Pure so unit tests can feed strings without a real cgroup mount.
+#[cfg(any(test, target_os = "linux"))]
 fn parse_cgroup_memory_limit(raw: &str) -> Option<u64> {
     let s = raw.trim();
     if s.is_empty() || s.eq_ignore_ascii_case("max") {
