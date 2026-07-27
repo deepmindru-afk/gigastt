@@ -33,11 +33,14 @@ gigastt serve [OPTIONS]
                             default to rnnt (lower WER, no punctuation). e2e_rnnt keeps
                             punctuation/casing/ITN. ml_ctc / ml_ctc_large are the GigaAM
                             Multilingual charwise-CTC heads (220M / 600M encoder,
-                            ru/en/kk/ky/uz, bare lowercase). Env: GIGASTT_MODEL_VARIANT.
+                            ru/en/kk/ky/uz, bare lowercase). ml_ctc is a speed SKU
+                            (~1.5× RTF vs rnnt), not a lean-RAM SKU (ready RSS ≈ rnnt).
+                            Env: GIGASTT_MODEL_VARIANT.
   --punctuation <MODE>      Restore punctuation/casing on output: auto | on | off
                             [default: auto = on for rnnt, off for e2e_rnnt].
                             Optional ONNX pass; absent model → text unchanged.
-                            Env: GIGASTT_PUNCTUATION.
+                            When present, ready RSS tax ~+4…28 MiB; edge hosts may
+                            leave off. Env: GIGASTT_PUNCTUATION.
   --punct-model-dir <DIR>   Punctuation model directory [default: ~/.gigastt/models/punct].
                             Auto-downloaded from ekhodzitsky/rupunct-small-onnx when
                             the pass is enabled and the files are absent.
@@ -54,8 +57,9 @@ gigastt serve [OPTIONS]
                             [default: 5.0]. Env: GIGASTT_HOTWORDS_BOOST.
   --vad                     Voice activity detection: skip silence before decoding
                             and finalize streaming segments on trailing silence.
-                            Downloads the Silero VAD model on first use.
-                            Env: GIGASTT_VAD.
+                            Recommended for pause-rich long files (meetings/podcasts);
+                            RTF up to ~×2.6 on silence-rich audio. Downloads the
+                            Silero VAD model on first use. Env: GIGASTT_VAD.
   --vad-threshold <N>       VAD speech-probability threshold in [0,1]
                             [default: 0.5]. No effect unless --vad.
                             Env: GIGASTT_VAD_THRESHOLD.
@@ -66,12 +70,15 @@ gigastt serve [OPTIONS]
                             Env: GIGASTT_VAD_MODEL_DIR.
   --endpoint-mode <MODE>    WS utterance end: auto|assistant|manual [default: auto].
                             Env: GIGASTT_ENDPOINT_MODE. Window cap never emits final.
-  --pool-size <N>           Concurrent inference sessions [default: 2]
+  --pool-size <N>           Concurrent inference sessions [default: 2].
+                            Each extra slot costs hundreds of MiB RSS; pool>1 also
+                            splits encoder threads (~+10–20% single-job RTF).
   --encoder-intra-threads <N>  Intra-op threads for the encoder session (CPU build
                             only). Unset: logical CPUs divided across the pool.
                             Env: GIGASTT_ENCODER_INTRA_THREADS.
   --pool-checkout-timeout-secs <S>  Seconds a handler waits for a free session triplet
-                            before returning 503 [default: 30].
+                            before returning 503 + retry_after_ms [default: 30].
+                            Longer = queue under saturation; shorter = fail-fast.
                             Env: GIGASTT_POOL_CHECKOUT_TIMEOUT_SECS.
   --bind-all                Required to listen on a non-loopback address.
                             Also: GIGASTT_ALLOW_BIND_ANY=1.
@@ -102,7 +109,8 @@ gigastt serve [OPTIONS]
                                 boot; degraded-pool boot floor, clamped to 1..=pool_size
                                 [default: 1]. Env: GIGASTT_POOL_MIN_SIZE.
   --batch-pool-size <N>         Triplets reserved for batch REST file transcription, split
-                                off from --pool-size so a long file job can't starve
+                                off from --pool-size (not additive — total loaded sessions
+                                stay at --pool-size) so a long file job can't starve
                                 WebSocket/SSE streaming. 0 disables the split [default: 0].
                                 Env: GIGASTT_BATCH_POOL_SIZE.
   --enable-jobs                 Enable the asynchronous /v1/jobs API for long-file and
@@ -184,8 +192,9 @@ gigastt transcribe [OPTIONS] <FILE>
   --hotwords-boost <N>        Logit boost for hotword tokens [default: 5.0].
                               Env: GIGASTT_HOTWORDS_BOOST.
   --vad                       Voice activity detection: skip silence before decoding
-                              (downloads the Silero VAD model on first use).
-                              Env: GIGASTT_VAD.
+                              (recommended for pause-rich long files; RTF up to ~×2.6
+                              on silence-rich audio). Downloads the Silero VAD model
+                              on first use. Env: GIGASTT_VAD.
   --vad-threshold <N>         VAD speech-probability threshold [default: 0.5].
                               Env: GIGASTT_VAD_THRESHOLD.
   --vad-min-silence-ms <N>    Minimum trailing silence (ms) to close a speech region

@@ -77,6 +77,11 @@ backpressure:
   `Retry-After: <secs>` and `{"code":"timeout","retry_after_ms":…}`.
 - **WebSocket** → `ServerMessage::Error { code: "timeout", retry_after_ms }`.
 
+**Checkout timeout is the queue-vs-fail-fast knob.** A longer value keeps
+callers waiting in line (absorb short saturation bursts); a shorter value
+returns **503 / `timeout` + `retry_after_ms` sooner** so clients can back off or
+retry another replica. See [Pool checkout timeout](#pool-checkout-timeout-queue-vs-fail-fast).
+
 A single wedged inference run is bounded by `--inference-timeout-secs`
 (default 600): the client gets `inference_timeout` (REST `504`, WS error +
 close). The 600 s default already covers the advertised 10-minute (600 s audio)
@@ -86,10 +91,14 @@ its triplet until it finishes (or restart); the timeout frees the *client*,
 not the slot.
 
 **Knobs**
-- `--pool-size N` — total triplets (more concurrency, more RAM).
-- `--batch-pool-size N` — reserve N triplets for long REST file jobs so they
-  can't starve interactive WebSocket / SSE streaming (default 0 = shared pool).
-- `--pool-checkout-timeout-secs` — how long callers wait before backpressure.
+- `--pool-size N` — total triplets (more concurrency, more RAM, and a small
+  single-job RTF cost from thread split — see [Pool size tradeoffs](#pool-size-tradeoffs-ram-vs-concurrency-vs-rtf)).
+- `--batch-pool-size N` — **split** N of those triplets for long REST file jobs
+  so they can't starve interactive WebSocket / SSE (default 0 = shared pool).
+  Not additive — total loaded sessions stay at `--pool-size` (see
+  [batch_pool_size splits the pool](#batchpoolsize-splits-the-pool-not-additive)).
+- `--pool-checkout-timeout-secs` — how long callers wait before backpressure
+  (long = queue, short = fail-fast 503).
 - `--inference-timeout-secs` — per-run ceiling; `0` disables.
 
 **Metrics** (with `--metrics`)
@@ -103,13 +112,15 @@ not the slot.
   to spot batch-pool saturation separately from the interactive pool.
 
 **Triage**
-1. If streaming is being starved by batch uploads, set `--batch-pool-size 1+`.
-   Monitor `gigastt_batch_pool_available` / `gigastt_batch_pool_waiters` to
-   confirm the split is sized correctly.
+1. If streaming is being starved by batch uploads, set `--batch-pool-size 1+`
+   (remember it **splits** the existing pool). Monitor
+   `gigastt_batch_pool_available` / `gigastt_batch_pool_waiters` to confirm the
+   split is sized correctly.
 2. If `gigastt_inference_timeouts_total` is climbing, capture a stuck run's
    input and check for an adversarial / huge file; raise the timeout only if the
    inputs are legitimately long.
-3. If saturation is steady, scale `--pool-size` (watch RSS) or add replicas.
+3. If saturation is steady, scale `--pool-size` (watch RSS and single-job RTF)
+   or add replicas.
 
 ## Model download failures
 
@@ -143,9 +154,13 @@ encoder by itself). A default pool of 2 with the INT8 encoder sits around
 **Reduce footprint**
 - Use the **INT8 encoder** (the default — auto-quantized on first run; don't
   pass `--skip-quantize`). It is ~4× smaller than FP32.
-- Lower `--pool-size` (e.g. `1`–`2` on a 4 GB box).
+- Lower `--pool-size` (e.g. `1`–`2` on a 4 GB box). See also
+  [Pool size tradeoffs](#pool-size-tradeoffs-ram-vs-concurrency-vs-rtf).
 - `--pool-min-size 1` lets the server **boot on a degraded pool** if some
   triplets fail to load under memory pressure, instead of failing outright.
+- On edge hosts, leave punctuation off (`--punctuation off`) if you do not need
+  restored casing — the RuPunct model adds a small ready-RSS tax when present
+  (see [Optional model ready tax](#optional-model-ready-tax)).
 - The REST upload path is zero-copy (`bytes::Bytes` end-to-end), so concurrent
   large uploads no longer multiply the body in RAM — but the decoded PCM and
   encoder scratch still scale with audio length and `--pool-size`.
@@ -155,7 +170,91 @@ encoder by itself). A default pool of 2 with the INT8 encoder sits around
    shutdown.
 2. Confirm the INT8 encoder is in use (`/v1/models` reports `"encoder":"int8"`).
 3. Cap concurrency: `--pool-size` × (per-triplet RSS + peak scratch) must fit
-   the box with headroom.
+   the box with headroom. Keep free RAM for admin reload if you use it
+   ([Admin reload headroom](#admin-reload-headroom)).
+
+## Resource & performance knobs
+
+Operator notes for pool sizing, SKUs, VAD, and reload. Full flag list:
+[`docs/cli.md`](cli.md).
+
+### Pool size tradeoffs (RAM vs concurrency vs RTF)
+
+- Each extra pool slot loads **another full encoder copy** — typically
+  **hundreds of MiB** RSS (INT8 `rnnt` ≈ **+280…450 MiB** going from pool 1 → 2;
+  default pool=2 ≈ **~790 MiB** ready, pool=1 ≈ **~400 MiB**).
+- Pool > 1 also **splits encoder intra-op threads** across concurrent triplets.
+  A **single** job on a busy multi-slot pool is therefore slower than the same
+  job on pool=1 — typically about **+10–20% RTF** on a quiet serial workload
+  (lab ≈ **+18%** at pool=2 vs pool=1). Raise pool for concurrent clients, not
+  for single-stream latency.
+- Edge / low-RAM: prefer **`--pool-size 1`**. Raise only when concurrent
+  sessions need it and the host has free RAM after peak scratch.
+
+### Pool checkout timeout (queue vs fail-fast)
+
+`--pool-checkout-timeout-secs` (default **30**) is how long a handler waits
+for a free triplet when the pool is full:
+
+| Setting | Behaviour |
+|---|---|
+| **Longer** (e.g. 60–120) | Callers **queue** longer; fewer 503s under short bursts; higher tail latency and more in-flight waiters |
+| **Shorter** (e.g. 5–15) | **Fail-fast**: REST `503` + `Retry-After` / WS `timeout` + `retry_after_ms` sooner so clients can back off or hit another replica |
+
+Tune with `gigastt_pool_waiters` and `gigastt_pool_timeouts_total`. Details:
+[Pool exhaustion & backpressure](#pool-exhaustion--backpressure).
+
+### batch_pool_size splits the pool (not additive)
+
+`--batch-pool-size N` **carves N triplets out of** `--pool-size` for long REST
+file jobs. It does **not** allocate extra idle triplets.
+
+Example: `--pool-size 4 --batch-pool-size 1` → **3** interactive (WS/SSE) +
+**1** batch, total still **4** loaded sessions. `0` (default) = shared pool.
+Clamped so at least one interactive triplet remains.
+
+### Admin reload headroom
+
+`POST /v1/admin/reload` builds a **second** engine, warms it, then swaps
+atomically. Peak RSS during a successful reload is about **+0.5× ready** on top
+of the live process — roughly **+536 MiB** at **pool=1** INT8 `rnnt` on the lab
+host. Edge boxes with almost no free RAM can OOM mid-reload even when steady-state
+`pool=1` fits; keep headroom or restart the process instead. See
+[Admin reload](api.md#admin-reload).
+
+### VAD for pause-rich long files
+
+Enable **`--vad`** (or `GIGASTT_VAD=1`) for **meetings, podcasts, and other
+pause-rich** long audio: Silero skips silence before decode and can finalize
+streaming segments on trailing silence. On silence-rich material, wall time can
+improve by up to about **×2.6** RTF vs running the full encoder over every
+quiet stretch. Continuous speech gains little; VAD still downloads the Silero
+model on first use (~few MB).
+
+```sh
+# Long meeting / podcast file
+gigastt transcribe meeting.wav --vad
+# Server-wide for REST + WS
+gigastt serve --vad --pool-size 1
+```
+
+### Head SKU: ml_ctc is speed, not lean-RAM
+
+`--model-variant ml_ctc` is a **throughput / RTF** choice (~**1.5×** faster RTF
+than default `rnnt` in lab — e.g. RTF **~0.023** vs **~0.034**), **not** a
+low-memory SKU. Ready RSS for `ml_ctc` is **about the same class as `rnnt`**
+on multi-head installs (both ~225 MB INT8 encoder class). For less RAM use
+**`--pool-size 1`**, not a head switch. Use `ml_ctc` / `ml_ctc_large` when you
+need **ru/en/kk/ky/uz** or higher encode speed; keep `rnnt` for best Russian WER.
+
+### Optional model ready tax
+
+When the **punctuation** model is present and the pass is enabled (`auto`/`on`
+for `rnnt`), ready RSS grows by about **+4…28 MiB** depending on host and
+load path. Edge profiles that only need bare text can set
+`--punctuation off` (and skip downloading `~/.gigastt/models/punct/`) to avoid
+that tax. Accuracy of the acoustic model is unchanged; only casing/punctuation
+restoration is skipped.
 
 ## Metrics
 
