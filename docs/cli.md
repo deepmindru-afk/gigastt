@@ -143,9 +143,11 @@ gigastt download [OPTIONS]
   --model-variant <V>    Head to download: rnnt (default) | e2e_rnnt | ml_ctc | ml_ctc_large.
                          Env: GIGASTT_MODEL_VARIANT.
   --skip-diarization     Skip downloading the speaker diarization model
-  --skip-quantize        Skip auto-quantization after download (FP32 only)
-  --prequantized         Fetch the pre-quantized INT8 bundle from the pinned
-                         GitHub Release (no FP32 download, no on-device quantize)
+  --skip-quantize        Skip auto-quantization after `--fp32` download
+  --prequantized         Lean INT8 bundle (default true; explicit flag kept for
+                         older scripts). Ignored when `--fp32` is set.
+  --fp32                 Download full FP32 set from HuggingFace + quantize
+                         (overrides lean default)
   --progress <FORMAT>    Progress output: human (default) | json.
                          Env: GIGASTT_DOWNLOAD_PROGRESS.
 

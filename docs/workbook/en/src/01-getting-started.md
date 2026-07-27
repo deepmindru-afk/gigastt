@@ -87,7 +87,7 @@ the pinned GitHub Release (no ~850 MB FP32 download, no ~2-minute on-device
 quantization; also handy when HuggingFace is unreachable but GitHub is not):
 
 ```sh
-gigastt download --prequantized
+gigastt download
 gigastt transcribe recording.wav
 ```
 
@@ -115,7 +115,7 @@ if ($actual -ne $expected.ToLower()) { throw "SHA-256 mismatch" }
 
 tar xf $asset
 # Put gigastt.exe on PATH, or call it by full path:
-.\gigastt.exe download --prequantized
+.\gigastt.exe download
 .\gigastt.exe transcribe recording.wav
 ```
 
@@ -251,7 +251,7 @@ auto-downloads a missing model) does two one-time things:
 
 Three levers change what you pay:
 
-- `gigastt download --prequantized` — the recommended shortcut: fetch the
+- `gigastt download` — the recommended shortcut: fetch the
   ~225 MB pre-quantized INT8 bundle from the pinned GitHub Release. No FP32
   download, no local quantization, no `protoc`. Note it pulls from
   `github.com`, not `huggingface.co` — useful when one of the two is blocked.
@@ -305,7 +305,7 @@ curl -F file=@recording.wav http://127.0.0.1:9876/v1/transcribe
   unreachable) — retry `gigastt download`; the resume-safe staging file makes
   it idempotent, and exit codes distinguish causes (65 = checksum, 69 =
   network, 74 = disk). If `huggingface.co` is blocked but `github.com` is
-  not, use `gigastt download --prequantized`; in a fully closed contour use
+  not, use `gigastt download`; in a fully closed contour use
   the air-gapped bundle. Check `~/.gigastt/models/` permissions on disk
   errors.
 - **OOM or heavy swap on startup** — each pool session loads its own encoder

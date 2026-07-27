@@ -956,7 +956,7 @@ pub async fn ensure_model(model_dir: &str) -> Result<()> {
 /// installed: if any variant's complete **FP32 download set or prequantized
 /// INT8 set** is in `model_dir`, it is used as-is and **no network request is
 /// made**. Only when the directory holds no usable model does it fall back to
-/// downloading the default (`Rnnt`) FP32 set.
+/// downloading the default (`Rnnt`) **pre-quantized INT8** set.
 ///
 /// Returns the variant that is now ready in `model_dir`.
 #[cfg(feature = "net")]
@@ -1003,13 +1003,67 @@ pub async fn ensure_model_variant(
         return Ok(variant);
     }
 
-    tracing::info!("Model ({variant:?}) not found, downloading from HuggingFace...");
-
-    for file in variant.download_files() {
-        download_file(variant, file, dir).await?;
+    // Default fetch is the lean pre-quantized INT8 bundle for RNN-T heads
+    // (GitHub Release). CTC heads already download INT8 from HuggingFace.
+    // Use the FP32 HF path only when the lean path is unavailable for a head
+    // that has no prequantized set (should not happen for shipped variants).
+    if variant.is_ctc() {
+        tracing::info!("Model ({variant:?}) not found, downloading from HuggingFace...");
+        for file in variant.download_files() {
+            download_file(variant, file, dir).await?;
+        }
+    } else {
+        tracing::info!(
+            "Model ({variant:?}) not found, downloading pre-quantized INT8 bundle from {PREQUANT_RELEASE_BASE}..."
+        );
+        for file in variant.prequantized_files() {
+            let final_dest = dir.join(file);
+            if final_dest.exists() {
+                continue;
+            }
+            let url = format!("{PREQUANT_RELEASE_BASE}/{file}");
+            let expected = variant.prequantized_checksum(file);
+            stream_to_partial_then_finalize(&url, &final_dest, expected, file).await?;
+        }
     }
 
     tracing::info!("Model download complete");
+    Ok(variant)
+}
+
+/// Ensure the **FP32 download set** for `requested` (or the variant already on
+/// disk, else default `Rnnt`) exists in `model_dir`, fetching from HuggingFace
+/// when missing. Used by `gigastt download --fp32` when the lean INT8 path is
+/// not wanted. Does not quantize — callers run [`crate::quantize`] separately.
+#[cfg(feature = "net")]
+pub async fn ensure_fp32_model_variant(
+    requested: Option<ModelVariant>,
+    model_dir: &str,
+) -> Result<ModelVariant> {
+    let dir = Path::new(model_dir);
+    let existing = ModelVariant::detect_in_dir(dir).filter(|&v| is_model_present(v, dir));
+    let variant = match resolve_variant(requested, existing) {
+        VariantAction::Use(v) => {
+            tracing::info!("Using existing FP32 {v:?} model at {model_dir}");
+            return Ok(v);
+        }
+        VariantAction::Download(v) => v,
+    };
+
+    std::fs::create_dir_all(dir).context("Failed to create model directory")?;
+    #[cfg(unix)]
+    let _lock = acquire_download_lock(dir)?;
+
+    if is_model_present(variant, dir) {
+        tracing::info!("FP32 model ({variant:?}) found at {model_dir} after lock");
+        return Ok(variant);
+    }
+
+    tracing::info!("Downloading FP32 {variant:?} model set from HuggingFace...");
+    for file in variant.download_files() {
+        download_file(variant, file, dir).await?;
+    }
+    tracing::info!("FP32 model download complete");
     Ok(variant)
 }
 
