@@ -23,6 +23,7 @@ Commands:
   transcribe-batch  Transcribe every audio file in a directory (offline)
   watch        Watch a directory and transcribe new/changed audio files
   quantize     Quantize encoder to INT8 (always available since v0.9.0)
+  cache-gc     Prune stale ORT optimized graphs; optional content-hash dedupe
 
 gigastt serve [OPTIONS]
   --port <PORT>             Listen port [default: 9876]
@@ -298,4 +299,13 @@ gigastt watch [OPTIONS] <INPUT_DIR> <OUTPUT_DIR>
 gigastt quantize [OPTIONS]          # always available since v0.9.0
   --model-dir <DIR>      Model directory [default: ~/.gigastt/models]
   --force                Re-quantize even if INT8 model exists
+
+gigastt cache-gc [OPTIONS]
+  --model-dir <DIR>      Model directory [default: ~/.gigastt/models]
+  --dry-run              Report reclaimable files without deleting / hardlinking
+  --dedupe               Also hardlink content-identical files (SHA-256 groups)
+
+  Removes non-active optimized_cache/*_optimized.onnx graphs, keeping only the
+  graph for the preferred encoder of the detected head (INT8 when present).
+  Safe on accuracy: leftovers are pure disk waste from FP32 runs or head switches.
 ```

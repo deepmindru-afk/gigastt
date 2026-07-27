@@ -10,8 +10,10 @@
 //! [`ModelManifest`]). When absent, load paths use the hardcoded
 //! [`ModelVariant`] filenames.
 
+mod cache;
 mod manifest;
 
+pub use cache::{DedupeReport, OptimizedCachePruneReport, dedupe_model_dir, prune_optimized_cache};
 pub use manifest::{MANIFEST_FILE, ManifestFiles, ModelManifest};
 
 #[cfg(feature = "net")]
