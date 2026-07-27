@@ -7,24 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.15.0] - 2026-07-27
+
+### Added
+
+- **Lean INT8-only install path.** Serve/transcribe accept a complete prequantized
+  tree (`encoder_int8` + decoder + joint + vocab, ~220 MB for `rnnt`) without
+  requiring the FP32 encoder. Documented offline file set and operator sizing.
+- **`gigastt download` defaults to lean prequantized INT8** (~220 MB from the
+  pinned GitHub Release). Opt into the full HuggingFace FP32 set + on-device
+  quantize with **`--fp32`**. Empty model dirs follow the same lean ensure path
+  for RNN-T heads.
+- **`gigastt cache-gc`** prunes non-active `optimized_cache/*_optimized.onnx`
+  graphs; **`--dedupe`** hardlinks content-identical files under the model dir.
+- **`gigastt serve --profile edge`** / `GIGASTT_PROFILE=edge` applies
+  `--pool-size 1` and `--vad` when those flags are left at defaults (explicit
+  flags always win).
+- **Soft admin reload:** `POST /v1/admin/reload` swaps before warmup;
+  **`?soft=true`** waits up to ~5 s for the previous engine to drain first.
+  Response includes `soft` / `soft_drained`.
+- **Lazy-load speaker encoder** until diarization is requested (lower ready RSS
+  when the speaker model is present but unused); warn if diarization is
+  requested without a speaker model.
+- **Operator resource docs:** pool/RTF tradeoffs, VAD for pause-rich long files,
+  admin reload headroom, ml_ctc as speed SKU, checkout timeout, batch pool
+  split, punct ready tax; lean install and edge profile guidance.
+- **Held-out public Russian WER matrix** published in `docs/benchmarks.md`
+  (Common Voice, FLEURS, RuLS, SOVA, ToneWebinars, …).
+
 ### Changed
 
-- **Documentation hygiene pass.** Supported versions in `SECURITY.md` track
-  2.14.x / 2.13.x; README / architecture crate pins use `gigastt-core = "2.14"`;
-  OpenAPI matches the 30-minute audio cap, documents Opus + telephony codecs,
-  `/ready` / jobs / `POST /v1/admin/reload`, and example versions `2.14.1`;
-  `docs/api.md` adds an Admin reload section; `docs/architecture.md` reflects
-  the five-crate workspace and optional paths (diarization, jobs, hot-reload);
-  `docs/README.md` is a full docs map; AGENTS/CLAUDE e2e lists and env tables
-  are refreshed; `NOTICE` attributes WeSpeaker (CC BY 4.0); privacy docs
-  separate runtime vs build-time network; `scripts/check-docs-drift.py` also
-  gates OpenAPI paths, SECURITY versions, and crate version pins.
-- **Workbook SOTA pass (EN+RU).** Pins and examples moved to 2.14.x; intro
-  persona matrix + time badges; recipes for admin reload, mono diarization,
-  punctuation/ITN/hotwords, and VAD endpointing ownership (2.14.1); Windows
-  install recipe; appendices for error-code jump tables and offline checklists;
-  closed the notarization open loop with an explicit out-of-band note; drift gate
-  forbids previous-minor pins and required recipe tokens in the English book.
+- **Pool RAM clamp** uses **min(host RAM, Linux cgroup `memory.max` /
+  v1 `memory.limit_in_bytes`)** so Docker/k8s limits no longer over-admit
+  pool size based on host RAM alone.
+- **CPU production factory** attaches a shared ORT `PrepackedWeights` container
+  across pooled sessions (kernel prepack share; remeasure pool Δ on your host).
+- **Long-form file path:** empty Silero speech-region lists fall back to
+  full/chunked decode instead of returning an empty transcript; docs describe
+  VAD regions vs fixed-window chunking.
+- **Documentation** refreshed for 2.15.x (SECURITY supported versions, crate
+  pins, OpenAPI/API examples, workbook EN+RU).
+
+### Fixed
+
+- INT8-only (prequantized) installs no longer trigger a spurious ~844 MB FP32
+  download on serve/transcribe bootstrap.
+- VAD “no speech regions” no longer yields a blank transcript on tone /
+  edge cases (falls back to full/chunked decode).
 
 ## [2.14.4] - 2026-07-25
 

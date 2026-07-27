@@ -40,7 +40,7 @@ gigastt is a **5-crate** Cargo workspace:
 | [`gigastt-uniffi`](../crates/gigastt-uniffi) | lib (cdylib) | UniFFI bindings (Python wheels / Swift / Kotlin path) |
 | [`gigastt-node`](../crates/gigastt-node) | lib (cdylib) | napi-rs Node.js / Electron binding |
 
-Embed inference in any Rust project with `gigastt-core = "2.14"`. For a lean embedded build, disable defaults (`default-features = false`) to drop `tokio` / `reqwest` / `symphonia` / polyvoice; opt capabilities back in via the `net`, `async-pool`, `file-decode`, and `diarization` features.
+Embed inference in any Rust project with `gigastt-core = "2.15"`. For a lean embedded build, disable defaults (`default-features = false`) to drop `tokio` / `reqwest` / `symphonia` / polyvoice; opt capabilities back in via the `net`, `async-pool`, `file-decode`, and `diarization` features.
 
 Server surfaces (single process, one primary port unless metrics is enabled):
 
