@@ -195,6 +195,10 @@ Operator notes for pool sizing, SKUs, VAD, and reload. Full flag list:
   for single-stream latency.
 - Edge / low-RAM: prefer **`--pool-size 1`**. Raise only when concurrent
   sessions need it and the host has free RAM after peak scratch.
+- Shorthand: **`gigastt serve --profile edge`** sets **pool-size 1** and
+  **`--vad`** when those flags are left at defaults (explicit `--pool-size` /
+  `--vad` / `--vad=false` still win). Optional: add `--punctuation off` for
+  the smallest ready RSS.
 
 ### Pool checkout timeout (queue vs fail-fast)
 

@@ -71,6 +71,9 @@ gigastt serve [OPTIONS]
                             Env: GIGASTT_VAD_MODEL_DIR.
   --endpoint-mode <MODE>    WS utterance end: auto|assistant|manual [default: auto].
                             Env: GIGASTT_ENDPOINT_MODE. Window cap never emits final.
+  --profile <P>             Deploy profile: default | edge [default: default].
+                            edge applies --pool-size 1 and --vad when those
+                            flags are left at defaults. Env: GIGASTT_PROFILE.
   --pool-size <N>           Concurrent inference sessions [default: 2].
                             Multi-connection default; edge / low-RAM hosts should
                             use 1 (~400 MB RSS). Pool > 1 costs RAM and can cost
