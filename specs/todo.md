@@ -79,7 +79,7 @@ Confirmed-impact work only. Full task list with DoD / order:
 | TTX-06…07 | model dir GC + hash dups (T-028/T-091) | P1 | **done** (`cache-gc`) |
 | TTX-08 | lazy speaker load (T-027) | P1 | **done** |
 | TTX-09 | vad docs (pause-rich) | P1 | **done** |
-| TTX-10 | long-form speech-region productize | P1 | todo |
+| TTX-10 | long-form speech-region productize | P1 | **done** |
 | TTX-11 | ml_ctc speed SKU docs | P1 | **done** |
 | TTX-12…15 | pool/reload/checkout/batch_pool docs | P1 | **done** |
 | TTX-16 | optional `--profile edge` | P1 | todo |

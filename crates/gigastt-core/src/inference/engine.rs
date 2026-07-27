@@ -2013,6 +2013,15 @@ impl Engine {
         let use_vad = self.vad.is_some() && overrides.vad.unwrap_or(true);
         match (use_vad, &self.vad) {
             (true, Some(vad)) => match vad.speech_regions(float_samples, &self.vad_config) {
+                Ok(regions) if regions.is_empty() => {
+                    // Tone / continuous speech can yield zero regions on a bad
+                    // threshold; fall back to fixed-window / full decode rather
+                    // than returning an empty transcript (lab T-045).
+                    tracing::warn!(
+                        "VAD found no speech regions; falling back to full/chunked decode"
+                    );
+                    self.decode_words(float_samples, triplet, biaser)
+                }
                 Ok(regions) => self.decode_speech_regions(float_samples, &regions, triplet, biaser),
                 Err(e) => {
                     tracing::warn!("VAD failed, decoding full audio: {e:#}");

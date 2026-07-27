@@ -243,6 +243,19 @@ gigastt transcribe meeting.wav --vad
 gigastt serve --vad --pool-size 1
 ```
 
+### Long-form decode paths (product)
+
+| Path | When | Behaviour |
+|------|------|-----------|
+| **Speech regions (`--vad`)** | VAD loaded and not overridden off | Silero `speech_regions` → decode speech-only buffer; word times remapped to original timeline. Peak RSS drops on pause-rich / multi-utt files. |
+| **Empty VAD regions** | VAD returns zero spans (e.g. tone) | **Fallback** to full / fixed-window decode (does not return empty text). |
+| **Fixed-window chunking** | File ≳ 30 s and no usable VAD path | Overlapping ~24 s windows (30 s on ANE), stitch words at overlap midpoints — bounds encoder activation memory. |
+
+There is no separate client-side stitch API: operators use **`--vad`** for
+pause-rich long-form quality + peak RAM, and rely on automatic chunking when
+VAD is off. Per-request `?vad=false` forces whole-buffer / chunked decode on a
+VAD-enabled server.
+
 ### Head SKU: ml_ctc is speed, not lean-RAM
 
 `--model-variant ml_ctc` is a **throughput / RTF** choice (~**1.5×** faster RTF

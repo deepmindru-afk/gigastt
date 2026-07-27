@@ -32,7 +32,7 @@ Type: `code` | `docs` | `ops-tooling`.
 | **TTX-07** | **Content-hash dedupe** (or hardlink) for exact duplicate files under model dir | code/ops-tooling | T-091 | Reclaim **~679 MB** exact dups | **done** (`gigastt cache-gc --dedupe`) |
 | **TTX-08** | **Lazy-load speaker encoder** only when diarization requested | code | T-027 | **−~40 MiB** ready when speaker file present but unused | **done** |
 | **TTX-09** | **Docs + edge profile: `--vad` for pause-rich** long files (meetings/podcasts) | docs (+ optional profile) | T-048 | RTF up to **×2.6** on silence-rich | **done** (docs; optional `--profile edge` remains TTX-16) |
-| **TTX-10** | **Long-form speech-region path** (Silero segments + word merge; fallback fixed chunks) — productize or document client-side stitch | code or docs | T-016/T-045 | Peak **−100…−190 MiB** @64–128 s; J≥0.94 | **todo** |
+| **TTX-10** | **Long-form speech-region path** (Silero segments + word merge; fallback fixed chunks) — productize or document client-side stitch | code or docs | T-016/T-045 | Peak **−100…−190 MiB** @64–128 s; J≥0.94 | **done** (`--vad` + empty-region fallback + docs) |
 | **TTX-11** | **SKU docs: `ml_ctc` = speed (~1.5× RTF), not lean-RAM** | docs | T-120 | RTF **0.023** vs rnnt **0.034**; ready RSS ≈ rnnt | **done** |
 | **TTX-12** | **Docs: pool>1 costs RAM and ~+10–20% single-job RTF** (thread split) | docs | T-009/T-117 | Operators pick concurrency knowingly | **done** |
 | **TTX-13** | **Docs: admin reload needs ~+0.5× ready free RAM** (pool=1 ≈ **+536 MiB** peak) | docs | T-054 | Prevent edge OOM on reload | **done** |
