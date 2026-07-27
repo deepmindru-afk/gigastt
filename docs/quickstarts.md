@@ -11,8 +11,8 @@ The bindings do not download models. Fetch the pre-quantized INT8 bundle and
 point the binding at the directory:
 
 ```sh
-gigastt download --prequantized            # -> ~/.gigastt/models (no protoc, no on-device quantize)
-# or: gigastt download --prequantized --model-dir ./models
+gigastt download            # -> ~/.gigastt/models (no protoc, no on-device quantize)
+# or: gigastt download --model-dir ./models
 ```
 
 On a device, ship that directory with your app (or download it on first run) and

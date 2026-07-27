@@ -75,7 +75,7 @@ Confirmed-impact work only. Full task list with DoD / order:
 | TTX-02 | lean install docs (T-001) | P0 | **done** |
 | TTX-03 | edge `pool-size 1` (T-009) | P0 | done (docs+CLI; default stays 2) |
 | TTX-04 | never threads=1 on multi-core (T-044) | P0 | done |
-| TTX-05 | prequantized download default | P0 | **todo** |
+| TTX-05 | prequantized download default | P0 | **done** |
 | TTX-06…07 | model dir GC + hash dups (T-028/T-091) | P1 | **done** (`cache-gc`) |
 | TTX-08 | lazy speaker load (T-027) | P1 | **done** |
 | TTX-09 | vad docs (pause-rich) | P1 | **done** |

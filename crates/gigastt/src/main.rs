@@ -471,20 +471,23 @@ enum Commands {
         #[arg(long, default_value_t = false)]
         skip_diarization: bool,
 
-        /// Skip the automatic INT8 quantization step after download.
-        /// Default behaviour is to quantize the encoder (~2 min, one-time)
-        /// so subsequent `gigastt serve` calls load the 210 MB INT8 encoder.
-        /// Opt out when you need the FP32 encoder for debugging.
+        /// Skip the automatic INT8 quantization step after an **FP32** download
+        /// (`--fp32`). The default lean path already ships INT8 and ignores this.
+        /// Env: GIGASTT_SKIP_QUANTIZE.
         #[arg(long, env = "GIGASTT_SKIP_QUANTIZE", default_value_t = false)]
         skip_quantize: bool,
 
-        /// Fetch the pre-quantized INT8 bundle from the pinned GitHub Release
-        /// instead of the FP32 set + on-device quantization. The lean path:
-        /// no ~844 MB FP32 download, no ~2-minute quantize, no `protoc`.
-        /// Mutually exclusive with `--skip-quantize` (which only applies to the
-        /// FP32 download path).
-        #[arg(long, default_value_t = false)]
+        /// Lean pre-quantized INT8 bundle (default **true**). The default
+        /// `gigastt download` path; ignored when `--fp32` is set. Kept so
+        /// existing scripts that pass `--prequantized` keep working.
+        #[arg(long, default_value_t = true)]
         prequantized: bool,
+
+        /// Download the full FP32 encoder set from HuggingFace and quantize
+        /// on-device (unless `--skip-quantize`). Overrides the default lean
+        /// pre-quantized INT8 path (~220 MB class from the pinned GitHub Release).
+        #[arg(long, default_value_t = false)]
+        fp32: bool,
 
         /// Progress reporting format: `human` (default — interactive `\r`
         /// progress on stderr) or `json` (NDJSON events on stdout, one object
@@ -1111,7 +1114,8 @@ async fn main() -> anyhow::Result<()> {
             #[cfg(feature = "diarization")]
             skip_diarization,
             skip_quantize,
-            prequantized,
+            prequantized: _prequantized,
+            fp32,
             progress,
             #[cfg(feature = "ane")]
             ane,
@@ -1119,7 +1123,7 @@ async fn main() -> anyhow::Result<()> {
             model::set_progress_mode(progress);
             // `download` is an explicit action: the requested variant maps to
             // the default (Rnnt) so a bare `gigastt download` fetches something
-            // useful.
+            // useful. Default = lean pre-quantized INT8; `--fp32` = HF FP32 + quantize.
             //
             // The flow runs on its own task: the INT8 quantization pass and the
             // large-file SHA-256 verify are synchronous, and polled inline they
@@ -1128,17 +1132,17 @@ async fn main() -> anyhow::Result<()> {
             let dl_model_dir = model_dir.clone();
             let mut download = tokio::spawn(async move {
                 let model_dir = dl_model_dir;
-                if prequantized && !model_variant.is_ctc() {
-                    // Lean path: fetch the INT8 bundle from the pinned Release — no
-                    // FP32 download, no on-device quantization, no protoc.
+                if !fp32 && !model_variant.is_ctc() {
+                    // Lean path (default): INT8 bundle from the pinned Release.
                     model::ensure_prequantized_model_variant(Some(model_variant), &model_dir)
                         .await?;
+                } else if fp32 && !model_variant.is_ctc() {
+                    // Explicit FP32 path for debugging / offline quantize workflows.
+                    let resolved =
+                        model::ensure_fp32_model_variant(Some(model_variant), &model_dir).await?;
+                    ensure_int8_encoder(resolved, &model_dir, skip_quantize)?;
                 } else {
-                    // The Multilingual CTC heads' standard download already fetches
-                    // istupakov's pre-quantized INT8 encoder directly from HuggingFace,
-                    // so `--prequantized` is a no-op refinement for them (no separate
-                    // GitHub-Release bundle). `ensure_int8_encoder` then finds the INT8
-                    // encoder already present and skips on-device quantization.
+                    // CTC heads: HF pre-quantized INT8 encoder (+ vocab) directly.
                     let resolved =
                         model::ensure_model_variant(Some(model_variant), &model_dir).await?;
                     ensure_int8_encoder(resolved, &model_dir, skip_quantize)?;
@@ -2650,6 +2654,29 @@ mod tests {
                 assert!(cors_allow_any);
             }
             _ => panic!("expected Serve"),
+        }
+    }
+
+    #[test]
+    fn test_cli_download_defaults_to_lean() {
+        let cli = Cli::try_parse_from(["gigastt", "download"]).expect("parse");
+        match cli.command {
+            Commands::Download {
+                fp32, prequantized, ..
+            } => {
+                assert!(!fp32, "default download is lean, not fp32");
+                assert!(prequantized, "legacy prequantized defaults true");
+            }
+            _ => panic!("expected Download"),
+        }
+    }
+
+    #[test]
+    fn test_cli_download_fp32_flag() {
+        let cli = Cli::try_parse_from(["gigastt", "download", "--fp32"]).expect("parse");
+        match cli.command {
+            Commands::Download { fp32, .. } => assert!(fp32),
+            _ => panic!("expected Download"),
         }
     }
 

@@ -22,7 +22,7 @@ Type: `code` | `docs` | `ops-tooling`.
 | **TTX-02** | **Document lean install** = `v3_rnnt_encoder_int8.onnx` + decoder + joint + vocab (~220 MB class); offline errors name those files | docs | T-001 | Disk SKU; unblocked by TTX-01 | **done** |
 | **TTX-03** | **Edge / low-RAM: default or profile `pool-size 1`** (docs + optional serve profile / auto later) | code+docs | T-009 | **−280…450 MiB** RSS vs pool=2 | **done** (docs+CLI help; default stays 2) |
 | **TTX-04** | **Encoder threads: never recommend/default `1` on multi-core**; help text + edge guide (threads=1 only explicit debug) | docs (+ guard if any path forces 1) | T-044 | Avoids RTF **×3…3.65** regression | **done** |
-| **TTX-05** | Prefer **`download --prequantized`** (or default lean path) once ensure accepts INT8-only | code+docs | T-001/T-026 | Lean download UX | **todo** |
+| **TTX-05** | Prefer **`download --prequantized`** (or default lean path) once ensure accepts INT8-only | code+docs | T-001/T-026 | Lean download UX | **done** (default lean; `--fp32` opt-in) |
 
 ### P1 — next (disk / RAM / speed productization)
 
@@ -121,6 +121,7 @@ Full tables: `specs/research/RESULTS.md`. Method: `specs/research/METHOD.md`.
 | 2026-07-27 | Lazy speaker: probe at boot; ONNX on first diarization request |
 | 2026-07-27 | Operator docs: VAD, pool/RTF tradeoffs, reload headroom, ml_ctc speed SKU, checkout timeout, batch split, punct tax |
 | 2026-07-27 | Lean install docs: minimum INT8+dec+joint+vocab file set (~220 MB); offline errors point at lean paths |
+| 2026-07-27 | Download / empty-dir ensure default to lean prequantized INT8; `--fp32` for HuggingFace FP32 + quantize |
 | 2026-07-27 | ensure accepts INT8-only (prequantized) install: `is_usable_present` = FP32 download set OR prequantized INT8 set; serve/transcribe no longer re-fetch FP32 when lean tree is complete |
 | 2026-07-27 | Model-dir hygiene: `gigastt cache-gc` prunes non-active `optimized_cache/*_optimized.onnx`; `--dedupe` hardlinks content-identical files |
 | 2026-07-27 | Edge pool=1 + encoder threads: keep `--pool-size` default 2; CLI help + docs recommend `--pool-size 1` for edge; document pool>1 RAM + ~10–20% single-job RTF; warn `--encoder-intra-threads 1` is ~3× slower (explicit `1` still passes through) |
