@@ -230,7 +230,13 @@ The `e2e_rnnt` head (`--model-variant e2e_rnnt`) uses the parallel `v3_e2e_rnnt_
 - Shared constants live in `inference/mod.rs`, referenced by sub-modules
 - `ort` errors are converted to typed `RuntimeError` at the `runtime/ort` seam (no `anyhow` wrapping)
 - Execution provider selection uses `#[cfg(feature = "coreml")]` / `#[cfg(feature = "cuda")]` blocks
-- **No internal task-tracker IDs in code/docs.** Never write tracker indices (`V1-NN`, `SUS-NN`, `TODO-NN`, etc.) into source comments, `CHANGELOG.md`, `docs/`, CI files, or any artifact — they mean nothing to a reader without the tracker. Comments should say *what* and *why*; the link from a fix to a tracked item lives only in `specs/prod-readiness-v1.0.md`, not in the code.
+- **No internal task-tracker IDs outside the tracker itself.** Never write tracker indices (`TTX-NN`, `T-NNN`, `V1-NN`, `SUS-NN`, `TODO-NN`, ticket keys, etc.) into:
+  - source comments or code strings
+  - `CHANGELOG.md`, `docs/`, CI/workflows, README, user-facing text
+  - **git branch names**, **commit subjects/bodies**, **PR titles/descriptions**, tags
+  They mean nothing without the tracker and are not conventional git/product language.
+  - **Do** describe *what* and *why* in plain English (e.g. branch `ttx/lazy-speaker`, commit `feat(core): lazy-load speaker encoder until diarization is requested`).
+  - **Do** keep the link from work → tracked item only in tracker docs: `specs/prod-readiness-v1.0.md`, `specs/resource-ttx-roadmap.md`, and lab notes under `specs/research/` (gitignored).
 
 ### TDD workflow
 

@@ -3054,12 +3054,12 @@ mod tests {
         assert!(!is_model_present(ModelVariant::Rnnt, dir));
     }
 
-    /// Research T-026: the serve/bootstrap `ensure_model_variant` filter is
+    /// The serve/bootstrap `ensure_model_variant` filter is
     /// `detect_in_dir(dir).filter(|&v| is_model_present(v, dir))`. An INT8-only
     /// (prequantized) tree is detected as Rnnt but **fails** `is_model_present`,
     /// so `existing` is `None` and `resolve_variant` chooses **Download** — which
-    /// fetches the FP32 encoder set. This is the measured product gap; the fix is
-    /// to also accept `is_prequantized_present` in that filter (not implemented here).
+    /// fetches the FP32 encoder set. Product gap: also accept
+    /// `is_prequantized_present` in that filter (not implemented here).
     #[test]
     fn test_ensure_filter_rejects_prequantized_only_dir() {
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -3084,7 +3084,7 @@ mod tests {
         let existing = ModelVariant::detect_in_dir(dir).filter(|&v| is_model_present(v, dir));
         assert_eq!(
             existing, None,
-            "ensure treats prequantized-only as absent (T-026 gap)"
+            "ensure treats prequantized-only as absent (must download FP32 set)"
         );
         assert_eq!(
             resolve_variant(None, existing),
