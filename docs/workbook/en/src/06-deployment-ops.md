@@ -81,6 +81,13 @@ curl -s http://127.0.0.1:9876/health
 
 ### Air-gapped / offline installation
 
+Core ASR for the default `rnnt` head is a **lean INT8-only** set (~220 MB):
+`v3_rnnt_encoder_int8.onnx`, `v3_rnnt_decoder.onnx`, `v3_rnnt_joint.onnx`,
+`v3_vocab.txt`. Prefer `gigastt download --prequantized`. Full operator detail:
+[deployment.md — Lean INT8-only install](../../../deployment.md#lean-int8-only-install)
+(canonical English).
+
+
 For hosts with no internet access, each release ships a self-contained
 tarball per Linux target — binary + pre-quantized INT8 `rnnt` model +
 punctuation model + systemd unit + installer — and two Debian packages

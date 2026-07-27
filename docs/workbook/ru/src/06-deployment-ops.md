@@ -85,6 +85,12 @@ curl -s http://127.0.0.1:9876/health
 
 ### Установка без сети (замкнутый контур)
 
+Для головы `rnnt` достаточно **lean INT8-набора** (~220 МБ):
+`v3_rnnt_encoder_int8.onnx`, `v3_rnnt_decoder.onnx`, `v3_rnnt_joint.onnx`,
+`v3_vocab.txt`. Рекомендуется `gigastt download --prequantized`. Подробности:
+[deployment.md — Lean INT8-only install](../../../deployment.md#lean-int8-only-install).
+
+
 Для хостов без доступа в интернет каждый релиз публикует самодостаточный
 tarball под каждую Linux-цель — бинарник + предквантованная INT8-модель
 `rnnt` + модель пунктуации + systemd-юнит + установщик — и два Debian-пакета
