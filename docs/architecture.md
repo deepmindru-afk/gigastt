@@ -26,7 +26,7 @@ Optional parallel paths (not on the ASR critical path by default):
 - **Speaker diarization** — WeSpeaker ResNet34 fbank embeddings + polyvoice clustering; opt-in per REST request (`?diarization=true`) or WS `Configure`. Offline matches word midpoints to turns; streaming assigns the latest turn to the current word tail.
 - **Stereo channel-speakers** — `channels=split` / `--stereo-speakers` runs ASR per channel and labels `speaker_0` / `speaker_1` (mutually exclusive with ML diarization).
 - **Jobs queue** — opt-in `--enable-jobs` async store for long-file / batch REST work.
-- **Hot reload** — loopback-only `POST /v1/admin/reload` rebuilds the engine from the boot recipe, warms it, then swaps atomically (keeps the old engine on failure).
+- **Hot reload** — loopback-only `POST /v1/admin/reload` rebuilds the engine from the boot recipe, warms it, then swaps atomically (keeps the old engine on failure). Peak RSS during reload is about **+0.5× ready** (old + new engine briefly co-resident; ~**+536 MiB** at pool=1).
 
 ## Crates
 
@@ -73,6 +73,11 @@ emit bare lowercase text. Trained across 70+ languages, best-in-class on Russian
 Kazakh, Kyrgyz, and Uzbek. Both download istupakov's pre-quantized INT8 encoder
 directly — no FP32 download, no on-device quantization (`ml_ctc` ~225 MB, `ml_ctc_large`
 ~592 MB).
+
+**SKU note:** `ml_ctc` is a **speed** head (~**1.5×** better RTF than default `rnnt` in
+lab measurements), **not** a lean-RAM SKU — ready RSS is about the same class as `rnnt`
+when both INT8 encoders are present. Prefer `--pool-size 1` for low RAM, not a head
+switch.
 
 ## Hardware acceleration
 

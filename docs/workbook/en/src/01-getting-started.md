@@ -224,7 +224,7 @@ model directory is used as-is (auto-detect), and a fresh install defaults to
 |---|---|---|---|
 | `rnnt` (default) | Russian | Bare lowercase from the acoustic model; casing + punctuation restored by an auto-downloaded RuPunct pass, digits by ITN | Default: lowest WER on Russian speech |
 | `e2e_rnnt` | Russian | Punctuation / casing / ITN baked into the acoustic model | You want one self-contained model with no post-processing passes |
-| `ml_ctc` | ru/en/kk/ky/uz | Bare lowercase, no restoration passes | Mixed Russian/English (or kk/ky/uz) speech; lighter 220M encoder |
+| `ml_ctc` | ru/en/kk/ky/uz | Bare lowercase, no restoration passes | Mixed Russian/English (or kk/ky/uz) speech; ~1.5× RTF vs `rnnt` (ready RSS ≈ `rnnt`) |
 | `ml_ctc_large` | ru/en/kk/ky/uz | Bare lowercase, no restoration passes | Multilingual speech where accuracy matters more than footprint (600M encoder) |
 
 The `ml_ctc*` heads download pre-quantized INT8 directly, so there is no

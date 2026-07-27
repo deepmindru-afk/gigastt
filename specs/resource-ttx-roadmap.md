@@ -31,13 +31,13 @@ Type: `code` | `docs` | `ops-tooling`.
 | **TTX-06** | **Model-dir GC:** drop non-active `optimized_cache` graphs; keep only current head INT8 optimized | code and/or CLI | T-028/T-037 | Reclaim **~1.3 GiB** on polluted installs | **todo** |
 | **TTX-07** | **Content-hash dedupe** (or hardlink) for exact duplicate files under model dir | code/ops-tooling | T-091 | Reclaim **~679 MB** exact dups | **todo** |
 | **TTX-08** | **Lazy-load speaker encoder** only when diarization requested | code | T-027 | **−~40 MiB** ready when speaker file present but unused | **done** |
-| **TTX-09** | **Docs + edge profile: `--vad` for pause-rich** long files (meetings/podcasts) | docs (+ optional profile) | T-048 | RTF up to **×2.6** on silence-rich | **todo** |
+| **TTX-09** | **Docs + edge profile: `--vad` for pause-rich** long files (meetings/podcasts) | docs (+ optional profile) | T-048 | RTF up to **×2.6** on silence-rich | **done** (docs; optional `--profile edge` remains TTX-16) |
 | **TTX-10** | **Long-form speech-region path** (Silero segments + word merge; fallback fixed chunks) — productize or document client-side stitch | code or docs | T-016/T-045 | Peak **−100…−190 MiB** @64–128 s; J≥0.94 | **todo** |
-| **TTX-11** | **SKU docs: `ml_ctc` = speed (~1.5× RTF), not lean-RAM** | docs | T-120 | RTF **0.023** vs rnnt **0.034**; ready RSS ≈ rnnt | **todo** |
-| **TTX-12** | **Docs: pool>1 costs RAM and ~+10–20% single-job RTF** (thread split) | docs | T-009/T-117 | Operators pick concurrency knowingly | **todo** |
-| **TTX-13** | **Docs: admin reload needs ~+0.5× ready free RAM** (pool=1 ≈ **+536 MiB** peak) | docs | T-054 | Prevent edge OOM on reload | **todo** |
-| **TTX-14** | **Docs: pool checkout timeout** = queue vs fail-fast **503** + `retry_after_ms` | docs | T-121 | Ops tuning | **todo** |
-| **TTX-15** | **Docs: `batch_pool_size` splits pool** (no extra idle triplets) | docs | T-085 | Avoid config myth | **todo** |
+| **TTX-11** | **SKU docs: `ml_ctc` = speed (~1.5× RTF), not lean-RAM** | docs | T-120 | RTF **0.023** vs rnnt **0.034**; ready RSS ≈ rnnt | **done** |
+| **TTX-12** | **Docs: pool>1 costs RAM and ~+10–20% single-job RTF** (thread split) | docs | T-009/T-117 | Operators pick concurrency knowingly | **done** |
+| **TTX-13** | **Docs: admin reload needs ~+0.5× ready free RAM** (pool=1 ≈ **+536 MiB** peak) | docs | T-054 | Prevent edge OOM on reload | **done** |
+| **TTX-14** | **Docs: pool checkout timeout** = queue vs fail-fast **503** + `retry_after_ms` | docs | T-121 | Ops tuning | **done** |
+| **TTX-15** | **Docs: `batch_pool_size` splits pool** (no extra idle triplets) | docs | T-085 | Avoid config myth | **done** |
 | **TTX-16** | Optional **`--profile edge`** bundling pool=1, sane threads, vad-on-long, optional ml_ctc note | code+docs | T-011 + above | One switch for weak hosts | **todo** |
 
 ### P2 — worth doing later (confirmed gaps / smaller ROI)
@@ -47,7 +47,7 @@ Type: `code` | `docs` | `ops-tooling`.
 | **TTX-17** | **cgroup `memory.max` pool clamp** (Docker/k8s), not only host RAM | code | T-041 | Avoid OOM under container limits | **todo** |
 | **TTX-18** | Soft reload without double-resident peak (drop-old-first / file soft-swap) | code | T-054 follow | Zero-headroom reload on edge | **todo** (optional) |
 | **TTX-19** | Weight-shared pool / PrepackedWeights spike → re-measure pool Δ | code spike | T-002/T-021 | Potential large RAM at pool≥2 | **todo** (spike) |
-| **TTX-20** | Docs: punct model ready tax (~+4…28 MiB); edge may leave punct off | docs | T-049 | Small RAM | **todo** |
+| **TTX-20** | Docs: punct model ready tax (~+4…28 MiB); edge may leave punct off | docs | T-049 | Small RAM | **done** |
 
 ---
 
@@ -118,6 +118,7 @@ Full tables: `specs/research/RESULTS.md`. Method: `specs/research/METHOD.md`.
 
 | Date | Note |
 |------|------|
-| 2026-07-27 | **TTX-08 done:** speaker encoder probed at boot (`wespeaker_*.onnx` presence only); ONNX session opens on first diarization request (`LazySpeakerEncoder`) |
+| 2026-07-27 | Lazy speaker: probe at boot; ONNX on first diarization request |
+| 2026-07-27 | Operator docs: VAD, pool/RTF tradeoffs, reload headroom, ml_ctc speed SKU, checkout timeout, batch split, punct tax |
 | 2026-07-27 | Reworked as **actionable backlog** (TTX-01…TTX-20): only confirmed-impact work to do; evidence demoted to snapshot |
 | 2026-07-26…27 | Lab R0–R19 filled confirmations (see research RESULTS) |

@@ -377,6 +377,21 @@ separate listener (default `127.0.0.1:9090`), not the API port. If you pass
 `--metrics`, publish/scrape `:9090` (or set `--metrics-listen`); a scraper still
 pointed at `:9876/metrics` will get a 404.
 
+## Sizing & performance (operators)
+
+Quick defaults; full knobs and numbers live in
+[runbook — Resource & performance knobs](runbook.md#resource--performance-knobs).
+
+| Goal | Start with |
+|---|---|
+| Low RAM / edge | `--pool-size 1`; optional `--punctuation off` |
+| Concurrent streams | Raise `--pool-size` only with free RAM; expect ~+10–20% single-job RTF |
+| Long meetings / podcasts | `--vad` (silence-rich RTF up to ~×2.6) |
+| Multilingual or max throughput | `ml_ctc` / `ml_ctc_large` for languages/speed — **not** for lower ready RSS |
+| Isolate long file jobs from WS | `--batch-pool-size N` **splits** `--pool-size` (not additive) |
+| Saturation policy | Long `--pool-checkout-timeout-secs` = queue; short = fail-fast 503 + `retry_after_ms` |
+| Hot reload on a small box | Keep ~**+0.5× ready** free RAM (~**+536 MiB** at pool=1) or restart instead |
+
 ## Hardening checklist
 
 - **Bind address:** Keep `--host 127.0.0.1` unless you're running in a container (then use the port binding strategy above).
@@ -389,4 +404,5 @@ pointed at `:9876/metrics` will get a 404.
 ## See also
 
 - [CLI Reference](cli.md) — `--bind-all`, `--allow-origin`, `--cors-allow-any` flags
+- [Runbook](runbook.md) — pool exhaustion, OOM, resource knobs
 - [Security](../SECURITY.md) — server-side security features

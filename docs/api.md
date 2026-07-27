@@ -367,6 +367,12 @@ warmup, then atomically swaps the live `Arc<Engine>`. In-flight requests keep
 the engine they started with; a failed rebuild leaves the previous model
 serving.
 
+**RAM:** rebuild keeps the old engine live until the new one is warm, so peak
+RSS during reload is about **+0.5× ready** on top of steady state (lab:
+**~+536 MiB** at `--pool-size 1`, INT8 `rnnt`). Ensure free memory before
+calling reload on edge hosts; otherwise restart the process instead of
+hot-reloading. Operator notes: [runbook — Admin reload headroom](runbook.md#admin-reload-headroom).
+
 **Security:** the handler accepts **loopback peers only** (`403 loopback_only`
 otherwise), even when `--bind-all` or `--cors-allow-any` is enabled. Concurrent
 reloads return `409 reload_in_progress`. Thin/test entry points without a
