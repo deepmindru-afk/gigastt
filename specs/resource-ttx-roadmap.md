@@ -18,11 +18,11 @@ Type: `code` | `docs` | `ops-tooling`.
 
 | ID | Task | Type | Theory | Impact (confirmed) | Status |
 |----|------|------|--------|--------------------|--------|
-| **TTX-01** | **`ensure` / model presence accepts INT8-only (prequantized) set** — serve/transcribe/download must not require FP32 encoder when INT8+dec+joint+vocab are complete | code | T-026 | Avoids **~844 MB** FP32 download / enables lean install | **todo** |
-| **TTX-02** | **Document lean install** = `v3_rnnt_encoder_int8.onnx` + decoder + joint + vocab (~220 MB class); offline errors name those files | docs | T-001 | Disk SKU; unblocked by TTX-01 | **blocked** on TTX-01 |
+| **TTX-01** | **`ensure` / model presence accepts INT8-only (prequantized) set** — serve/transcribe/download must not require FP32 encoder when INT8+dec+joint+vocab are complete | code | T-026 | Avoids **~844 MB** FP32 download / enables lean install | **done** |
+| **TTX-02** | **Document lean install** = `v3_rnnt_encoder_int8.onnx` + decoder + joint + vocab (~220 MB class); offline errors name those files | docs | T-001 | Disk SKU; unblocked by TTX-01 | **todo** |
 | **TTX-03** | **Edge / low-RAM: default or profile `pool-size 1`** (docs + optional serve profile / auto later) | code+docs | T-009 | **−280…450 MiB** RSS vs pool=2 | **done** (docs+CLI help; default stays 2) |
 | **TTX-04** | **Encoder threads: never recommend/default `1` on multi-core**; help text + edge guide (threads=1 only explicit debug) | docs (+ guard if any path forces 1) | T-044 | Avoids RTF **×3…3.65** regression | **done** |
-| **TTX-05** | Prefer **`download --prequantized`** (or default lean path) once ensure accepts INT8-only | code+docs | T-001/T-026 | Lean download UX | **blocked** on TTX-01 |
+| **TTX-05** | Prefer **`download --prequantized`** (or default lean path) once ensure accepts INT8-only | code+docs | T-001/T-026 | Lean download UX | **todo** |
 
 ### P1 — next (disk / RAM / speed productization)
 

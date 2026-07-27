@@ -71,11 +71,11 @@ Confirmed-impact work only. Full task list with DoD / order:
 
 | ID | Task (short) | Priority | Status |
 |----|--------------|----------|--------|
-| TTX-01 | ensure accepts INT8-only prequantized (T-026) | P0 | **todo** |
-| TTX-02 | lean install docs (T-001) | P0 | blocked on TTX-01 |
+| TTX-01 | ensure accepts INT8-only prequantized (T-026) | P0 | **done** |
+| TTX-02 | lean install docs (T-001) | P0 | **todo** |
 | TTX-03 | edge `pool-size 1` (T-009) | P0 | done (docs+CLI; default stays 2) |
 | TTX-04 | never threads=1 on multi-core (T-044) | P0 | done |
-| TTX-05 | prequantized download default | P0 | blocked on TTX-01 |
+| TTX-05 | prequantized download default | P0 | **todo** |
 | TTX-06…07 | model dir GC + hash dups (T-028/T-091) | P1 | todo |
 | TTX-08 | lazy speaker load (T-027) | P1 | **done** |
 | TTX-09 | vad docs (pause-rich) | P1 | **done** |
