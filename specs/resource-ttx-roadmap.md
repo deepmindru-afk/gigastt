@@ -28,8 +28,8 @@ Type: `code` | `docs` | `ops-tooling`.
 
 | ID | Task | Type | Theory | Impact (confirmed) | Status |
 |----|------|------|--------|--------------------|--------|
-| **TTX-06** | **Model-dir GC:** drop non-active `optimized_cache` graphs; keep only current head INT8 optimized | code and/or CLI | T-028/T-037 | Reclaim **~1.3 GiB** on polluted installs | **todo** |
-| **TTX-07** | **Content-hash dedupe** (or hardlink) for exact duplicate files under model dir | code/ops-tooling | T-091 | Reclaim **~679 MB** exact dups | **todo** |
+| **TTX-06** | **Model-dir GC:** drop non-active `optimized_cache` graphs; keep only current head INT8 optimized | code and/or CLI | T-028/T-037 | Reclaim **~1.3 GiB** on polluted installs | **done** (`gigastt cache-gc`) |
+| **TTX-07** | **Content-hash dedupe** (or hardlink) for exact duplicate files under model dir | code/ops-tooling | T-091 | Reclaim **~679 MB** exact dups | **done** (`gigastt cache-gc --dedupe`) |
 | **TTX-08** | **Lazy-load speaker encoder** only when diarization requested | code | T-027 | **−~40 MiB** ready when speaker file present but unused | **done** |
 | **TTX-09** | **Docs + edge profile: `--vad` for pause-rich** long files (meetings/podcasts) | docs (+ optional profile) | T-048 | RTF up to **×2.6** on silence-rich | **done** (docs; optional `--profile edge` remains TTX-16) |
 | **TTX-10** | **Long-form speech-region path** (Silero segments + word merge; fallback fixed chunks) — productize or document client-side stitch | code or docs | T-016/T-045 | Peak **−100…−190 MiB** @64–128 s; J≥0.94 | **todo** |
@@ -120,6 +120,8 @@ Full tables: `specs/research/RESULTS.md`. Method: `specs/research/METHOD.md`.
 |------|------|
 | 2026-07-27 | Lazy speaker: probe at boot; ONNX on first diarization request |
 | 2026-07-27 | Operator docs: VAD, pool/RTF tradeoffs, reload headroom, ml_ctc speed SKU, checkout timeout, batch split, punct tax |
+| 2026-07-27 | ensure accepts INT8-only (prequantized) install: `is_usable_present` = FP32 download set OR prequantized INT8 set; serve/transcribe no longer re-fetch FP32 when lean tree is complete |
+| 2026-07-27 | Model-dir hygiene: `gigastt cache-gc` prunes non-active `optimized_cache/*_optimized.onnx`; `--dedupe` hardlinks content-identical files |
 | 2026-07-27 | Edge pool=1 + encoder threads: keep `--pool-size` default 2; CLI help + docs recommend `--pool-size 1` for edge; document pool>1 RAM + ~10–20% single-job RTF; warn `--encoder-intra-threads 1` is ~3× slower (explicit `1` still passes through) |
 | 2026-07-27 | Reworked as **actionable backlog** (TTX-01…TTX-20): only confirmed-impact work to do; evidence demoted to snapshot |
 | 2026-07-26…27 | Lab R0–R19 filled confirmations (see research RESULTS) |

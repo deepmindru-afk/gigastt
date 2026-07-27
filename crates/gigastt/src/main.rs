@@ -517,6 +517,24 @@ enum Commands {
         force: bool,
     },
 
+    /// Prune stale ONNX Runtime optimized graphs (and optionally hardlink
+    /// exact duplicate files) under the model directory. Reclaims disk on
+    /// multi-head / FP32-polluted installs without changing accuracy.
+    CacheGc {
+        /// Model directory
+        #[arg(long, default_value_t = model::default_model_dir())]
+        model_dir: String,
+
+        /// Report reclaimable files without deleting or hardlinking
+        #[arg(long, default_value_t = false)]
+        dry_run: bool,
+
+        /// Also hardlink content-identical files under the model dir
+        /// (SHA-256 groups). Off by default — optimized_cache prune always runs.
+        #[arg(long, default_value_t = false)]
+        dedupe: bool,
+    },
+
     /// Transcribe an audio file (offline)
     Transcribe {
         /// Path to audio file (WAV, M4A, MP3, OGG, FLAC)
@@ -1203,6 +1221,35 @@ async fn main() -> anyhow::Result<()> {
             gigastt_core::quantize::quantize_model(&input, &output)?;
             tracing::info!("Quantized model saved to {}", output.display());
         }
+        Commands::CacheGc {
+            model_dir,
+            dry_run,
+            dedupe,
+        } => {
+            let dir = std::path::Path::new(&model_dir);
+            let prune = model::prune_optimized_cache(dir, dry_run)?;
+            let action = if dry_run { "would free" } else { "freed" };
+            println!(
+                "optimized_cache: kept {} graph(s), removed {} ({} {:.1} MiB)",
+                prune.kept.len(),
+                prune.removed.len(),
+                action,
+                prune.freed_bytes as f64 / (1024.0 * 1024.0),
+            );
+            for p in &prune.removed {
+                println!("  - {}", p.display());
+            }
+            if dedupe {
+                let d = model::dedupe_model_dir(dir, dry_run)?;
+                println!(
+                    "dedupe: {} group(s), {} hardlink(s), {} {:.1} MiB",
+                    d.groups,
+                    d.hardlinked,
+                    action,
+                    d.freed_bytes as f64 / (1024.0 * 1024.0),
+                );
+            }
+        }
         Commands::Transcribe {
             file,
             model_dir,
@@ -1683,6 +1730,31 @@ mod tests {
                 assert_eq!(model_variant, ModelVariant::E2eRnnt);
             }
             _ => panic!("expected Download"),
+        }
+    }
+
+    #[test]
+    fn test_cli_cache_gc_parsing() {
+        let cli = Cli::try_parse_from([
+            "gigastt",
+            "cache-gc",
+            "--model-dir",
+            "/tmp/models",
+            "--dry-run",
+            "--dedupe",
+        ])
+        .expect("parse cache-gc");
+        match cli.command {
+            Commands::CacheGc {
+                model_dir,
+                dry_run,
+                dedupe,
+            } => {
+                assert_eq!(model_dir, "/tmp/models");
+                assert!(dry_run);
+                assert!(dedupe);
+            }
+            _ => panic!("expected CacheGc"),
         }
     }
 
