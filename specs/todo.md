@@ -84,7 +84,8 @@ Confirmed-impact work only. Full task list with DoD / order:
 | TTX-12…15 | pool/reload/checkout/batch_pool docs | P1 | **done** |
 | TTX-16 | optional `--profile edge` | P1 | **done** |
 | TTX-20 | punct ready tax docs | P1 | **done** |
-| TTX-17…19 | cgroup, soft reload, weight-share spike | P2 | todo |
+| TTX-17 | cgroup memory.max pool clamp | P2 | **done** |
+| TTX-18…19 | soft reload, weight-share spike | P2 | todo |
 | long-form Silero segments | T-045 | J=0.98 vs fixed grid 0.84 on multi-utt |
 | server `--vad` pause-rich | T-048 | RTF ×2.6 on ~55% silence |
 | lazy speaker load | T-027 | **done** (TTX-08: probe at boot, load on first diarization; ~−39 MiB ready when unused) |
