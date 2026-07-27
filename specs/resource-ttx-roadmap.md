@@ -30,7 +30,7 @@ Type: `code` | `docs` | `ops-tooling`.
 |----|------|------|--------|--------------------|--------|
 | **TTX-06** | **Model-dir GC:** drop non-active `optimized_cache` graphs; keep only current head INT8 optimized | code and/or CLI | T-028/T-037 | Reclaim **~1.3 GiB** on polluted installs | **todo** |
 | **TTX-07** | **Content-hash dedupe** (or hardlink) for exact duplicate files under model dir | code/ops-tooling | T-091 | Reclaim **~679 MB** exact dups | **todo** |
-| **TTX-08** | **Lazy-load speaker encoder** only when diarization requested | code | T-027 | **−~40 MiB** ready when speaker file present but unused | **todo** |
+| **TTX-08** | **Lazy-load speaker encoder** only when diarization requested | code | T-027 | **−~40 MiB** ready when speaker file present but unused | **done** |
 | **TTX-09** | **Docs + edge profile: `--vad` for pause-rich** long files (meetings/podcasts) | docs (+ optional profile) | T-048 | RTF up to **×2.6** on silence-rich | **todo** |
 | **TTX-10** | **Long-form speech-region path** (Silero segments + word merge; fallback fixed chunks) — productize or document client-side stitch | code or docs | T-016/T-045 | Peak **−100…−190 MiB** @64–128 s; J≥0.94 | **todo** |
 | **TTX-11** | **SKU docs: `ml_ctc` = speed (~1.5× RTF), not lean-RAM** | docs | T-120 | RTF **0.023** vs rnnt **0.034**; ready RSS ≈ rnnt | **todo** |
@@ -118,5 +118,6 @@ Full tables: `specs/research/RESULTS.md`. Method: `specs/research/METHOD.md`.
 
 | Date | Note |
 |------|------|
+| 2026-07-27 | **TTX-08 done:** speaker encoder probed at boot (`wespeaker_*.onnx` presence only); ONNX session opens on first diarization request (`LazySpeakerEncoder`) |
 | 2026-07-27 | Reworked as **actionable backlog** (TTX-01…TTX-20): only confirmed-impact work to do; evidence demoted to snapshot |
 | 2026-07-26…27 | Lab R0–R19 filled confirmations (see research RESULTS) |
