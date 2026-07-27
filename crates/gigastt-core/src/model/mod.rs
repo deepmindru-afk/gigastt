@@ -3054,6 +3054,47 @@ mod tests {
         assert!(!is_model_present(ModelVariant::Rnnt, dir));
     }
 
+    /// Research T-026: the serve/bootstrap `ensure_model_variant` filter is
+    /// `detect_in_dir(dir).filter(|&v| is_model_present(v, dir))`. An INT8-only
+    /// (prequantized) tree is detected as Rnnt but **fails** `is_model_present`,
+    /// so `existing` is `None` and `resolve_variant` chooses **Download** — which
+    /// fetches the FP32 encoder set. This is the measured product gap; the fix is
+    /// to also accept `is_prequantized_present` in that filter (not implemented here).
+    #[test]
+    fn test_ensure_filter_rejects_prequantized_only_dir() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dir = tmp.path();
+        for f in ModelVariant::Rnnt.prequantized_files() {
+            std::fs::write(dir.join(f), b"stub").unwrap();
+        }
+        assert_eq!(
+            ModelVariant::detect_in_dir(dir),
+            Some(ModelVariant::Rnnt),
+            "encoder_int8 alone is enough for detect_in_dir"
+        );
+        assert!(
+            is_prequantized_present(ModelVariant::Rnnt, dir),
+            "prequantized set is complete"
+        );
+        assert!(
+            !is_model_present(ModelVariant::Rnnt, dir),
+            "FP32 download set must still be absent"
+        );
+        // Same filter as ensure_model_variant (line above download):
+        let existing = ModelVariant::detect_in_dir(dir).filter(|&v| is_model_present(v, dir));
+        assert_eq!(
+            existing, None,
+            "ensure treats prequantized-only as absent (T-026 gap)"
+        );
+        assert_eq!(
+            resolve_variant(None, existing),
+            VariantAction::Download(ModelVariant::Rnnt),
+            "absent existing → download FP32 rnnt set"
+        );
+        // After the intended fix, filter would also check is_prequantized_present
+        // and resolve_variant would Use(Rnnt) without download.
+    }
+
     /// `ensure_prequantized_model_variant` short-circuits (no network, no
     /// `.partial`) when the pre-quantized set is already present.
     #[tokio::test]

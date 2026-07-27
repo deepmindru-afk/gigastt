@@ -63,6 +63,30 @@ Prep: [`benchmark/README.md`](../benchmark/README.md#datasets).
 | 6 | ToneWebinars | **done** — 13.02 / 14.87 / **8.33** (n=1000) |
 | 7 | Phone-sim (optional) | optional |
 
+## Resource TTX (2026-07-27) — product backlog
+
+Confirmed-impact work only. Full task list with DoD / order:
+
+**[`specs/resource-ttx-roadmap.md`](resource-ttx-roadmap.md)** (TTX-01…TTX-20)
+
+| ID | Task (short) | Priority | Status |
+|----|--------------|----------|--------|
+| TTX-01 | ensure accepts INT8-only prequantized (T-026) | P0 | **todo** |
+| TTX-02 | lean install docs (T-001) | P0 | blocked on TTX-01 |
+| TTX-03 | edge `pool-size 1` (T-009) | P0 | todo |
+| TTX-04 | never threads=1 on multi-core (T-044) | P0 | todo |
+| TTX-05 | prequantized download default | P0 | blocked on TTX-01 |
+| TTX-06…07 | model dir GC + hash dups (T-028/T-091) | P1 | todo |
+| TTX-08 | lazy speaker load (T-027) | P1 | todo |
+| TTX-09…11 | vad / long-form / ml_ctc SKU docs | P1 | todo |
+| TTX-12…16 | ops docs + optional `--profile edge` | P1 | todo |
+| TTX-17…20 | cgroup, soft reload, weight-share spike, punct docs | P2 | todo |
+| long-form Silero segments | T-045 | J=0.98 vs fixed grid 0.84 on multi-utt |
+| server `--vad` pause-rich | T-048 | RTF ×2.6 on ~55% silence |
+| lazy speaker load | T-027 | partial (~−32 MiB) |
+
+Lab notes: `specs/research/` (local). Do not re-run frozen R0 without new variables.
+
 ## Next-up: v1.0 plan
 
 All new findings from the 2026-04-18 review are catalogued in
