@@ -261,15 +261,14 @@ pub(crate) fn chunk_window_samples(ane_encoder: bool) -> usize {
 
 /// Default number of session triplets in the pool.
 ///
-/// Each pooled triplet deserializes its own copy of the encoder weights — ORT's
-/// shared `PrepackedWeights` container shares prepacked kernel buffers, not the
-/// raw initializer tensors, and there is no stable cross-session
-/// initializer-sharing path in this ORT version (see
-/// [`Engine::cap_pool_size_for_ram`]). A pooled INT8 encoder triplet costs
-/// ~0.4 GB resident, so the default is kept at 2 (down from 4) to bound the
-/// idle footprint: two concurrent inference slots cover typical local /
-/// small-container deployments without quadrupling memory. Raise `--pool-size`
-/// when higher concurrency is needed and RAM allows.
+/// Each pooled triplet still materializes encoder weights; ORT's shared
+/// `PrepackedWeights` container (enabled on the CPU production factory) shares
+/// prepacked kernel buffers across sessions when the EP supports it — raw
+/// initializer tensors are not guaranteed to collapse to 1× (remeasure pool Δ
+/// after upgrades; see research T-002 / T-021). A pooled INT8 encoder triplet
+/// still costs on the order of ~0.4 GB resident in practice, so the default
+/// pool stays at 2. Raise `--pool-size` when higher concurrency is needed and
+/// RAM allows.
 #[cfg(target_os = "android")]
 const DEFAULT_POOL_SIZE: usize = 1;
 #[cfg(not(target_os = "android"))]

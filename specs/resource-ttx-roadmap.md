@@ -46,7 +46,7 @@ Type: `code` | `docs` | `ops-tooling`.
 |----|------|------|--------|--------|--------|
 | **TTX-17** | **cgroup `memory.max` pool clamp** (Docker/k8s), not only host RAM | code | T-041 | Avoid OOM under container limits | **done** |
 | **TTX-18** | Soft reload without double-resident peak (drop-old-first / file soft-swap) | code | T-054 follow | Zero-headroom reload on edge | **done** (swap-before-warm + `?soft=true` drain) |
-| **TTX-19** | Weight-shared pool / PrepackedWeights spike → re-measure pool Δ | code spike | T-002/T-021 | Potential large RAM at pool≥2 | **todo** (spike) |
+| **TTX-19** | Weight-shared pool / PrepackedWeights spike → re-measure pool Δ | code spike | T-002/T-021 | Potential large RAM at pool≥2 | **done** (CPU shared PrepackedWeights; remeasure Δ) |
 | **TTX-20** | Docs: punct model ready tax (~+4…28 MiB); edge may leave punct off | docs | T-049 | Small RAM | **done** |
 
 ---
@@ -125,6 +125,7 @@ Full tables: `specs/research/RESULTS.md`. Method: `specs/research/METHOD.md`.
 | 2026-07-27 | Long-form: document speech-region vs fixed-window paths; empty VAD regions fall back to full/chunked decode |
 | 2026-07-27 | Pool RAM clamp reads Linux cgroup `memory.max` / v1 limit (min with host RAM) |
 | 2026-07-27 | Soft reload: swap before warm; `?soft=true` waits for old engine drain |
+| 2026-07-27 | Weight-share spike: CPU production factory attaches shared ORT PrepackedWeights |
 | 2026-07-27 | `--profile edge` / `GIGASTT_PROFILE=edge`: default pool-size 1 + VAD when those flags are unset |
 | 2026-07-27 | ensure accepts INT8-only (prequantized) install: `is_usable_present` = FP32 download set OR prequantized INT8 set; serve/transcribe no longer re-fetch FP32 when lean tree is complete |
 | 2026-07-27 | Model-dir hygiene: `gigastt cache-gc` prunes non-active `optimized_cache/*_optimized.onnx`; `--dedupe` hardlinks content-identical files |

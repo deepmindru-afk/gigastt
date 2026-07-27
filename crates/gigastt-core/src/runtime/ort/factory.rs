@@ -253,7 +253,15 @@ pub(crate) fn production_factory_variant(
     } else if cfg!(feature = "cuda") {
         OrtFactory::cuda()
     } else {
-        OrtFactory::cpu().with_optimized_cache_dir(model_dir.join("optimized_cache"))
+        // Shared PrepackedWeights across every session this factory creates.
+        // ORT still materializes per-session initializers for most graphs; the
+        // container shares prepacked kernel buffers when the EP supports it.
+        // Enabled as the weight-share spike: remeasure pool1→2 RSS after deploy
+        // (see specs/research theories T-002 / T-021). Safe no-op if unused.
+        let prepacked = std::sync::Arc::new(ort::session::builder::PrepackedWeights::new());
+        OrtFactory::cpu()
+            .with_optimized_cache_dir(model_dir.join("optimized_cache"))
+            .with_prepacked_weights(prepacked)
     };
     Box::new(factory)
 }
@@ -287,6 +295,15 @@ mod tests {
     #[test]
     fn select_backend_rnnt_is_ort_without_accelerated_backend() {
         assert_eq!(select_backend(Some(ModelVariant::Rnnt)), BackendKind::Ort);
+    }
+
+    #[test]
+    fn test_cpu_factory_can_attach_prepacked_weights() {
+        let pw = std::sync::Arc::new(ort::session::builder::PrepackedWeights::new());
+        let f = OrtFactory::cpu().with_prepacked_weights(pw);
+        // create() must succeed without a model path (runtime shell only).
+        let rt = f.create(1).expect("cpu runtime with prepacked");
+        drop(rt);
     }
 
     // On a candle build, `Rnnt` picks the Candle backend but every other head (and
