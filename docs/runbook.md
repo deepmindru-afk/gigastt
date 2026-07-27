@@ -195,6 +195,9 @@ Operator notes for pool sizing, SKUs, VAD, and reload. Full flag list:
   for single-stream latency.
 - Edge / low-RAM: prefer **`--pool-size 1`**. Raise only when concurrent
   sessions need it and the host has free RAM after peak scratch.
+- **Containers:** pool clamp uses **min(host RAM, cgroup `memory.max`)** on
+  Linux (Docker/k8s limits). A 1 GiB container on a large host no longer
+  over-admits pool slots based on host RAM alone.
 - Shorthand: **`gigastt serve --profile edge`** sets **pool-size 1** and
   **`--vad`** when those flags are left at defaults (explicit `--pool-size` /
   `--vad` / `--vad=false` still win). Optional: add `--punctuation off` for

@@ -31,6 +31,46 @@ use super::{ENCODER_SUBSAMPLING, HOP_LENGTH, N_FFT, N_MELS, SECONDS_PER_FRAME, n
 #[cfg(feature = "diarization")]
 use super::diarization::{self, LazySpeakerEncoder};
 
+/// Parse a cgroup memory limit file body (`memory.max` v2 or
+/// `memory.limit_in_bytes` v1). Returns `None` for missing/unbounded/`max`.
+/// Pure so unit tests can feed strings without a real cgroup mount.
+fn parse_cgroup_memory_limit(raw: &str) -> Option<u64> {
+    let s = raw.trim();
+    if s.is_empty() || s.eq_ignore_ascii_case("max") {
+        return None;
+    }
+    let bytes: u64 = s.parse().ok()?;
+    // Kernel v1 often reports a huge sentinel (~2^63-1) when unlimited.
+    if bytes == 0 || bytes >= (1u64 << 62) {
+        return None;
+    }
+    Some(bytes)
+}
+
+/// Read Linux cgroup memory limit (v2 then v1). `None` on non-Linux or when
+/// unlimited / unreadable. Does not panic on missing files.
+fn cgroup_memory_limit_bytes() -> Option<u64> {
+    #[cfg(target_os = "linux")]
+    {
+        const CANDIDATES: &[&str] = &[
+            "/sys/fs/cgroup/memory.max",                   // cgroup v2 unified
+            "/sys/fs/cgroup/memory/memory.limit_in_bytes", // cgroup v1
+        ];
+        for path in CANDIDATES {
+            if let Ok(raw) = std::fs::read_to_string(path)
+                && let Some(bytes) = parse_cgroup_memory_limit(&raw)
+            {
+                return Some(bytes);
+            }
+        }
+        None
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        None
+    }
+}
+
 /// Total physical RAM in bytes, or `0` if it can't be determined (in which case
 /// the pool RAM cap is a no-op). macOS: `sysctl HW_MEMSIZE`; Linux/other unix:
 /// `sysconf(_SC_PHYS_PAGES) * _SC_PAGESIZE`.
@@ -68,6 +108,23 @@ fn total_ram_bytes() -> u64 {
     #[cfg(not(unix))]
     {
         0
+    }
+}
+
+/// Effective RAM budget for pool sizing: **min(host RAM, cgroup memory.max)**
+/// when a cgroup limit is present (Docker/k8s). Falls back to host-only when
+/// cgroup files are missing (macOS, bare metal without limits).
+fn effective_ram_bytes() -> u64 {
+    let host = total_ram_bytes();
+    match cgroup_memory_limit_bytes() {
+        Some(limit) if limit > 0 => {
+            if host == 0 {
+                limit
+            } else {
+                host.min(limit)
+            }
+        }
+        _ => host,
     }
 }
 
@@ -633,7 +690,8 @@ impl Engine {
         let encoder_bytes = std::fs::metadata(Self::encoder_model_path(dir, variant))
             .map(|m| m.len())
             .unwrap_or(0);
-        let pool_size = Self::cap_pool_size_for_ram(pool_size, encoder_bytes, total_ram_bytes());
+        let pool_size =
+            Self::cap_pool_size_for_ram(pool_size, encoder_bytes, effective_ram_bytes());
         // Don't let `pool_size * encoder_intra_threads` oversubscribe the CPU
         // (no-op when the default `1` is requested).
         let logical_cpus = std::thread::available_parallelism()
@@ -2368,6 +2426,34 @@ mod tests {
             OverrideError::VadNotLoaded.message()
         );
         // Limit violations are client errors (400); missing models are 409.
+    }
+
+    #[test]
+    fn test_parse_cgroup_memory_limit_max_and_sentinel() {
+        assert_eq!(parse_cgroup_memory_limit("max"), None);
+        assert_eq!(parse_cgroup_memory_limit("MAX\n"), None);
+        assert_eq!(parse_cgroup_memory_limit(""), None);
+        assert_eq!(parse_cgroup_memory_limit("0"), None);
+        // v1 unlimited sentinel
+        assert_eq!(parse_cgroup_memory_limit("9223372036854771712"), None);
+        assert_eq!(
+            parse_cgroup_memory_limit("1073741824"),
+            Some(1024 * 1024 * 1024)
+        );
+        assert_eq!(
+            parse_cgroup_memory_limit("  536870912\n"),
+            Some(512 * 1024 * 1024)
+        );
+    }
+
+    #[test]
+    fn test_effective_ram_prefers_tighter_cgroup() {
+        // Pure composition: min(host, cgroup) — exercised via cap_pool_size with
+        // a 1 GiB "cgroup" budget vs larger host-class numbers.
+        let enc = 225 * 1024 * 1024;
+        let one_gib = 1024u64 * 1024 * 1024;
+        // Half of 1 GiB = 512 MiB budget; ~450 MiB/triplet → max 1 slot.
+        assert_eq!(Engine::cap_pool_size_for_ram(2, enc, one_gib), 1);
     }
 
     #[test]
