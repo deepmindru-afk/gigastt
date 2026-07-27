@@ -428,8 +428,8 @@ Quick defaults; full knobs and numbers live in
 
 | Goal | Start with |
 |---|---|
-| Low RAM / edge | `--pool-size 1`; optional `--punctuation off` |
-| Lean disk (~220 MB model) | `gigastt download --prequantized` or copy INT8+dec+joint+vocab only |
+| Low RAM / edge | `--profile edge` (pool=1 + VAD) or `--pool-size 1`; optional `--punctuation off` |
+| Lean disk (~220 MB model) | `gigastt download` (lean default) or copy INT8+dec+joint+vocab only |
 | Concurrent streams | Raise `--pool-size` only with free RAM; expect ~+10–20% single-job RTF |
 | Long meetings / podcasts | `--vad` (silence-rich RTF up to ~×2.6) |
 | Multilingual or max throughput | `ml_ctc` / `ml_ctc_large` for languages/speed — **not** for lower ready RSS |

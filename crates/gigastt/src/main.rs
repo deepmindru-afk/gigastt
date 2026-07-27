@@ -1,5 +1,6 @@
 use anyhow::Context;
-use clap::{Args, Parser, Subcommand};
+use clap::parser::ValueSource;
+use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 use gigastt::batch;
 use gigastt::boot::{
     EngineRecipe, ItnMode, PunctuationMode, ensure_int8_encoder, parse_itn_mode,
@@ -173,6 +174,19 @@ struct BatchOutputArgs {
 // `Serve` carries many optional CLI flags, so it is much larger than the other
 // variants. The enum is parsed once at startup and never stored in bulk, so
 // boxing the fields would only hurt readability.
+
+/// Optional deploy profile for `serve`. `Edge` applies weak-host defaults
+/// (`--pool-size 1`, `--vad`) only when the operator did not set those flags
+/// explicitly.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, ValueEnum)]
+enum ServeProfile {
+    /// Stock defaults (pool=2, VAD off unless `--vad`).
+    #[default]
+    Default,
+    /// Low-RAM / single-stream hosts: pool-size 1 + VAD on (unless overridden).
+    Edge,
+}
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 enum Commands {
@@ -189,6 +203,12 @@ enum Commands {
         /// Model directory
         #[arg(long, default_value_t = model::default_model_dir())]
         model_dir: String,
+
+        /// Deploy profile: `default` (stock) or `edge` (pool-size 1 + VAD when
+        /// those flags are left at defaults). Explicit `--pool-size` / `--vad`
+        /// always win. Env: GIGASTT_PROFILE.
+        #[arg(long, env = "GIGASTT_PROFILE", value_enum, default_value_t = ServeProfile::Default)]
+        profile: ServeProfile,
 
         /// Recognition head to use. Omit to auto-detect from the model
         /// directory: if a model is already installed its variant is used as-is
@@ -948,7 +968,8 @@ fn build_batch_options(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let cli = Cli::parse();
+    let matches = Cli::command().get_matches();
+    let cli = Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
 
     if cli.offline {
         // Translate the flag into the env var the download guard in
@@ -982,6 +1003,7 @@ async fn main() -> anyhow::Result<()> {
             port,
             host,
             model_dir,
+            profile,
             model_variant,
             punctuation,
             punct_model_dir,
@@ -989,12 +1011,12 @@ async fn main() -> anyhow::Result<()> {
             hotwords_file,
             hotwords_default,
             hotwords_boost,
-            vad,
+            mut vad,
             vad_threshold,
             vad_min_silence_ms,
             vad_model_dir,
             endpoint_mode,
-            pool_size,
+            mut pool_size,
             pool_min_size,
             batch_pool_size,
             enable_jobs,
@@ -1020,6 +1042,23 @@ async fn main() -> anyhow::Result<()> {
             trust_proxy,
             config,
         } => {
+            // Edge profile fills weak-host defaults only when the operator left
+            // the corresponding flags at clap defaults (explicit flags always win).
+            if profile == ServeProfile::Edge
+                && let Some(serve_m) = matches.subcommand_matches("serve")
+            {
+                if serve_m.value_source("pool_size") == Some(ValueSource::DefaultValue) {
+                    pool_size = 1;
+                }
+                if serve_m.value_source("vad") == Some(ValueSource::DefaultValue) {
+                    vad = true;
+                }
+                tracing::info!(
+                    pool_size,
+                    vad,
+                    "serve profile=edge (pool/vad defaults applied when unset)"
+                );
+            }
             ensure_bind_allowed(&host, bind_all)?;
             let limits = build_limits(
                 config.as_deref(),
@@ -1595,6 +1634,26 @@ mod tests {
                 Some(v) => unsafe { std::env::set_var(self.0, v) },
                 None => unsafe { std::env::remove_var(self.0) },
             }
+        }
+    }
+
+    #[test]
+    fn test_cli_serve_profile_edge_defaults_pool_and_vad_flags() {
+        // Parsing only: profile field is Edge; runtime applies pool/vad in main.
+        let cli = Cli::try_parse_from(["gigastt", "serve", "--profile", "edge"]).expect("parse");
+        match cli.command {
+            Commands::Serve {
+                profile,
+                pool_size,
+                vad,
+                ..
+            } => {
+                assert_eq!(profile, ServeProfile::Edge);
+                // clap defaults before profile application:
+                assert_eq!(pool_size, 2);
+                assert!(!vad);
+            }
+            _ => panic!("expected Serve"),
         }
     }
 

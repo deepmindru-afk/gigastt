@@ -82,7 +82,7 @@ Confirmed-impact work only. Full task list with DoD / order:
 | TTX-10 | long-form speech-region productize | P1 | **done** |
 | TTX-11 | ml_ctc speed SKU docs | P1 | **done** |
 | TTX-12…15 | pool/reload/checkout/batch_pool docs | P1 | **done** |
-| TTX-16 | optional `--profile edge` | P1 | todo |
+| TTX-16 | optional `--profile edge` | P1 | **done** |
 | TTX-20 | punct ready tax docs | P1 | **done** |
 | TTX-17…19 | cgroup, soft reload, weight-share spike | P2 | todo |
 | long-form Silero segments | T-045 | J=0.98 vs fixed grid 0.84 on multi-utt |

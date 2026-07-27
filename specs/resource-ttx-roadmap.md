@@ -38,7 +38,7 @@ Type: `code` | `docs` | `ops-tooling`.
 | **TTX-13** | **Docs: admin reload needs ~+0.5× ready free RAM** (pool=1 ≈ **+536 MiB** peak) | docs | T-054 | Prevent edge OOM on reload | **done** |
 | **TTX-14** | **Docs: pool checkout timeout** = queue vs fail-fast **503** + `retry_after_ms` | docs | T-121 | Ops tuning | **done** |
 | **TTX-15** | **Docs: `batch_pool_size` splits pool** (no extra idle triplets) | docs | T-085 | Avoid config myth | **done** |
-| **TTX-16** | Optional **`--profile edge`** bundling pool=1, sane threads, vad-on-long, optional ml_ctc note | code+docs | T-011 + above | One switch for weak hosts | **todo** |
+| **TTX-16** | Optional **`--profile edge`** bundling pool=1, sane threads, vad-on-long, optional ml_ctc note | code+docs | T-011 + above | One switch for weak hosts | **done** (`--profile edge` → pool=1 + vad when unset) |
 
 ### P2 — worth doing later (confirmed gaps / smaller ROI)
 
@@ -122,6 +122,8 @@ Full tables: `specs/research/RESULTS.md`. Method: `specs/research/METHOD.md`.
 | 2026-07-27 | Operator docs: VAD, pool/RTF tradeoffs, reload headroom, ml_ctc speed SKU, checkout timeout, batch split, punct tax |
 | 2026-07-27 | Lean install docs: minimum INT8+dec+joint+vocab file set (~220 MB); offline errors point at lean paths |
 | 2026-07-27 | Download / empty-dir ensure default to lean prequantized INT8; `--fp32` for HuggingFace FP32 + quantize |
+| 2026-07-27 | Long-form: document speech-region vs fixed-window paths; empty VAD regions fall back to full/chunked decode |
+| 2026-07-27 | `--profile edge` / `GIGASTT_PROFILE=edge`: default pool-size 1 + VAD when those flags are unset |
 | 2026-07-27 | ensure accepts INT8-only (prequantized) install: `is_usable_present` = FP32 download set OR prequantized INT8 set; serve/transcribe no longer re-fetch FP32 when lean tree is complete |
 | 2026-07-27 | Model-dir hygiene: `gigastt cache-gc` prunes non-active `optimized_cache/*_optimized.onnx`; `--dedupe` hardlinks content-identical files |
 | 2026-07-27 | Edge pool=1 + encoder threads: keep `--pool-size` default 2; CLI help + docs recommend `--pool-size 1` for edge; document pool>1 RAM + ~10–20% single-job RTF; warn `--encoder-intra-threads 1` is ~3× slower (explicit `1` still passes through) |
