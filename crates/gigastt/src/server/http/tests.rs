@@ -1292,7 +1292,12 @@ async fn test_reload_rejects_non_loopback_peer() {
         jobs: None,
     });
     let peer = SocketAddr::from((Ipv4Addr::new(203, 0, 113, 7), 40000));
-    let resp = reload(axum::extract::ConnectInfo(peer), State(state)).await;
+    let resp = reload(
+        axum::extract::ConnectInfo(peer),
+        axum::extract::Query(super::admin::ReloadQuery::default()),
+        State(state),
+    )
+    .await;
     assert_eq!(resp.status(), StatusCode::FORBIDDEN);
     let bytes = axum::body::to_bytes(resp.into_body(), 1024).await.unwrap();
     let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
@@ -1316,7 +1321,12 @@ async fn test_reload_unsupported_when_no_builder() {
         jobs: None,
     });
     let peer = SocketAddr::from((Ipv4Addr::LOCALHOST, 40000));
-    let resp = reload(axum::extract::ConnectInfo(peer), State(state)).await;
+    let resp = reload(
+        axum::extract::ConnectInfo(peer),
+        axum::extract::Query(super::admin::ReloadQuery::default()),
+        State(state),
+    )
+    .await;
     assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
     let bytes = axum::body::to_bytes(resp.into_body(), 1024).await.unwrap();
     let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();

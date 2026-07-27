@@ -227,12 +227,17 @@ Clamped so at least one interactive triplet remains.
 
 ### Admin reload headroom
 
-`POST /v1/admin/reload` builds a **second** engine, warms it, then swaps
-atomically. Peak RSS during a successful reload is about **+0.5× ready** on top
-of the live process — roughly **+536 MiB** at **pool=1** INT8 `rnnt` on the lab
-host. Edge boxes with almost no free RAM can OOM mid-reload even when steady-state
-`pool=1` fits; keep headroom or restart the process instead. See
-[Admin reload](api.md#admin-reload).
+`POST /v1/admin/reload` builds a **second** engine, then **swaps before warmup**
+so the warm peak is not forced to stack on the previous copy once in-flight
+work finishes. Peak RSS during the **build** can still approach about **+0.5×
+ready** (lab ≈ **+536 MiB** at **pool=1** INT8 `rnnt`). Edge boxes with almost
+no free RAM can OOM mid-build even when steady-state `pool=1` fits; keep
+headroom or restart the process instead.
+
+**Soft reload** (`POST /v1/admin/reload?soft=true`): after swap, wait up to ~5 s
+for the previous engine's last in-flight holders to release, then warm — lowers
+the warm+old double stack on quiet edge hosts. Response includes `"soft":true`
+and `"soft_drained":true/false`. See [Admin reload](api.md#admin-reload).
 
 ### VAD for pause-rich long files
 
