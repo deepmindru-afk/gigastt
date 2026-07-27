@@ -1145,10 +1145,17 @@ impl Engine {
     pub fn create_state(&self, diarization_enabled: bool) -> StreamingState {
         #[cfg(feature = "diarization")]
         let diarization_state = if diarization_enabled {
-            self.speaker_encoder
-                .as_ref()
-                .and_then(|lazy| lazy.get_or_load())
-                .and_then(|enc| diarization::open_streaming(&enc))
+            match self.speaker_encoder.as_ref() {
+                Some(lazy) => lazy
+                    .get_or_load()
+                    .and_then(|enc| diarization::open_streaming(&enc)),
+                None => {
+                    tracing::warn!(
+                        "diarization_enabled=true ignored: wespeaker model not present at engine boot"
+                    );
+                    None
+                }
+            }
         } else {
             None
         };
