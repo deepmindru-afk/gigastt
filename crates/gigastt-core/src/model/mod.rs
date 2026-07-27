@@ -951,10 +951,10 @@ pub async fn ensure_model(model_dir: &str) -> Result<()> {
 /// present, downloading it if it isn't (or if the dir holds a different variant).
 ///
 /// When `requested` is `None`, the function respects whatever is already
-/// installed: if any variant's complete file set is in `model_dir`, it is used
-/// as-is and **no network request is made**. Only when the directory is empty
-/// (no usable model found) does it fall back to downloading the default
-/// (`Rnnt`).
+/// installed: if any variant's complete **FP32 download set or prequantized
+/// INT8 set** is in `model_dir`, it is used as-is and **no network request is
+/// made**. Only when the directory holds no usable model does it fall back to
+/// downloading the default (`Rnnt`) FP32 set.
 ///
 /// Returns the variant that is now ready in `model_dir`.
 #[cfg(feature = "net")]
@@ -964,10 +964,11 @@ pub async fn ensure_model_variant(
 ) -> Result<ModelVariant> {
     let dir = Path::new(model_dir);
 
-    // Determine the variant that is fully present on disk (all download files
-    // exist). `detect_in_dir` only checks for the encoder, so we filter to
-    // variants whose complete download set is present.
-    let existing = ModelVariant::detect_in_dir(dir).filter(|&v| is_model_present(v, dir));
+    // Determine the variant that is fully usable on disk. `detect_in_dir` only
+    // checks for an encoder file, so we filter to variants whose complete set
+    // is present — either the HF FP32 download set or the lean prequantized
+    // INT8 set (engine prefers INT8 when loading).
+    let existing = ModelVariant::detect_in_dir(dir).filter(|&v| is_usable_present(v, dir));
 
     let variant = match resolve_variant(requested, existing) {
         VariantAction::Use(v) => {
@@ -994,8 +995,8 @@ pub async fn ensure_model_variant(
     let _lock = acquire_download_lock(dir)?;
 
     // Double-check after acquiring the lock in case another process finished
-    // the download while we were waiting.
-    if is_model_present(variant, dir) {
+    // the download while we were waiting (FP32 or prequantized INT8 set).
+    if is_usable_present(variant, dir) {
         tracing::info!("Model ({variant:?}) found at {model_dir} after lock acquisition");
         return Ok(variant);
     }
@@ -1408,6 +1409,13 @@ pub fn is_prequantized_present(variant: ModelVariant, dir: &Path) -> bool {
         .prequantized_files()
         .iter()
         .all(|f| dir.join(f).exists())
+}
+
+/// True when the engine can load `variant` from `dir` without a download:
+/// either the full HuggingFace FP32 set ([`is_model_present`]) or the lean
+/// pre-quantized INT8 bundle ([`is_prequantized_present`]).
+pub fn is_usable_present(variant: ModelVariant, dir: &Path) -> bool {
+    is_model_present(variant, dir) || is_prequantized_present(variant, dir)
 }
 
 /// Append `.partial` to a path; retained for tests that assert the legacy
@@ -3054,14 +3062,11 @@ mod tests {
         assert!(!is_model_present(ModelVariant::Rnnt, dir));
     }
 
-    /// The serve/bootstrap `ensure_model_variant` filter is
-    /// `detect_in_dir(dir).filter(|&v| is_model_present(v, dir))`. An INT8-only
-    /// (prequantized) tree is detected as Rnnt but **fails** `is_model_present`,
-    /// so `existing` is `None` and `resolve_variant` chooses **Download** — which
-    /// fetches the FP32 encoder set. Product gap: also accept
-    /// `is_prequantized_present` in that filter (not implemented here).
+    /// Regression: an INT8-only (prequantized) tree must count as a usable
+    /// install for ensure/bootstrap — same filter as `ensure_model_variant`.
+    /// Without `is_usable_present`, serve would re-download the ~844 MB FP32 set.
     #[test]
-    fn test_ensure_filter_rejects_prequantized_only_dir() {
+    fn test_ensure_filter_accepts_prequantized_only_dir() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let dir = tmp.path();
         for f in ModelVariant::Rnnt.prequantized_files() {
@@ -3080,19 +3085,50 @@ mod tests {
             !is_model_present(ModelVariant::Rnnt, dir),
             "FP32 download set must still be absent"
         );
-        // Same filter as ensure_model_variant (line above download):
-        let existing = ModelVariant::detect_in_dir(dir).filter(|&v| is_model_present(v, dir));
+        assert!(
+            is_usable_present(ModelVariant::Rnnt, dir),
+            "INT8-only set is usable without FP32"
+        );
+        // Same filter as ensure_model_variant:
+        let existing = ModelVariant::detect_in_dir(dir).filter(|&v| is_usable_present(v, dir));
         assert_eq!(
-            existing, None,
-            "ensure treats prequantized-only as absent (must download FP32 set)"
+            existing,
+            Some(ModelVariant::Rnnt),
+            "ensure treats prequantized-only as present"
         );
         assert_eq!(
             resolve_variant(None, existing),
-            VariantAction::Download(ModelVariant::Rnnt),
-            "absent existing → download FP32 rnnt set"
+            VariantAction::Use(ModelVariant::Rnnt),
+            "usable existing → no download"
         );
-        // After the intended fix, filter would also check is_prequantized_present
-        // and resolve_variant would Use(Rnnt) without download.
+    }
+
+    /// `ensure_model_variant` short-circuits (no network, no `.partial`) when
+    /// only the pre-quantized INT8 set is on disk.
+    #[tokio::test]
+    #[cfg_attr(miri, ignore = "tokio runtime is unsupported under Miri")]
+    async fn test_ensure_model_variant_accepts_prequantized_only() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dir = tmp.path();
+        for f in ModelVariant::Rnnt.prequantized_files() {
+            std::fs::write(dir.join(f), b"stub").unwrap();
+        }
+
+        let variant = ensure_model_variant(None, dir.to_str().unwrap())
+            .await
+            .expect("prequantized-only dir must short-circuit without download");
+        assert_eq!(variant, ModelVariant::Rnnt);
+
+        let has_partial = std::fs::read_dir(dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .any(|e| e.file_name().to_string_lossy().contains(".partial"));
+        assert!(
+            !has_partial,
+            "no download when the prequantized set is present"
+        );
+        // Still no FP32 encoder on disk.
+        assert!(!dir.join(ModelVariant::Rnnt.encoder_file()).exists());
     }
 
     /// `ensure_prequantized_model_variant` short-circuits (no network, no
