@@ -78,9 +78,13 @@ Confirmed-impact work only. Full task list with DoD / order:
 | TTX-05 | prequantized download default | P0 | blocked on TTX-01 |
 | TTX-06…07 | model dir GC + hash dups (T-028/T-091) | P1 | todo |
 | TTX-08 | lazy speaker load (T-027) | P1 | **done** |
-| TTX-09…11 | vad / long-form / ml_ctc SKU docs | P1 | todo |
-| TTX-12…16 | ops docs + optional `--profile edge` | P1 | todo |
-| TTX-17…20 | cgroup, soft reload, weight-share spike, punct docs | P2 | todo |
+| TTX-09 | vad docs (pause-rich) | P1 | **done** |
+| TTX-10 | long-form speech-region productize | P1 | todo |
+| TTX-11 | ml_ctc speed SKU docs | P1 | **done** |
+| TTX-12…15 | pool/reload/checkout/batch_pool docs | P1 | **done** |
+| TTX-16 | optional `--profile edge` | P1 | todo |
+| TTX-20 | punct ready tax docs | P1 | **done** |
+| TTX-17…19 | cgroup, soft reload, weight-share spike | P2 | todo |
 | long-form Silero segments | T-045 | J=0.98 vs fixed grid 0.84 on multi-utt |
 | server `--vad` pause-rich | T-048 | RTF ×2.6 on ~55% silence |
 | lazy speaker load | T-027 | **done** (TTX-08: probe at boot, load on first diarization; ~−39 MiB ready when unused) |
