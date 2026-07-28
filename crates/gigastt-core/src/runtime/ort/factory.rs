@@ -14,11 +14,21 @@ use super::session::OrtRuntime;
 compile_error!("features `coreml` and `cuda` are mutually exclusive");
 
 /// `ort` execution provider selector.
+///
+/// As of `ort` 2.0.0-rc.13 the CoreML / CUDA / NNAPI providers live behind
+/// `ort`'s own `coreml` / `cuda` / `nnapi` Cargo features, so the variants that
+/// name them are compiled in only when our matching feature (which enables the
+/// upstream one) is on. A default CPU build carries only `Cpu`. This type is
+/// crate-internal (`pub(crate) mod runtime`), so the feature-conditional variant
+/// set is not part of the public API.
 #[derive(Clone, Copy)]
 pub enum OrtExecutionProvider {
     Cpu,
+    #[cfg(feature = "coreml")]
     CoreML,
+    #[cfg(feature = "cuda")]
     Cuda,
+    #[cfg(feature = "nnapi")]
     Nnapi,
 }
 
@@ -26,18 +36,31 @@ impl OrtExecutionProvider {
     /// Returns the execution-provider list to register when loading a session.
     ///
     /// `model_path` is used to derive provider-specific cache directories (e.g.
-    /// CoreML's `coreml_cache/` next to the model).
+    /// CoreML's version-scoped `coreml_cache/ort-<minor>/` next to the model).
     pub(crate) fn execution_providers(
         self,
         model_path: &Path,
     ) -> Vec<ort::ep::ExecutionProviderDispatch> {
+        // Each non-CPU arm names a provider type that `ort` 2.0.0-rc.13 gates
+        // behind its own feature, so the arm is gated on the matching feature —
+        // the default build compiles a single `Cpu` arm and never references a
+        // type that is configured out. `model_path` is only read by the CoreML
+        // arm; the `let _` below keeps it accounted for on builds without it.
+        #[cfg(not(feature = "coreml"))]
+        let _ = model_path;
         match self {
             Self::Cpu => vec![ort::ep::CPU::default().build()],
+            #[cfg(feature = "coreml")]
             Self::CoreML => {
-                let cache_dir = model_path
-                    .parent()
-                    .map(|p| p.join("coreml_cache"))
-                    .unwrap_or_else(|| PathBuf::from("coreml_cache"));
+                // Version-scoped: `coreml_cache/ort-<minor>/`. The CoreML EP keys
+                // its compiled bundles by graph hash only, so an ORT upgrade would
+                // otherwise load a bundle a different ONNX Runtime compiled and
+                // fail into a silent CPU fallback. Scoping by ORT version makes the
+                // upgrade miss the stale entry and recompile once (self-healing).
+                let cache_dir = match model_path.parent() {
+                    Some(p) => crate::model::coreml_cache_dir(p),
+                    None => crate::model::coreml_cache_dir(Path::new(".")),
+                };
                 let coreml_ep = ort::ep::CoreML::default()
                     .with_model_format(ort::ep::coreml::ModelFormat::MLProgram)
                     .with_static_input_shapes(true)
@@ -49,10 +72,12 @@ impl OrtExecutionProvider {
                     .build();
                 vec![coreml_ep, ort::ep::CPU::default().build()]
             }
+            #[cfg(feature = "cuda")]
             Self::Cuda => vec![
                 ort::ep::CUDA::default().build(),
                 ort::ep::CPU::default().build(),
             ],
+            #[cfg(feature = "nnapi")]
             Self::Nnapi => vec![
                 ort::ep::NNAPI::default().build(),
                 ort::ep::CPU::default().build(),
@@ -86,14 +111,17 @@ impl OrtFactory {
         Self::with_provider(OrtExecutionProvider::Cpu)
     }
 
+    #[cfg(feature = "coreml")]
     pub fn coreml() -> Self {
         Self::with_provider(OrtExecutionProvider::CoreML)
     }
 
+    #[cfg(feature = "cuda")]
     pub fn cuda() -> Self {
         Self::with_provider(OrtExecutionProvider::Cuda)
     }
 
+    #[cfg(feature = "nnapi")]
     pub fn nnapi() -> Self {
         Self::with_provider(OrtExecutionProvider::Nnapi)
     }
@@ -160,15 +188,28 @@ pub fn default_factory() -> Box<dyn RuntimeFactory> {
     {
         Box::new(crate::runtime::coreml::factory::AneFactory::new())
     }
+    // Select the provider with `#[cfg]`, not a runtime `cfg!()`: since rc.13 the
+    // accelerated constructors don't exist unless their feature is on, so a
+    // `cfg!()` branch that merely evaluates false at runtime would still have to
+    // compile a call to a function that isn't there. The `not(...)` guards keep
+    // exactly one block active for any feature combination (coreml precedes cuda
+    // precedes nnapi; coreml+cuda is already a `compile_error!`).
     #[cfg(not(any(feature = "candle", all(feature = "ane", target_os = "macos"))))]
     {
-        if cfg!(feature = "coreml") {
+        #[cfg(feature = "coreml")]
+        {
             Box::new(OrtFactory::coreml())
-        } else if cfg!(feature = "cuda") {
+        }
+        #[cfg(all(feature = "cuda", not(feature = "coreml")))]
+        {
             Box::new(OrtFactory::cuda())
-        } else if cfg!(feature = "nnapi") {
+        }
+        #[cfg(all(feature = "nnapi", not(feature = "coreml"), not(feature = "cuda")))]
+        {
             Box::new(OrtFactory::nnapi())
-        } else {
+        }
+        #[cfg(not(any(feature = "coreml", feature = "cuda", feature = "nnapi")))]
+        {
             Box::new(OrtFactory::cpu())
         }
     }
@@ -248,11 +289,17 @@ pub(crate) fn production_factory_variant(
     }
     let _ = backend;
 
-    let factory = if cfg!(feature = "coreml") {
-        OrtFactory::coreml()
-    } else if cfg!(feature = "cuda") {
-        OrtFactory::cuda()
-    } else {
+    // `#[cfg]` rather than a runtime `cfg!()` for the same reason as
+    // `default_factory`: the accelerated constructors are compiled out without
+    // their feature. Only the CPU branch reads `model_dir`, so it is marked used
+    // on the accelerated builds. This path selects coreml/cuda/cpu only — nnapi
+    // is a mobile target reached through `default_factory`, not the server.
+    #[cfg(feature = "coreml")]
+    let factory = OrtFactory::coreml();
+    #[cfg(all(feature = "cuda", not(feature = "coreml")))]
+    let factory = OrtFactory::cuda();
+    #[cfg(not(any(feature = "coreml", feature = "cuda")))]
+    let factory = {
         // Shared PrepackedWeights across every session this factory creates.
         // ORT still materializes per-session initializers for most graphs; the
         // container shares prepacked kernel buffers when the EP supports it.
@@ -263,6 +310,8 @@ pub(crate) fn production_factory_variant(
             .with_optimized_cache_dir(model_dir.join("optimized_cache"))
             .with_prepacked_weights(prepacked)
     };
+    #[cfg(any(feature = "coreml", feature = "cuda"))]
+    let _ = model_dir;
     Box::new(factory)
 }
 
