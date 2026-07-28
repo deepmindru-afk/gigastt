@@ -1441,3 +1441,328 @@ fn test_encode_wav_pcm16_clamps_and_sanitizes() {
     assert!(decoded[2].abs() < 1e-3, "NaN must become silence");
     assert!((decoded[3] - 0.5).abs() < 1e-3);
 }
+
+// --- streaming resample equivalence (whole-buffer reference) ---
+
+/// PCM16 samples of a committed 16 kHz mono WAV fixture, used as a real-signal
+/// input for the streaming-resample equivalence tests.
+fn fixture_tone_pcm() -> Vec<i16> {
+    let wav = include_bytes!("../../../tests/fixtures/telephony/tone_src.wav");
+    let data = super::telephony::find_riff_chunk(wav, b"data").expect("fixture data chunk");
+    data.chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
+}
+
+/// Linear sine sweep, PCM16. Sweeping across the whole band is the adversarial
+/// case for a resampler seam: any FIR-history reset shows up as a spike.
+fn sweep_pcm(rate: u32, seconds: f32) -> Vec<i16> {
+    let n = (rate as f32 * seconds) as usize;
+    (0..n)
+        .map(|i| {
+            let t = i as f32 / rate as f32;
+            let f = 50.0 + (0.45 * rate as f32 - 50.0) * (t / seconds);
+            (0.8 * (std::f32::consts::PI * f * t).sin() * 32000.0) as i16
+        })
+        .collect()
+}
+
+/// Pure tone, PCM16, with the phase accumulated in f64 so the *input* carries
+/// no drift of its own. Where `sweep_pcm` probes chunk seams, a single tone
+/// probes long-run phase accumulation: it has an analytic ground truth, so each
+/// path can be scored against the truth instead of only against the other one.
+/// `freq` is chosen to complete a whole number of cycles per 16 kHz analysis
+/// window, which makes the phase estimate below leakage-free.
+fn tone_pcm(rate: u32, seconds: f64, freq: f64) -> Vec<i16> {
+    let n = (f64::from(rate) * seconds) as usize;
+    (0..n)
+        .map(|i| {
+            let t = i as f64 / f64::from(rate);
+            (0.8 * (std::f64::consts::TAU * freq * t).sin() * 32000.0) as i16
+        })
+        .collect()
+}
+
+/// Largest deviation, across one-second windows, of the measured phase of
+/// `freq` from the phase of the first window. A resampler whose fractional read
+/// position accumulates error stretches time slightly, which shows up here as a
+/// phase that walks away from where it started.
+fn max_phase_drift_16k(samples: &[f32], freq: f64) -> f64 {
+    const WINDOW: usize = 16_000;
+    let phase_of = |start: usize| {
+        let mut re = 0.0f64;
+        let mut im = 0.0f64;
+        for (i, &v) in samples[start..start + WINDOW].iter().enumerate() {
+            let w = std::f64::consts::TAU * freq * ((start + i) as f64 / 16_000.0);
+            re += f64::from(v) * w.cos();
+            im += f64::from(v) * w.sin();
+        }
+        im.atan2(re)
+    };
+    let first = phase_of(0);
+    let mut worst = 0.0f64;
+    for w in 0..samples.len() / WINDOW {
+        let mut d = phase_of(w * WINDOW) - first;
+        // Wrap into (-pi, pi] so a drift that crosses a cycle stays comparable.
+        d -= std::f64::consts::TAU * (d / std::f64::consts::TAU).round();
+        worst = worst.max(d.abs());
+    }
+    worst
+}
+
+/// Signal-to-error ratio, in dB, of `candidate` measured against `reference`.
+fn signal_to_error_db(reference: &[f32], candidate: &[f32]) -> f64 {
+    let mut err = 0.0f64;
+    let mut sig = 0.0f64;
+    for (&r, &c) in reference.iter().zip(candidate) {
+        let d = f64::from(r) - f64::from(c);
+        err += d * d;
+        sig += f64::from(r) * f64::from(r);
+    }
+    if err == 0.0 {
+        return f64::INFINITY;
+    }
+    10.0 * (sig / err).log10()
+}
+
+/// Assert the streaming path agrees with a whole-buffer `resample()` of the
+/// same decoded signal: same length within one sample, max per-sample delta
+/// below 1e-4.
+fn assert_matches_whole_buffer(streamed: &[f32], reference: &[f32], what: &str) {
+    let len_diff = streamed.len().abs_diff(reference.len());
+    assert!(
+        len_diff <= 1,
+        "{what}: length diverged, streaming {} vs whole-buffer {}",
+        streamed.len(),
+        reference.len()
+    );
+    let cmp = streamed.len().min(reference.len());
+    assert!(cmp > 0, "{what}: nothing to compare");
+    let mut max_diff = 0.0f32;
+    let mut max_at = 0usize;
+    for i in 0..cmp {
+        let d = (streamed[i] - reference[i]).abs();
+        if d > max_diff {
+            max_diff = d;
+            max_at = i;
+        }
+    }
+    assert!(
+        max_diff <= 1e-4,
+        "{what}: max |streaming - whole-buffer| = {max_diff} at sample {max_at}"
+    );
+}
+
+/// Decoding the same PCM twice — once with a 16 kHz header (passthrough, so
+/// the result is exactly what the decoder produced) and once with a `rate`
+/// header (the streaming resample path) — must agree with running the
+/// passthrough result through the whole-buffer `resample()`.
+fn check_mono_equivalence(pcm: &[i16], rate: u32, what: &str) {
+    let at_source = decode_audio_bytes(&make_wav_bytes(pcm, 16000)).unwrap();
+    let reference = resample(&at_source, SampleRate(rate), SampleRate(16000)).unwrap();
+    let streamed = decode_audio_bytes(&make_wav_bytes(pcm, rate)).unwrap();
+    assert_matches_whole_buffer(&streamed, &reference, what);
+}
+
+fn check_stereo_equivalence(left: &[i16], right: &[i16], rate: u32, what: &str) {
+    // Mono-mix path.
+    let mixed_at_source = decode_audio_bytes(&make_stereo_wav_bytes(left, right, 16000)).unwrap();
+    let mixed_reference = resample(&mixed_at_source, SampleRate(rate), SampleRate(16000)).unwrap();
+    let mixed_streamed = decode_audio_bytes(&make_stereo_wav_bytes(left, right, rate)).unwrap();
+    assert_matches_whole_buffer(&mixed_streamed, &mixed_reference, &format!("{what} mixed"));
+
+    // Split-channel path.
+    let split_at_source =
+        decode_audio_bytes_shared_channels(Bytes::from(make_stereo_wav_bytes(left, right, 16000)))
+            .unwrap();
+    let split_streamed =
+        decode_audio_bytes_shared_channels(Bytes::from(make_stereo_wav_bytes(left, right, rate)))
+            .unwrap();
+    assert_eq!(split_streamed.len(), split_at_source.len());
+    for (c, (streamed, source)) in split_streamed.iter().zip(&split_at_source).enumerate() {
+        let reference = resample(source, SampleRate(rate), SampleRate(16000)).unwrap();
+        assert_matches_whole_buffer(streamed, &reference, &format!("{what} channel {c}"));
+    }
+}
+
+#[test]
+#[cfg_attr(miri, ignore = "rubato sinc resampler is too slow under Miri")]
+fn test_streaming_decode_matches_whole_buffer_resample_48k() {
+    let pcm = sweep_pcm(48_000, 2.5);
+    check_mono_equivalence(&pcm, 48_000, "48k sweep mono");
+}
+
+#[test]
+#[cfg_attr(miri, ignore = "rubato sinc resampler is too slow under Miri")]
+fn test_streaming_decode_matches_whole_buffer_resample_44k1() {
+    let pcm = sweep_pcm(44_100, 2.5);
+    check_mono_equivalence(&pcm, 44_100, "44.1k sweep mono");
+}
+
+#[test]
+#[cfg_attr(miri, ignore = "rubato sinc resampler is too slow under Miri")]
+fn test_streaming_decode_matches_whole_buffer_resample_stereo_48k() {
+    let left = sweep_pcm(48_000, 2.5);
+    let right: Vec<i16> = left.iter().rev().copied().collect();
+    check_stereo_equivalence(&left, &right, 48_000, "48k sweep stereo");
+}
+
+#[test]
+#[cfg_attr(miri, ignore = "rubato sinc resampler is too slow under Miri")]
+fn test_streaming_decode_matches_whole_buffer_resample_stereo_44k1() {
+    let left = sweep_pcm(44_100, 2.5);
+    let right: Vec<i16> = left.iter().rev().copied().collect();
+    check_stereo_equivalence(&left, &right, 44_100, "44.1k sweep stereo");
+}
+
+/// Long-input gate for the staged resample at a NON-INTEGER ratio.
+///
+/// The fixtures above hold both paths to 1e-4 per sample, but they are 2.5 s
+/// long and that tolerance is only reachable at that scale. rubato carries its
+/// fractional read position in a single f64 that runs monotonically for the
+/// whole of one `process` call (`idx += 1/ratio` per output sample) and takes
+/// the sub-sample offset as `idx * 256 - floor(idx * 256)`, so the resolution
+/// of that offset halves every time `idx` doubles. One whole-buffer call over
+/// 300 s of 44.1 kHz audio drives `idx` to 13.2 million, where the offset is
+/// quantised to ~1e-6; the staged path restarts `idx` near zero on every flush
+/// and holds ~1e-9. The two therefore separate as the input grows, and past
+/// ~300 s the gap is over the 1e-4 per-sample bound the short fixtures use —
+/// this case measures 1.2e-4, which is why it is scored on the error-to-signal
+/// ratio instead. Sweeping the duration over the same comparison gives max
+/// per-sample deltas of 6.7e-7 at 30 s, 1.2e-5 at 120 s, 1.3e-4 at 300 s and
+/// 4.1e-4 at 600 s.
+///
+/// What separates is the *reference*, not the path under test. Against the
+/// analytic tone the staged path's phase is flat with duration (9.2e-5 rad at
+/// 30 s, 9.3e-5 rad at 600 s) while the whole-buffer path's walks (9.3e-5 rad
+/// at 30 s, 4.2e-4 rad at 600 s); this case measures 8.4e-5 rad staged against
+/// 2.4e-4 rad whole-buffer. Asserting the ordering pins that direction: a plain
+/// delta cannot say which side moved, but this fails if the staged path ever
+/// becomes the one that drifts. Integer ratios are exempt from all of it —
+/// `1/ratio` is exact in f64 at 48/32/8 kHz, so those stay bit-identical at any
+/// length and keep the strict per-sample gate.
+///
+/// Costs ~50 s in a debug build, which is why one duration is covered rather
+/// than a sweep; 300 s is the shortest that reaches the regime. That cost is
+/// also why it is `#[ignore]`d: PR CI runs `cargo test --workspace --lib` and
+/// stays fast, while the main-push lane runs this by name.
+#[test]
+#[ignore = "~50 s in debug; long-duration numeric gate, run on main push"]
+#[cfg_attr(miri, ignore = "rubato sinc resampler is too slow under Miri")]
+fn test_streaming_decode_long_44k1_input_holds_phase_better_than_whole_buffer() {
+    // A whole number of cycles per one-second analysis window, so the phase
+    // estimate sees no spectral leakage.
+    const FREQ: f64 = 1_000.0;
+    let pcm = tone_pcm(44_100, 300.0, FREQ);
+
+    let at_source = decode_audio_bytes(&make_wav_bytes(&pcm, 16000)).unwrap();
+    let reference = resample(&at_source, SampleRate(44_100), SampleRate(16000)).unwrap();
+    let streamed = decode_audio_bytes(&make_wav_bytes(&pcm, 44_100)).unwrap();
+
+    // Length stays exact: the divergence is sub-sample phase, never a dropped
+    // or duplicated frame at a flush boundary.
+    assert_eq!(
+        streamed.len(),
+        reference.len(),
+        "long 44.1k input: length diverged"
+    );
+
+    // Error-to-signal floor for non-integer ratios at this length, in place of
+    // the per-sample tolerance the short fixtures use.
+    let snr = signal_to_error_db(&reference, &streamed);
+    assert!(
+        snr >= 70.0,
+        "long 44.1k input: streaming vs whole-buffer SNR {snr:.1} dB below the 70 dB floor"
+    );
+
+    let streamed_drift = max_phase_drift_16k(&streamed, FREQ);
+    let reference_drift = max_phase_drift_16k(&reference, FREQ);
+    assert!(
+        streamed_drift <= reference_drift,
+        "long 44.1k input: staged path drifted {streamed_drift:.3e} rad, \
+         more than the whole-buffer reference's {reference_drift:.3e} rad"
+    );
+    // Absolute floor as well, so the ordering assertion cannot be satisfied by
+    // both paths degrading together.
+    assert!(
+        streamed_drift <= 2e-4,
+        "long 44.1k input: staged path phase drift {streamed_drift:.3e} rad exceeds 2e-4"
+    );
+}
+
+#[test]
+#[cfg_attr(miri, ignore = "rubato sinc resampler is too slow under Miri")]
+fn test_streaming_decode_matches_whole_buffer_resample_fixture() {
+    // The fixture is exactly one staging chunk long, so on its own it drains
+    // once and never crosses a chunk boundary — the seam this test exists to
+    // guard would go unobserved. Doubling it puts a full flush on each side of
+    // a boundary plus a short tail, so a resampler that dropped its FIR history
+    // between flushes shows up here.
+    let pcm = [fixture_tone_pcm(), fixture_tone_pcm()].concat();
+    assert!(
+        pcm.len() > super::resample::RESAMPLE_STAGING_FRAMES,
+        "fixture must span more than one staging flush, got {} samples",
+        pcm.len()
+    );
+    check_mono_equivalence(&pcm, 48_000, "fixture 48k");
+    check_mono_equivalence(&pcm, 44_100, "fixture 44.1k");
+}
+
+#[test]
+fn test_streaming_decode_16k_input_is_bit_identical() {
+    // A 16 kHz source must never reach the resampler: every sample stays the
+    // raw PCM16 conversion and the frame count is preserved exactly.
+    let pcm = fixture_tone_pcm();
+    let mono = decode_audio_bytes(&make_wav_bytes(&pcm, 16000)).unwrap();
+    assert_eq!(mono.len(), pcm.len());
+    for (i, (&raw, &got)) in pcm.iter().zip(&mono).enumerate() {
+        let expected = f32::from(raw) / 32768.0;
+        assert_eq!(
+            got.to_bits(),
+            expected.to_bits(),
+            "sample {i} was filtered: {got} vs {expected}"
+        );
+    }
+
+    let right: Vec<i16> = pcm.iter().rev().copied().collect();
+    let channels =
+        decode_audio_bytes_shared_channels(Bytes::from(make_stereo_wav_bytes(&pcm, &right, 16000)))
+            .unwrap();
+    assert_eq!(channels.len(), 2);
+    for (c, raw) in [&pcm, &right].iter().enumerate() {
+        assert_eq!(channels[c].len(), raw.len());
+        for (i, (&r, &got)) in raw.iter().zip(&channels[c]).enumerate() {
+            let expected = f32::from(r) / 32768.0;
+            assert_eq!(
+                got.to_bits(),
+                expected.to_bits(),
+                "channel {c} sample {i} was filtered: {got} vs {expected}"
+            );
+        }
+    }
+}
+
+#[test]
+#[cfg_attr(miri, ignore = "rubato sinc resampler is too slow under Miri")]
+fn test_telephony_raw_streaming_matches_whole_buffer_resample() {
+    // 8 kHz G.711 upsamples to 16 kHz through the same staged path. Long
+    // enough to fill the staging buffer more than once — at 2.5 s the whole
+    // clip fits in a single flush and no chunk boundary is ever crossed.
+    let pcm = sweep_pcm(8_000, 12.5);
+    assert!(
+        pcm.len() > super::resample::RESAMPLE_STAGING_FRAMES,
+        "clip must span more than one staging flush, got {} samples",
+        pcm.len()
+    );
+    let mut encoder = audio_codec::pcmu::PcmuEncoder::new();
+    let encoded = audio_codec::Encoder::encode(&mut encoder, &pcm);
+    let mut decoder = audio_codec::pcmu::PcmuDecoder::new();
+    let round_tripped = audio_codec::Decoder::decode(&mut decoder, &encoded);
+    let at_source: Vec<f32> = round_tripped
+        .iter()
+        .map(|&s| f32::from(s) / 32768.0)
+        .collect();
+    let reference = resample(&at_source, SampleRate(8_000), SampleRate(16_000)).unwrap();
+    let streamed = decode_telephony_raw(&encoded, TelephonyCodec::Pcmu, 8_000).unwrap();
+    assert_matches_whole_buffer(&streamed, &reference, "pcmu 8k");
+}
