@@ -1823,3 +1823,99 @@ fn test_telephony_raw_streaming_matches_whole_buffer_resample() {
     let streamed = decode_telephony_raw(&encoded, TelephonyCodec::Pcmu, 8_000).unwrap();
     assert_matches_whole_buffer(&streamed, &reference, "pcmu 8k");
 }
+
+// --- Streaming dual-mono detection ---
+
+/// The streaming detector must agree with the batch pair
+/// (`normalized_correlation` behind `is_dual_mono`) on both the value and, more
+/// importantly, the *verdict*: it decides whether `channels=split` transcribes
+/// two speakers or falls back to a mono mix, so a flip would change output.
+#[test]
+fn test_dual_mono_detector_matches_batch_correlation() {
+    // Deterministic, no rand: a base signal plus independent-ish perturbations.
+    let n = 40_000;
+    let base: Vec<f32> = (0..n)
+        .map(|i| 0.5 * ((i as f32) * 0.013).sin() + 0.2 * ((i as f32) * 0.0007).cos())
+        .collect();
+    let other: Vec<f32> = (0..n)
+        .map(|i| 0.5 * ((i as f32) * 0.031 + 1.7).sin() - 0.3 * ((i as f32) * 0.0021).cos())
+        .collect();
+
+    let cases: Vec<(&str, Vec<f32>, Vec<f32>)> = vec![
+        // Identical: the PBX-recorded-the-mix case the check exists for.
+        ("identical", base.clone(), base.clone()),
+        // Same content, slightly attenuated — still dual-mono.
+        (
+            "attenuated",
+            base.clone(),
+            base.iter().map(|v| v * 0.85).collect(),
+        ),
+        // Same content plus a small amount of the other — near the threshold.
+        (
+            "mostly-same",
+            base.clone(),
+            base.iter()
+                .zip(&other)
+                .map(|(l, r)| l * 0.9 + r * 0.1)
+                .collect(),
+        ),
+        // Genuine stereo: two different sources.
+        ("independent", base.clone(), other.clone()),
+        // Phase-inverted: strongly anti-correlated, must not read as dual-mono.
+        ("inverted", base.clone(), base.iter().map(|v| -v).collect()),
+        // One channel silent.
+        ("right-silent", base.clone(), vec![0.0; n]),
+        // Both silent.
+        ("both-silent", vec![0.0; n], vec![0.0; n]),
+        // DC offset on both: the case naive power sums would lose.
+        (
+            "dc-offset",
+            base.iter().map(|v| v + 0.7).collect(),
+            base.iter().map(|v| v + 0.7).collect(),
+        ),
+    ];
+
+    for (label, left, right) in cases {
+        let batch = super::decode::normalized_correlation_for_test(&left, &right);
+        // Feed in irregular blocks so the recurrence is exercised across pushes.
+        let mut det = DualMonoDetector::new();
+        let mut i = 0;
+        let mut step = 1;
+        while i < left.len() {
+            let end = (i + step).min(left.len());
+            det.push(&left[i..end], &right[i..end]);
+            i = end;
+            step = step % 1_237 + 1;
+        }
+        assert!(
+            (det.correlation() - batch).abs() < 1e-6,
+            "{label}: streaming {} vs batch {batch}",
+            det.correlation()
+        );
+        let want = is_dual_mono(&[left, right]);
+        assert_eq!(det.is_dual_mono(), want, "{label}: verdict diverged");
+    }
+}
+
+#[test]
+fn test_dual_mono_detector_empty_is_not_dual_mono() {
+    let det = DualMonoDetector::new();
+    assert!(!det.is_dual_mono());
+    assert_eq!(det.correlation(), 0.0);
+    // An empty push keeps it empty.
+    let mut det = DualMonoDetector::new();
+    det.push(&[], &[]);
+    assert!(!det.is_dual_mono());
+}
+
+/// Mismatched block lengths count only the overlap, mirroring `is_dual_mono`'s
+/// `min(len)` truncation.
+#[test]
+fn test_dual_mono_detector_uses_the_overlap_only() {
+    let a = vec![0.3f32, -0.4, 0.5, 0.9, -0.1];
+    let b = vec![0.3f32, -0.4, 0.5];
+    let mut det = DualMonoDetector::new();
+    det.push(&a, &b);
+    let batch = super::decode::normalized_correlation_for_test(&a[..3], &b);
+    assert!((det.correlation() - batch).abs() < 1e-9);
+}

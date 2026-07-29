@@ -140,7 +140,7 @@ pub use decode::{
 // buffers itself; the path variant is engine-only.
 #[cfg(feature = "file-decode")]
 pub(crate) use decode::decode_audio_file_bounded;
-pub use decode::{is_dual_mono, mix_channels_to_mono};
+pub use decode::{DualMonoDetector, is_dual_mono, mix_channels_to_mono};
 
 pub(crate) use pcm::{consume_audio_buffer, prepare_audio_buffer};
 pub use pcm::{parse_pcm16_with_carry, parse_pcm16_with_carry_into};
