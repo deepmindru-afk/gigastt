@@ -634,8 +634,9 @@ Operators who want an explicit duration limit can start the server with
 `--max-audio-secs <N>` (env `GIGASTT_MAX_AUDIO_SECS`, default `0` = unlimited);
 audio longer than `N` seconds is rejected with `413 Payload Too Large` and code
 `audio_too_long` before any inference runs. `?vad=true` streams too — the VAD
-runs causally inside the window loop — so it carries no ceiling of its own.
-Speaker diarization, `channels=split`, and telephony/Opus decoding still hold
+runs causally inside the window loop — so it carries no ceiling of its own, and
+OGG/Opus uploads stream packet-wise like every other container. Speaker
+diarization, `channels=split`, and the G.722 / raw telephony codecs still hold
 the whole decoded buffer in memory, so those paths always enforce a fixed
 ~30-minute safety ceiling regardless of `--max-audio-secs`, returning the same
 `audio_too_long` code. A batch worker should gate on `GET /ready` (not just
