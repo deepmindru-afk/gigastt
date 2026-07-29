@@ -114,6 +114,23 @@ impl WindowSpec {
     }
 }
 
+/// Which channel a windowed decode yields.
+///
+/// The default file pipeline wants the mono mix; `channels=split` wants each
+/// channel on its own, and needs it *streamed* — materializing every channel of
+/// the whole file is what pinned that path to a duration ceiling.
+#[cfg(feature = "file-decode")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ChannelSelect {
+    /// Mean of every channel present in the packet.
+    Mono,
+    /// A single channel, by zero-based index.
+    // Exercised by the equivalence tests; the `channels=split` call site that
+    // makes it live in a non-test build lands with the per-channel decode.
+    #[allow(dead_code)]
+    One(usize),
+}
+
 /// One decode window lent by a [`PcmWindows`] source.
 pub(crate) struct PcmWindow<'a> {
     /// Absolute offset of `samples[0]` in the stream, in samples @16 kHz.
@@ -245,6 +262,8 @@ pub(crate) struct FileWindows {
     /// Total 16 kHz samples decoded so far (== `buf_start_abs + buf.len()`).
     decoded_16k_total: usize,
     spec: WindowSpec,
+    /// Which channel the packet loop keeps.
+    channel: ChannelSelect,
     /// Absolute start (@16 kHz) of the next window to yield.
     next_start: usize,
     /// True until the first window's single-pass-vs-windowed decision is made.
@@ -274,7 +293,7 @@ impl FileWindows {
         {
             hint.with_extension(ext);
         }
-        Self::from_mss(mss, hint, spec, max_audio_secs)
+        Self::from_mss(mss, hint, spec, max_audio_secs, ChannelSelect::Mono)
     }
 
     /// Open a shared [`Bytes`] buffer for windowed decode. `BytesMediaSource` is
@@ -289,7 +308,7 @@ impl FileWindows {
         }
         let source = BytesMediaSource::new(data);
         let mss = MediaSourceStream::new(Box::new(source), Default::default());
-        Self::from_mss(mss, Hint::new(), spec, max_audio_secs)
+        Self::from_mss(mss, Hint::new(), spec, max_audio_secs, ChannelSelect::Mono)
     }
 
     /// Probe the container and either set up the streaming decoder or, for Opus /
@@ -302,6 +321,7 @@ impl FileWindows {
         hint: Hint,
         spec: WindowSpec,
         max_audio_secs: Option<f64>,
+        channel: ChannelSelect,
     ) -> Result<Self> {
         let mut format = symphonia::default::get_probe()
             .probe(
@@ -394,12 +414,46 @@ impl FileWindows {
                     buf_start_abs: 0,
                     decoded_16k_total: 0,
                     spec,
+                    channel,
                     next_start: 0,
                     first: true,
                     done: false,
                 })
             }
         }
+    }
+
+    /// Open a shared [`Bytes`] buffer for windowed decode of **one** channel.
+    ///
+    /// The per-channel twin of [`FileWindows::from_bytes`], for the
+    /// `channels=split` path: channel `k` is extracted in the packet loop and
+    /// resampled on its own, so peak memory is one window rather than every
+    /// channel of the whole file.
+    ///
+    /// The samples are the ones the whole-buffer per-channel decode produced —
+    /// same packet cadence, same resampler, same staging — so the windows the
+    /// decoder sees are unchanged.
+    // Same as `ChannelSelect::One`: tested, wired by the next step.
+    #[allow(dead_code)]
+    pub(crate) fn from_bytes_channel(
+        data: Bytes,
+        spec: WindowSpec,
+        max_audio_secs: Option<f64>,
+        channel: usize,
+    ) -> Result<Self> {
+        if let Some(result) = try_decode_g722_wav(&data, max_audio_secs) {
+            // G.722-in-WAV is mono by construction; there is no channel to pick.
+            return Ok(Self::eager(result?, spec));
+        }
+        let source = BytesMediaSource::new(data);
+        let mss = MediaSourceStream::new(Box::new(source), Default::default());
+        Self::from_mss(
+            mss,
+            Hint::new(),
+            spec,
+            max_audio_secs,
+            ChannelSelect::One(channel),
+        )
     }
 
     /// Build an eager source over an already-decoded 16 kHz buffer.
@@ -413,6 +467,7 @@ impl FileWindows {
             buf_start_abs: 0,
             decoded_16k_total: total,
             spec,
+            channel: ChannelSelect::Mono,
             next_start: 0,
             first: true,
             done: false,
@@ -450,6 +505,7 @@ impl FileWindows {
     /// samples to `buf`. Enforces the source-rate length budget incrementally with
     /// the exact same error string as the whole-buffer path.
     fn fill_to(&mut self, target: usize) -> Result<()> {
+        let channel = self.channel;
         let Source::Streaming {
             format,
             decoder,
@@ -486,14 +542,29 @@ impl FileWindows {
                 interleaved.clear();
                 decoded.copy_to_vec_interleaved(interleaved);
                 let stage = resampler.stage();
-                for frame in 0..num_frames {
-                    let mut sum = 0.0_f32;
-                    for c in 0..ch {
-                        sum += interleaved[frame * ch + c];
+                match channel {
+                    ChannelSelect::Mono => {
+                        for frame in 0..num_frames {
+                            let mut sum = 0.0_f32;
+                            for c in 0..ch {
+                                sum += interleaved[frame * ch + c];
+                            }
+                            stage.push(sum / ch as f32);
+                        }
                     }
-                    stage.push(sum / ch as f32);
+                    // A packet that is short of the requested channel
+                    // contributes nothing rather than shifting the timeline.
+                    ChannelSelect::One(k) if k < ch => {
+                        for frame in 0..num_frames {
+                            stage.push(interleaved[frame * ch + k]);
+                        }
+                    }
+                    ChannelSelect::One(_) => {}
                 }
-            } else {
+            } else if matches!(channel, ChannelSelect::Mono | ChannelSelect::One(0)) {
+                // Single-channel packet: it *is* channel 0. Asking for a higher
+                // index contributes nothing, rather than silently handing back
+                // channel 0's audio under another channel's name.
                 let stage = resampler.stage();
                 let offset = stage.len();
                 stage.resize(offset + num_frames, 0.0);
@@ -874,6 +945,59 @@ mod file_windows_tests {
         // resample + SliceWindows: the staged chunk sequence is the same either
         // way, so every resampled sample matches.
         assert_eq!(got, slice_seq(&flat, spec));
+    }
+
+    /// The load-bearing claim for streaming `channels=split`: pulling channel
+    /// `k` through the packet loop yields the *same samples* the whole-buffer
+    /// per-channel decode produced. Checked at 16 kHz (resampler passthrough)
+    /// and 48 kHz (real resampling), for both channels of a genuine stereo
+    /// stream whose channels differ.
+    #[test]
+    fn test_file_windows_channel_select_matches_batch_per_channel_decode() {
+        for rate in [16_000u32, 48_000] {
+            let n = rate as usize * 3;
+            let left = signal(n, 0.3);
+            let right = signal(n, 2.1);
+            let wav = stereo_wav_pcm16(&left, &right, rate);
+            let batch = crate::inference::audio::decode_audio_bytes_shared_channels(
+                Bytes::copy_from_slice(&wav),
+            )
+            .expect("batch per-channel decode");
+            assert_eq!(batch.len(), 2, "expected a stereo decode at {rate}Hz");
+            // The channels must actually differ, or the test proves nothing.
+            assert_ne!(batch[0], batch[1]);
+
+            for (k, want) in batch.iter().enumerate() {
+                let streamed = FileWindows::from_bytes_channel(
+                    Bytes::copy_from_slice(&wav),
+                    WindowSpec::flat(),
+                    None,
+                    k,
+                )
+                .expect("open channel")
+                .drain_to_vec()
+                .expect("drain channel");
+                assert_eq!(&streamed, want, "rate={rate} channel={k}");
+            }
+        }
+    }
+
+    /// Selecting a channel the stream does not have yields nothing rather than
+    /// silently falling back to another channel's audio.
+    #[test]
+    fn test_file_windows_channel_select_out_of_range_is_empty() {
+        let src = signal(16_000, 1.0);
+        let wav = encode_wav_pcm16(&src, 16000); // mono
+        let streamed = FileWindows::from_bytes_channel(
+            Bytes::copy_from_slice(&wav),
+            WindowSpec::flat(),
+            None,
+            5,
+        )
+        .expect("open")
+        .drain_to_vec()
+        .expect("drain");
+        assert!(streamed.is_empty(), "got {} samples", streamed.len());
     }
 
     #[test]
