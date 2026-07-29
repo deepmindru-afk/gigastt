@@ -272,3 +272,75 @@ async fn test_job_invalid_audio_fails_with_sanitized_error() {
 
     let _ = shutdown.send(());
 }
+
+/// Submit → poll → fetch the result, returning the parsed result body.
+async fn run_job_to_result(port: u16, query: &str, wav: Vec<u8>) -> serde_json::Value {
+    let client = reqwest::Client::new();
+    let submit = client
+        .post(format!("http://127.0.0.1:{port}/v1/jobs{query}"))
+        .body(wav)
+        .send()
+        .await
+        .expect("POST /v1/jobs failed");
+    assert_eq!(submit.status(), 202);
+    let body: serde_json::Value =
+        serde_json::from_str(&submit.text().await.expect("submit text")).expect("submit JSON");
+    let job_id = body["job_id"].as_str().expect("job_id").to_string();
+
+    for _ in 0..240 {
+        let status_text = client
+            .get(format!("http://127.0.0.1:{port}/v1/jobs/{job_id}"))
+            .send()
+            .await
+            .expect("GET status failed")
+            .text()
+            .await
+            .expect("status text");
+        let status: serde_json::Value = serde_json::from_str(&status_text).expect("status JSON");
+        if status["status"] == "done" {
+            break;
+        }
+        assert_ne!(status["status"], "failed", "job failed: {status:?}");
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+
+    let result = client
+        .get(format!("http://127.0.0.1:{port}/v1/jobs/{job_id}/result"))
+        .send()
+        .await
+        .expect("GET result failed");
+    assert_eq!(result.status(), 200);
+    serde_json::from_str(&result.text().await.expect("result text")).expect("result JSON")
+}
+
+/// A job submitted with `?diarization=true` against a server that has no speaker
+/// model must say why on the result, instead of answering 200 with every speaker
+/// field empty and no explanation — the same notice the synchronous endpoint
+/// attaches. A job that did not ask for diarization keeps the byte-identical
+/// response shape it always had.
+#[cfg(unix)]
+#[ignore = "requires model"]
+#[tokio::test]
+async fn test_job_diarization_unavailable_is_reported() {
+    let (_model_guard, dir) = common::model_dir_without_speaker();
+    let (port, shutdown) = common::start_server_with_jobs(&dir, 1).await;
+
+    let asked = run_job_to_result(port, "?diarization=true", common::generate_wav(2, 16000)).await;
+    assert!(
+        asked["text"].is_string(),
+        "the transcript is still complete: {asked:?}"
+    );
+    assert_eq!(
+        asked["diarization"]["status"], "unavailable",
+        "a job that asked for diarization and got none must say so: {asked:?}"
+    );
+    assert_eq!(asked["diarization"]["reason"], "no_speaker_model");
+
+    let plain = run_job_to_result(port, "", common::generate_wav(2, 16000)).await;
+    assert!(
+        plain.get("diarization").is_none(),
+        "a job that never asked for diarization must keep the old response shape: {plain:?}"
+    );
+
+    let _ = shutdown.send(());
+}

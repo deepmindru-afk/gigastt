@@ -468,6 +468,36 @@ them in.
   Actual diarization output requires the speaker-encoder model to be loaded on the
   server (downloaded automatically when the `diarization` feature is enabled).
 
+When `diarization=true` was requested but speakers could **not** be labeled, the
+response carries an additive `diarization` object explaining why, instead of a
+200 with silently empty speaker fields. It is absent when diarization was not
+requested or succeeded, so clients that never ask see the exact same shape. The
+same object appears on `GET /v1/jobs/{id}/result`.
+
+```json
+{
+  "text": "…", "words": [...], "duration": 4200.0,
+  "diarization": {
+    "status": "unavailable",
+    "reason": "duration_ceiling",
+    "message": "diarization skipped: input 4200s exceeds the 3600s single-pass limit; the transcript is complete but has no speaker labels",
+    "input_seconds": 4200.0,
+    "ceiling_seconds": 3600.0
+  }
+}
+```
+
+| `reason` | When |
+|---|---|
+| `no_speaker_model` | No speaker-encoder model is loaded, or the build lacks the `diarization` feature |
+| `duration_ceiling` | The clusterer refused the input; `input_seconds` and `ceiling_seconds` carry the clusterer's own numbers |
+| `pipeline_error` | Diarization was attempted and failed for another reason (logged server-side) |
+
+The transcript itself is complete in every case — only the speaker labels are
+missing. Live WebSocket sessions do not carry this notice: `ready` advertises
+`diarization` as a server capability before any audio is sent, and a `configure`
+requesting an unavailable capability is a graceful no-op there.
+
 When either channel split or diarization produces speaker labels, each word object
 includes a `speaker` integer:
 

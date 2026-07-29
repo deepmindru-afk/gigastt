@@ -158,6 +158,10 @@ pub async fn get_job_result(
             "job_not_finished",
         ));
     }
+    // Read before `result` is moved out below; the outcome is `Copy`.
+    let diarization = job
+        .diarization
+        .and_then(super::transcribe::diarization_notice);
     let Some(result) = job.result else {
         tracing::error!(job_id = %id, "Done job is missing result");
         return Err(api_error(
@@ -180,9 +184,7 @@ pub async fn get_job_result(
             duration: result.duration_s,
             confidence: result.confidence,
             segments,
-            // The async jobs surface does not yet carry a diarization outcome
-            // (see `FileTranscribeOpts::diarization_outcome`), so no notice here.
-            diarization: None,
+            diarization,
         })
         .into_response())
     }
