@@ -23,6 +23,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   into a result that is thrown away. Adds a `GigasttError::Cancelled` variant
   (additive; the enum is `#[non_exhaustive]`).
 
+- **`diarization` capability notice on transcription responses.** Asking for
+  diarization and getting none used to be indistinguishable from not asking:
+  HTTP 200, every speaker field empty, no explanation. An additive
+  `diarization` object now appears on the response **only** when
+  `?diarization=true` was requested and speakers could not be labeled, with a
+  `reason` separating the three cases that previously collapsed into the same
+  silence — `no_speaker_model`, `duration_ceiling` (carrying the actual input
+  and ceiling seconds), and `pipeline_error`. Clients that get diarization, or
+  never ask for it, see a byte-identical response. Served on both
+  `POST /v1/transcribe` and `GET /v1/jobs/{id}/result`.
+
+  Live WebSocket sessions deliberately do **not** carry this notice: `ready`
+  already advertises `diarization` as a server capability before any audio is
+  sent, and a `configure` for an unavailable capability is a documented
+  graceful no-op there (the same convention `punctuation` follows). The
+  request/response endpoints have no such handshake, which is why they need it.
+
 ### Removed
 
 - **The 30-minute (1800 s) duration cap on the default file-transcription
