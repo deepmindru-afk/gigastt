@@ -1,5 +1,7 @@
 //! Audio decoding, resampling, and buffer management utilities.
 
+#[cfg(feature = "file-decode")]
+mod chunks;
 mod decode;
 mod opus;
 mod pcm;
@@ -155,6 +157,11 @@ pub(crate) use stream::{PcmWindows, SliceWindows, WindowSpec};
 // windows from it; the public `decode_audio_*` functions drain it flat.
 #[cfg(feature = "file-decode")]
 pub(crate) use stream::FileWindows;
+// Fixed-size streaming decode for callers driving the streaming recognizer
+// (SSE file transcription, embedders). Public: it is the only way to decode a
+// container without materializing it.
+#[cfg(feature = "file-decode")]
+pub use chunks::AudioChunks;
 
 pub use telephony::TelephonyCodec;
 #[cfg(feature = "file-decode")]
