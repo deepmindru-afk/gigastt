@@ -58,7 +58,7 @@ publishes tarballs for `x86_64-unknown-linux-gnu` and
 `aarch64-unknown-linux-gnu`:
 
 ```sh
-# Resolve the latest release tag (or set TAG=v2.14.1 by hand):
+# Resolve the latest release tag (or set TAG=v2.15.0 by hand):
 TAG=$(curl -fsSL https://api.github.com/repos/ekhodzitsky/gigastt/releases/latest \
       | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
 VER=${TAG#v}
@@ -87,7 +87,7 @@ the pinned GitHub Release (no ~850 MB FP32 download, no ~2-minute on-device
 quantization; also handy when HuggingFace is unreachable but GitHub is not):
 
 ```sh
-gigastt download --prequantized
+gigastt download
 gigastt transcribe recording.wav
 ```
 
@@ -101,7 +101,7 @@ Every release publishes `x86_64-pc-windows-msvc` tarballs (CPU). PowerShell
 
 ```powershell
 $rel = Invoke-RestMethod https://api.github.com/repos/ekhodzitsky/gigastt/releases/latest
-$TAG = $rel.tag_name          # e.g. v2.14.1
+$TAG = $rel.tag_name          # e.g. v2.15.0
 $VER = $TAG.TrimStart('v')
 $asset = "gigastt-$VER-x86_64-pc-windows-msvc.tar.gz"
 $base = "https://github.com/ekhodzitsky/gigastt/releases/download/$TAG"
@@ -115,7 +115,7 @@ if ($actual -ne $expected.ToLower()) { throw "SHA-256 mismatch" }
 
 tar xf $asset
 # Put gigastt.exe on PATH, or call it by full path:
-.\gigastt.exe download --prequantized
+.\gigastt.exe download
 .\gigastt.exe transcribe recording.wav
 ```
 
@@ -162,7 +162,7 @@ curl -F file=@recording.wav http://127.0.0.1:9876/v1/transcribe
 **Verify:** `/health` returns
 
 ```json
-{"status":"ok","model":"gigaam-v3-rnnt","variant":"rnnt","version":"2.14.1","punctuation":true,"itn":true}
+{"status":"ok","model":"gigaam-v3-rnnt","variant":"rnnt","version":"2.15.0","punctuation":true,"itn":true}
 ```
 
 (the `version` field reflects the image you pulled), and the POST returns a
@@ -224,7 +224,7 @@ model directory is used as-is (auto-detect), and a fresh install defaults to
 |---|---|---|---|
 | `rnnt` (default) | Russian | Bare lowercase from the acoustic model; casing + punctuation restored by an auto-downloaded RuPunct pass, digits by ITN | Default: lowest WER on Russian speech |
 | `e2e_rnnt` | Russian | Punctuation / casing / ITN baked into the acoustic model | You want one self-contained model with no post-processing passes |
-| `ml_ctc` | ru/en/kk/ky/uz | Bare lowercase, no restoration passes | Mixed Russian/English (or kk/ky/uz) speech; lighter 220M encoder |
+| `ml_ctc` | ru/en/kk/ky/uz | Bare lowercase, no restoration passes | Mixed Russian/English (or kk/ky/uz) speech; ~1.5× RTF vs `rnnt` (ready RSS ≈ `rnnt`) |
 | `ml_ctc_large` | ru/en/kk/ky/uz | Bare lowercase, no restoration passes | Multilingual speech where accuracy matters more than footprint (600M encoder) |
 
 The `ml_ctc*` heads download pre-quantized INT8 directly, so there is no
@@ -251,7 +251,7 @@ auto-downloads a missing model) does two one-time things:
 
 Three levers change what you pay:
 
-- `gigastt download --prequantized` — the recommended shortcut: fetch the
+- `gigastt download` — the recommended shortcut: fetch the
   ~225 MB pre-quantized INT8 bundle from the pinned GitHub Release. No FP32
   download, no local quantization, no `protoc`. Note it pulls from
   `github.com`, not `huggingface.co` — useful when one of the two is blocked.
@@ -305,7 +305,7 @@ curl -F file=@recording.wav http://127.0.0.1:9876/v1/transcribe
   unreachable) — retry `gigastt download`; the resume-safe staging file makes
   it idempotent, and exit codes distinguish causes (65 = checksum, 69 =
   network, 74 = disk). If `huggingface.co` is blocked but `github.com` is
-  not, use `gigastt download --prequantized`; in a fully closed contour use
+  not, use `gigastt download`; in a fully closed contour use
   the air-gapped bundle. Check `~/.gigastt/models/` permissions on disk
   errors.
 - **OOM or heavy swap on startup** — each pool session loads its own encoder

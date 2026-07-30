@@ -220,8 +220,8 @@ Use the HTTP probes to drive client-side state machines — do not spawn
 - `GET /health` — **liveness**. Returns 200 as soon as the listener is up,
   including during first-run model download/quantization, when it is served by a
   minimal bootstrap responder:
-  `{"status":"ok","model":"loading","version":"2.14.1"}`. Once the engine is up:
-  `{"status":"ok","model":"gigaam-v3-rnnt","variant":"rnnt","version":"2.14.1","punctuation":true,"itn":true}`.
+  `{"status":"ok","model":"loading","version":"2.15.0"}`. Once the engine is up:
+  `{"status":"ok","model":"gigaam-v3-rnnt","variant":"rnnt","version":"2.15.0","punctuation":true,"itn":true}`.
   The `version` field is present in **both** phases — use it for version gates
   instead of executing the binary.
 - `GET /ready` — **readiness**. 200 `{"status":"ready","pool_available":N,"pool_total":M}`
@@ -237,7 +237,7 @@ Defaults; every limit is a CLI flag with a matching `GIGASTT_*` env var
 
 | Limit | Default | Behavior at the limit |
 |---|---|---|
-| `--pool-size` | 2 | Concurrent inference sessions; the next connect waits up to 30 s, then `timeout` + `retry_after_ms` (WS) or 503 + `Retry-After` (REST) |
+| `--pool-size` | 2 | Concurrent inference sessions (edge / low-RAM: use `1`); the next connect waits up to 30 s, then `timeout` + `retry_after_ms` (WS) or 503 + `Retry-After` (REST). Pool > 1 costs RAM and can cost ~10–20% single-job RTF |
 | `--idle-timeout-secs` | 300 | No frames for 5 min → `idle_timeout` + close 1001. Streaming silence (quiet PCM) keeps the session alive — silence is still audio |
 | `--max-session-secs` | 3600 | Wall-clock cap → `max_session_duration_exceeded` + flushed `final` + close 1008. `0` disables |
 | `--ws-frame-max-bytes` | 512 KiB | Larger frame → close 1009 |
@@ -362,10 +362,17 @@ diarization, telephony codecs, or native export knobs use `POST /v1/transcribe`.
 ## Admin reload
 
 `POST /v1/admin/reload` rebuilds the inference engine from the server's boot
-recipe (model dir, pool sizes, punctuation / ITN / VAD / hotwords), runs
-warmup, then atomically swaps the live `Arc<Engine>`. In-flight requests keep
-the engine they started with; a failed rebuild leaves the previous model
-serving.
+recipe (model dir, pool sizes, punctuation / ITN / VAD / hotwords), **swaps**
+the live `Arc<Engine>`, then warms the new engine. In-flight requests keep the
+engine they started with; a failed rebuild leaves the previous model serving.
+
+**RAM:** peak during **build** can still approach about **+0.5× ready** (lab:
+**~+536 MiB** at `--pool-size 1`, INT8 `rnnt`) while the old engine is still
+live. Warmup runs after swap so it need not stack on the previous copy once
+in-flight work finishes. Soft mode: `POST /v1/admin/reload?soft=true` waits up
+to ~5 s for the old engine to drain before warming (`soft` / `soft_drained` in
+the JSON body). Ensure free memory before reload on edge hosts; otherwise
+restart. Operator notes: [runbook — Admin reload headroom](runbook.md#admin-reload-headroom).
 
 **Security:** the handler accepts **loopback peers only** (`403 loopback_only`
 otherwise), even when `--bind-all` or `--cors-allow-any` is enabled. Concurrent
@@ -374,6 +381,7 @@ rebuild recipe return `503 reload_unsupported`.
 
 ```sh
 curl -X POST http://127.0.0.1:9876/v1/admin/reload
+# edge: curl -X POST 'http://127.0.0.1:9876/v1/admin/reload?soft=true'
 # {"reloaded":true,"variant":"rnnt","encoder":"int8"}
 ```
 
@@ -459,6 +467,36 @@ them in.
   as an explicit request; returns `400` with code `conflicting_modes` if both are set.
   Actual diarization output requires the speaker-encoder model to be loaded on the
   server (downloaded automatically when the `diarization` feature is enabled).
+
+When `diarization=true` was requested but speakers could **not** be labeled, the
+response carries an additive `diarization` object explaining why, instead of a
+200 with silently empty speaker fields. It is absent when diarization was not
+requested or succeeded, so clients that never ask see the exact same shape. The
+same object appears on `GET /v1/jobs/{id}/result`.
+
+```json
+{
+  "text": "…", "words": [...], "duration": 4200.0,
+  "diarization": {
+    "status": "unavailable",
+    "reason": "duration_ceiling",
+    "message": "diarization skipped: input 4200s exceeds the 3600s single-pass limit; the transcript is complete but has no speaker labels",
+    "input_seconds": 4200.0,
+    "ceiling_seconds": 3600.0
+  }
+}
+```
+
+| `reason` | When |
+|---|---|
+| `no_speaker_model` | No speaker-encoder model is loaded, or the build lacks the `diarization` feature |
+| `duration_ceiling` | The clusterer refused the input; `input_seconds` and `ceiling_seconds` carry the clusterer's own numbers |
+| `pipeline_error` | Diarization was attempted and failed for another reason (logged server-side) |
+
+The transcript itself is complete in every case — only the speaker labels are
+missing. Live WebSocket sessions do not carry this notice: `ready` advertises
+`diarization` as a server capability before any audio is sent, and a `configure`
+requesting an unavailable capability is a graceful no-op there.
 
 When either channel split or diarization produces speaker labels, each word object
 includes a `speaker` integer:
@@ -616,11 +654,28 @@ curl -X POST "http://127.0.0.1:9876/v1/transcribe?format=md&word_timestamps=true
 
 Content-Type is ignored — the container format (WAV/MP3/M4A/OGG/FLAC) is sniffed
 from the bytes, so `--data-binary @file` is enough; multipart form uploads are
-not accepted. The practical ceiling is the body limit (`--body-limit-bytes`,
-default 50 MiB ≈ 26 min of 16 kHz mono WAV) and the per-request inference cap
-(`--inference-timeout-secs`, default 600 s); raise **both** together for longer
-single files. A batch worker should gate on `GET /ready` (not just `/health`) so
-it backs off on `503` pool saturation instead of failing mid-job.
+not accepted. There is no default duration limit — the file decodes and
+transcribes in bounded overlapping windows, so peak memory stays roughly
+constant regardless of length, and a multi-hour recording transcribes fine.
+The remaining practical ceiling is the upload body limit (`--body-limit-bytes`,
+default 50 MiB ≈ 26 min of 16 kHz mono WAV); raise it for larger single files.
+
+Operators who want an explicit duration limit can start the server with
+`--max-audio-secs <N>` (env `GIGASTT_MAX_AUDIO_SECS`, default `0` = unlimited);
+audio longer than `N` seconds is rejected with `413 Payload Too Large` and code
+`audio_too_long` before any inference runs. `?vad=true` streams too — the VAD
+runs causally inside the window loop — so it carries no ceiling of its own,
+OGG/Opus uploads stream packet-wise like every other container,
+`POST /v1/transcribe/stream` (SSE) decodes on demand as it emits, and
+`?channels=split` streams as well: the stereo-vs-dual-mono decision is made in
+one pass and each channel is then decoded in windows — except on a VAD-enabled
+server, where it keeps the whole-buffer path. Speaker diarization and the
+G.722 / raw telephony codecs still hold the whole decoded buffer in memory, so
+those paths always enforce a fixed
+~30-minute safety ceiling regardless of `--max-audio-secs`, returning the same
+`audio_too_long` code. A batch worker should gate on `GET /ready` (not just
+`/health`) so it backs off on `503` pool saturation instead of failing
+mid-job.
 
 ### Error responses
 
@@ -636,6 +691,7 @@ it backs off on `503` pool saturation instead of failing mid-job.
 | 409 | `job_not_finished` | `GET /v1/jobs/{id}/result` called before the job is done |
 | 409 | `job_not_cancellable` | `DELETE /v1/jobs/{id}` called on a terminal job |
 | 413 | `payload_too_large` | Body exceeds `--body-limit-bytes` (default 50 MiB) |
+| 413 | `audio_too_long` | Audio exceeds `--max-audio-secs` (opt-in, env `GIGASTT_MAX_AUDIO_SECS`, default unlimited), or a whole-buffer path (diarization/`channels=split`/telephony) hit its ~30-minute safety ceiling |
 | 422 | `invalid_audio` | Audio could not be decoded (unsupported/corrupt format) |
 | 422 | `transcription_error` | Audio decoded but inference failed |
 | 429 | `queue_full` | In-memory job store is full; `Retry-After` header included |
