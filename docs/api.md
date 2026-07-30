@@ -663,10 +663,12 @@ default 50 MiB ≈ 26 min of 16 kHz mono WAV); raise it for larger single files.
 Operators who want an explicit duration limit can start the server with
 `--max-audio-secs <N>` (env `GIGASTT_MAX_AUDIO_SECS`, default `0` = unlimited);
 audio longer than `N` seconds is rejected with `413 Payload Too Large` and code
-`audio_too_long` before any inference runs. VAD segmentation, speaker
-diarization, `channels=split`, and telephony/Opus decoding hold the whole
-decoded buffer in memory, so those paths always enforce a fixed ~30-minute
-safety ceiling regardless of `--max-audio-secs`, returning the same
+`audio_too_long` before any inference runs. `?vad=true` streams too — the VAD
+runs causally inside the window loop — so it carries no ceiling of its own, and
+OGG/Opus uploads stream packet-wise like every other container. Speaker
+diarization, `channels=split`, and the G.722 / raw telephony codecs still hold
+the whole decoded buffer in memory, so those paths always enforce a fixed
+~30-minute safety ceiling regardless of `--max-audio-secs`, returning the same
 `audio_too_long` code. A batch worker should gate on `GET /ready` (not just
 `/health`) so it backs off on `503` pool saturation instead of failing
 mid-job.
@@ -685,7 +687,7 @@ mid-job.
 | 409 | `job_not_finished` | `GET /v1/jobs/{id}/result` called before the job is done |
 | 409 | `job_not_cancellable` | `DELETE /v1/jobs/{id}` called on a terminal job |
 | 413 | `payload_too_large` | Body exceeds `--body-limit-bytes` (default 50 MiB) |
-| 413 | `audio_too_long` | Audio exceeds `--max-audio-secs` (opt-in, env `GIGASTT_MAX_AUDIO_SECS`, default unlimited), or a whole-buffer path (VAD/diarization/`channels=split`/telephony) hit its ~30-minute safety ceiling |
+| 413 | `audio_too_long` | Audio exceeds `--max-audio-secs` (opt-in, env `GIGASTT_MAX_AUDIO_SECS`, default unlimited), or a whole-buffer path (diarization/`channels=split`/telephony) hit its ~30-minute safety ceiling |
 | 422 | `invalid_audio` | Audio could not be decoded (unsupported/corrupt format) |
 | 422 | `transcription_error` | Audio decoded but inference failed |
 | 429 | `queue_full` | In-memory job store is full; `Retry-After` header included |
