@@ -1,10 +1,15 @@
 //! Audio decoding, resampling, and buffer management utilities.
 
+#[cfg(feature = "file-decode")]
+mod chunks;
 mod decode;
 mod opus;
 mod pcm;
 mod resample;
+mod stream;
 mod telephony;
+#[cfg(feature = "file-decode")]
+mod vad_windows;
 
 #[cfg(test)]
 #[path = "tests.rs"]
@@ -25,26 +30,27 @@ pub(crate) use super::{HOP_LENGTH, N_FFT};
 // Shared constants -----------------------------------------------------------
 
 pub(crate) const MAX_BUFFER_SAMPLES: usize = 16000 * 5; // 5 seconds at 16kHz
-/// Hard upper bound on file-transcription audio length (seconds). Long-form
-/// inputs are decoded in bounded overlapping chunks (see
-/// `Engine::transcribe_samples_chunked`), so peak encoder memory is O(chunk)
-/// regardless of file length; this cap bounds the fully decoded PCM buffer
-/// instead. 30 minutes ≈ the largest uncompressed PCM16@16kHz upload the
-/// default 50 MiB body limit admits (~27 min), and bounds the decoded f32
-/// buffer at 30 min × 48 kHz × 4 B ≈ 346 MB per concurrent decode.
+/// Explicit, documented safety ceiling (seconds) for the decode paths that must
+/// hold the **whole** decoded buffer in RAM: speaker diarization,
+/// `channels=split` (including its per-channel Opus decode), and the G.722 /
+/// raw telephony codecs, which have no packet-wise decoder. The default
+/// file path streams overlapping windows (see `Engine::decode_words_streaming`),
+/// the VAD file path streams through
+/// [`VadWindows`](super::audio::VadWindows), and OGG/Opus streams packet-wise
+/// through the `opus-rs` fallback, so all three have peak audio memory O(one
+/// window) regardless of length and *no* duration limit; the remaining paths
+/// keep this bound so a multi-hour input refuses with a typed
+/// [`AudioTooLong`](crate::error::GigasttError::AudioTooLong) instead of driving
+/// the process into OOM. Operators can lower the effective limit for every path
+/// (including the streaming one) with `--max-audio-secs`; there is no way to
+/// raise it above this ceiling for the whole-buffer paths.
 #[cfg(feature = "file-decode")]
-pub(crate) const MAX_DURATION_S: f64 = 1800.0; // 30 minutes
+pub(crate) const WHOLE_BUFFER_MAX_AUDIO_SECS: f64 = 1800.0; // 30 minutes
 /// Upper bound on a header-declared sample rate. Legal rates (8k–48k) stay well
 /// below this; anything above is a malformed/adversarial header and is rejected
-/// before it can scale the duration cap or the capacity hint.
+/// before it can scale a sample budget or the capacity hint.
 #[cfg(feature = "file-decode")]
 pub(crate) const MAX_SAMPLE_RATE: u32 = 192_000;
-/// Ceiling used to size the duration cap and capacity hint. The header's
-/// `sample_rate` is clamped to this when computing the sample budget, so a
-/// crafted header cannot inflate either beyond `MAX_DURATION_S` × 48 kHz worth
-/// of samples.
-#[cfg(feature = "file-decode")]
-pub(crate) const MAX_DECODE_SAMPLE_RATE: u32 = 48_000;
 
 /// Normalized cross-correlation threshold for dual-mono detection.
 /// Some PBXs record the same mixed call to both channels of a "stereo" file.
@@ -52,14 +58,76 @@ pub(crate) const MAX_DECODE_SAMPLE_RATE: u32 = 48_000;
 /// when the two channels are nearly identical we fall back to the mono path.
 pub(crate) const DUAL_MONO_CORRELATION_THRESHOLD: f64 = 0.98;
 
-/// Maximum number of decoded samples allowed for `sample_rate`, the budget used
-/// by both the duration cap and the up-front capacity hint. The header rate is
-/// clamped to [`MAX_DECODE_SAMPLE_RATE`] so a crafted header cannot inflate the
-/// budget beyond [`MAX_DURATION_S`] × 48 kHz. Pure so the cap math is testable
-/// without decoding a file.
+/// Source-rate sample budget for a `limit` at `sample_rate`. `None` (or a
+/// non-positive / non-finite limit) means **unbounded** — the streaming window
+/// path, whose peak audio memory is O(one window) regardless of length.
+/// `Some(secs)` yields `secs × sample_rate` samples with the rate **unclamped**,
+/// so the budget is honest at 96 kHz / 192 kHz instead of silently expiring at a
+/// fraction of the stated seconds. Pure so the budget math is testable without
+/// decoding a file.
 #[cfg(feature = "file-decode")]
-pub(crate) fn max_decode_samples(sample_rate: u32) -> usize {
-    MAX_DURATION_S as usize * sample_rate.min(MAX_DECODE_SAMPLE_RATE) as usize
+pub(crate) fn max_samples_for_secs(limit: Option<f64>, sample_rate: u32) -> usize {
+    match limit {
+        Some(secs) if secs.is_finite() && secs > 0.0 => (secs * sample_rate as f64) as usize,
+        _ => usize::MAX,
+    }
+}
+
+/// Resolve the effective seconds limit for a path that must hold the whole
+/// decoded buffer in RAM. Never exceeds [`WHOLE_BUFFER_MAX_AUDIO_SECS`]; an
+/// operator-supplied `--max-audio-secs` only ever lowers it.
+#[cfg(feature = "file-decode")]
+pub(crate) fn whole_buffer_limit_secs(user: Option<f64>) -> f64 {
+    match user {
+        Some(secs) if secs.is_finite() && secs > 0.0 => secs.min(WHOLE_BUFFER_MAX_AUDIO_SECS),
+        _ => WHOLE_BUFFER_MAX_AUDIO_SECS,
+    }
+}
+
+/// Resolve a caller-supplied seconds limit into the pair the decode loops need:
+/// the source-rate sample budget (`usize::MAX` when unbounded) and the finite
+/// seconds figure to report on a trip (`f64::INFINITY` when unbounded, which the
+/// budget then never reaches).
+#[cfg(feature = "file-decode")]
+pub(crate) fn resolve_budget(limit: Option<f64>, sample_rate: u32) -> (usize, f64) {
+    let limit_secs = limit
+        .filter(|s| s.is_finite() && *s > 0.0)
+        .unwrap_or(f64::INFINITY);
+    (max_samples_for_secs(limit, sample_rate), limit_secs)
+}
+
+/// Convert a decode-layer [`anyhow::Error`] into a typed
+/// [`GigasttError`](crate::error::GigasttError), preserving a typed
+/// [`AudioTooLong`](crate::error::GigasttError::AudioTooLong) rather than
+/// collapsing it into the generic `InvalidAudio` bucket so the wire code stays
+/// `audio_too_long`. Any other error becomes `InvalidAudio`.
+#[cfg(feature = "file-decode")]
+pub(crate) fn decode_error(e: anyhow::Error) -> crate::error::GigasttError {
+    match e.downcast::<crate::error::GigasttError>() {
+        Ok(g) => g,
+        Err(e) => crate::error::GigasttError::InvalidAudio {
+            reason: format!("{e:#}"),
+        },
+    }
+}
+
+/// Build the typed [`AudioTooLong`](crate::error::GigasttError::AudioTooLong) as
+/// an [`anyhow::Error`] for the decode layer (which returns `anyhow::Result`).
+/// The engine / server seams downcast it back to the concrete variant so the
+/// wire code stays `audio_too_long` instead of collapsing into the generic
+/// "invalid audio" bucket. `observed_source_frames` is counted at
+/// `sample_rate`; `limit_secs` is the ceiling that fired.
+#[cfg(feature = "file-decode")]
+pub(crate) fn audio_too_long_err(
+    observed_source_frames: usize,
+    sample_rate: u32,
+    limit_secs: f64,
+) -> anyhow::Error {
+    crate::error::GigasttError::AudioTooLong {
+        observed_secs: observed_source_frames as f64 / sample_rate as f64,
+        limit_secs,
+    }
+    .into()
 }
 
 // Public API re-exports (stable paths under `inference::audio::…`) ------------
@@ -68,16 +136,43 @@ pub(crate) fn max_decode_samples(sample_rate: u32) -> usize {
 #[cfg(test)]
 pub(crate) use decode::BytesMediaSource;
 #[cfg(feature = "file-decode")]
+pub use decode::{ChannelScan, scan_channels};
+#[cfg(feature = "file-decode")]
 pub use decode::{
-    decode_audio_bytes, decode_audio_bytes_shared, decode_audio_bytes_shared_channels,
-    decode_audio_file, load_audio_channels,
+    decode_audio_bytes, decode_audio_bytes_shared, decode_audio_bytes_shared_bounded,
+    decode_audio_bytes_shared_channels, decode_audio_bytes_shared_channels_bounded,
+    decode_audio_file, load_audio_channels, probe_duration_bytes, probe_duration_file,
 };
-pub use decode::{is_dual_mono, mix_channels_to_mono};
+// Length-bounded file decode used by the engine's whole-buffer branch; the
+// streaming path threads its budget through `FileWindows` instead. The bytes /
+// channels bounded variants above are `pub` because the server decodes those
+// buffers itself; the path variant is engine-only.
+#[cfg(feature = "file-decode")]
+pub(crate) use decode::decode_audio_file_bounded;
+pub use decode::{DualMonoDetector, is_dual_mono, mix_channels_to_mono};
 
 pub(crate) use pcm::{consume_audio_buffer, prepare_audio_buffer};
 pub use pcm::{parse_pcm16_with_carry, parse_pcm16_with_carry_into};
 
 pub use resample::{SampleRate, resample, resample_with_cache};
+
+// Long-form window source. Crate-internal: the file-decode loop is the only
+// consumer today, and the streaming source lands behind the same trait.
+pub(crate) use stream::{PcmWindows, SliceWindows, WindowSpec};
+// Streaming container-backed window source: keeps peak audio memory O(one
+// window) regardless of file duration. `Engine::transcribe_request` pulls
+// windows from it; the public `decode_audio_*` functions drain it flat.
+#[cfg(feature = "file-decode")]
+pub(crate) use stream::FileWindows;
+// VAD-compressed window source: same geometry over the silence-free timeline,
+// so the VAD file path is O(one window) too and needs no duration ceiling.
+#[cfg(feature = "file-decode")]
+pub(crate) use vad_windows::VadWindows;
+// Fixed-size streaming decode for callers driving the streaming recognizer
+// (SSE file transcription, embedders). Public: it is the only way to decode a
+// container without materializing it.
+#[cfg(feature = "file-decode")]
+pub use chunks::AudioChunks;
 
 pub use telephony::TelephonyCodec;
 #[cfg(feature = "file-decode")]

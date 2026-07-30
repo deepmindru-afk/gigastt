@@ -39,7 +39,7 @@ ONNX files, vocabulary, and decoding.
 |---|---|---|---|---|---|
 | `rnnt` (default) | 844 MB FP32 encoder → ~215 MB INT8 (auto-quantized) + decoder/joiner/vocab (a few MB) | Russian | Bare lowercase; pair with `--punctuation` / `--itn` (on by default in `auto`) | Lowest Russian WER of the four — [table](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#accuracy-by-domain--wer--95-ci) | Russian-only workloads; the default for a reason |
 | `e2e_rnnt` | Same size class as `rnnt` (~850 MB FP32 → INT8 generated locally) | Russian | Punctuation / casing / ITN **baked in**, one pass | Higher WER than `rnnt`, but the best punctuation/casing F1 — [comparison](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#punctuation-quality--e2e_rnnt-vs-rnnt--rupunct-restore) | You want readable Russian in a single pass with no restore step |
-| `ml_ctc` | ~225 MB pre-quantized INT8, encoder-only (no decoder/joiner) | ru/en/kk/ky/uz | Bare lowercase | [Multilingual tables](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#english--wer--librispeech-test-clean) | Multilingual audio on a small footprint |
+| `ml_ctc` | ~225 MB pre-quantized INT8, encoder-only (no decoder/joiner) | ru/en/kk/ky/uz | Bare lowercase | [Multilingual tables](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#english--wer--librispeech-test-clean) | Multilingual audio or ~1.5× RTF vs `rnnt` (ready RSS ≈ `rnnt`, not a lean-RAM SKU) |
 | `ml_ctc_large` | ~592 MB pre-quantized INT8, encoder-only | ru/en/kk/ky/uz | Bare lowercase | Best multilingual accuracy; approaches `rnnt` on Russian clean read — [table](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#accuracy-by-domain--wer--95-ci) | Mixed-language audio, or English/Kazakh/Kyrgyz/Uzbek at all |
 
 Two hard constraints the table implies:
@@ -278,9 +278,9 @@ gigastt --offline transcribe sample.wav --model-dir /srv/gigastt-models
 ### Sizing the session pool (RAM)
 
 Every pool slot deserializes **its own encoder copy**, so RSS scales linearly
-with `--pool-size` (default 2). The engine budgets each slot at roughly
-`2 × encoder-file-size` resident (measured ~1.9× on the INT8 `rnnt` encoder,
-CPU provider, release build):
+with `--pool-size` (default 2 for multi-connection hosts). The engine budgets
+each slot at roughly `2 × encoder-file-size` resident (measured ~1.9× on the
+INT8 `rnnt` encoder, CPU provider, release build):
 
 | Head (as loaded) | Encoder file | ≈ RAM per pool slot | Default pool 2 |
 |---|---|---|---|
@@ -288,6 +288,17 @@ CPU provider, release build):
 | `rnnt` / `e2e_rnnt` FP32 (`--skip-quantize`) | 844 MB | ~1.6 GB | ~3.3 GB — never in production |
 | `ml_ctc` INT8 | ~225 MB | ~0.45 GB | ~0.9 GB |
 | `ml_ctc_large` INT8 | ~592 MB | ~1.2 GB | ~2.4 GB |
+
+**Edge / low-RAM:** prefer `--pool-size 1` (~400 MB RSS). That also keeps
+encoder intra-op threads on a single job (auto threads = logical CPUs ÷ pool),
+so lone-job RTF is typically **~10–20% better** than pool=2 with the same
+cores. Keep the default 2 when you need two concurrent sessions and have the
+RAM.
+
+**Encoder threads (CPU EP):** leave `--encoder-intra-threads` unset so the
+server spreads logical CPUs across the pool. Do **not** set `1` on multi-core
+hosts unless debugging — it is about **~3× slower** than auto. Explicit `1`
+still passes through for debug.
 
 Two safety nets are built in:
 
@@ -299,8 +310,8 @@ Two safety nets are built in:
   on a partially loaded pool instead of crashing when memory runs out mid-load.
 
 Rule of thumb: `RAM ≥ pool_size × per-slot + ~1 GB for the OS and request
-peaks`. On a 4 GB box that means `--pool-size 1–2` with the INT8 encoder —
-the same conclusion as the OOM pitfall in
+peaks`. On a 4 GB box that means `--pool-size 1` (edge) or at most 2 with the
+INT8 encoder — the same conclusion as the OOM pitfall in
 [Deployment & ops](06-deployment-ops.md).
 
 **Verify:**
