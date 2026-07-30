@@ -1287,6 +1287,136 @@ fn test_decode_audio_bytes_g722_wav_ffmpeg_fixture_matches_reference() {
 
 // --- Opus (OGG container, pure-Rust opus-rs fallback decoder) ---
 
+/// The whole-buffer Opus pipeline as it stood before the streaming source:
+/// decode every channel of the whole file, mix to mono, then feed the resampler
+/// in exact `RESAMPLE_STAGING_FRAMES` chunks. Kept here verbatim as the oracle
+/// the streaming decode must reproduce sample for sample.
+#[cfg(feature = "file-decode")]
+fn eager_opus_reference(bytes: &[u8]) -> anyhow::Result<Vec<f32>> {
+    use symphonia::core::formats::probe::Hint;
+    use symphonia::core::formats::{FormatOptions, TrackType};
+    use symphonia::core::io::MediaSourceStream;
+    use symphonia::core::meta::MetadataOptions;
+
+    let source = BytesMediaSource::new(bytes::Bytes::copy_from_slice(bytes));
+    let mss = MediaSourceStream::new(Box::new(source), Default::default());
+    let mut format = symphonia::default::get_probe().probe(
+        &Hint::new(),
+        mss,
+        FormatOptions::default(),
+        MetadataOptions::default(),
+    )?;
+    let (track_id, sample_rate, channels) = {
+        let track = format
+            .default_track(TrackType::Audio)
+            .ok_or_else(|| anyhow::anyhow!("no audio track"))?;
+        let p = track
+            .codec_params
+            .as_ref()
+            .and_then(|p| p.audio())
+            .ok_or_else(|| anyhow::anyhow!("no audio params"))?;
+        (
+            track.id,
+            p.sample_rate.ok_or_else(|| anyhow::anyhow!("no rate"))?,
+            p.channels.as_ref().map(|c| c.count()).unwrap_or(1),
+        )
+    };
+    let mono = mix_channels_to_mono(&super::opus::decode_opus_channels(
+        &mut *format,
+        track_id,
+        channels,
+        usize::MAX,
+        f64::INFINITY,
+    )?);
+    let mut resampler = super::resample::ResampleTo16k::new(SampleRate(sample_rate), None);
+    for piece in mono.chunks(super::resample::RESAMPLE_STAGING_FRAMES) {
+        resampler.stage().extend_from_slice(piece);
+        resampler.flush_full()?;
+    }
+    let mut out = Vec::new();
+    resampler.finish_into(&mut out)?;
+    Ok(out)
+}
+
+#[test]
+fn test_opus_streaming_decode_matches_whole_buffer() {
+    // Opus used to be the one container that could not stream: the fallback
+    // decoder accumulated every channel of the whole file before anything was
+    // mixed or resampled, which is what kept it on the duration ceiling. It
+    // decodes packet-by-packet now — and must yield the same samples, not
+    // merely close ones.
+    for (name, bytes) in [
+        (
+            "opus_tone.ogg",
+            &include_bytes!("../../../tests/fixtures/opus/opus_tone.ogg")[..],
+        ),
+        (
+            "opus_tone_no_eos.ogg",
+            &include_bytes!("../../../tests/fixtures/opus/opus_tone_no_eos.ogg")[..],
+        ),
+    ] {
+        let streamed = decode_audio_bytes(bytes).expect("streaming decode");
+        let eager = eager_opus_reference(bytes).expect("whole-buffer decode");
+        assert!(!streamed.is_empty(), "{name} decoded to nothing");
+        assert_eq!(streamed, eager, "{name}: streaming decode diverged");
+    }
+}
+
+#[test]
+fn test_opus_streaming_windows_match_slice_over_flat_decode() {
+    // The windowed source over an Opus stream must yield exactly what
+    // `SliceWindows` yields over the same flat decode — the same guarantee the
+    // symphonia-backed source carries.
+    let bytes =
+        bytes::Bytes::from_static(include_bytes!("../../../tests/fixtures/opus/opus_tone.ogg"));
+    // A window shorter than the clip so the overlapping geometry is exercised.
+    let spec = WindowSpec::new(16_000, 16_000, 3_200);
+    let flat = FileWindows::from_bytes(bytes.clone(), WindowSpec::flat(), None)
+        .expect("open flat")
+        .drain_to_vec()
+        .expect("drain");
+    let mut src = FileWindows::from_bytes(bytes, spec, None).expect("open windows");
+    let mut got = Vec::new();
+    while let Some(w) = src.next_window().expect("window") {
+        got.push((w.start_sample, w.samples.to_vec()));
+    }
+    let mut want = Vec::new();
+    let mut sw = SliceWindows::new(&flat, spec);
+    while let Some(w) = sw.next_window().expect("slice window") {
+        want.push((w.start_sample, w.samples.to_vec()));
+    }
+    assert!(
+        got.len() > 1,
+        "expected the windowed regime, got {}",
+        got.len()
+    );
+    assert_eq!(got, want);
+    assert_eq!(src.total_16k_samples(), flat.len());
+}
+
+#[test]
+fn test_push_mono_mix_matches_mix_channels_to_mono() {
+    // The streaming decode mixes per packet; the whole-buffer one mixed the
+    // finished per-channel buffers. Same arithmetic, pinned.
+    for channels in [1usize, 2] {
+        let frames = 97;
+        let pcm: Vec<f32> = (0..frames * channels)
+            .map(|i| ((i as f32) * 0.37).sin() * 0.8 - 0.13)
+            .collect();
+        let mut got = Vec::new();
+        super::opus::push_mono_mix(&pcm, channels, frames, &mut got);
+
+        let per_channel: Vec<Vec<f32>> = (0..channels)
+            .map(|c| (0..frames).map(|f| pcm[f * channels + c]).collect())
+            .collect();
+        assert_eq!(
+            got,
+            mix_channels_to_mono(&per_channel),
+            "channels={channels}"
+        );
+    }
+}
+
 #[test]
 fn test_is_recoverable_packet_eof_matches_unexpected_eof_only() {
     use std::io::{Error as IoError, ErrorKind};
@@ -1822,6 +1952,69 @@ fn test_telephony_raw_streaming_matches_whole_buffer_resample() {
     let reference = resample(&at_source, SampleRate(8_000), SampleRate(16_000)).unwrap();
     let streamed = decode_telephony_raw(&encoded, TelephonyCodec::Pcmu, 8_000).unwrap();
     assert_matches_whole_buffer(&streamed, &reference, "pcmu 8k");
+}
+
+// --- AudioChunks (fixed-size streaming decode) ---
+
+/// The chunk sequence must be exactly `slice.chunks(n)` over the flat decode —
+/// same samples, same boundaries — because the streaming recognizer's state
+/// depends on the chunk cadence, so any drift here would change a transcript.
+#[test]
+fn test_audio_chunks_match_flat_decode_chunked() {
+    for &n in &[1usize, 999, 16_000, 16_001, 48_000, 120_000] {
+        for &chunk in &[16_000usize, 640, 7_000] {
+            let src: Vec<f32> = (0..n)
+                .map(|i| 0.4 * ((i as f32) * 0.017).sin() + 0.2 * ((i as f32) * 0.0031).sin())
+                .collect();
+            let wav = bytes::Bytes::from(encode_wav_pcm16(&src, 16000));
+            let flat = decode_audio_bytes(&wav).expect("flat decode");
+
+            let mut chunks = AudioChunks::from_bytes(wav, chunk, None).expect("open chunks");
+            let mut got: Vec<Vec<f32>> = Vec::new();
+            while let Some(c) = chunks.next_chunk().expect("chunk") {
+                got.push(c.to_vec());
+            }
+            let want: Vec<Vec<f32>> = flat.chunks(chunk).map(<[f32]>::to_vec).collect();
+            assert_eq!(got, want, "n={n} chunk={chunk}");
+            assert_eq!(
+                chunks.total_16k_samples(),
+                flat.len(),
+                "n={n} chunk={chunk}"
+            );
+        }
+    }
+}
+
+/// An operator length limit still trips, and as the typed `AudioTooLong` so the
+/// HTTP layer can answer 413 rather than a generic decode failure.
+#[test]
+fn test_audio_chunks_honour_max_audio_secs() {
+    let src = vec![0.1f32; 16_000 * 5];
+    let wav = bytes::Bytes::from(encode_wav_pcm16(&src, 16000));
+    // Unbounded: the whole clip streams.
+    let mut ok = AudioChunks::from_bytes(wav.clone(), 16_000, None).expect("open");
+    let mut total = 0;
+    while let Some(c) = ok.next_chunk().expect("chunk") {
+        total += c.len();
+    }
+    assert_eq!(total, src.len());
+
+    // Bounded below the clip length: the budget trips during the pull.
+    let mut capped = AudioChunks::from_bytes(wav, 16_000, Some(1.0)).expect("open");
+    let err = loop {
+        match capped.next_chunk() {
+            Ok(Some(_)) => continue,
+            Ok(None) => panic!("a 5 s clip must not drain under a 1 s limit"),
+            Err(e) => break e,
+        }
+    };
+    assert!(
+        matches!(
+            err.downcast_ref::<crate::error::GigasttError>(),
+            Some(crate::error::GigasttError::AudioTooLong { .. })
+        ),
+        "expected a typed AudioTooLong, got: {err:#}"
+    );
 }
 
 // --- Streaming dual-mono detection ---
