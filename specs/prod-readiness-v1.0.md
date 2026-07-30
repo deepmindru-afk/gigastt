@@ -1,5 +1,10 @@
 # gigastt v1.0 — production-readiness TODO
 
+> **Completed milestone — historical record.** This review covered the road to v1.0,
+> which shipped long ago (current release: 2.16.0). It is kept because the V1-NN
+> indices referenced elsewhere resolve here. For the active backlog use
+> `specs/resource-ttx-roadmap.md`; for what is released, `CHANGELOG.md`.
+
 Consolidated findings from the 4-critic review (2026-04-18) covering:
 architecture, prod-readiness, test coverage, security, and gaps.
 Supersedes the residual items in `specs/todo.md`; see `specs/plan.md`

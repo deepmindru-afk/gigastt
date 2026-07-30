@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+A few early versions (0.3.0, 0.4.0–0.4.2, 0.9.6, 2.0.0–2.0.2, 2.2.1, 2.9.0, 2.14.1)
+were released without a git tag, so their headings carry no compare link.
+
 ## [Unreleased]
 
 ### Changed
@@ -192,7 +195,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **`ort` is pinned to exactly `2.0.0-rc.12`.** The previous requirement was a caret, so
+- **`ort` is pinned to an exact version instead of a caret.** The previous requirement was a caret, so
   any dependency resolution without this repository's `Cargo.lock` picked up
   `2.0.0-rc.13` (published 2026-07-28), where the `CoreML` / `CUDA` / `NNAPI` execution
   providers moved behind `ort`'s own Cargo features. `gigastt-core` then failed to compile
@@ -741,6 +744,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `200 {"reloaded":true,"variant":…,"encoder":"int8"|"fp32"}` on success.
 
 ## [2.6.0] - 2026-07-09
+
+### Changed (dependencies)
+
+- **`polyvoice` moved from 0.7.0 to 0.9.0** (PR #127). This is the release that
+  introduced `FbankOnnxExtractor`, the rank-3 fbank speaker encoder the 2.11.2
+  diarization fix builds on.
 
 ### Added
 
@@ -1306,7 +1315,7 @@ benchmark against current Russian-ASR engines, and a reworked README.
 - **cbindgen 0.28 → 0.29** — FFI header generation build-dependency update.
 - **codecov-action 5 → 6** — CI coverage action update.
 
-## [2.0.8] - 2026-05-07
+## [2.0.8] - 2026-05-08
 
 ### Changed
 
@@ -1499,6 +1508,16 @@ benchmark against current Russian-ASR engines, and a reworked README.
   - `gigastt` — CLI + axum server (binary crate)
   This enables embedding `gigastt-core` as a standalone library in other Rust
   projects.
+
+## [1.0.2] - 2026-05-07
+
+### Added
+
+- SIGHUP config reload for `RuntimeLimits` via `arc-swap`; the rate limiter is
+  rebuilt on reload and startup now reads the config file.
+- WER benchmark with a threshold gate on main push.
+- rustdoc coverage for all public API items; `transcribe_file` and
+  `websocket_client` examples.
 
 ## [1.0.1] - 2026-05-06
 
@@ -2035,6 +2054,19 @@ _Release candidate for v0.9.0 — bundles five P0 fixes plus two supporting item
 - **Dockerfiles** updated to Rust 1.85+ for edition 2024 support.
 - **Audio decode refactor** — extracted shared inner function, eliminated ~80 line duplication.
 
+## [0.4.4] - 2026-04-13
+
+### Added
+
+- Russian README (`README_RU.md`) with a language switcher.
+
+### Fixed
+
+- CI toolchain: stable Rust, `-A dead_code` restored, `--locked` audit;
+  shutdown-test timeout raised 5 s → 15 s for slow CI debug builds, and
+  `e2e_shutdown` excluded from CI (needs graceful connection termination).
+- README inaccuracies: WER header, test counts, a missing endpoint, CLI flags.
+
 ## [0.4.3] - 2026-04-13
 
 ### Added
@@ -2205,11 +2237,17 @@ _Release candidate for v0.9.0 — bundles five P0 fixes plus two supporting item
 
 [Unreleased]: https://github.com/ekhodzitsky/gigastt/compare/v2.16.0...HEAD
 [2.16.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.15.0...v2.16.0
+[2.0.9]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.8...v2.0.9
+[2.0.8]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.7...v2.0.8
+[2.0.7]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.6...v2.0.7
+[2.0.6]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.5...v2.0.6
+[2.0.5]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.4...v2.0.5
+[2.0.4]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.3...v2.0.4
+[0.9.5]: https://github.com/ekhodzitsky/gigastt/compare/v0.9.4...v0.9.5
 [2.15.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.14.4...v2.15.0
 [2.14.4]: https://github.com/ekhodzitsky/gigastt/compare/v2.14.3...v2.14.4
 [2.14.3]: https://github.com/ekhodzitsky/gigastt/compare/v2.14.2...v2.14.3
-[2.14.2]: https://github.com/ekhodzitsky/gigastt/compare/v2.14.1...v2.14.2
-[2.14.1]: https://github.com/ekhodzitsky/gigastt/compare/v2.14.0...v2.14.1
+[2.14.2]: https://github.com/ekhodzitsky/gigastt/compare/v2.14.0...v2.14.2
 [2.14.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.13.0...v2.14.0
 [2.13.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.12.0...v2.13.0
 [2.12.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.11.3...v2.12.0
@@ -2217,8 +2255,7 @@ _Release candidate for v0.9.0 — bundles five P0 fixes plus two supporting item
 [2.11.2]: https://github.com/ekhodzitsky/gigastt/compare/v2.11.1...v2.11.2
 [2.11.1]: https://github.com/ekhodzitsky/gigastt/compare/v2.11.0...v2.11.1
 [2.11.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.10.0...v2.11.0
-[2.10.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.9.0...v2.10.0
-[2.9.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.8.0...v2.9.0
+[2.10.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.8.0...v2.10.0
 [2.8.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.7.0...v2.8.0
 [2.7.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.6.0...v2.7.0
 [2.6.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.5.0...v2.6.0
@@ -2231,14 +2268,11 @@ _Release candidate for v0.9.0 — bundles five P0 fixes plus two supporting item
 [2.0.12]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.11...v2.0.12
 [2.0.11]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.10...v2.0.11
 [2.0.10]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.9...v2.0.10
-[2.0.3]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.2...v2.0.3
-[2.0.2]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.1...v2.0.2
-[2.0.1]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.0...v2.0.1
-[2.0.0]: https://github.com/ekhodzitsky/gigastt/compare/v1.0.1...v2.0.0
+[2.0.3]: https://github.com/ekhodzitsky/gigastt/compare/v1.0.2...v2.0.3
+[1.0.2]: https://github.com/ekhodzitsky/gigastt/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/ekhodzitsky/gigastt/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/ekhodzitsky/gigastt/compare/v0.10.0...v1.0.0
-[0.10.0]: https://github.com/ekhodzitsky/gigastt/compare/v0.9.6...v0.10.0
-[0.9.6]: https://github.com/ekhodzitsky/gigastt/compare/v0.9.5...v0.9.6
+[0.10.0]: https://github.com/ekhodzitsky/gigastt/compare/v0.9.5...v0.10.0
 [0.9.4]: https://github.com/ekhodzitsky/gigastt/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/ekhodzitsky/gigastt/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/ekhodzitsky/gigastt/compare/v0.9.1...v0.9.2
@@ -2257,10 +2291,7 @@ _Release candidate for v0.9.0 — bundles five P0 fixes plus two supporting item
 [0.5.2]: https://github.com/ekhodzitsky/gigastt/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/ekhodzitsky/gigastt/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/ekhodzitsky/gigastt/compare/v0.4.3...v0.5.0
-[0.4.3]: https://github.com/ekhodzitsky/gigastt/compare/v0.4.2...v0.4.3
-[0.4.2]: https://github.com/ekhodzitsky/gigastt/compare/v0.4.1...v0.4.2
-[0.4.1]: https://github.com/ekhodzitsky/gigastt/compare/v0.4.0...v0.4.1
-[0.4.0]: https://github.com/ekhodzitsky/gigastt/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/ekhodzitsky/gigastt/compare/v0.2.0...v0.3.0
+[0.4.4]: https://github.com/ekhodzitsky/gigastt/compare/v0.4.3...v0.4.4
+[0.4.3]: https://github.com/ekhodzitsky/gigastt/compare/v0.2.0...v0.4.3
 [0.2.0]: https://github.com/ekhodzitsky/gigastt/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/ekhodzitsky/gigastt/releases/tag/v0.1.2

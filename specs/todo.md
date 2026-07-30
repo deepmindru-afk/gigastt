@@ -355,6 +355,9 @@ long-file + upgrade docs). Deferred:
 - Fix: opt-in `POST /v1/jobs` → `202 {job_id}` + `GET /v1/jobs/{id}`
   poll, backed by the batch pool + a TTL job map. Off unless
   `--enable-jobs`.
+- **Status: ✅ closed (PR #146, v2.10.0)** — shipped as `server/http/jobs_api.rs`
+  with submit / poll / cancel / SSE progress / retry / TTL eviction, covered by
+  `tests/e2e_jobs.rs`.
 
 ### 27. Downstream consumer not notified (P2)
 - `voodoo2serg/recognition` hand-rolls ffmpeg segmentation + faked
