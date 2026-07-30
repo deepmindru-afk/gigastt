@@ -219,6 +219,42 @@ pub async fn start_server_with_limits(
     (port, shutdown_tx)
 }
 
+/// Start the server with both an explicit session-pool size and custom
+/// `RuntimeLimits`. Used by the cancellation / watchdog e2e tests that need a
+/// single deterministic pool slot *and* a short `inference_timeout_secs`.
+pub async fn start_server_with_pool_and_limits(
+    model_dir: &str,
+    pool_size: usize,
+    limits: gigastt::server::RuntimeLimits,
+) -> (u16, oneshot::Sender<()>) {
+    let (port, listener) = free_port().await;
+    let (shutdown_tx, shutdown_rx) = oneshot::channel();
+
+    let engine = gigastt::inference::Engine::load_with_pool_size(model_dir, pool_size).unwrap();
+    let config = gigastt::server::ServerConfig {
+        port,
+        host: "127.0.0.1".into(),
+        origin_policy: gigastt::server::OriginPolicy::loopback_only(),
+        limits,
+        metrics_enabled: false,
+        metrics_listen: gigastt::server::config::default_metrics_listen(),
+        trust_proxy: false,
+        config_path: None,
+        // Batch pool falls back to the interactive pool, so `pool_size` is the
+        // single effective slot the `/v1/transcribe` batch path draws from.
+        batch_pool_size: 0,
+    };
+    tokio::spawn(gigastt::server::run_with_config_listener(
+        engine,
+        config,
+        Some(shutdown_rx),
+        listener,
+    ));
+
+    wait_for_ready(port, Duration::from_secs(30)).await;
+    (port, shutdown_tx)
+}
+
 /// Start the server with the asynchronous `/v1/jobs` API enabled. Uses a
 /// dedicated batch pool of size `batch_pool_size` (minimum 1) so job workers do
 /// not contend with the interactive pool used by WebSocket / synchronous REST.
@@ -465,4 +501,29 @@ pub fn assert_msg_type(
         v["type"]
     );
     v
+}
+
+/// A link-farm of the real model directory with `wespeaker_resnet34.onnx` left
+/// out, so a server started on it loads the recognition model but advertises no
+/// diarization capability.
+///
+/// Lets the "diarization requested but unavailable" path be exercised
+/// deterministically instead of depending on whether a speaker model happens to
+/// be installed on the machine. The returned `TempDir` must outlive the server.
+/// Unix only: it relies on symlinks to avoid copying ~850 MB.
+#[cfg(unix)]
+#[allow(dead_code)]
+pub fn model_dir_without_speaker() -> (tempfile::TempDir, String) {
+    let src = model_dir();
+    let dir = tempfile::tempdir().expect("tempdir");
+    for entry in std::fs::read_dir(&src).expect("read model dir") {
+        let entry = entry.expect("dir entry");
+        let name = entry.file_name();
+        if name.to_string_lossy() == "wespeaker_resnet34.onnx" {
+            continue;
+        }
+        std::os::unix::fs::symlink(entry.path(), dir.path().join(&name)).expect("symlink");
+    }
+    let path = dir.path().to_string_lossy().into_owned();
+    (dir, path)
 }

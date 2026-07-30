@@ -21,7 +21,12 @@ pub enum ServerMessage {
         /// Supported input sample rates (omitted from JSON if empty for backward compat).
         #[serde(skip_serializing_if = "Vec::is_empty")]
         supported_rates: Vec<u32>,
-        /// Whether diarization is active for this session. Omitted from JSON when false.
+        /// Whether this server *can* diarize — a speaker model is loaded.
+        /// `Ready` precedes `Configure`, so this is a capability advert, not
+        /// session state: `Configure { diarization: true }` against a `false`
+        /// here is a graceful no-op (same convention as `punctuation`), and
+        /// this field is how a client knows that in advance. Omitted from JSON
+        /// when false.
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         diarization: bool,
         /// Minimum protocol version accepted by this server. Lets clients

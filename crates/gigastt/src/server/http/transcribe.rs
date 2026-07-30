@@ -6,12 +6,13 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json, Response};
 use serde::Serialize;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64};
+use std::sync::{Arc, OnceLock};
 
 use super::super::config::RuntimeLimits;
 use super::super::metrics::MetricsRegistry;
 use gigastt_core::export::Segment;
-use gigastt_core::inference::Engine;
+use gigastt_core::inference::{DiarizationOutcome, Engine};
 
 use super::error::{
     ApiError, api_error, api_inference_timeout_error, api_pool_closed_error, api_timeout_error,
@@ -41,6 +42,80 @@ pub struct TranscribeResponse {
     /// so existing clients that read `text` / `words` / `duration` are unaffected.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub segments: Option<Vec<Segment>>,
+    /// Present only when `?diarization=true` was requested and speakers could
+    /// **not** be labeled — the transcript is still complete, but the client
+    /// would otherwise see empty speaker fields with no explanation. Additive:
+    /// absent when diarization was not requested or succeeded, so existing
+    /// clients see the exact same shape.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub diarization: Option<DiarizationNotice>,
+}
+
+/// Capability notice attached to a transcription response when a
+/// `?diarization=true` request produced no speaker labels. Makes the reason
+/// visible to the client instead of returning an all-empty-speaker transcript
+/// with HTTP 200 and no explanation.
+#[derive(Serialize)]
+pub struct DiarizationNotice {
+    /// Always `"unavailable"` — the notice only appears when diarization was
+    /// requested and did not label speakers.
+    pub status: &'static str,
+    /// Machine-readable cause: `"duration_ceiling"`, `"no_speaker_model"`, or
+    /// `"pipeline_error"`.
+    pub reason: &'static str,
+    /// Human-readable, non-sensitive explanation.
+    pub message: String,
+    /// Length of the submitted audio in seconds — present only for the duration
+    /// ceiling, so the client can see what was too long.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_seconds: Option<f64>,
+    /// The clusterer's single-pass ceiling in seconds — present only for the
+    /// duration ceiling.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ceiling_seconds: Option<f64>,
+}
+
+/// Map a [`DiarizationOutcome`] to the client-facing [`DiarizationNotice`].
+///
+/// `Applied` (and any future success) yields `None` — no notice, so a
+/// successful or unrequested diarization leaves the response shape untouched.
+/// Every declined case carries a distinct `reason`, and the duration ceiling
+/// also carries the input and ceiling seconds.
+pub(super) fn diarization_notice(outcome: DiarizationOutcome) -> Option<DiarizationNotice> {
+    match outcome {
+        DiarizationOutcome::Applied => None,
+        DiarizationOutcome::NoSpeakerModel => Some(DiarizationNotice {
+            status: "unavailable",
+            reason: "no_speaker_model",
+            message: "diarization was requested but no speaker model is loaded".to_string(),
+            input_seconds: None,
+            ceiling_seconds: None,
+        }),
+        DiarizationOutcome::DurationCeiling {
+            input_secs,
+            ceiling_secs,
+        } => Some(DiarizationNotice {
+            status: "unavailable",
+            reason: "duration_ceiling",
+            message: format!(
+                "diarization skipped: input {input_secs:.0}s exceeds the {ceiling_secs:.0}s \
+                 single-pass limit; the transcript is complete but has no speaker labels"
+            ),
+            input_seconds: Some(input_secs),
+            ceiling_seconds: Some(ceiling_secs),
+        }),
+        DiarizationOutcome::Failed => Some(DiarizationNotice {
+            status: "unavailable",
+            reason: "pipeline_error",
+            message: "diarization failed; the transcript is complete but has no speaker labels"
+                .to_string(),
+            input_seconds: None,
+            ceiling_seconds: None,
+        }),
+        // `DiarizationOutcome` is `#[non_exhaustive]`; a future variant should
+        // add its own notice above. Until then, prefer silence over a wrong one.
+        _ => None,
+    }
 }
 
 /// Resolve the `?codec=` / `?sample_rate=` query pair into a raw-decode recipe.
@@ -135,6 +210,7 @@ pub(super) async fn run_file_transcription(
     state: &AppState,
     body: Bytes,
     params: &ExportParams,
+    diar_sink: Option<Arc<OnceLock<DiarizationOutcome>>>,
 ) -> Result<gigastt_core::inference::TranscribeResult, ApiError> {
     if body.is_empty() {
         return Err(api_error(
@@ -218,17 +294,39 @@ pub(super) async fn run_file_transcription(
     let mut reservation =
         reserve_batch_slot(&engine, &limits, state.metrics_registry.as_ref()).await?;
 
+    // Cooperative cancellation + real-progress plumbing, shared with the jobs
+    // path. `abort` lets a client disconnect, a fired shutdown, or the
+    // no-progress watchdog stop the detached ONNX run at its next window;
+    // `progress` carries per-window processed-sample counts back to the watchdog
+    // so a long file that keeps advancing never trips the timeout.
+    let abort = Arc::new(AtomicBool::new(false));
+    let progress = Arc::new(AtomicU64::new(0));
+
     let file_opts = super::super::file_transcribe::FileTranscribeOpts {
         overrides,
         hotwords,
         split_channels,
         diarization: request_diarization,
         raw_codec,
+        abort: Some(abort.clone()),
+        progress: Some(progress.clone()),
+        diarization_outcome: diar_sink,
+        max_audio_secs: limits.max_audio_secs_opt(),
     };
+
+    // A client disconnect drops this handler future before it returns, dropping
+    // the guard and flipping `abort`; the detached blocking run then cancels at
+    // its next window and returns the triplet. On the normal return path the
+    // guard fires after the result is already in hand, so it is a harmless no-op.
+    let _abort_guard = super::super::file_transcribe::AbortOnDrop(abort.clone());
 
     let inference_start = std::time::Instant::now();
     let span = tracing::Span::current();
-    let handle = tokio::task::spawn_blocking(move || {
+    // Route through the shared TaskTracker (like the WS / SSE paths) so a
+    // SIGTERM drain can wait for an in-flight REST transcription up to
+    // `--shutdown-drain-secs`; a bare `tokio::task::spawn_blocking` is untracked
+    // and would be abandoned on shutdown, cutting the response mid-run.
+    let handle = state.tracker.spawn_blocking(move || {
         let _enter = span.enter();
         // catch_unwind ensures triplet is returned to pool even on panic
         let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -251,28 +349,33 @@ pub(super) async fn run_file_transcription(
         // reservation dropped here automatically returns the triplet to the pool
     });
 
-    // Guard the blocking ONNX run with the per-request inference timeout
-    // (`0` disables). `spawn_blocking` can't be cancelled, so the detached task
-    // keeps the triplet and returns the slot to the pool only when the run
-    // finishes; the client gets a typed `inference_timeout` (504) immediately.
+    // The per-request inference timeout is now a no-progress watchdog: the
+    // deadline resets whenever a window completes, so a long file streaming
+    // steady progress never trips it, while a genuinely stalled run still trips
+    // at the same moment and returns a typed `inference_timeout` (504). On a
+    // trip — and on shutdown — the watchdog flips `abort`, so the detached run
+    // releases its triplet within one window instead of staying wedged for the
+    // whole file. `0` disables the watchdog (shutdown still cancels).
     let inference_timeout_secs = limits.inference_timeout_secs;
-    let result = if inference_timeout_secs == 0 {
-        handle.await
-    } else {
-        match tokio::time::timeout(
-            std::time::Duration::from_secs(inference_timeout_secs),
-            handle,
-        )
-        .await
-        {
-            Ok(r) => r,
-            Err(_elapsed) => {
-                if let Some(ref reg) = state.metrics_registry {
-                    reg.counter_inc("gigastt_inference_timeouts_total", &[], 1);
-                }
-                tracing::error!("REST inference exceeded {inference_timeout_secs}s — aborting");
-                return Err(api_inference_timeout_error());
+    let outcome = super::super::file_transcribe::await_transcription_watchdog(
+        handle,
+        &progress,
+        &abort,
+        inference_timeout_secs,
+        &state.shutdown,
+    )
+    .await;
+
+    let result = match outcome {
+        super::super::file_transcribe::WatchdogOutcome::Joined(r) => r,
+        super::super::file_transcribe::WatchdogOutcome::TimedOut => {
+            if let Some(ref reg) = state.metrics_registry {
+                reg.counter_inc("gigastt_inference_timeouts_total", &[], 1);
             }
+            tracing::error!(
+                "REST inference made no progress for {inference_timeout_secs}s — aborting"
+            );
+            return Err(api_inference_timeout_error());
         }
     };
     if let Some(ref reg) = state.metrics_registry {
@@ -285,6 +388,26 @@ pub(super) async fn run_file_transcription(
 
     match result {
         Ok(Ok(result)) => Ok(result),
+        Ok(Err(gigastt_core::error::GigasttError::Cancelled)) => {
+            // Reached only when a shutdown cancelled the run while the client was
+            // still connected (a disconnect drops this future before here). Be
+            // honest that the server is going away rather than faking success.
+            Err(api_error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Server is shutting down",
+                "cancelled",
+            ))
+        }
+        Ok(Err(e)) if matches!(&e, gigastt_core::error::GigasttError::AudioTooLong { .. }) => {
+            // Distinct from the generic decode failure below: a client must be
+            // able to tell "too long" (raise `--max-audio-secs` or split) from
+            // "corrupt". 413 + `audio_too_long`, with the observed/limit seconds.
+            Err(api_error(
+                StatusCode::PAYLOAD_TOO_LARGE,
+                &e.to_string(),
+                e.code(),
+            ))
+        }
         Ok(Err(e)) => {
             tracing::error!("Transcription error: {e}");
             Err(api_error(
@@ -319,8 +442,15 @@ pub async fn transcribe(
     Query(params): Query<ExportParams>,
     body: Bytes,
 ) -> Result<Response, ApiError> {
-    let result = run_file_transcription(&state, body, &params).await?;
+    // Only sink the diarization outcome when diarization was requested, so a
+    // `?diarization=true` request that produces no speaker labels can be turned
+    // into a visible notice instead of an all-empty-speaker transcript.
+    let diar_sink: Option<Arc<OnceLock<DiarizationOutcome>>> =
+        (params.diarization == Some(true)).then(|| Arc::new(OnceLock::new()));
+    let result = run_file_transcription(&state, body, &params, diar_sink.clone()).await?;
     if let Some(rendered) = render_export_response(&result, &params)? {
+        // Export formats (SRT/VTT/TSV/plain text) have no field for a capability
+        // notice; it surfaces on the JSON path below.
         Ok(rendered)
     } else {
         // Default JSON response. `?segments=true` adds a cue-grouped
@@ -332,13 +462,89 @@ pub async fn transcribe(
         } else {
             None
         };
+        // Attach a diarization notice only when diarization was requested and
+        // declined (ceiling / no model / pipeline error); `Applied` and the
+        // not-requested case leave the field absent.
+        let diarization = diar_sink
+            .as_ref()
+            .and_then(|sink| sink.get().copied())
+            .and_then(diarization_notice);
         Ok(Json(TranscribeResponse {
             text: result.text,
             words: result.words,
             duration: result.duration_s,
             confidence: result.confidence,
             segments,
+            diarization,
         })
         .into_response())
+    }
+}
+
+#[cfg(test)]
+mod diarization_notice_tests {
+    use super::*;
+
+    #[test]
+    fn test_applied_yields_no_notice() {
+        // A successful diarization needs no notice: speakers ride on the words.
+        assert!(diarization_notice(DiarizationOutcome::Applied).is_none());
+    }
+
+    #[test]
+    fn test_duration_ceiling_carries_numbers_and_reason() {
+        let notice = diarization_notice(DiarizationOutcome::DurationCeiling {
+            input_secs: 5400.0,
+            ceiling_secs: 3600.0,
+        })
+        .expect("a declined ceiling must produce a notice");
+        assert_eq!(notice.status, "unavailable");
+        assert_eq!(notice.reason, "duration_ceiling");
+        assert_eq!(notice.input_seconds, Some(5400.0));
+        assert_eq!(notice.ceiling_seconds, Some(3600.0));
+
+        // The wire JSON carries both numbers and the machine-readable reason.
+        let json = serde_json::to_value(&notice).expect("serialize");
+        assert_eq!(json["reason"], "duration_ceiling");
+        assert_eq!(json["input_seconds"], 5400.0);
+        assert_eq!(json["ceiling_seconds"], 3600.0);
+    }
+
+    #[test]
+    fn test_no_speaker_model_reason_without_numbers() {
+        let notice = diarization_notice(DiarizationOutcome::NoSpeakerModel).expect("notice");
+        assert_eq!(notice.reason, "no_speaker_model");
+        assert!(notice.input_seconds.is_none());
+        assert!(notice.ceiling_seconds.is_none());
+        // `skip_serializing_if` keeps the number fields out of the JSON entirely.
+        let json = serde_json::to_value(&notice).expect("serialize");
+        assert!(json.get("input_seconds").is_none());
+        assert!(json.get("ceiling_seconds").is_none());
+    }
+
+    #[test]
+    fn test_failed_maps_to_pipeline_error() {
+        let notice = diarization_notice(DiarizationOutcome::Failed).expect("notice");
+        assert_eq!(notice.reason, "pipeline_error");
+        assert!(notice.input_seconds.is_none());
+    }
+
+    #[test]
+    fn test_response_omits_diarization_field_when_absent() {
+        // The default (not-requested / succeeded) response must be byte-shape
+        // compatible: no `diarization` key at all.
+        let resp = TranscribeResponse {
+            text: "hi".to_string(),
+            words: Vec::new(),
+            duration: 1.0,
+            confidence: None,
+            segments: None,
+            diarization: None,
+        };
+        let json = serde_json::to_value(&resp).expect("serialize");
+        assert!(
+            json.get("diarization").is_none(),
+            "diarization must be omitted when there is no notice"
+        );
     }
 }
