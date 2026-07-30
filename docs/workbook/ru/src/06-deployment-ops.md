@@ -237,7 +237,10 @@ rule_files:
   - /etc/prometheus/rules/gigastt-alerts.yml   # copy of docs/observability/alerts.yml
 ```
 
-Метрики, которые важны (все с префиксом `gigastt_`):
+Метрики, которые важны (все с префиксом `gigastt_`). Готовые правила Prometheus и
+дашборд Grafana лежат в
+[`docs/observability/`](https://github.com/ekhodzitsky/gigastt/tree/main/docs/observability) —
+этот каталог канонический, если таблица ниже когда-нибудь с ним разойдётся:
 
 | Метрика | Значение |
 |---|---|

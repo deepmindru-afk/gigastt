@@ -19,11 +19,16 @@ For accurate RTF (real-time factor) measurements you need self-hosted runners on
 
 ### 1. Install the runner agent
 
+The version below is an example — take the current one from
+[actions/runner releases](https://github.com/actions/runner/releases/latest)
+(GitHub also auto-updates a registered runner).
+
 ```bash
 mkdir ~/actions-runner && cd ~/actions-runner
-curl -o actions-runner-osx-arm64-2.320.0.tar.gz \
-  -L https://github.com/actions/runner/releases/download/v2.320.0/actions-runner-osx-arm64-2.320.0.tar.gz
-tar xzf actions-runner-osx-arm64-2.320.0.tar.gz
+RUNNER_VERSION=2.320.0   # replace with the latest release
+curl -o "actions-runner-osx-arm64-${RUNNER_VERSION}.tar.gz" \
+  -L "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-osx-arm64-${RUNNER_VERSION}.tar.gz"
+tar xzf "actions-runner-osx-arm64-${RUNNER_VERSION}.tar.gz"
 ```
 
 ### 2. Configure
@@ -69,9 +74,10 @@ For auto-start on boot create a `launchd` plist or use `screen` / `tmux`.
 
 ```bash
 mkdir ~/actions-runner && cd ~/actions-runner
-curl -o actions-runner-linux-x64-2.320.0.tar.gz \
-  -L https://github.com/actions/runner/releases/download/v2.320.0/actions-runner-linux-x64-2.320.0.tar.gz
-tar xzf actions-runner-linux-x64-2.320.0.tar.gz
+RUNNER_VERSION=2.320.0   # replace with the latest release
+curl -o "actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz" \
+  -L "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz"
+tar xzf "actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz"
 ```
 
 ### 2. Configure

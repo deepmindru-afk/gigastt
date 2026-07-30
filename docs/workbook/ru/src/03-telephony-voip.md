@@ -198,7 +198,8 @@ curl -s -X POST "http://127.0.0.1:9876/v1/transcribe?diarization=true" \
 только если загружен `wespeaker_resnet34.onnx`. Без файла запрос успешен, но
 слов без `speaker`. Offline-диаризация сопоставляет mid слова с turn;
 streaming ставит последний turn на новые слова (грубее). Контракт:
-[docs/api.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/api.md).
+[docs/api.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/api.md)
+и строка про диаризацию в README проекта.
 
 ### RTP-дамп без контейнера
 

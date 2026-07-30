@@ -9,8 +9,8 @@ you should not need any other document to get here.
 
 ## Prerequisites
 
-- **Disk:** ~1.5 GB free (model + tools). The lean `--prequantized` path needs
-  only ~250 MB during setup.
+- **Disk:** ~250 MB for the default lean INT8 install; ~1.5 GB if you take the
+  `--fp32` path (FP32 download plus on-device quantization).
 - **RAM:** ~800 MB free at the default `--pool-size 2` (~400 MB per session).
 - **Network** (unless you follow the air-gapped recipe): reach either
   `huggingface.co` (full model) or `github.com` (pre-quantized bundle).
@@ -21,7 +21,7 @@ you should not need any other document to get here.
 
 Pick **one** recipe below — macOS, Linux, Windows, Docker, or air-gapped — then
 read [Choosing the recognition head](#choosing-the-recognition-head) and
-[The expensive first run](#the-expensive-first-run) once.
+[What the first run costs](#what-the-first-run-costs) once.
 
 ## Recipe: macOS (Homebrew)
 
@@ -33,8 +33,8 @@ recipe for the protoc prerequisite.
 brew tap ekhodzitsky/gigastt https://github.com/ekhodzitsky/gigastt
 brew install gigastt
 
-# Fetch the model (~850 MB FP32 from HuggingFace, then a one-time ~2 min
-# INT8 quantization pass — see "The expensive first run" below):
+# Fetch the model (~225 MB pre-quantized INT8 bundle by default —
+# see "What the first run costs" below):
 gigastt download
 
 # Transcribe your first file:
@@ -141,8 +141,8 @@ docker run -d --name gigastt \
 ```
 
 The named volume keeps the model across container restarts; without it the
-container re-downloads ~850 MB on every recreation. On first start the
-container downloads the model and quantizes it — the port binds immediately,
+container re-downloads ~225 MB on every recreation. On first start the
+container downloads the model — the port binds immediately,
 but inference is only up when `/ready` turns green:
 
 ```sh
@@ -239,25 +239,25 @@ WER/RTF numbers per head are in
 [docs/benchmarks.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md);
 the deeper model/backend tour is in [Models and backends](07-models-and-backends.md).
 
-## The expensive first run
+## What the first run costs
 
 The very first `gigastt download` (or first `gigastt serve`, which
-auto-downloads a missing model) does two one-time things:
+auto-downloads a missing model) fetches a **~225 MB pre-quantized INT8 bundle**
+from the pinned GitHub Release: SHA-256-verified, staged to `.partial`,
+atomically renamed. No FP32 download, no on-device quantization, no `protoc`.
 
-1. **Downloads ~850 MB** of FP32 ONNX files from HuggingFace
-   (SHA-256-verified, staged to `.partial`, atomically renamed).
-2. **Quantizes the encoder to INT8** (~2 minutes, one-time), producing the
-   ~225 MB encoder the engine actually loads. Later runs reuse it.
+Note it pulls from `github.com`, not `huggingface.co` — useful when one of the
+two is blocked.
 
 Three levers change what you pay:
 
-- `gigastt download` — the recommended shortcut: fetch the
-  ~225 MB pre-quantized INT8 bundle from the pinned GitHub Release. No FP32
-  download, no local quantization, no `protoc`. Note it pulls from
-  `github.com`, not `huggingface.co` — useful when one of the two is blocked.
-- `gigastt download --skip-quantize` (or `GIGASTT_SKIP_QUANTIZE=1` on
-  `serve`) — keep the FP32 encoder and skip quantization. The engine then
-  loads FP32: slower inference and ~4× the model RAM. Only for debugging.
+- `gigastt download --fp32` — the old path: ~850 MB of FP32 ONNX files from
+  HuggingFace, then a one-time ~2-minute INT8 quantization pass producing the
+  same ~225 MB encoder the engine loads. Needs `protoc`. Use it when you want
+  the FP32 encoder for debugging or an offline quantize workflow.
+- `--fp32 --skip-quantize` (or `GIGASTT_SKIP_QUANTIZE=1` on `serve`) — keep the
+  FP32 encoder and skip quantization. The engine then loads FP32: slower
+  inference and ~4× the model RAM. Only for debugging.
 - Nothing — just let the first `serve` do it. The port binds immediately;
   `/health` answers `200` with `"model":"loading"` and `/ready` returns
   `503 {"reason":"initializing"}` until the model is usable, so clients should
@@ -293,10 +293,9 @@ curl -F file=@recording.wav http://127.0.0.1:9876/v1/transcribe
   the Protocol Buffers compiler (`brew install protobuf` /
   `apt install protobuf-compiler`), or skip the toolchain entirely with the
   prebuilt binary / Homebrew.
-- **First `serve` sits there for minutes** — that is the one-time model
-  download + INT8 quantization, not a hang: `/health` returns
-  `{"model":"loading"}` meanwhile. Pre-seed with `gigastt download
-  --prequantized` and gate clients on `/ready`.
+- **First `serve` sits there for a while** — that is the one-time model
+  download, not a hang: `/health` returns `{"model":"loading"}` meanwhile.
+  Pre-seed with `gigastt download` and gate clients on `/ready`.
 - **`Address already in use` on port 9876** — find the holder with
   `lsof -nP -tiTCP:9876 -sTCP:LISTEN`; confirm it is gigastt
   (`ps -p <pid> -o command=`), then `kill <pid>` (SIGTERM drains cleanly), or

@@ -231,7 +231,10 @@ rule_files:
   - /etc/prometheus/rules/gigastt-alerts.yml   # copy of docs/observability/alerts.yml
 ```
 
-The metrics that matter (all prefixed `gigastt_`):
+The metrics that matter (all prefixed `gigastt_`). Ready-made Prometheus rules and
+a Grafana dashboard live in
+[`docs/observability/`](https://github.com/ekhodzitsky/gigastt/tree/main/docs/observability) —
+that directory is the canonical source if this table ever drifts from it:
 
 | Metric | Meaning |
 |---|---|

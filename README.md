@@ -19,7 +19,7 @@ gigastt turns any machine into a private Russian speech-recognition server — o
 
 | Private, on-device | Embeddable + streaming | Accurate Russian | Tiny &amp; real-time |
 |---|---|---|---|
-| No cloud, no keys — runtime is 100% local. MIT engine on MIT weights, commercial-ready. | One static binary, a C-ABI FFI for mobile, or the `gigastt-core` crate — with incremental WebSocket partials, no Python. | Most accurate on 3 of 4 Russian domains: far-field 4.08%, phone 18.50%, YouTube 10.91%; statistical tie on clean read. | ~225 MB INT8 model, RTF ~0.10 (~10× real-time on CPU), 0.94 s cold-start. |
+| No cloud, no keys — after the one-time model download the runtime is 100% local. MIT engine on MIT weights, commercial-ready. | One static binary, a C-ABI FFI for mobile, or the `gigastt-core` crate — with incremental WebSocket partials, no Python. | Most accurate on 3 of 4 Russian domains: far-field 4.08%, phone 18.50%, YouTube 10.91%; statistical tie on clean read. | ~225 MB INT8 model, RTF ~0.10 (~10× real-time on CPU), 0.94 s cold-start. |
 
 **WER** clean 3.55% / far-field 4.08% / phone 18.50% / YouTube 10.91%  ·  **held-out** CV **2.63%** (beats Vosk+FW) · FLEURS 5.26% (FW 3.84 leads) · RuLS **4.21%** (beats Vosk+FW) · SOVA device: Vosk ahead  · ToneWebinars: FW 8.33 leads (gigastt 13.0)  ·  **RTF** ~0.10  ·  **Model** ~225 MB INT8  ·  **Cold-start** 0.94 s  ·  **RAM** ~400 MB single / 790 MB pool-2  ·  **Streaming** first partial ~0.78 s
 
@@ -43,7 +43,7 @@ Conditions: Apple M1, CPU EP, INT8/greedy, 1000 samples/domain (clean read 992; 
 
 **Streaming:** the Whisper engines are offline-only — no partials while you speak. gigastt streams genuine incremental WebSocket partials (~0.78 s to first partial on CPU) from one self-contained binary with no Python; Vosk-server and T-one (300 ms chunks) also stream. So streaming is gigastt's clear win over the Whisper family; over Vosk / T-one the edge is packaging — incremental partials plus a C-ABI FFI in a single binary — not lower latency.
 
-**Punctuation &amp; casing:** gigastt outputs readable Russian out of the box — native on the `e2e_rnnt` head, or via a small bundled RuPunct + ITN pass on the default `rnnt` head (`--punctuation` / `--itn`, auto-downloaded). That matches the Whisper engines (punctuated natively) and beats the Russian specialists — Vosk needs a separate 1.6 GB `recasepunc` add-on and T-one emits none.
+**Punctuation &amp; casing:** gigastt outputs readable Russian out of the box — native on the `e2e_rnnt` head, or via a small bundled RuPunct + ITN pass on the default `rnnt` head (`--punctuation` / `--itn`, auto-downloaded). That matches the Whisper engines (punctuated natively) and beats the Russian specialists — Vosk needs a separate `recasepunc` add-on (a model of its own, comparable in size to the recognizer) and T-one emits none.
 
 ## Scope &amp; honest caveats
 
@@ -65,7 +65,7 @@ brew tap ekhodzitsky/gigastt https://github.com/ekhodzitsky/gigastt && brew inst
 # crates.io — needs protoc on PATH (brew install protobuf / apt install protobuf-compiler)
 cargo install gigastt
 
-# Prebuilt image from GHCR (CPU, multi-arch amd64+arm64; append -cuda for the CUDA variant)
+# Prebuilt image from GHCR (CPU, multi-arch amd64+arm64; CUDA variant: :cuda)
 docker pull ghcr.io/ekhodzitsky/gigastt:latest
 
 # Or build your own image (CUDA: Dockerfile.cuda; bake the model with --build-arg GIGASTT_BAKE_MODEL=1)
