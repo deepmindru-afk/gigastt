@@ -130,13 +130,29 @@ pub struct RuntimeLimits {
     /// long for a free session triplet before returning 503 / `timeout`.
     /// The `Retry-After` hint echoes the same value. Default: 30.
     pub pool_checkout_timeout_secs: u64,
-    /// Per-request inference timeout (seconds). A `spawn_blocking` ONNX run
-    /// exceeding this returns a typed `inference_timeout` to the client so a
-    /// hung run can't block it indefinitely. `0` disables the timeout.
-    /// Default: 600 — generous enough to transcribe a worst-case in-spec
-    /// 10-minute (600 s audio) file on the CPU EP without tripping, while
-    /// still bounding a genuinely wedged run.
+    /// Per-request **no-progress** inference watchdog (seconds). The deadline
+    /// resets every time a decode window completes, so a file that keeps making
+    /// progress never trips — only a run that stalls for this many seconds
+    /// without finishing a window returns a typed `inference_timeout` (504 on
+    /// REST, a job failure on `/v1/jobs`). On a trip the run's abort flag is
+    /// flipped, so the pooled triplet is released within one window instead of
+    /// staying wedged for the rest of the file. `0` disables the watchdog.
+    /// Default: 600.
+    ///
+    /// This was a *total* wall-clock cap in earlier releases; the flag name,
+    /// the default, and the `inference_timeout` error code are unchanged, and a
+    /// short file that genuinely hangs still trips at the same moment — but the
+    /// hidden ceiling on audio duration (roughly `timeout ÷ RTF`) is gone, so
+    /// long files are no longer capped by this limit.
     pub inference_timeout_secs: u64,
+    /// Opt-in maximum decoded audio length in seconds for file transcription.
+    /// `0` (the default) means **unlimited**: a file of any length transcribes,
+    /// because the default path decodes in bounded windows so peak audio memory
+    /// is O(one window). When > 0, audio longer than this is rejected with HTTP
+    /// 413 and error code `audio_too_long`. The whole-buffer feature paths (VAD,
+    /// diarization, `channels=split`, telephony / Opus) keep a fixed ~30-minute
+    /// safety ceiling regardless of this value, so they refuse rather than OOM.
+    pub max_audio_secs: u64,
     /// Whether the asynchronous `/v1/jobs` API is enabled. Off by default so
     /// existing single-user installs see no change.
     pub jobs_enabled: bool,
@@ -146,8 +162,16 @@ pub struct RuntimeLimits {
     /// Maximum number of jobs kept in memory (queued + finished). When full,
     /// POST /v1/jobs returns 429 + Retry-After. Default: 100.
     pub jobs_max: usize,
-    /// Maximum retry attempts for a job that hits inference_timeout or panics.
-    /// Default: 3.
+    /// Maximum total bytes of buffered uploads held across all in-memory jobs
+    /// (queued + processing; a terminal job releases its body). The count cap
+    /// (`jobs_max`) alone can't bound RAM — each queued job holds its full
+    /// upload as `Bytes`, so `jobs_max` × `body_limit_bytes` (default 100 × 50
+    /// MiB ≈ 5 GiB) could sit in memory while the queue is "not full" by count.
+    /// A submission that would push the live total over this budget gets the
+    /// same 429 + `Retry-After` backpressure as a count-full queue. Default:
+    /// 512 MiB.
+    pub jobs_max_bytes: usize,
+    /// Maximum retry attempts for a job that panics. Default: 3.
     pub jobs_retry: u32,
 }
 
@@ -163,11 +187,22 @@ impl Default for RuntimeLimits {
             shutdown_drain_secs: 10,
             pool_checkout_timeout_secs: 30,
             inference_timeout_secs: 600,
+            max_audio_secs: 0,
             jobs_enabled: false,
             jobs_ttl_secs: 3600,
             jobs_max: 100,
+            jobs_max_bytes: 512 * 1024 * 1024,
             jobs_retry: 3,
         }
+    }
+}
+
+impl RuntimeLimits {
+    /// The opt-in audio-length limit as the `Option<f64>` seconds the core
+    /// request expects: `0` maps to `None` (unlimited), any positive value to
+    /// `Some(secs)`.
+    pub fn max_audio_secs_opt(&self) -> Option<f64> {
+        (self.max_audio_secs != 0).then_some(self.max_audio_secs as f64)
     }
 }
 
@@ -195,13 +230,17 @@ pub struct RuntimeLimitsConfig {
     pub pool_checkout_timeout_secs: u64,
     /// Per-request inference timeout in seconds (`0` disables).
     pub inference_timeout_secs: u64,
+    /// Opt-in maximum decoded audio length in seconds (`0` = unlimited).
+    pub max_audio_secs: u64,
     /// Enable the asynchronous `/v1/jobs` API.
     pub jobs_enabled: bool,
     /// TTL in seconds for completed/failed/cancelled jobs.
     pub jobs_ttl_secs: u64,
     /// Maximum number of jobs kept in memory.
     pub jobs_max: usize,
-    /// Maximum retry attempts for inference-timeout / panic.
+    /// Maximum total bytes of buffered job uploads kept in memory.
+    pub jobs_max_bytes: usize,
+    /// Maximum retry attempts for a panicking job.
     pub jobs_retry: u32,
 }
 
@@ -218,9 +257,11 @@ impl Default for RuntimeLimitsConfig {
             shutdown_drain_secs: d.shutdown_drain_secs,
             pool_checkout_timeout_secs: d.pool_checkout_timeout_secs,
             inference_timeout_secs: d.inference_timeout_secs,
+            max_audio_secs: d.max_audio_secs,
             jobs_enabled: d.jobs_enabled,
             jobs_ttl_secs: d.jobs_ttl_secs,
             jobs_max: d.jobs_max,
+            jobs_max_bytes: d.jobs_max_bytes,
             jobs_retry: d.jobs_retry,
         }
     }
@@ -238,9 +279,11 @@ impl From<RuntimeLimitsConfig> for RuntimeLimits {
             shutdown_drain_secs: cfg.shutdown_drain_secs,
             pool_checkout_timeout_secs: cfg.pool_checkout_timeout_secs,
             inference_timeout_secs: cfg.inference_timeout_secs,
+            max_audio_secs: cfg.max_audio_secs,
             jobs_enabled: cfg.jobs_enabled,
             jobs_ttl_secs: cfg.jobs_ttl_secs,
             jobs_max: cfg.jobs_max,
+            jobs_max_bytes: cfg.jobs_max_bytes,
             jobs_retry: cfg.jobs_retry,
         }
     }
@@ -332,7 +375,27 @@ mod tests {
         assert!(!limits.jobs_enabled);
         assert_eq!(limits.jobs_ttl_secs, 3600);
         assert_eq!(limits.jobs_max, 100);
+        assert_eq!(limits.jobs_max_bytes, 512 * 1024 * 1024);
         assert_eq!(limits.jobs_retry, 3);
+    }
+
+    #[test]
+    fn test_max_audio_secs_default_unlimited_and_opt_mapping() {
+        let limits = RuntimeLimits::default();
+        assert_eq!(
+            limits.max_audio_secs, 0,
+            "default must be 0 = unlimited (owner's decision); files of any length transcribe"
+        );
+        assert_eq!(
+            limits.max_audio_secs_opt(),
+            None,
+            "0 maps to None (unlimited)"
+        );
+        let capped = RuntimeLimits {
+            max_audio_secs: 600,
+            ..Default::default()
+        };
+        assert_eq!(capped.max_audio_secs_opt(), Some(600.0));
     }
 
     #[test]
