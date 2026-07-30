@@ -125,9 +125,6 @@ pub(crate) enum ChannelSelect {
     /// Mean of every channel present in the packet.
     Mono,
     /// A single channel, by zero-based index.
-    // Exercised by the equivalence tests; the `channels=split` call site that
-    // makes it live in a non-test build lands with the per-channel decode.
-    #[allow(dead_code)]
     One(usize),
 }
 

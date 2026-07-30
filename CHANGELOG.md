@@ -33,6 +33,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   decoding) keep the ~30-minute safety ceiling to avoid OOM, surfaced as the
   same `audio_too_long` code introduced above.
 
+- **The same cap on `?channels=split`.** Splitting stereo into two speakers
+  decoded every channel of the whole file up front, and decided *whether* to
+  split by correlating the two channels end to end — so a 35-minute call was
+  refused with `413 audio_too_long`. Both halves stream now: the decision comes
+  from `scan_channels`, which is header-only unless the file is exactly stereo
+  and otherwise a single pass over six accumulators, and each channel is then
+  pulled through the windowed decode in turn via the additive
+  `TranscribeSource::ChannelStreams`. A 35-minute stereo upload transcribes in
+  578 MiB peak with both speakers labeled. `channels=split` on a VAD-enabled
+  server keeps the whole-buffer path (and its ceiling) until the VAD itself
+  runs inside the window loop.
+
 ### Changed
 
 - **CLI contract change: `gigastt transcribe-batch` no longer fails on long
