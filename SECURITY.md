@@ -4,9 +4,9 @@
 
 | Version | Supported |
 |---------|-----------|
-| 2.14.x  | Yes (current)  |
-| 2.13.x  | Yes (previous) |
-| < 2.13  | No             |
+| 2.15.x  | Yes (current)  |
+| 2.14.x  | Yes (previous) |
+| < 2.14  | No             |
 
 ## Reporting a Vulnerability
 

@@ -23,6 +23,7 @@ Commands:
   transcribe-batch  Transcribe every audio file in a directory (offline)
   watch        Watch a directory and transcribe new/changed audio files
   quantize     Quantize encoder to INT8 (always available since v0.9.0)
+  cache-gc     Prune stale ORT optimized graphs; optional content-hash dedupe
 
 gigastt serve [OPTIONS]
   --port <PORT>             Listen port [default: 9876]
@@ -33,11 +34,14 @@ gigastt serve [OPTIONS]
                             default to rnnt (lower WER, no punctuation). e2e_rnnt keeps
                             punctuation/casing/ITN. ml_ctc / ml_ctc_large are the GigaAM
                             Multilingual charwise-CTC heads (220M / 600M encoder,
-                            ru/en/kk/ky/uz, bare lowercase). Env: GIGASTT_MODEL_VARIANT.
+                            ru/en/kk/ky/uz, bare lowercase). ml_ctc is a speed SKU
+                            (~1.5× RTF vs rnnt), not a lean-RAM SKU (ready RSS ≈ rnnt).
+                            Env: GIGASTT_MODEL_VARIANT.
   --punctuation <MODE>      Restore punctuation/casing on output: auto | on | off
                             [default: auto = on for rnnt, off for e2e_rnnt].
                             Optional ONNX pass; absent model → text unchanged.
-                            Env: GIGASTT_PUNCTUATION.
+                            When present, ready RSS tax ~+4…28 MiB; edge hosts may
+                            leave off. Env: GIGASTT_PUNCTUATION.
   --punct-model-dir <DIR>   Punctuation model directory [default: ~/.gigastt/models/punct].
                             Auto-downloaded from ekhodzitsky/rupunct-small-onnx when
                             the pass is enabled and the files are absent.
@@ -54,8 +58,9 @@ gigastt serve [OPTIONS]
                             [default: 5.0]. Env: GIGASTT_HOTWORDS_BOOST.
   --vad                     Voice activity detection: skip silence before decoding
                             and finalize streaming segments on trailing silence.
-                            Downloads the Silero VAD model on first use.
-                            Env: GIGASTT_VAD.
+                            Recommended for pause-rich long files (meetings/podcasts);
+                            RTF up to ~×2.6 on silence-rich audio. Downloads the
+                            Silero VAD model on first use. Env: GIGASTT_VAD.
   --vad-threshold <N>       VAD speech-probability threshold in [0,1]
                             [default: 0.5]. No effect unless --vad.
                             Env: GIGASTT_VAD_THRESHOLD.
@@ -66,12 +71,21 @@ gigastt serve [OPTIONS]
                             Env: GIGASTT_VAD_MODEL_DIR.
   --endpoint-mode <MODE>    WS utterance end: auto|assistant|manual [default: auto].
                             Env: GIGASTT_ENDPOINT_MODE. Window cap never emits final.
-  --pool-size <N>           Concurrent inference sessions [default: 2]
+  --profile <P>             Deploy profile: default | edge [default: default].
+                            edge applies --pool-size 1 and --vad when those
+                            flags are left at defaults. Env: GIGASTT_PROFILE.
+  --pool-size <N>           Concurrent inference sessions [default: 2].
+                            Multi-connection default; edge / low-RAM hosts should
+                            use 1 (~400 MB RSS). Pool > 1 costs RAM and can cost
+                            ~10–20% single-job RTF (encoder threads split across slots).
   --encoder-intra-threads <N>  Intra-op threads for the encoder session (CPU build
                             only). Unset: logical CPUs divided across the pool.
+                            Avoid `1` on multi-core (~3× slower than auto); explicit
+                            `1` is still allowed for debugging.
                             Env: GIGASTT_ENCODER_INTRA_THREADS.
   --pool-checkout-timeout-secs <S>  Seconds a handler waits for a free session triplet
-                            before returning 503 [default: 30].
+                            before returning 503 + retry_after_ms [default: 30].
+                            Longer = queue under saturation; shorter = fail-fast.
                             Env: GIGASTT_POOL_CHECKOUT_TIMEOUT_SECS.
   --bind-all                Required to listen on a non-loopback address.
                             Also: GIGASTT_ALLOW_BIND_ANY=1.
@@ -102,7 +116,8 @@ gigastt serve [OPTIONS]
                                 boot; degraded-pool boot floor, clamped to 1..=pool_size
                                 [default: 1]. Env: GIGASTT_POOL_MIN_SIZE.
   --batch-pool-size <N>         Triplets reserved for batch REST file transcription, split
-                                off from --pool-size so a long file job can't starve
+                                off from --pool-size (not additive — total loaded sessions
+                                stay at --pool-size) so a long file job can't starve
                                 WebSocket/SSE streaming. 0 disables the split [default: 0].
                                 Env: GIGASTT_BATCH_POOL_SIZE.
   --enable-jobs                 Enable the asynchronous /v1/jobs API for long-file and
@@ -110,10 +125,21 @@ gigastt serve [OPTIONS]
                                 disabled). Env: GIGASTT_ENABLE_JOBS.
   --jobs-ttl-secs <N>           TTL for finished/failed/cancelled jobs before eviction
                                 [default: 3600]. Env: GIGASTT_JOBS_TTL_SECS.
+  --max-audio-secs <N>          Reject audio longer than N seconds on every path; 0 leaves
+                                the streaming file path unlimited [default: 0], with or
+                                without --vad. Paths that still need the whole buffer
+                                (diarization, channels=split, telephony) keep their own
+                                1800 s ceiling regardless. Over the limit returns
+                                413 audio_too_long. Env: GIGASTT_MAX_AUDIO_SECS.
   --jobs-max <N>                Max jobs kept in memory; POST /v1/jobs returns 429 when
                                 full [default: 100]. Env: GIGASTT_JOBS_MAX.
-  --jobs-retry <N>              Max retries for a job on inference_timeout or panic
-                                [default: 3]. Env: GIGASTT_JOBS_RETRY.
+  --jobs-max-bytes <N>          Max total bytes of buffered job uploads kept in memory;
+                                bounds RAM independently of --jobs-max, a submission over
+                                budget returns 429 [default: 536870912 = 512 MiB].
+                                Env: GIGASTT_JOBS_MAX_BYTES.
+  --jobs-retry <N>              Max retries for a job that panics (a deterministic
+                                inference_timeout is not retried) [default: 3].
+                                Env: GIGASTT_JOBS_RETRY.
   --inference-timeout-secs <N>  Per-request inference timeout; a run exceeding it returns
                                 inference_timeout (REST 504 / WS close). 0 disables
                                 [default: 600]. Env: GIGASTT_INFERENCE_TIMEOUT_SECS.
@@ -131,9 +157,11 @@ gigastt download [OPTIONS]
   --model-variant <V>    Head to download: rnnt (default) | e2e_rnnt | ml_ctc | ml_ctc_large.
                          Env: GIGASTT_MODEL_VARIANT.
   --skip-diarization     Skip downloading the speaker diarization model
-  --skip-quantize        Skip auto-quantization after download (FP32 only)
-  --prequantized         Fetch the pre-quantized INT8 bundle from the pinned
-                         GitHub Release (no FP32 download, no on-device quantize)
+  --skip-quantize        Skip auto-quantization after `--fp32` download
+  --prequantized         Lean INT8 bundle (default true; explicit flag kept for
+                         older scripts). Ignored when `--fp32` is set.
+  --fp32                 Download full FP32 set from HuggingFace + quantize
+                         (overrides lean default)
   --progress <FORMAT>    Progress output: human (default) | json.
                          Env: GIGASTT_DOWNLOAD_PROGRESS.
 
@@ -184,8 +212,9 @@ gigastt transcribe [OPTIONS] <FILE>
   --hotwords-boost <N>        Logit boost for hotword tokens [default: 5.0].
                               Env: GIGASTT_HOTWORDS_BOOST.
   --vad                       Voice activity detection: skip silence before decoding
-                              (downloads the Silero VAD model on first use).
-                              Env: GIGASTT_VAD.
+                              (recommended for pause-rich long files; RTF up to ~×2.6
+                              on silence-rich audio). Downloads the Silero VAD model
+                              on first use. Env: GIGASTT_VAD.
   --vad-threshold <N>         VAD speech-probability threshold [default: 0.5].
                               Env: GIGASTT_VAD_THRESHOLD.
   --vad-min-silence-ms <N>    Minimum trailing silence (ms) to close a speech region
@@ -195,7 +224,10 @@ gigastt transcribe [OPTIONS] <FILE>
   --endpoint-mode <MODE>      WS utterance end: auto|assistant|manual [default: auto].
                               Env: GIGASTT_ENDPOINT_MODE. Cap never emits final.
   --encoder-intra-threads <N>  Intra-op threads for the encoder session (CPU build
-                              only). Env: GIGASTT_ENCODER_INTRA_THREADS.
+                              only). Unset: logical CPUs (single triplet). Avoid
+                              `1` on multi-core (~3× slower than auto); explicit
+                              `1` still allowed for debugging.
+                              Env: GIGASTT_ENCODER_INTRA_THREADS.
   -f, --format <FORMAT>       Export format: json, txt, srt, vtt, md [default: txt].
                               Env: GIGASTT_FORMAT.
   -o, --output <FILE>         Write rendered output to file instead of stdout.
@@ -238,7 +270,9 @@ gigastt transcribe-batch [OPTIONS] <INPUT_DIR> <OUTPUT_DIR>
   --itn <MODE>                Inverse text normalization: auto | on | off. Env: GIGASTT_ITN.
   -f, --format <LIST>         Export formats, comma-separated: txt, json, md, srt, vtt
                               [default: txt,json]. Env: GIGASTT_FORMAT.
-  --pool-size <N>             Concurrent transcription workers [default: 2]
+  --pool-size <N>             Concurrent transcription workers [default: 2].
+                              Edge / low-RAM: use 1. Pool > 1 costs RAM and can
+                              cost ~10–20% single-job RTF (thread split).
   --retries <N>               Extra attempts per file after a failure [default: 0].
                               Env: GIGASTT_BATCH_RETRIES.
   --move-to <DIR>             Move each successfully transcribed source into DIR
@@ -281,4 +315,13 @@ gigastt watch [OPTIONS] <INPUT_DIR> <OUTPUT_DIR>
 gigastt quantize [OPTIONS]          # always available since v0.9.0
   --model-dir <DIR>      Model directory [default: ~/.gigastt/models]
   --force                Re-quantize even if INT8 model exists
+
+gigastt cache-gc [OPTIONS]
+  --model-dir <DIR>      Model directory [default: ~/.gigastt/models]
+  --dry-run              Report reclaimable files without deleting / hardlinking
+  --dedupe               Also hardlink content-identical files (SHA-256 groups)
+
+  Removes non-active optimized_cache/*_optimized.onnx graphs, keeping only the
+  graph for the preferred encoder of the detected head (INT8 when present).
+  Safe on accuracy: leftovers are pure disk waste from FP32 runs or head switches.
 ```

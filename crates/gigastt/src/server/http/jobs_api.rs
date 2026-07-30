@@ -158,6 +158,10 @@ pub async fn get_job_result(
             "job_not_finished",
         ));
     }
+    // Read before `result` is moved out below; the outcome is `Copy`.
+    let diarization = job
+        .diarization
+        .and_then(super::transcribe::diarization_notice);
     let Some(result) = job.result else {
         tracing::error!(job_id = %id, "Done job is missing result");
         return Err(api_error(
@@ -180,6 +184,7 @@ pub async fn get_job_result(
             duration: result.duration_s,
             confidence: result.confidence,
             segments,
+            diarization,
         })
         .into_response())
     }
@@ -206,6 +211,14 @@ pub async fn cancel_job(
             Box::new(|j| {
                 if matches!(j.status, JobStatus::Queued | JobStatus::Processing) {
                     j.status = JobStatus::Cancelled;
+                    // Flip the in-flight run's abort flag (set by the executor
+                    // while Processing) so the engine stops at its next window
+                    // and releases its pooled triplet in bounded time, rather
+                    // than transcribing the rest of the file into a result the
+                    // worker will discard. `None` for a still-queued job.
+                    if let Some(abort) = &j.abort {
+                        abort.store(true, std::sync::atomic::Ordering::Relaxed);
+                    }
                 }
             }),
         )

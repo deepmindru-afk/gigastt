@@ -169,6 +169,15 @@ Three-tier test architecture:
 - `tests/soak_test.rs` — 1 soak test (continuous WS cycling, configurable via `GIGASTT_SOAK_DURATION_SECS`)
 - `cargo test --test load_test -- --ignored` / `cargo test --test soak_test -- --ignored`
 
+**Long-form quality tests** (require model + the RuLS corpus, local-only — the corpus is a ~9 GB
+OpenSLR download that does not fit the CI cache budget, so these never run in CI):
+- `tests/longform_quality.rs` — stitch cost of the chunked long-form path against a length-matched
+  segment baseline, plus the encoder-length degradation curve. Both skip loudly when the corpus is
+  absent; they never substitute another corpus.
+- `python3 scripts/prepare_rulslib.py` to fetch the corpus, then
+  `cargo test --release -p gigastt --test longform_quality -- --ignored --test-threads=1`
+- Default ceiling +2.0 pp on the stitch cost; override with `GIGASTT_LONGFORM_MAX_STITCH_PP`.
+
 **Benchmark suite:**
 - `tests/benchmark.rs` — WER evaluation on Golos fixtures (custom harness, `harness = false`)
 
@@ -186,7 +195,7 @@ Three-tier test architecture:
 - Shared constants in `crates/gigastt-core/src/inference/mod.rs`, referenced by sub-modules
 - `ort` errors are converted to typed `RuntimeError` at the `runtime/ort` seam (no `anyhow` wrapping)
 - Execution provider selection uses `#[cfg(feature = "coreml")]` / `#[cfg(feature = "cuda")]` blocks in `crates/gigastt-core/src/inference/mod.rs`; default falls through to CPU EP
-- **No internal task-tracker IDs in code/docs.** Never write tracker indices (`V1-NN`, `SUS-NN`, `TODO-NN`, etc.) into source comments, `CHANGELOG.md`, `docs/`, CI files, or any artifact — they are noise to anyone without the tracker. Describe *what* the code does and *why*; if a fix maps to a tracked item, that linkage lives only in `specs/prod-readiness-v1.0.md` (the tracker), not in the code.
+- **No internal task-tracker IDs outside the tracker itself.** Never write tracker indices (`TTX-NN`, `T-NNN`, `V1-NN`, `SUS-NN`, `TODO-NN`, ticket keys, etc.) into source comments/code, `CHANGELOG.md`, `docs/`, CI/workflows, README, user-facing text, **git branch names**, **commit subjects/bodies**, or **PR titles/descriptions**. They are noise without the tracker. Use conventional language only (e.g. branch `ttx/lazy-speaker`, commit `feat(core): lazy-load speaker encoder…`). Link work to a tracked item only inside tracker docs: `specs/prod-readiness-v1.0.md`, `specs/resource-ttx-roadmap.md`, and lab notes under `specs/research/` (gitignored).
 
 ### Audio format support
 - File transcription: WAV, M4A/AAC, MP3, OGG/Vorbis, FLAC (via symphonia)

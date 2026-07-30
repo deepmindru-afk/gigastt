@@ -7,24 +7,216 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Opt-in `--max-audio-secs` duration cap for file transcription.** New CLI
+  flag (env `GIGASTT_MAX_AUDIO_SECS`, default `0` = unlimited) rejects audio
+  whose decoded duration exceeds `N` seconds with `413 Payload Too Large` and
+  the new machine-readable error code `audio_too_long`, checked before any
+  inference runs.
+
+- **Cooperative cancellation reaches the running transcription.** A client
+  disconnect or shutdown on `POST /v1/transcribe`, and `DELETE /v1/jobs/{id}` on
+  an in-flight job, now flip an abort flag that the engine's per-window decode
+  loop — and the VAD scan — observe at the next window boundary, releasing the
+  pooled session within one window instead of transcribing the rest of the file
+  into a result that is thrown away. Adds a `GigasttError::Cancelled` variant
+  (additive; the enum is `#[non_exhaustive]`).
+
+- **`diarization` capability notice on transcription responses.** Asking for
+  diarization and getting none used to be indistinguishable from not asking:
+  HTTP 200, every speaker field empty, no explanation. An additive
+  `diarization` object now appears on the response **only** when
+  `?diarization=true` was requested and speakers could not be labeled, with a
+  `reason` separating the three cases that previously collapsed into the same
+  silence — `no_speaker_model`, `duration_ceiling` (carrying the actual input
+  and ceiling seconds), and `pipeline_error`. Clients that get diarization, or
+  never ask for it, see a byte-identical response. Served on both
+  `POST /v1/transcribe` and `GET /v1/jobs/{id}/result`.
+
+  Live WebSocket sessions deliberately do **not** carry this notice: `ready`
+  already advertises `diarization` as a server capability before any audio is
+  sent, and a `configure` for an unavailable capability is a documented
+  graceful no-op there (the same convention `punctuation` follows). The
+  request/response endpoints have no such handshake, which is why they need it.
+
+### Removed
+
+- **The 30-minute (1800 s) duration cap on the default file-transcription
+  path.** File decode streams through bounded windows regardless of length,
+  so peak memory stays roughly constant — files of any length now transcribe
+  fine. The paths that still need the whole decoded buffer in memory (speaker
+  diarization, `channels=split`, and the G.722 / raw telephony codecs) keep
+  the ~30-minute safety ceiling to avoid OOM, surfaced as the same
+  `audio_too_long` code introduced above.
+
+- **The same cap on the `--vad` file path.** Silence-skipping used to scan and
+  copy two whole-file buffers, which kept the ceiling in place exactly where
+  long files matter most — `--profile edge` turns VAD on by default, so the
+  smallest hosts were the ones still capped. The VAD now runs *inside* the
+  window loop: Silero is causal, so frames are scored as the container decodes
+  and kept audio is released as soon as the bounded look-ahead
+  (`min_speech_ms + min_silence_ms + speech_pad_ms`, ~850 ms at the defaults)
+  has passed. Peak audio memory is one decode window plus that look-ahead,
+  whatever the length. The speech spans, the windows fed to the encoder, and
+  therefore the transcript are byte-identical to the batch path — asserted
+  against it directly, including a proptest over random probability sequences
+  and configs. `--max-audio-secs` still applies verbatim when set.
+
+- **The same cap on OGG/Opus.** Symphonia demuxes Opus but ships no decoder, so
+  packets went through the `opus-rs` fallback, which accumulated every channel
+  of the whole file before anything could be mixed or resampled — leaving the
+  container behind voice messages, browser MediaRecorder captures and WebRTC
+  recordings as the last one that could not stream. A two-hour 24 kbps
+  `.ogg` is 25 MB and was refused outright. Opus now decodes packet-wise into
+  the same window loop as every other container: peak RSS across 5 min / 30 min
+  / 2 h is 780 / 910 / 822 MB — no slope, dominated by the ONNX arena. The
+  samples are identical to the whole-buffer decode, including the mono
+  downmix, which is asserted against it directly; the resampler is still fed in
+  the same fixed-size chunks so its flush boundaries do not move.
+
+- **The same cap on `POST /v1/transcribe/stream` (SSE).** The SSE endpoint drives
+  the streaming recognizer one second at a time, so it never needed the whole
+  buffer — but the eager decode in front of it materialized the upload, which
+  kept it on the whole-buffer ~30-minute ceiling while the single-shot endpoint
+  beside it had none. Uploading a 50-minute file for progressive results was
+  refused with `413 audio_too_long`. It now decodes on demand through the new
+  public `AudioChunks`, which yields the same fixed-size chunk sequence
+  `slice.chunks(n)` gives over a fully decoded buffer, so the recognizer state —
+  and the emitted segments — advance exactly as before. `--max-audio-secs` is
+  honoured verbatim and still answered as a clean `413` before the stream opens
+  for containers that declare a duration.
+
+- **The same cap on `?channels=split`.** Splitting stereo into two speakers
+  decoded every channel of the whole file up front, and decided *whether* to
+  split by correlating the two channels end to end — so a 35-minute call was
+  refused with `413 audio_too_long`. Both halves stream now: the decision comes
+  from `scan_channels`, which is header-only unless the file is exactly stereo
+  and otherwise a single pass over six accumulators, and each channel is then
+  pulled through the windowed decode in turn via the additive
+  `TranscribeSource::ChannelStreams`. A 35-minute stereo upload transcribes in
+  578 MiB peak with both speakers labeled. `channels=split` on a VAD-enabled
+  server keeps the whole-buffer path (and its ceiling) until the VAD itself
+  runs inside the window loop.
+
 ### Changed
 
-- **Documentation hygiene pass.** Supported versions in `SECURITY.md` track
-  2.14.x / 2.13.x; README / architecture crate pins use `gigastt-core = "2.14"`;
-  OpenAPI matches the 30-minute audio cap, documents Opus + telephony codecs,
-  `/ready` / jobs / `POST /v1/admin/reload`, and example versions `2.14.1`;
-  `docs/api.md` adds an Admin reload section; `docs/architecture.md` reflects
-  the five-crate workspace and optional paths (diarization, jobs, hot-reload);
-  `docs/README.md` is a full docs map; AGENTS/CLAUDE e2e lists and env tables
-  are refreshed; `NOTICE` attributes WeSpeaker (CC BY 4.0); privacy docs
-  separate runtime vs build-time network; `scripts/check-docs-drift.py` also
-  gates OpenAPI paths, SECURITY versions, and crate version pins.
-- **Workbook SOTA pass (EN+RU).** Pins and examples moved to 2.14.x; intro
-  persona matrix + time badges; recipes for admin reload, mono diarization,
-  punctuation/ITN/hotwords, and VAD endpointing ownership (2.14.1); Windows
-  install recipe; appendices for error-code jump tables and offline checklists;
-  closed the notarization open loop with an explicit out-of-band note; drift gate
-  forbids previous-minor pins and required recipe tokens in the English book.
+- **CLI contract change: `gigastt transcribe-batch` no longer fails on long
+  files.** Running `transcribe-batch` over a corpus that includes files
+  longer than 30 minutes now exits `0` instead of `1`, because those files
+  are no longer rejected by the default file-transcription path.
+
+- **`--inference-timeout-secs` is now a no-progress watchdog, not a total
+  wall-clock cap.** The deadline resets every time a decode window completes, so
+  a long file that keeps making progress no longer trips it — previously the
+  600 s default was a hidden ceiling on audio duration (roughly `timeout ÷ RTF`,
+  about 100 minutes at RTF 0.1). The flag name, the default (600 s), and the
+  `inference_timeout` error code are unchanged, and a short file that genuinely
+  hangs still trips at the same moment; on a trip the run is aborted so its
+  pooled triplet is freed within one window rather than staying wedged for the
+  rest of the file.
+
+- **`/v1/jobs` progress reflects audio actually decoded.** The progress bar was
+  a wall-clock extrapolation that assumed a fixed RTF of 0.1; it now advances
+  from the engine's real per-window processed-sample count. The SSE `progress`
+  event shape is unchanged (additive-only).
+- **`ort` moved to exactly `2.0.0-rc.13`.** rc.13 relocated the `CoreML` / `CUDA` /
+  `NNAPI` execution providers behind `ort`'s own Cargo features, so the provider
+  match arms are now gated per feature — a default (CPU) build never names a
+  feature-gated type. The pin stays exact (`=`) so a future rc cannot arrive
+  unannounced. On macOS the CoreML EP behaviour is unchanged (MLProgram format,
+  static input shapes).
+  - **The CoreML compiled-model cache is recompiled once after this upgrade.**
+    The cache (`~/.gigastt/models/coreml_cache/`) is now scoped by ONNX Runtime
+    version (`coreml_cache/ort-<minor>/`), because a bundle compiled by one ONNX
+    Runtime is not loadable by another — loading a stale one made the CoreML EP
+    fail at prediction time and fall back to CPU silently on every run. After the
+    upgrade the first transcription recompiles the graph (a few seconds, a
+    one-time cost); subsequent runs are fast again. The pre-upgrade cache is left
+    on disk; `gigastt cache-gc` now reclaims stale CoreML caches (it previously
+    pruned only `optimized_cache/`).
+
+- **File decode resamples incrementally instead of in one whole-buffer pass.**
+  Decoded packets now drain through a stateful resampler in ~1 s staged chunks, so
+  peak RSS no longer carries three full-length copies of the source-rate audio.
+  Measured decode-only peak RSS for a 20-minute 48 kHz stereo WAV: **706 MiB → 82 MiB
+  (8.6×)**, with decode wall time slightly improved. Output is bit-identical for
+  48 kHz sources and numerically tighter at 44.1 kHz, where the staged resampler keeps
+  rubato's fractional phase bounded instead of letting it accumulate over millions of
+  samples. All public decode signatures are unchanged.
+
+- Long-form file decode pulls its overlapping windows from an internal window
+  source instead of indexing one whole-file buffer, and trims the merged word
+  list by binary search instead of rescanning it once per window. Window
+  geometry, seam policy and decoded output are unchanged (verified
+  bit-identical, including word timestamps, across both decode branches).
+
+### Fixed
+
+- **`ort` is pinned to exactly `2.0.0-rc.12`.** The previous requirement was a caret, so
+  any dependency resolution without this repository's `Cargo.lock` picked up
+  `2.0.0-rc.13` (published 2026-07-28), where the `CoreML` / `CUDA` / `NNAPI` execution
+  providers moved behind `ort`'s own Cargo features. `gigastt-core` then failed to compile
+  with six `E0433` errors — affecting a fresh `cargo install gigastt`, any downstream
+  `cargo add`, and `cargo-semver-checks`' isolated rustdoc build. Workspace builds were
+  shielded by the lockfile; new consumers were not. Adopting rc.13 is a separate change
+  that has to gate the provider arms per feature.
+
+- **Punctuation restoration no longer silently gives up on long transcripts.**
+  Restoration ran a single tokenizer pass over the whole transcript against a
+  2048-position model and swallowed the resulting runtime error, so any recording
+  longer than roughly 9–12 minutes of Russian speech came back completely
+  unpunctuated and lowercase with HTTP 200. Restoration now runs over overlapping
+  ~250-word windows, keeping each window's middle labels; transcripts that already
+  fit in one window are byte-identical to before.
+
+## [2.15.0] - 2026-07-27
+
+### Added
+
+- **Lean INT8-only install path.** Serve/transcribe accept a complete prequantized
+  tree (`encoder_int8` + decoder + joint + vocab, ~220 MB for `rnnt`) without
+  requiring the FP32 encoder. Documented offline file set and operator sizing.
+- **`gigastt download` defaults to lean prequantized INT8** (~220 MB from the
+  pinned GitHub Release). Opt into the full HuggingFace FP32 set + on-device
+  quantize with **`--fp32`**. Empty model dirs follow the same lean ensure path
+  for RNN-T heads.
+- **`gigastt cache-gc`** prunes non-active `optimized_cache/*_optimized.onnx`
+  graphs; **`--dedupe`** hardlinks content-identical files under the model dir.
+- **`gigastt serve --profile edge`** / `GIGASTT_PROFILE=edge` applies
+  `--pool-size 1` and `--vad` when those flags are left at defaults (explicit
+  flags always win).
+- **Soft admin reload:** `POST /v1/admin/reload` swaps before warmup;
+  **`?soft=true`** waits up to ~5 s for the previous engine to drain first.
+  Response includes `soft` / `soft_drained`.
+- **Lazy-load speaker encoder** until diarization is requested (lower ready RSS
+  when the speaker model is present but unused); warn if diarization is
+  requested without a speaker model.
+- **Operator resource docs:** pool/RTF tradeoffs, VAD for pause-rich long files,
+  admin reload headroom, ml_ctc as speed SKU, checkout timeout, batch pool
+  split, punct ready tax; lean install and edge profile guidance.
+- **Held-out public Russian WER matrix** published in `docs/benchmarks.md`
+  (Common Voice, FLEURS, RuLS, SOVA, ToneWebinars, …).
+
+### Changed
+
+- **Pool RAM clamp** uses **min(host RAM, Linux cgroup `memory.max` /
+  v1 `memory.limit_in_bytes`)** so Docker/k8s limits no longer over-admit
+  pool size based on host RAM alone.
+- **CPU production factory** attaches a shared ORT `PrepackedWeights` container
+  across pooled sessions (kernel prepack share; remeasure pool Δ on your host).
+- **Long-form file path:** empty Silero speech-region lists fall back to
+  full/chunked decode instead of returning an empty transcript; docs describe
+  VAD regions vs fixed-window chunking.
+- **Documentation** refreshed for 2.15.x (SECURITY supported versions, crate
+  pins, OpenAPI/API examples, workbook EN+RU).
+
+### Fixed
+
+- INT8-only (prequantized) installs no longer trigger a spurious ~844 MB FP32
+  download on serve/transcribe bootstrap.
+- VAD “no speech regions” no longer yields a blank transcript on tone /
+  edge cases (falls back to full/chunked decode).
 
 ## [2.14.4] - 2026-07-25
 
