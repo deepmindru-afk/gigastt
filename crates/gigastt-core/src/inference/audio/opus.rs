@@ -7,6 +7,8 @@ use symphonia::core::formats::FormatReader;
 
 #[cfg(feature = "file-decode")]
 use super::audio_too_long_err;
+#[cfg(feature = "file-decode")]
+use super::stream::ChannelSelect;
 
 /// Opus always decodes at 48 kHz regardless of the container's declared input
 /// rate (RFC 7845 §5.1), so this — not the header rate — is the unit the length
@@ -148,17 +150,21 @@ fn decode_packet_interleaved(
 pub(super) struct OpusStream {
     decoder: opus_rs::OpusDecoder,
     channels: usize,
+    /// Mix down, or keep one channel — `channels=split` needs the latter, and
+    /// without it a per-channel read of an `.opus` would silently get the mix.
+    channel: ChannelSelect,
     /// Interleaved per-packet scratch, hoisted out of the decode loop.
     pcm: Vec<f32>,
 }
 
 #[cfg(feature = "file-decode")]
 impl OpusStream {
-    pub(super) fn new(channels: usize) -> Result<Self> {
+    pub(super) fn new(channels: usize, channel: ChannelSelect) -> Result<Self> {
         check_opus_channels(channels)?;
         Ok(Self {
             decoder: new_opus_decoder(channels)?,
             channels,
+            channel,
             pcm: Vec::new(),
         })
     }
@@ -168,7 +174,15 @@ impl OpusStream {
     pub(super) fn decode_packet(&mut self, data: &[u8], out: &mut Vec<f32>) -> Result<usize> {
         let frames =
             decode_packet_interleaved(&mut self.decoder, self.channels, data, &mut self.pcm)?;
-        push_mono_mix(&self.pcm, self.channels, frames, out);
+        match self.channel {
+            ChannelSelect::Mono => push_mono_mix(&self.pcm, self.channels, frames, out),
+            ChannelSelect::One(k) if k < self.channels => {
+                for frame in 0..frames {
+                    out.push(self.pcm[frame * self.channels + k]);
+                }
+            }
+            ChannelSelect::One(_) => {}
+        }
         Ok(frames)
     }
 }

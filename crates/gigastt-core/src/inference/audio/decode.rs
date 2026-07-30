@@ -359,6 +359,176 @@ pub fn decode_audio_bytes_shared_channels_bounded(
     decode_audio_inner_channels(mss, Hint::new(), "bytes", max_audio_secs)
 }
 
+/// What a one-pass scan of a container's channels found.
+#[cfg(feature = "file-decode")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChannelScan {
+    /// Channels the container declares.
+    pub channels: usize,
+    /// True only when there are exactly two and they are near-identical — a PBX
+    /// that recorded the same mix to both. Transcribing those as two speakers
+    /// would duplicate every word.
+    pub dual_mono: bool,
+}
+
+#[cfg(feature = "file-decode")]
+impl ChannelScan {
+    /// Whether `channels=split` should fall back to the mono mix, and why.
+    /// `None` means genuine stereo: split it.
+    pub fn mono_fallback_reason(&self) -> Option<&'static str> {
+        match self.channels {
+            0 => Some("no channels"),
+            1 => Some("mono audio"),
+            2 if self.dual_mono => Some("dual-mono audio"),
+            2 => None,
+            _ => Some("more than two channels"),
+        }
+    }
+}
+
+/// Decide how `channels=split` should treat `data` **without materializing it**.
+///
+/// The split path used to answer this by decoding every channel of the whole
+/// file and correlating the two in full, which is what pinned it to a duration
+/// ceiling. Almost all of the answer is in the header: anything that is not
+/// exactly two channels falls back to the mono mix, and that needs no decode at
+/// all. Only the two-channel case has to look at the audio, and
+/// [`DualMonoDetector`] does that in one pass over six accumulators.
+///
+/// The correlation is taken on the **16 kHz resampled** channels, on the same
+/// per-packet staging cadence the whole-buffer decode used, so it is the same
+/// statistic on the same numbers — the verdict does not move.
+///
+/// OGG/Opus is the exception: it has no packet-wise decoder here, so it keeps
+/// the whole-buffer decode (and its ceiling) for this decision.
+#[cfg(feature = "file-decode")]
+pub fn scan_channels(data: Bytes, max_audio_secs: Option<f64>) -> Result<ChannelScan> {
+    let source = BytesMediaSource::new(data.clone());
+    let mss = MediaSourceStream::new(Box::new(source), Default::default());
+    let mut format = symphonia::default::get_probe()
+        .probe(
+            &Hint::new(),
+            mss,
+            FormatOptions::default(),
+            MetadataOptions::default(),
+        )
+        .context("Unsupported audio format")?;
+
+    let (track_id, sample_rate, channels, is_opus) = {
+        let track = format
+            .default_track(TrackType::Audio)
+            .context("No audio track found")?;
+        let params = track
+            .codec_params
+            .as_ref()
+            .and_then(|p| p.audio())
+            .context("No audio codec parameters")?;
+        let sample_rate = params.sample_rate.context("Unknown sample rate")?;
+        if sample_rate == 0 || sample_rate > MAX_SAMPLE_RATE {
+            anyhow::bail!("Unsupported sample rate: {sample_rate}Hz");
+        }
+        (
+            track.id,
+            sample_rate,
+            params.channels.as_ref().map(|c| c.count()).unwrap_or(1),
+            params.codec == CODEC_ID_OPUS,
+        )
+    };
+
+    // Header-only verdict: no decode, whatever the file's length.
+    if channels != 2 {
+        return Ok(ChannelScan {
+            channels,
+            dual_mono: false,
+        });
+    }
+
+    if is_opus {
+        let decoded = decode_audio_bytes_shared_channels_bounded(data, max_audio_secs)?;
+        return Ok(ChannelScan {
+            channels: decoded.len(),
+            dual_mono: is_dual_mono(&decoded),
+        });
+    }
+
+    let (max_samples, limit_secs) = resolve_budget(max_audio_secs, sample_rate);
+    let mut decoder = {
+        let track = format
+            .default_track(TrackType::Audio)
+            .context("No audio track found")?;
+        let params = track
+            .codec_params
+            .as_ref()
+            .and_then(|p| p.audio())
+            .context("No audio codec parameters")?;
+        symphonia::default::get_codecs()
+            .make_audio_decoder(params, &AudioDecoderOptions::default())
+            .context("Unsupported audio codec")?
+    };
+
+    // One resampler per channel, fed on the same cadence the whole-buffer
+    // decode used, so the 16 kHz samples reaching the detector are the ones it
+    // would have correlated.
+    let mut acc: Vec<ResampleTo16k> = (0..2)
+        .map(|_| ResampleTo16k::new(SampleRate(sample_rate), None))
+        .collect();
+    let mut detector = DualMonoDetector::new();
+    let mut ready: [Vec<f32>; 2] = [Vec::new(), Vec::new()];
+    let mut interleaved: Vec<f32> = Vec::new();
+    let mut source_frames: usize = 0;
+
+    loop {
+        let Some(packet) = next_demux_packet(&mut *format, source_frames > 0)? else {
+            break;
+        };
+        if packet.track_id != track_id {
+            continue;
+        }
+        let decoded = decoder.decode(&packet).context("Decode error")?;
+        let num_frames = decoded.frames();
+        let ch = decoded.spec().channels().count();
+        if ch < 2 {
+            // A mid-stream drop to mono makes the pair meaningless; treat the
+            // stream as not dual-mono and let the split path decide per channel.
+            break;
+        }
+        interleaved.clear();
+        decoded.copy_to_vec_interleaved(&mut interleaved);
+        for (c, chan) in acc.iter_mut().enumerate() {
+            let stage = chan.stage();
+            for frame in 0..num_frames {
+                stage.push(interleaved[frame * ch + c]);
+            }
+        }
+        source_frames += num_frames;
+        if source_frames > max_samples {
+            return Err(audio_too_long_err(source_frames, sample_rate, limit_secs));
+        }
+        for (c, chan) in acc.iter_mut().enumerate() {
+            chan.flush_full()?;
+            chan.drain_ready_into(&mut ready[c]);
+        }
+        let (left, right) = ready.split_at_mut(1);
+        detector.push(&left[0], &right[0]);
+        ready[0].clear();
+        ready[1].clear();
+    }
+
+    for (c, chan) in acc.into_iter().enumerate() {
+        let mut tail = Vec::new();
+        let mut chan = chan;
+        chan.finish_into(&mut tail)?;
+        ready[c] = tail;
+    }
+    let (left, right) = ready.split_at_mut(1);
+    detector.push(&left[0], &right[0]);
+
+    Ok(ChannelScan {
+        channels: 2,
+        dual_mono: detector.is_dual_mono(),
+    })
+}
+
 /// Shared non-mixing decode: probe → format → decode → per-channel resample.
 #[cfg(feature = "file-decode")]
 fn decode_audio_inner_channels<'s>(
@@ -534,6 +704,80 @@ pub fn is_dual_mono(channels: &[Vec<f32>]) -> bool {
     }
     let len = left.len().min(right.len());
     normalized_correlation(&left[..len], &right[..len]) > DUAL_MONO_CORRELATION_THRESHOLD
+}
+
+/// Streaming form of the dual-mono correlation, for the `channels=split` path
+/// over a container that is never fully resident.
+///
+/// [`is_dual_mono`] needs both channels end to end, which is the only reason
+/// channel splitting had to hold the whole decode. The same statistic is
+/// computable in one pass with Welford's co-moment recurrence, so this keeps
+/// six `f64` accumulators instead of two whole channels.
+///
+/// The recurrence is used rather than raw power sums (`Σab − ΣaΣb/n`) on
+/// purpose: the naive form loses the covariance to cancellation once `n` is in
+/// the tens of millions, exactly the regime long files put it in, and the
+/// decision it feeds is a knife-edge threshold. Agreement with the batch
+/// function is asserted in `tests.rs`, on the value and on the decision.
+#[derive(Debug, Default, Clone)]
+pub struct DualMonoDetector {
+    n: f64,
+    mean_a: f64,
+    mean_b: f64,
+    /// Co-moment Σ(a−ā)(b−b̄).
+    c_ab: f64,
+    m2_a: f64,
+    m2_b: f64,
+}
+
+impl DualMonoDetector {
+    /// New detector with no samples observed.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Feed the next block of two channels. Only the overlapping prefix counts,
+    /// matching [`is_dual_mono`]'s `min(len)` truncation.
+    pub fn push(&mut self, a: &[f32], b: &[f32]) {
+        for (&x, &y) in a.iter().zip(b) {
+            let (x, y) = (x as f64, y as f64);
+            self.n += 1.0;
+            let dx = x - self.mean_a;
+            let dy = y - self.mean_b;
+            self.mean_a += dx / self.n;
+            self.mean_b += dy / self.n;
+            self.c_ab += dx * (y - self.mean_b);
+            self.m2_a += dx * (x - self.mean_a);
+            self.m2_b += dy * (y - self.mean_b);
+        }
+    }
+
+    /// Normalized correlation of everything observed so far, on the same scale
+    /// [`is_dual_mono`] thresholds. `0.0` when either channel is silent.
+    pub fn correlation(&self) -> f64 {
+        if self.n == 0.0 {
+            return 0.0;
+        }
+        let denom = self.m2_a.sqrt() * self.m2_b.sqrt();
+        if denom < 1e-12 {
+            return 0.0;
+        }
+        self.c_ab / denom
+    }
+
+    /// Whether the two channels are near-identical — the same verdict
+    /// [`is_dual_mono`] returns for a fully materialized pair. `false` when no
+    /// samples were observed.
+    pub fn is_dual_mono(&self) -> bool {
+        self.n > 0.0 && self.correlation() > DUAL_MONO_CORRELATION_THRESHOLD
+    }
+}
+
+/// Test-only alias so the streaming detector can be pinned against the exact
+/// batch statistic it replaces.
+#[cfg(test)]
+pub(super) fn normalized_correlation_for_test(a: &[f32], b: &[f32]) -> f64 {
+    normalized_correlation(a, b)
 }
 
 fn normalized_correlation(a: &[f32], b: &[f32]) -> f64 {

@@ -1693,6 +1693,16 @@ impl Engine {
                 req.diarization_outcome.as_deref(),
                 ctl,
             ),
+            #[cfg(feature = "file-decode")]
+            TranscribeSource::ChannelStreams { data, channels } => self.transcribe_channel_streams(
+                data,
+                channels,
+                max_audio_secs,
+                triplet,
+                &req.overrides,
+                req.hotwords,
+                ctl.abort_only(),
+            ),
             TranscribeSource::Channels(channels) => self.transcribe_channels_inner(
                 channels,
                 triplet,
@@ -2057,6 +2067,62 @@ impl Engine {
                 text: String::new(),
                 words,
                 duration_s,
+            });
+        }
+
+        let merged = merge_channel_results(per_channel);
+        Ok(self.finish_transcribe_result(merged.words, merged.duration_s, overrides))
+    }
+
+    /// Streaming twin of the `channels=split` decode.
+    ///
+    /// Each channel of `data` runs through the windowed loop the mono file path
+    /// uses, so
+    /// peak audio memory is one window instead of every channel of the whole
+    /// file — which is what kept channel splitting on a duration ceiling. The
+    /// per-channel results are merged exactly as the whole-buffer twin merges
+    /// them.
+    ///
+    /// The caller decides *whether* to split; use
+    /// [`scan_channels`](crate::inference::audio::scan_channels), which answers
+    /// that in one pass without materializing anything.
+    ///
+    /// No progress sink is threaded through: each channel restarts the sample
+    /// clock, so a shared monotonic counter would go backwards — the same
+    /// reason the whole-buffer twin passes `abort_only`.
+    // Bundling these behind `&TranscribeRequest` is what one would want, but the
+    // caller's match moves `data` out of `req.source`, so the request cannot be
+    // borrowed whole afterwards. Same shape as `run_inference` above.
+    #[allow(clippy::too_many_arguments)]
+    #[cfg(feature = "file-decode")]
+    fn transcribe_channel_streams(
+        &self,
+        data: bytes::Bytes,
+        channels: usize,
+        max_audio_secs: Option<f64>,
+        triplet: &mut SessionTriplet,
+        overrides: &TranscribeOverrides,
+        hotwords: Option<&HotwordOverride>,
+        ctl: DecodeControls,
+    ) -> Result<TranscribeResult, GigasttError> {
+        let request_biaser = hotwords.and_then(|hw| self.build_request_biaser(hw));
+        let biaser: Option<&bias::Biaser> = match hotwords {
+            None => self.biaser.as_ref(),
+            Some(_) => request_biaser.as_ref(),
+        };
+
+        let spec = window_spec(self.ane_encoder);
+        let mut per_channel = Vec::with_capacity(channels);
+        for k in 0..channels {
+            let mut windows =
+                audio::FileWindows::from_bytes_channel(data.clone(), spec, max_audio_secs, k)
+                    .map_err(audio::decode_error)?;
+            let words = self.decode_words_streaming(&mut windows, triplet, biaser, ctl)?;
+            per_channel.push(TranscribeResult {
+                confidence: aggregate_confidence(&words),
+                text: String::new(),
+                words,
+                duration_s: windows.total_16k_samples() as f64 / 16000.0,
             });
         }
 

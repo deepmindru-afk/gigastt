@@ -665,11 +665,13 @@ Operators who want an explicit duration limit can start the server with
 audio longer than `N` seconds is rejected with `413 Payload Too Large` and code
 `audio_too_long` before any inference runs. `?vad=true` streams too — the VAD
 runs causally inside the window loop — so it carries no ceiling of its own,
-OGG/Opus uploads stream packet-wise like every other container, and
-`POST /v1/transcribe/stream` (SSE) decodes on demand as it emits, so it has no
-ceiling either. Speaker diarization, `channels=split`, and the G.722 / raw
-telephony codecs still hold the whole decoded buffer in memory, so those paths
-always enforce a fixed
+OGG/Opus uploads stream packet-wise like every other container,
+`POST /v1/transcribe/stream` (SSE) decodes on demand as it emits, and
+`?channels=split` streams as well: the stereo-vs-dual-mono decision is made in
+one pass and each channel is then decoded in windows — except on a VAD-enabled
+server, where it keeps the whole-buffer path. Speaker diarization and the
+G.722 / raw telephony codecs still hold the whole decoded buffer in memory, so
+those paths always enforce a fixed
 ~30-minute safety ceiling regardless of `--max-audio-secs`, returning the same
 `audio_too_long` code. A batch worker should gate on `GET /ready` (not just
 `/health`) so it backs off on `503` pool saturation instead of failing
