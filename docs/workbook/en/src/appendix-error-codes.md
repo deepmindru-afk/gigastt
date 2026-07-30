@@ -40,7 +40,7 @@ Gate **liveness** on `/health`, **readiness** on `/ready` — never on "TCP port
 | 503 | `pool_closed` | Shutdown in progress | Reconnect after deploy — [06](06-deployment-ops.md) |
 | 503 | `initializing` | Model still loading (WS upgrade or ready) | Poll `/ready` — [01](01-getting-started.md) |
 | 503 | `reload_failed` / `reload_unsupported` | Hot-reload build failed / no builder | Fix model files; keep old engine — [06](06-deployment-ops.md) |
-| 504 | `inference_timeout` | One run > `--inference-timeout-secs` | Raise timeout for long files — [02](02-cli-batch.md) |
+| 504 | `inference_timeout` | A run made no progress for `--inference-timeout-secs` | Not a length limit (deadline resets per window) — investigate a wedged run — [02](02-cli-batch.md) |
 
 ## WebSocket error codes
 

@@ -467,10 +467,10 @@ enum Commands {
         #[arg(long, env = "GIGASTT_MAX_AUDIO_SECS")]
         max_audio_secs: Option<u64>,
 
-        /// Skip the automatic INT8 quantization step after download.
-        /// Default behaviour is to quantize the encoder (~2 min, one-time)
-        /// so the pool loads the 210 MB INT8 encoder instead of the 844 MB
-        /// FP32. Opt out when you need the FP32 encoder for debugging.
+        /// Skip the automatic INT8 quantization step on the `--fp32` path.
+        /// The default path downloads a pre-quantized ~225 MB INT8 bundle and
+        /// never quantizes on device, so this flag only matters together with
+        /// `--fp32`, where it keeps the 844 MB FP32 encoder for debugging.
         #[arg(long, env = "GIGASTT_SKIP_QUANTIZE", default_value_t = false)]
         skip_quantize: bool,
 

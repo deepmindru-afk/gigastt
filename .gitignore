@@ -24,7 +24,6 @@ cobertura*.xml
 
 # Internal planning docs — never commit
 /docs/superpowers/
-/docs/archive/
 # Local research lab (theories / experiments) — never push
 /specs/research/
 

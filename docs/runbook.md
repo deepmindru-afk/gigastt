@@ -12,7 +12,7 @@ Operator-facing guidance for gigastt in production: graceful shutdown, session c
 | `Close(1008 Policy Violation)` unexpected | session-duration cap fired | Double check `max_session_secs` is set high enough for your use case |
 | `Close(1001 Going Away)` seen by clients | Expected on SIGTERM — not a bug | None — clients should reconnect |
 | REST `503` `timeout` / WS error `timeout` (`retry_after_ms`) | Pool saturated — every triplet busy | Raise `--pool-size`; isolate batch with `--batch-pool-size`; see [Pool exhaustion](#pool-exhaustion--backpressure) |
-| `inference_timeout` (REST `504` / WS close) | A single run exceeded `--inference-timeout-secs` (default 600 s) | Default covers 10-min files; raise only for longer audio or investigate a wedged ONNX run |
+| `inference_timeout` (REST `504` / WS close) | A run made no progress for `--inference-timeout-secs` (default 600 s) | Not a length limit — the deadline resets on every decode window, so long files never trip it. Investigate a wedged ONNX run |
 | Server won't start, model errors | Missing / corrupt model files | See [Model download failures](#model-download-failures) |
 | OOM / pod killed | Pool RSS exceeds the box | Lower `--pool-size`, use the INT8 encoder, `--pool-min-size` to boot degraded — see [Out-of-memory](#out-of-memory-oom) |
 
@@ -82,13 +82,17 @@ callers waiting in line (absorb short saturation bursts); a shorter value
 returns **503 / `timeout` + `retry_after_ms` sooner** so clients can back off or
 retry another replica. See [Pool checkout timeout](#pool-checkout-timeout-queue-vs-fail-fast).
 
-A single wedged inference run is bounded by `--inference-timeout-secs`
-(default 600): the client gets `inference_timeout` (REST `504`, WS error +
-close). The 600 s default already covers the advertised 10-minute (600 s audio)
-file ceiling out of the box; raise it only for genuinely longer files.
-Caveat — `spawn_blocking` can't be cancelled, so a truly hung run keeps
-its triplet until it finishes (or restart); the timeout frees the *client*,
-not the slot.
+A wedged inference run is bounded by `--inference-timeout-secs` (default 600):
+the client gets `inference_timeout` (REST `504`, WS error + close).
+
+This is a **no-progress watchdog, not a total wall-clock cap**. The deadline
+resets every time a decode window completes, so a file that keeps making
+progress never trips it no matter how long it is — do not raise this value
+"for long files". Audio length is governed by `--max-audio-secs` (default
+`0` = unlimited) instead.
+
+On a trip the run's abort flag is flipped and the pooled triplet is released
+within one window, so a hung run no longer wedges a slot until restart.
 
 **Knobs**
 - `--pool-size N` — total triplets (more concurrency, more RAM, and a small

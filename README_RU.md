@@ -19,7 +19,7 @@ gigastt превращает любую машину в приватный се�
 
 | Локально, приватно | Встраивание + стриминг | Точный русский | Маленький и real-time |
 |---|---|---|---|
-| Без облака и ключей — инференс 100% локальный. MIT-движок на MIT-весах, пригоден для коммерции. | Один бинарник, C-ABI FFI для мобильных или крейт `gigastt-core` — с инкрементальными partial'ами по WebSocket, без Python. | Самый точный на 3 из 4 русских доменов: far-field 4.08%, телефон 18.50%, YouTube 10.91%; ничья на чистой речи. | ~225 МБ INT8, RTF ~0.10 (~10× быстрее реального времени на CPU), холодный старт 0.94 с. |
+| Без облака и ключей — после разовой загрузки модели инференс 100% локальный. MIT-движок на MIT-весах, пригоден для коммерции. | Один бинарник, C-ABI FFI для мобильных или крейт `gigastt-core` — с инкрементальными partial'ами по WebSocket, без Python. | Самый точный на 3 из 4 русских доменов: far-field 4.08%, телефон 18.50%, YouTube 10.91%; ничья на чистой речи. | ~225 МБ INT8, RTF ~0.10 (~10× быстрее реального времени на CPU), холодный старт 0.94 с. |
 
 **WER** чистая 3.55% / far-field 4.08% / телефон 18.50% / YouTube 10.91%  ·  **held-out** CV **2.63%** (лучше Vosk+FW) · FLEURS 5.26% (лидер FW 3.84) · RuLS **4.21%** (лучше Vosk+FW) · SOVA device: Vosk впереди  · ToneWebinars: лидер FW 8.33 (gigastt 13.0)  ·  **RTF** ~0.10  ·  **Модель** ~225 МБ INT8  ·  **Холодный старт** 0.94 с  ·  **RAM** ~400 МБ одна сессия / 790 МБ pool-2  ·  **Стриминг** первый partial ~0.78 с
 
@@ -43,7 +43,7 @@ WER (%) на четырёх русских доменах, меньше — лу
 
 **Стриминг:** Whisper-движки работают только офлайн — никаких partial'ов во время речи. gigastt отдаёт настоящие инкрементальные partial'ы по WebSocket (первый ~0.78 с на CPU) из одного самодостаточного бинарника без Python; Vosk-server и T-one (чанки 300 мс) тоже стримят. То есть стриминг — чистая победа над Whisper-семейством; а перед Vosk / T-one преимущество в упаковке — инкрементальные partial'ы плюс C-ABI FFI в одном бинарнике, а не в меньшей задержке.
 
-**Пунктуация и регистр:** gigastt выдаёт читаемый русский из коробки — нативно на голове `e2e_rnnt` или маленьким встроенным проходом RuPunct + ITN на дефолтной `rnnt` (`--punctuation` / `--itn`, авто-докачка). Это на уровне Whisper-движков (у них пунктуация нативная) и лучше русских специалистов — Vosk требует отдельный аддон `recasepunc` на 1.6 ГБ, а T-one не даёт пунктуации вовсе.
+**Пунктуация и регистр:** gigastt выдаёт читаемый русский из коробки — нативно на голове `e2e_rnnt` или маленьким встроенным проходом RuPunct + ITN на дефолтной `rnnt` (`--punctuation` / `--itn`, авто-докачка). Это на уровне Whisper-движков (у них пунктуация нативная) и лучше русских специалистов — Vosk требует отдельный аддон `recasepunc` (отдельная модель, сопоставимая по размеру с распознавателем), а T-one не даёт пунктуации вовсе.
 
 ## Область применения и честные оговорки
 
@@ -65,7 +65,7 @@ brew tap ekhodzitsky/gigastt https://github.com/ekhodzitsky/gigastt && brew inst
 # crates.io — нужен protoc в PATH (brew install protobuf / apt install protobuf-compiler)
 cargo install gigastt
 
-# Готовый образ из GHCR (CPU, multi-arch amd64+arm64; суффикс -cuda для CUDA-варианта)
+# Готовый образ из GHCR (CPU, multi-arch amd64+arm64; CUDA-вариант: :cuda)
 docker pull ghcr.io/ekhodzitsky/gigastt:latest
 
 # Или соберите свой образ (CUDA: Dockerfile.cuda; вшить модель в образ: --build-arg GIGASTT_BAKE_MODEL=1)
@@ -94,6 +94,7 @@ $ gigastt watch inbox/ out/ --move-to inbox/done/
 $ gigastt serve
 # WebSocket  ws://127.0.0.1:9876/v1/ws
 # REST       http://127.0.0.1:9876/v1/transcribe
+# OpenAI     http://127.0.0.1:9876/v1/audio/transcriptions
 ```
 
 ## Возможности
@@ -103,12 +104,13 @@ $ gigastt serve
 | Головы | `rnnt` (34-токенный char, дефолт — ниже всех WER) · `e2e_rnnt` (1025-токенный BPE, пунктуация / регистр / ITN встроены) · `ml_ctc` / `ml_ctc_large` (GigaAM Multilingual charwise-CTC, 220M / 600M, 71-токенный multilingual char — ru/en/kk/ky/uz) |
 | Постобработка | опциональные пунктуация, регистр и русский ITN — нативно на `e2e_rnnt` или встроенный проход RuPunct + ITN на `rnnt` (авто-докачка; `--punctuation` / `--itn`), переопределяемо на каждый запрос (`?punctuation=` / `?itn=` / `?vad=`) |
 | Доставка | статический бинарник · C-ABI FFI `cdylib` (Android / mobile) · крейт `gigastt-core` (без серверных зависимостей) |
-| Провайдеры исполнения | CPU (любая платформа) · CoreML / Neural Engine (macOS ARM64) · CUDA 12+ (Linux x86_64) · NNAPI (Android) · [ANE](docs/ane-backend.md) (`--features ane`, macOS ARM64 — энкодер ≈15.6× на Neural Engine, тёплый e2e ≈10× быстрее CPU-сборки, WER ≈1.11% против `ort`; только файловый режим) · [Candle/Metal](docs/candle-backend.md) (`--features candle`, экспериментальный — вывод побайтово совпадает с `ort`) |
-| Стриминг | инкрементальные partial'ы по WebSocket · REST + SSE для файлов · один порт 9876 |
+| Провайдеры исполнения | CPU (любая платформа) · CoreML EP (macOS ARM64) · CUDA 12+ (Linux x86_64) · NNAPI (Android) · [ANE](docs/ane-backend.md) (`--features ane`, macOS ARM64 — энкодер ≈15.6× на Neural Engine, тёплый e2e ≈10× быстрее CPU-сборки, WER ≈1.11% против `ort`; только файловый режим) · [Candle/Metal](docs/candle-backend.md) (`--features candle`, экспериментальный — вывод побайтово совпадает с `ort`) |
+| Стриминг | инкрементальные partial'ы по WebSocket · REST + SSE для файлов · OpenAI-совместимый `/v1/audio/transcriptions` · один порт 9876 |
 | Аудио на вход | WAV · M4A/AAC · MP3 · OGG/Vorbis · OGG/Opus (`.opus`) · FLAC (авто-микс в моно) |
 | Стерео-телефония | Опциональный режим «канал = спикер» (`--stereo-speakers` в CLI / `channels=split` в REST) помечает левый/правый каналы как `speaker_0` и `speaker_1` |
 | Диаризация | Эмбеддинги WeSpeaker ResNet34 + кластеризация polyvoice, встроена по умолчанию (speaker-модель скачивается командой `gigastt download`, отказ — `--skip-diarization`) — файлы включают её на каждый запрос (`?diarization=true`, несовместимо с `channels=split`), живые сессии — через WS `Configure`; слова и сегменты получают метки `speaker` |
 | Асинхронные задачи | Очередь для длинных файлов / batch-распознавания через `/v1/jobs` (включается `--enable-jobs`): submit, poll, отмена, SSE-прогресс, retry и TTL-евикция |
+| Клиентские SDK | Типизированные WebSocket-клиенты для протокола v1.0 с переподключением по `retry_after_ms`: [Go (`sdks/go`)](sdks/go) · [TypeScript `@gigastt/client` (`sdks/js`)](sdks/js) |
 | Экспорт | JSON · TXT · SRT · VTT · Markdown — пословные тайминги + confidence или посегментно (`?segments=true` JSON, `### [mm:ss]` Markdown) |
 | Защита сервера | loopback по умолчанию · origin-allowlist · rate-limiting по IP · graceful drain · Prometheus `/metrics` на отдельном порту · loopback-only горячая перезагрузка модели (`POST /v1/admin/reload`) |
 

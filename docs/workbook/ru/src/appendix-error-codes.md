@@ -39,8 +39,8 @@
 | 503 | `timeout` | Пул насыщен | Backoff; `--pool-size` — [07](07-models-and-backends.md) |
 | 503 | `pool_closed` | Shutdown | Переподключение после деплоя — [06](06-deployment-ops.md) |
 | 503 | `initializing` | Модель ещё грузится | Поллите `/ready` — [01](01-getting-started.md) |
-| 503 | `reload_failed` / `reload_unsupported` | Hot-reload не удался | Почините файлы модели — [06](06-deployment-ops.md) |
-| 504 | `inference_timeout` | Прогон > `--inference-timeout-secs` | Поднимите timeout — [02](02-cli-batch.md) |
+| 503 | `reload_failed` / `reload_unsupported` | Hot-reload не удался / сборка без builder'а | Почините файлы модели; старый движок остаётся жив — [06](06-deployment-ops.md) |
+| 504 | `inference_timeout` | Прогон не двигался `--inference-timeout-secs` | Это не лимит длины (дедлайн сбрасывается на каждом окне) — ищите зависший прогон — [02](02-cli-batch.md) |
 
 ## WebSocket error codes
 

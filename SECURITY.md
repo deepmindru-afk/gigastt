@@ -5,8 +5,8 @@
 | Version | Supported |
 |---------|-----------|
 | 2.16.x  | Yes (current)  |
-| 2.14.x  | Yes (previous) |
-| < 2.14  | No             |
+| 2.15.x  | Yes (previous) |
+| < 2.15  | No             |
 
 ## Reporting a Vulnerability
 
