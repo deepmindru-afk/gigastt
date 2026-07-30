@@ -39,7 +39,7 @@ mel-фронтенд и контракт входа 16 кГц моно; разл
 |---|---|---|---|---|---|
 | `rnnt` (по умолчанию) | энкодер 844 МБ FP32 → ~215 МБ INT8 (авто-квантизация) + decoder/joiner/vocab (несколько МБ) | русский | «Голый» lowercase; дополняйте `--punctuation` / `--itn` (включены по умолчанию в режиме `auto`) | Лучший русский WER из четырёх — [таблица](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#accuracy-by-domain--wer--95-ci) | Русскоязычные нагрузки; дефолт не случаен |
 | `e2e_rnnt` | Тот же класс размера, что у `rnnt` (~850 МБ FP32 → INT8 генерируется локально) | русский | Пунктуация / регистр / ITN **встроены**, один проход | WER выше, чем у `rnnt`, но лучший F1 пунктуации/регистра — [сравнение](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#punctuation-quality--e2e_rnnt-vs-rnnt--rupunct-restore) | Нужен читаемый русский текст за один проход, без шага восстановления |
-| `ml_ctc` | ~225 МБ pre-quantized INT8, только энкодер (без decoder/joiner) | ru/en/kk/ky/uz | «Голый» lowercase | [Мультиязычные таблицы](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#english--wer--librispeech-test-clean) | Мультиязычное аудио при малом футпринте |
+| `ml_ctc` | ~225 МБ pre-quantized INT8, только энкодер (без decoder/joiner) | ru/en/kk/ky/uz | «Голый» lowercase | [Мультиязычные таблицы](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#english--wer--librispeech-test-clean) | Мультиязычное аудио или ~1,5× RTF vs `rnnt` (ready RSS ≈ `rnnt`, не lean-RAM SKU) |
 | `ml_ctc_large` | ~592 МБ pre-quantized INT8, только энкодер | ru/en/kk/ky/uz | «Голый» lowercase | Лучшая мультиязычная точность; на чистом русском чтении приближается к `rnnt` — [таблица](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#accuracy-by-domain--wer--95-ci) | Смешанные языки или английский/казахский/кыргызский/узбекский как таковые |
 
 Два жёстких ограничения, следующих из таблицы:
@@ -281,9 +281,9 @@ gigastt --offline transcribe sample.wav --model-dir /srv/gigastt-models
 ### Память под пул сессий
 
 Каждый слот пула десериализует **свою копию энкодера**, поэтому RSS растёт
-линейно с `--pool-size` (по умолчанию 2). Движок закладывает на слот примерно
-`2 × размер-файла-энкодера` резидентной памяти (измерено ~1,9× на INT8-
-энкодере `rnnt`, CPU-провайдер, release-сборка):
+линейно с `--pool-size` (по умолчанию 2 для multi-connection хостов). Движок
+закладывает на слот примерно `2 × размер-файла-энкодера` резидентной памяти
+(измерено ~1,9× на INT8-энкодере `rnnt`, CPU-провайдер, release-сборка):
 
 | Голова (как загружена) | Файл энкодера | ≈ RAM на слот пула | Дефолтный пул 2 |
 |---|---|---|---|
@@ -291,6 +291,16 @@ gigastt --offline transcribe sample.wav --model-dir /srv/gigastt-models
 | `rnnt` / `e2e_rnnt` FP32 (`--skip-quantize`) | 844 МБ | ~1,6 ГБ | ~3,3 ГБ — никогда в проде |
 | `ml_ctc` INT8 | ~225 МБ | ~0,45 ГБ | ~0,9 ГБ |
 | `ml_ctc_large` INT8 | ~592 МБ | ~1,2 ГБ | ~2,4 ГБ |
+
+**Edge / мало RAM:** предпочитайте `--pool-size 1` (~400 МБ RSS). Так же
+intra-op потоки энкодера остаются на одной задаче (auto = логические CPU ÷ pool),
+поэтому lone-job RTF обычно на **~10–20% лучше**, чем при pool=2 на тех же
+ядрах. Дефолт 2 оставляйте, когда нужны две параллельные сессии и есть RAM.
+
+**Потоки энкодера (CPU EP):** не задавайте `--encoder-intra-threads`, чтобы
+сервер распределил логические CPU по пулу. **Не** ставьте `1` на multi-core
+хостах без отладки — это примерно **в ~3 раза медленнее** auto. Явный `1`
+по-прежнему проходит для debug.
 
 Встроены две защиты:
 
@@ -303,8 +313,8 @@ gigastt --offline transcribe sample.wav --model-dir /srv/gigastt-models
   заканчивается посреди загрузки.
 
 Эмпирическое правило: `RAM ≥ pool_size × расход-на-слот + ~1 ГБ на ОС и пики
-запросов`. На машине с 4 ГБ это означает `--pool-size 1–2` с INT8-энкодером —
-тот же вывод, что и в пункте про OOM в
+запросов`. На машине с 4 ГБ это `--pool-size 1` (edge) или максимум 2 с
+INT8-энкодером — тот же вывод, что и в пункте про OOM в
 [Развёртывание и эксплуатация](06-deployment-ops.md).
 
 **Проверка:**

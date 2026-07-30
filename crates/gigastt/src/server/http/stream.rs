@@ -12,6 +12,11 @@ use super::error::{ApiError, api_error};
 use super::state::AppState;
 use super::transcribe::reserve_batch_slot;
 
+/// Samples per `process_chunk` call on the SSE path: one second at 16 kHz.
+/// Frame-aligned, and pinned because the streaming recognizer's state — and so
+/// the emitted segments — depend on the chunk cadence.
+const SSE_CHUNK_SAMPLES: usize = 16_000;
+
 /// Per-segment error carried over the SSE channel: a stable machine-readable
 /// code plus a sanitized message, mirroring the WebSocket error contract so
 /// SSE clients get the same codes (`inference_error`, `inference_panic`,
@@ -101,17 +106,46 @@ pub async fn transcribe_stream(
     // bump and `decode_audio_bytes_shared` reads the upload buffer in place. On a
     // decode error the early `?` return drops `reservation`, returning the
     // triplet to the pool.
-    let samples = tokio::task::spawn_blocking(move || {
+    // SSE drives the *streaming* recognizer one second at a time, so it never
+    // needed the whole buffer — only the eager decode in front of it did, and
+    // that is what pinned this endpoint to the whole-buffer duration ceiling
+    // while the single-shot path had none. `AudioChunks` probes the container
+    // here (so an unsupported or malformed header still fails as a clean HTTP
+    // status, before the stream opens) and decodes packets on demand.
+    let max_audio_secs = limits.max_audio_secs_opt();
+    let body_for_probe = body.clone();
+    let chunks = tokio::task::spawn_blocking(move || {
         // catch_unwind mirrors the REST handler: a panic inside the blocking
-        // decode (e.g. a crafted container that trips an upstream arithmetic
+        // probe (e.g. a crafted container that trips an upstream arithmetic
         // panic) is absorbed and surfaced as a normal decode error instead of a
         // `JoinError`, so the SSE path returns a clean 422 rather than a 500.
         match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            gigastt_core::inference::audio::decode_audio_bytes_shared(body)
+            // Enforce an operator length limit up front where the container
+            // declares its duration (WAV / FLAC / M4A / OGG), so `--max-audio-secs`
+            // keeps answering a clean 413 instead of tripping mid-stream. The
+            // incremental budget inside the decode remains the backstop for
+            // containers that declare nothing.
+            if let Some(limit) = max_audio_secs
+                && let Ok(Some(declared)) =
+                    gigastt_core::inference::audio::probe_duration_bytes(body_for_probe.clone())
+                && declared > limit
+            {
+                return Err(anyhow::Error::from(
+                    gigastt_core::error::GigasttError::AudioTooLong {
+                        observed_secs: declared,
+                        limit_secs: limit,
+                    },
+                ));
+            }
+            gigastt_core::inference::audio::AudioChunks::from_bytes(
+                body_for_probe,
+                SSE_CHUNK_SAMPLES,
+                max_audio_secs,
+            )
         })) {
             Ok(inner) => inner,
             Err(_) => {
-                tracing::error!("Panic in SSE audio decode — treated as decode error");
+                tracing::error!("Panic in SSE audio probe — treated as decode error");
                 Err(anyhow::anyhow!("Audio decode thread panicked"))
             }
         }
@@ -126,6 +160,13 @@ pub async fn transcribe_stream(
         )
     })?
     .map_err(|e| {
+        // "Too long" is distinct from "corrupt": answer 413 `audio_too_long`
+        // with the observed/limit seconds instead of the generic 422.
+        if let Some(g @ gigastt_core::error::GigasttError::AudioTooLong { .. }) =
+            e.downcast_ref::<gigastt_core::error::GigasttError>()
+        {
+            return api_error(StatusCode::PAYLOAD_TOO_LARGE, &g.to_string(), g.code());
+        }
         tracing::error!("Audio decode error: {e:#}");
         api_error(
             StatusCode::UNPROCESSABLE_ENTITY,
@@ -157,13 +198,36 @@ pub async fn transcribe_stream(
         // catch_unwind ensures the triplet is returned to the pool even on panic.
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let mut stream_state = engine.create_state(false);
-            let chunk_size = 16000; // 1 second at 16 kHz
+            let mut chunks = chunks;
 
-            for chunk in samples.chunks(chunk_size) {
+            // Same chunk sequence `samples.chunks(SSE_CHUNK_SAMPLES)` produced —
+            // fixed-size, last one short — so the streaming state advances
+            // exactly as before; only where the samples come from changed.
+            loop {
                 if cancel.is_cancelled() {
                     tracing::info!("SSE transcription cancelled by shutdown");
                     return;
                 }
+                let chunk = match chunks.next_chunk() {
+                    Ok(Some(c)) => c,
+                    Ok(None) => break,
+                    Err(e) => {
+                        // A decode failure past the header (corrupt packet, or a
+                        // length budget tripping on a container that declared no
+                        // duration) can no longer be an HTTP status — the stream
+                        // is already open — so it ends the stream with the same
+                        // machine-readable code the status would have carried.
+                        let code = e
+                            .downcast_ref::<gigastt_core::error::GigasttError>()
+                            .map_or("invalid_audio", |g| g.code());
+                        tracing::error!("SSE audio decode error: {e:#}");
+                        let _ = tx.blocking_send(Err(StreamError {
+                            code,
+                            message: "Failed to decode audio file. Check format (WAV, MP3, M4A, OGG, FLAC supported).".into(),
+                        }));
+                        return;
+                    }
+                };
                 match engine.process_chunk(chunk, &mut stream_state, &mut reservation) {
                     Ok(segs) => {
                         for seg in segs {
