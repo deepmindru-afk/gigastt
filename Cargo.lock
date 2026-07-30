@@ -2961,9 +2961,9 @@ dependencies = [
 
 [[package]]
 name = "polyvoice"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51156feb158b33666f0a1d0aadb70761566c676cef9d214fc6cd6d5c2c1eb01e"
+checksum = "819bba4acf4c69f16a0478730e29fc6e0d2d5203f9d24f8aafe0819e7fd22afd"
 dependencies = [
  "anyhow",
  "hound",
@@ -2972,7 +2972,7 @@ dependencies = [
  "realfft",
  "serde",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror 2.0.19",
  "tracing",
 ]
 

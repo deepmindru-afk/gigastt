@@ -2752,8 +2752,7 @@ mod tests {
         WordInfo, merge_channel_results, now_timestamp,
     };
     #[cfg(feature = "diarization")]
-    #[allow(deprecated)]
-    use polyvoice::{DiarizationConfig as DiaConfig, EmbeddingExtractor};
+    use polyvoice::Embedder;
 
     #[test]
     fn test_transcribe_overrides_default_all_none() {
@@ -4487,7 +4486,6 @@ vocab = "pack_vocab.txt"
     #[cfg(feature = "diarization")]
     #[test]
     #[ignore = "requires the WeSpeaker diarization model"]
-    #[allow(deprecated)] // legacy EmbeddingExtractor — see import note above
     fn test_speaker_encoder_accepts_waveform_audio() {
         let model_path =
             Path::new(&crate::model::default_model_dir()).join("wespeaker_resnet34.onnx");
@@ -4501,7 +4499,7 @@ vocab = "pack_vocab.txt"
             .collect();
 
         let embedding = encoder
-            .extract(&samples, &DiaConfig::default())
+            .embed(&samples)
             .expect("waveform must be converted to rank-3 fbank features");
 
         assert_eq!(embedding.len(), SPEAKER_EMBEDDING_DIM);

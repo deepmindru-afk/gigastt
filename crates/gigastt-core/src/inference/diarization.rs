@@ -1,37 +1,15 @@
 //! Speaker diarization via [polyvoice] (feature-gated).
 //!
-//! ## Why the deprecated polyvoice surface lives here
-//!
-//! polyvoice 0.9 deprecates `FbankOnnxExtractor` / `EmbeddingExtractor` /
-//! `EmbeddingError` in favour of the v1.0 `polyvoice::embedder::Embedder`
-//! trait (+ `ResNet34Adapter` / `CamPlusPlusExtractor`). We **cannot** migrate
-//! yet:
-//!
-//! 1. **Streaming path** — gigastt's per-session WS diarization uses
-//!    [`polyvoice::streaming::StreamingPipeline`], which is still generic over
-//!    the legacy trait (`E: EmbeddingExtractor`). polyvoice has not wired
-//!    `Embedder` into streaming (the crate suppresses the same deprecation
-//!    warnings module-wide for that reason).
-//! 2. **Offline path** — the validated default offline API is still
-//!    [`polyvoice::Pipeline`] (also `E: EmbeddingExtractor`). The v1.0
-//!    `pipeline_v2` uses `Embedder` but is offline-only, experimental (reverted
-//!    from default after a long-form DER regression), and pulls in
-//!    segmentation / clusterer / resegmentation models we do not ship today.
-//! 3. **Adapter still wraps the legacy type** — even polyvoice's own
-//!    `ResNet34Adapter` (the `Embedder` for WeSpeaker) is a thin wrapper around
-//!    `FbankOnnxExtractor`. Switching to it without switching pipelines buys
-//!    nothing.
-//!
-//! Until polyvoice accepts `Embedder` on `StreamingPipeline` (and the
-//! production offline path), this module is the **sole** home of the deprecated
-//! surface. Do not re-import those types into `inference/mod.rs`.
+//! Both pipelines take the v1.0 [`polyvoice::Embedder`] contract: the offline
+//! [`polyvoice::Pipeline`] and the per-session
+//! [`polyvoice::streaming::StreamingPipeline`] are generic over `E: Embedder`,
+//! and [`FbankOnnxExtractor`] implements it directly. The legacy
+//! `EmbeddingExtractor` / `EmbeddingError` surface this module used to contain
+//! is soft-deprecated upstream and is no longer referenced here.
 //!
 //! The WeSpeaker model (`wespeaker_resnet34.onnx`) expects rank-3 fbank input;
-//! keep [`load_speaker_encoder`] on the 3-arg `FbankOnnxExtractor` constructor,
-//! not the old rank-2 waveform `OnnxEmbeddingExtractor`.
-
-// Entire module is the polyvoice-legacy containment boundary.
-#![allow(deprecated)]
+//! keep [`load_speaker_encoder`] on the `FbankOnnxExtractor` constructor, not
+//! the old rank-2 waveform `OnnxEmbeddingExtractor`.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -39,7 +17,7 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 use polyvoice::streaming::StreamingPipeline;
 use polyvoice::{
-    ClusterConfig, DiarizationConfig as DiaConfig, EmbeddingError, EmbeddingExtractor, EnergyVad,
+    ClusterConfig, DiarizationConfig as DiaConfig, Embedder, EmbedderError, EnergyVad,
     FbankOnnxExtractor, Pipeline, PipelineError, VadConfig,
 };
 
@@ -50,7 +28,7 @@ pub(crate) const SPEAKER_EMBEDDING_DIM: usize = 256;
 /// ONNX session pool size shared across concurrent diarization sessions.
 const SPEAKER_POOL_SIZE: usize = 4;
 
-/// Shared WeSpeaker encoder handle (`Arc` over the legacy fbank ONNX extractor).
+/// Shared WeSpeaker encoder handle (`Arc` over the fbank ONNX extractor).
 pub type SpeakerEncoder = Arc<FbankOnnxExtractor>;
 
 /// Per-session streaming diarization state.
@@ -61,13 +39,13 @@ pub type StreamingDiarizationState = StreamingPipeline<EnergyVad, SharedExtracto
 /// The ONNX session pool inside the extractor is shared across sessions via `Arc`.
 pub struct SharedExtractor(Arc<FbankOnnxExtractor>);
 
-impl EmbeddingExtractor for SharedExtractor {
-    fn extract(&self, samples: &[f32], config: &DiaConfig) -> Result<Vec<f32>, EmbeddingError> {
-        self.0.extract(samples, config)
+impl Embedder for SharedExtractor {
+    fn dim(&self) -> usize {
+        self.0.dim()
     }
 
-    fn embedding_dim(&self) -> usize {
-        self.0.embedding_dim()
+    fn embed(&self, samples: &[f32]) -> Result<Vec<f32>, EmbedderError> {
+        self.0.embed(samples)
     }
 }
 
@@ -372,7 +350,7 @@ mod tests {
             .collect();
 
         let embedding = encoder
-            .extract(&samples, &DiaConfig::default())
+            .embed(&samples)
             .expect("waveform must be converted to rank-3 fbank features");
 
         assert_eq!(embedding.len(), SPEAKER_EMBEDDING_DIM);
