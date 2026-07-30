@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`polyvoice` moved to 0.12.0** (from 0.9.0), picking up two API changes.
+  `FbankOnnxExtractor::new` gained an execution-provider argument in 0.11: it is
+  passed `ExecutionProvider::Cpu`, not `ExecutionProvider::auto()`. 0.9
+  registered no provider at all, so CPU is what the speaker embeddings were
+  computed on, while `auto()` would pick CoreML on Apple Silicon and XNNPACK on
+  aarch64 Linux — different numerics, different embeddings, different
+  clustering, and a different DER. Moving diarization onto an accelerator is a
+  quality change that belongs in its own measured task, not in a dependency
+  bump. Verified label-identical against 0.9 on the synthetic two-speaker corpus
+  and on 146 s of real speech that clusters into seven speakers: 366/366 words
+  carry the same speaker, and the transcript is byte-identical.
+
+  0.12 then moved `FbankOnnxExtractor` off the soft-deprecated
+  `EmbeddingExtractor` trait onto `polyvoice::Embedder` (`dim` / `embed` instead
+  of `embedding_dim` / `extract`), and both the offline `Pipeline` and the
+  streaming `StreamingPipeline` now take `E: Embedder`. The `SharedExtractor`
+  adapter follows, so `inference::SharedExtractor` implements `Embedder` rather
+  than `EmbeddingExtractor` — a breaking change for anyone who named the old
+  trait on it, though the type exists only to hand one pooled WeSpeaker session
+  to per-session streaming pipelines. This also retires the deprecation
+  containment boundary: `diarization.rs` no longer needs `#![allow(deprecated)]`.
+
 ## [2.16.0] - 2026-07-30
 
 ### Added
@@ -115,18 +139,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   upsampling branch, where the cutoff is *not* scaled), four 48 kHz OGG/Opus
   fixtures including a stereo one, and real 48 kHz speech — byte-identical output
   in every case.
-
-- **`polyvoice` moved to 0.11.0.** `FbankOnnxExtractor::new` gained an
-  execution-provider argument. It is passed `ExecutionProvider::Cpu`, not
-  `ExecutionProvider::auto()`: 0.9 registered no provider at all, so CPU is what
-  the speaker embeddings were computed on, while `auto()` would pick CoreML on
-  Apple Silicon and XNNPACK on aarch64 Linux — different numerics, different
-  embeddings, different clustering, and a different DER. Moving diarization onto
-  an accelerator is a quality change that belongs in its own measured task, not
-  in a dependency bump. Verified label-identical against 0.9 on the synthetic
-  two-speaker corpus and on 146 s of real speech that clusters into seven
-  speakers: 366/366 words carry the same speaker, and the transcript is
-  byte-identical.
 
 - **CLI contract change: `gigastt transcribe-batch` no longer fails on long
   files.** Running `transcribe-batch` over a corpus that includes files
