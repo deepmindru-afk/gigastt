@@ -304,6 +304,48 @@ services:
 
 If you observe clients hanging past the cap or not receiving `Final` on deploy, see `docs/runbook.md` for the rollback escape hatches.
 
+## Lean INT8-only install
+
+Production inference needs only the **pre-quantized INT8 set** for one head —
+about **~220 MB** on disk for default `rnnt` (no FP32 encoder). The engine prefers
+`*_encoder_int8.onnx` when present; serve / transcribe accept this tree without
+re-fetching the ~844 MB FP32 encoder.
+
+**Minimum files for `rnnt` (default):**
+
+| File | Role |
+|------|------|
+| `v3_rnnt_encoder_int8.onnx` | INT8 Conformer encoder (~215 MB) |
+| `v3_rnnt_decoder.onnx` | LSTM decoder |
+| `v3_rnnt_joint.onnx` | RNN-T joiner |
+| `v3_vocab.txt` | Char vocabulary |
+
+**Minimum files for `e2e_rnnt`:** `v3_e2e_rnnt_encoder_int8.onnx`,
+`v3_e2e_rnnt_decoder.onnx`, `v3_e2e_rnnt_joint.onnx`, `v3_e2e_rnnt_vocab.txt`.
+
+**CTC heads** (`ml_ctc` / `ml_ctc_large`) are already INT8-only:
+`multilingual_ctc.int8.onnx` or `multilingual_large_ctc.int8.onnx` plus
+`multilingual_vocab.txt`.
+
+```sh
+# Recommended: lean bundle from the pinned GitHub Release
+gigastt download --prequantized
+# or copy the four rnnt files into --model-dir / a volume, then:
+GIGASTT_OFFLINE=1 gigastt serve --model-dir /path/to/models --pool-size 1
+```
+
+Optional side models (not required for core ASR):
+
+| Path | When |
+|------|------|
+| `punct/` (RUPunct) | `--punctuation auto/on` on `rnnt` |
+| `vad/silero_vad.onnx` | `--vad` |
+| `speaker_model.onnx` (name per build) | diarization feature |
+
+The FP32 encoder (`v3_rnnt_encoder.onnx`) is only needed to **produce** INT8 via
+`gigastt quantize` / the non-prequantized download path. After INT8 exists you can
+delete FP32 to reclaim ~844 MB; `gigastt cache-gc` drops stale ORT optimized graphs.
+
 ## Air-gapped / offline installation
 
 For hosts with no internet access, every release publishes a self-contained
@@ -328,13 +370,15 @@ sudo systemctl start gigastt
 
 **Offline mode.** `GIGASTT_OFFLINE=1` (or the `--offline` flag) makes every
 code path that would download a model — `gigastt download`, the punctuation /
-VAD auto-fetch inside `serve` — fail fast with an error naming the file to
-provide and where to put it, instead of a network timeout. The shipped systemd
-unit sets it via `/etc/gigastt/gigastt.env`, so the service never attempts a
-connection. To add optional models later (speaker diarization, other
-recognition heads), fetch them on a connected machine with `gigastt download`
-and copy the files into the model directory; see the bundled
-`README-OFFLINE.md` for exact paths.
+VAD auto-fetch inside `serve` — fail fast with an error naming the **missing
+file path** (for example `…/v3_rnnt_encoder_int8.onnx` for a lean install),
+instead of a network timeout. Place the lean `rnnt` set (see
+[Lean INT8-only install](#lean-int8-only-install)) under the model directory,
+or install the offline tarball / `gigastt-model-int8` deb above. The shipped
+systemd unit sets offline mode via `/etc/gigastt/gigastt.env`, so the service
+never attempts a connection. To add optional models later (punctuation, VAD,
+speaker diarization, other heads), fetch them on a connected machine and copy
+them into the model directory; see the bundled `README-OFFLINE.md` for paths.
 
 Note on builds: the *runtime* needs no network, but building from source does
 (`ort` fetches a prebuilt onnxruntime) — use the prebuilt artifacts above in
@@ -377,6 +421,22 @@ separate listener (default `127.0.0.1:9090`), not the API port. If you pass
 `--metrics`, publish/scrape `:9090` (or set `--metrics-listen`); a scraper still
 pointed at `:9876/metrics` will get a 404.
 
+## Sizing & performance (operators)
+
+Quick defaults; full knobs and numbers live in
+[runbook — Resource & performance knobs](runbook.md#resource--performance-knobs).
+
+| Goal | Start with |
+|---|---|
+| Low RAM / edge | `--profile edge` (pool=1 + VAD) or `--pool-size 1`; optional `--punctuation off` |
+| Lean disk (~220 MB model) | `gigastt download` (lean default) or copy INT8+dec+joint+vocab only |
+| Concurrent streams | Raise `--pool-size` only with free RAM; expect ~+10–20% single-job RTF |
+| Long meetings / podcasts | `--vad` (silence-rich RTF up to ~×2.6) |
+| Multilingual or max throughput | `ml_ctc` / `ml_ctc_large` for languages/speed — **not** for lower ready RSS |
+| Isolate long file jobs from WS | `--batch-pool-size N` **splits** `--pool-size` (not additive) |
+| Saturation policy | Long `--pool-checkout-timeout-secs` = queue; short = fail-fast 503 + `retry_after_ms` |
+| Hot reload on a small box | Keep ~**+0.5× ready** free RAM (~**+536 MiB** at pool=1) or restart instead |
+
 ## Hardening checklist
 
 - **Bind address:** Keep `--host 127.0.0.1` unless you're running in a container (then use the port binding strategy above).
@@ -389,4 +449,5 @@ pointed at `:9876/metrics` will get a 404.
 ## See also
 
 - [CLI Reference](cli.md) — `--bind-all`, `--allow-origin`, `--cors-allow-any` flags
+- [Runbook](runbook.md) — pool exhaustion, OOM, resource knobs
 - [Security](../SECURITY.md) — server-side security features

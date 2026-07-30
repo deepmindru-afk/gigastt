@@ -63,6 +63,36 @@ Prep: [`benchmark/README.md`](../benchmark/README.md#datasets).
 | 6 | ToneWebinars | **done** — 13.02 / 14.87 / **8.33** (n=1000) |
 | 7 | Phone-sim (optional) | optional |
 
+## Resource TTX (2026-07-27) — product backlog
+
+Confirmed-impact work only. Full task list with DoD / order:
+
+**[`specs/resource-ttx-roadmap.md`](resource-ttx-roadmap.md)** (TTX-01…TTX-20)
+
+| ID | Task (short) | Priority | Status |
+|----|--------------|----------|--------|
+| TTX-01 | ensure accepts INT8-only prequantized (T-026) | P0 | **done** |
+| TTX-02 | lean install docs (T-001) | P0 | **done** |
+| TTX-03 | edge `pool-size 1` (T-009) | P0 | done (docs+CLI; default stays 2) |
+| TTX-04 | never threads=1 on multi-core (T-044) | P0 | done |
+| TTX-05 | prequantized download default | P0 | **done** |
+| TTX-06…07 | model dir GC + hash dups (T-028/T-091) | P1 | **done** (`cache-gc`) |
+| TTX-08 | lazy speaker load (T-027) | P1 | **done** |
+| TTX-09 | vad docs (pause-rich) | P1 | **done** |
+| TTX-10 | long-form speech-region productize | P1 | **done** |
+| TTX-11 | ml_ctc speed SKU docs | P1 | **done** |
+| TTX-12…15 | pool/reload/checkout/batch_pool docs | P1 | **done** |
+| TTX-16 | optional `--profile edge` | P1 | **done** |
+| TTX-20 | punct ready tax docs | P1 | **done** |
+| TTX-17 | cgroup memory.max pool clamp | P2 | **done** |
+| TTX-18 | soft admin reload | P2 | **done** |
+| TTX-19 | weight-share spike | P2 | **done** |
+| long-form Silero segments | T-045 | J=0.98 vs fixed grid 0.84 on multi-utt |
+| server `--vad` pause-rich | T-048 | RTF ×2.6 on ~55% silence |
+| lazy speaker load | T-027 | **done** (TTX-08: probe at boot, load on first diarization; ~−39 MiB ready when unused) |
+
+Lab notes: `specs/research/` (local). Do not re-run frozen R0 without new variables.
+
 ## Next-up: v1.0 plan
 
 All new findings from the 2026-04-18 review are catalogued in
