@@ -477,22 +477,39 @@ fn test_parse_pcm16_empty() {
 }
 
 #[test]
-fn test_decode_duration_cap_pure() {
-    // Pure cap math (testable without realizing a multi-minute PCM buffer):
-    // the sample budget scales with the clamped rate and the duration cap.
-    let budget_16k = max_decode_samples(16000);
-    // 30-min cap at 16kHz => 1800 * 16000 samples.
-    assert_eq!(budget_16k, 1800 * 16000);
-    // 12 minutes (the old reject point) is comfortably under budget.
-    assert!(12 * 60 * 16000 < budget_16k, "12-minute file must pass");
-    // >30 min is over budget and would be rejected.
-    assert!(
-        (30 * 60 + 1) * 16000 > budget_16k,
-        ">30min must exceed budget"
+fn test_sample_budget_pure() {
+    // No caller limit means unbounded — the streaming path is O(one window),
+    // so a file of any length transcribes.
+    assert_eq!(max_samples_for_secs(None, 16000), usize::MAX);
+    assert_eq!(max_samples_for_secs(Some(0.0), 16000), usize::MAX);
+    assert_eq!(max_samples_for_secs(Some(-5.0), 16000), usize::MAX);
+
+    // A finite limit scales linearly with the UNCLAMPED source rate — the fix
+    // for the old 48 kHz clamp that made a 96 kHz file expire at half its
+    // stated seconds. 1800 s at 96 kHz is twice the 48 kHz budget, not equal.
+    assert_eq!(max_samples_for_secs(Some(1800.0), 16000), 1800 * 16000);
+    assert_eq!(max_samples_for_secs(Some(1800.0), 96_000), 1800 * 96_000);
+    assert_eq!(
+        max_samples_for_secs(Some(1800.0), 192_000),
+        4 * max_samples_for_secs(Some(1800.0), 48_000),
     );
-    // Header rate is clamped: a crafted 192kHz header can't inflate the
-    // budget past the 48kHz ceiling.
-    assert_eq!(max_decode_samples(192_000), max_decode_samples(48_000));
+}
+
+#[test]
+fn test_whole_buffer_limit_clamps_but_only_downward() {
+    // The whole-buffer ceiling is the default when the operator sets nothing.
+    assert_eq!(whole_buffer_limit_secs(None), WHOLE_BUFFER_MAX_AUDIO_SECS);
+    assert_eq!(
+        whole_buffer_limit_secs(Some(0.0)),
+        WHOLE_BUFFER_MAX_AUDIO_SECS
+    );
+    // A smaller operator limit lowers it.
+    assert_eq!(whole_buffer_limit_secs(Some(300.0)), 300.0);
+    // A larger operator limit cannot raise it above the ceiling.
+    assert_eq!(
+        whole_buffer_limit_secs(Some(10_000.0)),
+        WHOLE_BUFFER_MAX_AUDIO_SECS
+    );
 }
 
 // --- SampleRate tests ---
@@ -947,7 +964,7 @@ fn test_resample_with_cache_reuses_across_chunk_sizes() {
 #[test]
 fn test_decode_rejects_adversarial_sample_rate() {
     // A crafted header with an out-of-range sample rate must be rejected
-    // before it can scale the duration cap or trigger an oversized
+    // before it can scale the length budget or trigger an oversized
     // reservation — and must never panic.
     let silence: Vec<i16> = vec![0; 16]; // tiny payload — the header is the attack
     // Just above the ceiling: a well-formed header that the clamp must reject.
@@ -1208,14 +1225,14 @@ fn test_decode_audio_bytes_g722_wav_fallback() {
 #[test]
 fn test_try_decode_g722_wav_malformed_inputs() {
     // Not RIFF at all → None (falls through to symphonia).
-    assert!(try_decode_g722_wav(b"not a wave file").is_none());
+    assert!(try_decode_g722_wav(b"not a wave file", None).is_none());
     // PCM WAV → None (symphonia handles it).
     let pcm_wav = make_wav_bytes(&[0i16; 32], 16000);
-    assert!(try_decode_g722_wav(&pcm_wav).is_none());
+    assert!(try_decode_g722_wav(&pcm_wav, None).is_none());
     // G.722 tag but no data chunk → Some(Err), not a panic or silent None.
     let mut header_only = make_compressed_wav(0x0064, 16000, 8000, &[]);
     header_only.truncate(38); // strip the data chunk header + payload
-    let result = try_decode_g722_wav(&header_only);
+    let result = try_decode_g722_wav(&header_only, None);
     assert!(
         matches!(result, Some(Err(_))),
         "expected Some(Err), got {result:?}"
@@ -1225,7 +1242,7 @@ fn test_try_decode_g722_wav_malformed_inputs() {
     let encoded = audio_codec::Encoder::encode(&mut enc, &[0i16; 320]);
     let mut wav = make_compressed_wav(0x0064, 16000, 8000, &encoded);
     wav.truncate(wav.len() - 3);
-    let result = try_decode_g722_wav(&wav);
+    let result = try_decode_g722_wav(&wav, None);
     assert!(
         matches!(result, Some(Ok(_))),
         "truncated data must not panic"
@@ -1269,6 +1286,136 @@ fn test_decode_audio_bytes_g722_wav_ffmpeg_fixture_matches_reference() {
 }
 
 // --- Opus (OGG container, pure-Rust opus-rs fallback decoder) ---
+
+/// The whole-buffer Opus pipeline as it stood before the streaming source:
+/// decode every channel of the whole file, mix to mono, then feed the resampler
+/// in exact `RESAMPLE_STAGING_FRAMES` chunks. Kept here verbatim as the oracle
+/// the streaming decode must reproduce sample for sample.
+#[cfg(feature = "file-decode")]
+fn eager_opus_reference(bytes: &[u8]) -> anyhow::Result<Vec<f32>> {
+    use symphonia::core::formats::probe::Hint;
+    use symphonia::core::formats::{FormatOptions, TrackType};
+    use symphonia::core::io::MediaSourceStream;
+    use symphonia::core::meta::MetadataOptions;
+
+    let source = BytesMediaSource::new(bytes::Bytes::copy_from_slice(bytes));
+    let mss = MediaSourceStream::new(Box::new(source), Default::default());
+    let mut format = symphonia::default::get_probe().probe(
+        &Hint::new(),
+        mss,
+        FormatOptions::default(),
+        MetadataOptions::default(),
+    )?;
+    let (track_id, sample_rate, channels) = {
+        let track = format
+            .default_track(TrackType::Audio)
+            .ok_or_else(|| anyhow::anyhow!("no audio track"))?;
+        let p = track
+            .codec_params
+            .as_ref()
+            .and_then(|p| p.audio())
+            .ok_or_else(|| anyhow::anyhow!("no audio params"))?;
+        (
+            track.id,
+            p.sample_rate.ok_or_else(|| anyhow::anyhow!("no rate"))?,
+            p.channels.as_ref().map(|c| c.count()).unwrap_or(1),
+        )
+    };
+    let mono = mix_channels_to_mono(&super::opus::decode_opus_channels(
+        &mut *format,
+        track_id,
+        channels,
+        usize::MAX,
+        f64::INFINITY,
+    )?);
+    let mut resampler = super::resample::ResampleTo16k::new(SampleRate(sample_rate), None);
+    for piece in mono.chunks(super::resample::RESAMPLE_STAGING_FRAMES) {
+        resampler.stage().extend_from_slice(piece);
+        resampler.flush_full()?;
+    }
+    let mut out = Vec::new();
+    resampler.finish_into(&mut out)?;
+    Ok(out)
+}
+
+#[test]
+fn test_opus_streaming_decode_matches_whole_buffer() {
+    // Opus used to be the one container that could not stream: the fallback
+    // decoder accumulated every channel of the whole file before anything was
+    // mixed or resampled, which is what kept it on the duration ceiling. It
+    // decodes packet-by-packet now — and must yield the same samples, not
+    // merely close ones.
+    for (name, bytes) in [
+        (
+            "opus_tone.ogg",
+            &include_bytes!("../../../tests/fixtures/opus/opus_tone.ogg")[..],
+        ),
+        (
+            "opus_tone_no_eos.ogg",
+            &include_bytes!("../../../tests/fixtures/opus/opus_tone_no_eos.ogg")[..],
+        ),
+    ] {
+        let streamed = decode_audio_bytes(bytes).expect("streaming decode");
+        let eager = eager_opus_reference(bytes).expect("whole-buffer decode");
+        assert!(!streamed.is_empty(), "{name} decoded to nothing");
+        assert_eq!(streamed, eager, "{name}: streaming decode diverged");
+    }
+}
+
+#[test]
+fn test_opus_streaming_windows_match_slice_over_flat_decode() {
+    // The windowed source over an Opus stream must yield exactly what
+    // `SliceWindows` yields over the same flat decode — the same guarantee the
+    // symphonia-backed source carries.
+    let bytes =
+        bytes::Bytes::from_static(include_bytes!("../../../tests/fixtures/opus/opus_tone.ogg"));
+    // A window shorter than the clip so the overlapping geometry is exercised.
+    let spec = WindowSpec::new(16_000, 16_000, 3_200);
+    let flat = FileWindows::from_bytes(bytes.clone(), WindowSpec::flat(), None)
+        .expect("open flat")
+        .drain_to_vec()
+        .expect("drain");
+    let mut src = FileWindows::from_bytes(bytes, spec, None).expect("open windows");
+    let mut got = Vec::new();
+    while let Some(w) = src.next_window().expect("window") {
+        got.push((w.start_sample, w.samples.to_vec()));
+    }
+    let mut want = Vec::new();
+    let mut sw = SliceWindows::new(&flat, spec);
+    while let Some(w) = sw.next_window().expect("slice window") {
+        want.push((w.start_sample, w.samples.to_vec()));
+    }
+    assert!(
+        got.len() > 1,
+        "expected the windowed regime, got {}",
+        got.len()
+    );
+    assert_eq!(got, want);
+    assert_eq!(src.total_16k_samples(), flat.len());
+}
+
+#[test]
+fn test_push_mono_mix_matches_mix_channels_to_mono() {
+    // The streaming decode mixes per packet; the whole-buffer one mixed the
+    // finished per-channel buffers. Same arithmetic, pinned.
+    for channels in [1usize, 2] {
+        let frames = 97;
+        let pcm: Vec<f32> = (0..frames * channels)
+            .map(|i| ((i as f32) * 0.37).sin() * 0.8 - 0.13)
+            .collect();
+        let mut got = Vec::new();
+        super::opus::push_mono_mix(&pcm, channels, frames, &mut got);
+
+        let per_channel: Vec<Vec<f32>> = (0..channels)
+            .map(|c| (0..frames).map(|f| pcm[f * channels + c]).collect())
+            .collect();
+        assert_eq!(
+            got,
+            mix_channels_to_mono(&per_channel),
+            "channels={channels}"
+        );
+    }
+}
 
 #[test]
 fn test_is_recoverable_packet_eof_matches_unexpected_eof_only() {
@@ -1805,4 +1952,261 @@ fn test_telephony_raw_streaming_matches_whole_buffer_resample() {
     let reference = resample(&at_source, SampleRate(8_000), SampleRate(16_000)).unwrap();
     let streamed = decode_telephony_raw(&encoded, TelephonyCodec::Pcmu, 8_000).unwrap();
     assert_matches_whole_buffer(&streamed, &reference, "pcmu 8k");
+}
+
+// --- AudioChunks (fixed-size streaming decode) ---
+
+/// The chunk sequence must be exactly `slice.chunks(n)` over the flat decode —
+/// same samples, same boundaries — because the streaming recognizer's state
+/// depends on the chunk cadence, so any drift here would change a transcript.
+#[test]
+fn test_audio_chunks_match_flat_decode_chunked() {
+    for &n in &[1usize, 999, 16_000, 16_001, 48_000, 120_000] {
+        for &chunk in &[16_000usize, 640, 7_000] {
+            let src: Vec<f32> = (0..n)
+                .map(|i| 0.4 * ((i as f32) * 0.017).sin() + 0.2 * ((i as f32) * 0.0031).sin())
+                .collect();
+            let wav = bytes::Bytes::from(encode_wav_pcm16(&src, 16000));
+            let flat = decode_audio_bytes(&wav).expect("flat decode");
+
+            let mut chunks = AudioChunks::from_bytes(wav, chunk, None).expect("open chunks");
+            let mut got: Vec<Vec<f32>> = Vec::new();
+            while let Some(c) = chunks.next_chunk().expect("chunk") {
+                got.push(c.to_vec());
+            }
+            let want: Vec<Vec<f32>> = flat.chunks(chunk).map(<[f32]>::to_vec).collect();
+            assert_eq!(got, want, "n={n} chunk={chunk}");
+            assert_eq!(
+                chunks.total_16k_samples(),
+                flat.len(),
+                "n={n} chunk={chunk}"
+            );
+        }
+    }
+}
+
+/// An operator length limit still trips, and as the typed `AudioTooLong` so the
+/// HTTP layer can answer 413 rather than a generic decode failure.
+#[test]
+fn test_audio_chunks_honour_max_audio_secs() {
+    let src = vec![0.1f32; 16_000 * 5];
+    let wav = bytes::Bytes::from(encode_wav_pcm16(&src, 16000));
+    // Unbounded: the whole clip streams.
+    let mut ok = AudioChunks::from_bytes(wav.clone(), 16_000, None).expect("open");
+    let mut total = 0;
+    while let Some(c) = ok.next_chunk().expect("chunk") {
+        total += c.len();
+    }
+    assert_eq!(total, src.len());
+
+    // Bounded below the clip length: the budget trips during the pull.
+    let mut capped = AudioChunks::from_bytes(wav, 16_000, Some(1.0)).expect("open");
+    let err = loop {
+        match capped.next_chunk() {
+            Ok(Some(_)) => continue,
+            Ok(None) => panic!("a 5 s clip must not drain under a 1 s limit"),
+            Err(e) => break e,
+        }
+    };
+    assert!(
+        matches!(
+            err.downcast_ref::<crate::error::GigasttError>(),
+            Some(crate::error::GigasttError::AudioTooLong { .. })
+        ),
+        "expected a typed AudioTooLong, got: {err:#}"
+    );
+}
+
+// --- Streaming dual-mono detection ---
+
+/// The streaming detector must agree with the batch pair
+/// (`normalized_correlation` behind `is_dual_mono`) on both the value and, more
+/// importantly, the *verdict*: it decides whether `channels=split` transcribes
+/// two speakers or falls back to a mono mix, so a flip would change output.
+#[test]
+fn test_dual_mono_detector_matches_batch_correlation() {
+    // Deterministic, no rand: a base signal plus independent-ish perturbations.
+    let n = 40_000;
+    let base: Vec<f32> = (0..n)
+        .map(|i| 0.5 * ((i as f32) * 0.013).sin() + 0.2 * ((i as f32) * 0.0007).cos())
+        .collect();
+    let other: Vec<f32> = (0..n)
+        .map(|i| 0.5 * ((i as f32) * 0.031 + 1.7).sin() - 0.3 * ((i as f32) * 0.0021).cos())
+        .collect();
+
+    let cases: Vec<(&str, Vec<f32>, Vec<f32>)> = vec![
+        // Identical: the PBX-recorded-the-mix case the check exists for.
+        ("identical", base.clone(), base.clone()),
+        // Same content, slightly attenuated — still dual-mono.
+        (
+            "attenuated",
+            base.clone(),
+            base.iter().map(|v| v * 0.85).collect(),
+        ),
+        // Same content plus a small amount of the other — near the threshold.
+        (
+            "mostly-same",
+            base.clone(),
+            base.iter()
+                .zip(&other)
+                .map(|(l, r)| l * 0.9 + r * 0.1)
+                .collect(),
+        ),
+        // Genuine stereo: two different sources.
+        ("independent", base.clone(), other.clone()),
+        // Phase-inverted: strongly anti-correlated, must not read as dual-mono.
+        ("inverted", base.clone(), base.iter().map(|v| -v).collect()),
+        // One channel silent.
+        ("right-silent", base.clone(), vec![0.0; n]),
+        // Both silent.
+        ("both-silent", vec![0.0; n], vec![0.0; n]),
+        // DC offset on both: the case naive power sums would lose.
+        (
+            "dc-offset",
+            base.iter().map(|v| v + 0.7).collect(),
+            base.iter().map(|v| v + 0.7).collect(),
+        ),
+    ];
+
+    for (label, left, right) in cases {
+        let batch = super::decode::normalized_correlation_for_test(&left, &right);
+        // Feed in irregular blocks so the recurrence is exercised across pushes.
+        let mut det = DualMonoDetector::new();
+        let mut i = 0;
+        let mut step = 1;
+        while i < left.len() {
+            let end = (i + step).min(left.len());
+            det.push(&left[i..end], &right[i..end]);
+            i = end;
+            step = step % 1_237 + 1;
+        }
+        assert!(
+            (det.correlation() - batch).abs() < 1e-6,
+            "{label}: streaming {} vs batch {batch}",
+            det.correlation()
+        );
+        let want = is_dual_mono(&[left, right]);
+        assert_eq!(det.is_dual_mono(), want, "{label}: verdict diverged");
+    }
+}
+
+#[test]
+fn test_dual_mono_detector_empty_is_not_dual_mono() {
+    let det = DualMonoDetector::new();
+    assert!(!det.is_dual_mono());
+    assert_eq!(det.correlation(), 0.0);
+    // An empty push keeps it empty.
+    let mut det = DualMonoDetector::new();
+    det.push(&[], &[]);
+    assert!(!det.is_dual_mono());
+}
+
+/// Mismatched block lengths count only the overlap, mirroring `is_dual_mono`'s
+/// `min(len)` truncation.
+#[test]
+fn test_dual_mono_detector_uses_the_overlap_only() {
+    let a = vec![0.3f32, -0.4, 0.5, 0.9, -0.1];
+    let b = vec![0.3f32, -0.4, 0.5];
+    let mut det = DualMonoDetector::new();
+    det.push(&a, &b);
+    let batch = super::decode::normalized_correlation_for_test(&a[..3], &b);
+    assert!((det.correlation() - batch).abs() < 1e-9);
+}
+
+// --- One-pass channel scan (channels=split decision) ---
+
+/// Two-channel PCM16 WAV with the given channels.
+#[cfg(feature = "file-decode")]
+fn stereo_wav(left: &[f32], right: &[f32], rate: u32) -> bytes::Bytes {
+    let frames = left.len().min(right.len());
+    let data_bytes = (frames * 4) as u32;
+    let mut w = Vec::with_capacity(44 + data_bytes as usize);
+    w.extend_from_slice(b"RIFF");
+    w.extend_from_slice(&(36 + data_bytes).to_le_bytes());
+    w.extend_from_slice(b"WAVE");
+    w.extend_from_slice(b"fmt ");
+    w.extend_from_slice(&16u32.to_le_bytes());
+    w.extend_from_slice(&1u16.to_le_bytes());
+    w.extend_from_slice(&2u16.to_le_bytes());
+    w.extend_from_slice(&rate.to_le_bytes());
+    w.extend_from_slice(&(rate * 4).to_le_bytes());
+    w.extend_from_slice(&4u16.to_le_bytes());
+    w.extend_from_slice(&16u16.to_le_bytes());
+    w.extend_from_slice(b"data");
+    w.extend_from_slice(&data_bytes.to_le_bytes());
+    let q = |s: f32| (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
+    for i in 0..frames {
+        w.extend_from_slice(&q(left[i]).to_le_bytes());
+        w.extend_from_slice(&q(right[i]).to_le_bytes());
+    }
+    bytes::Bytes::from(w)
+}
+
+/// The scan replaces "decode every channel of the whole file, then correlate".
+/// Its verdict picks between transcribing two speakers and mixing to mono, so
+/// it must match the batch answer exactly — checked at both a passthrough and a
+/// resampling rate, on dual-mono and on genuine stereo.
+#[cfg(feature = "file-decode")]
+#[test]
+fn test_scan_channels_matches_batch_dual_mono_verdict() {
+    for rate in [16_000u32, 48_000] {
+        let n = rate as usize * 2;
+        let a: Vec<f32> = (0..n)
+            .map(|i| 0.5 * ((i as f32) * 0.011).sin() + 0.15 * ((i as f32) * 0.0009).cos())
+            .collect();
+        let b: Vec<f32> = (0..n)
+            .map(|i| 0.45 * ((i as f32) * 0.029 + 0.9).sin())
+            .collect();
+
+        for (label, left, right) in [
+            ("identical", a.clone(), a.clone()),
+            ("attenuated", a.clone(), a.iter().map(|v| v * 0.8).collect()),
+            ("stereo", a.clone(), b.clone()),
+        ] {
+            let wav = stereo_wav(&left, &right, rate);
+            let batch = decode_audio_bytes_shared_channels(wav.clone()).expect("batch");
+            let want = is_dual_mono(&batch);
+            let scan = scan_channels(wav, None).expect("scan");
+            assert_eq!(scan.channels, 2, "{label} @{rate}");
+            assert_eq!(
+                scan.dual_mono, want,
+                "{label} @{rate}: scan verdict diverged from batch"
+            );
+            assert_eq!(
+                scan.mono_fallback_reason().is_some(),
+                want,
+                "{label} @{rate}"
+            );
+        }
+    }
+}
+
+/// Anything that is not exactly two channels is decided from the header, so the
+/// scan must not need to decode — and must report the same fallback the
+/// whole-buffer path chose.
+#[cfg(feature = "file-decode")]
+#[test]
+fn test_scan_channels_non_stereo_is_header_only() {
+    let mono = encode_wav_pcm16(&vec![0.2f32; 16_000], 16000);
+    let scan = scan_channels(bytes::Bytes::from(mono), None).expect("scan mono");
+    assert_eq!(scan.channels, 1);
+    assert!(!scan.dual_mono);
+    assert_eq!(scan.mono_fallback_reason(), Some("mono audio"));
+}
+
+#[cfg(feature = "file-decode")]
+#[test]
+fn test_channel_scan_fallback_reasons() {
+    let r = |channels, dual_mono| {
+        ChannelScan {
+            channels,
+            dual_mono,
+        }
+        .mono_fallback_reason()
+    };
+    assert_eq!(r(0, false), Some("no channels"));
+    assert_eq!(r(1, false), Some("mono audio"));
+    assert_eq!(r(2, true), Some("dual-mono audio"));
+    assert_eq!(r(2, false), None);
+    assert_eq!(r(6, false), Some("more than two channels"));
 }

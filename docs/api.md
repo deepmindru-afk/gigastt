@@ -468,6 +468,36 @@ them in.
   Actual diarization output requires the speaker-encoder model to be loaded on the
   server (downloaded automatically when the `diarization` feature is enabled).
 
+When `diarization=true` was requested but speakers could **not** be labeled, the
+response carries an additive `diarization` object explaining why, instead of a
+200 with silently empty speaker fields. It is absent when diarization was not
+requested or succeeded, so clients that never ask see the exact same shape. The
+same object appears on `GET /v1/jobs/{id}/result`.
+
+```json
+{
+  "text": "…", "words": [...], "duration": 4200.0,
+  "diarization": {
+    "status": "unavailable",
+    "reason": "duration_ceiling",
+    "message": "diarization skipped: input 4200s exceeds the 3600s single-pass limit; the transcript is complete but has no speaker labels",
+    "input_seconds": 4200.0,
+    "ceiling_seconds": 3600.0
+  }
+}
+```
+
+| `reason` | When |
+|---|---|
+| `no_speaker_model` | No speaker-encoder model is loaded, or the build lacks the `diarization` feature |
+| `duration_ceiling` | The clusterer refused the input; `input_seconds` and `ceiling_seconds` carry the clusterer's own numbers |
+| `pipeline_error` | Diarization was attempted and failed for another reason (logged server-side) |
+
+The transcript itself is complete in every case — only the speaker labels are
+missing. Live WebSocket sessions do not carry this notice: `ready` advertises
+`diarization` as a server capability before any audio is sent, and a `configure`
+requesting an unavailable capability is a graceful no-op there.
+
 When either channel split or diarization produces speaker labels, each word object
 includes a `speaker` integer:
 
@@ -624,11 +654,28 @@ curl -X POST "http://127.0.0.1:9876/v1/transcribe?format=md&word_timestamps=true
 
 Content-Type is ignored — the container format (WAV/MP3/M4A/OGG/FLAC) is sniffed
 from the bytes, so `--data-binary @file` is enough; multipart form uploads are
-not accepted. The practical ceiling is the body limit (`--body-limit-bytes`,
-default 50 MiB ≈ 26 min of 16 kHz mono WAV) and the per-request inference cap
-(`--inference-timeout-secs`, default 600 s); raise **both** together for longer
-single files. A batch worker should gate on `GET /ready` (not just `/health`) so
-it backs off on `503` pool saturation instead of failing mid-job.
+not accepted. There is no default duration limit — the file decodes and
+transcribes in bounded overlapping windows, so peak memory stays roughly
+constant regardless of length, and a multi-hour recording transcribes fine.
+The remaining practical ceiling is the upload body limit (`--body-limit-bytes`,
+default 50 MiB ≈ 26 min of 16 kHz mono WAV); raise it for larger single files.
+
+Operators who want an explicit duration limit can start the server with
+`--max-audio-secs <N>` (env `GIGASTT_MAX_AUDIO_SECS`, default `0` = unlimited);
+audio longer than `N` seconds is rejected with `413 Payload Too Large` and code
+`audio_too_long` before any inference runs. `?vad=true` streams too — the VAD
+runs causally inside the window loop — so it carries no ceiling of its own,
+OGG/Opus uploads stream packet-wise like every other container,
+`POST /v1/transcribe/stream` (SSE) decodes on demand as it emits, and
+`?channels=split` streams as well: the stereo-vs-dual-mono decision is made in
+one pass and each channel is then decoded in windows — except on a VAD-enabled
+server, where it keeps the whole-buffer path. Speaker diarization and the
+G.722 / raw telephony codecs still hold the whole decoded buffer in memory, so
+those paths always enforce a fixed
+~30-minute safety ceiling regardless of `--max-audio-secs`, returning the same
+`audio_too_long` code. A batch worker should gate on `GET /ready` (not just
+`/health`) so it backs off on `503` pool saturation instead of failing
+mid-job.
 
 ### Error responses
 
@@ -644,6 +691,7 @@ it backs off on `503` pool saturation instead of failing mid-job.
 | 409 | `job_not_finished` | `GET /v1/jobs/{id}/result` called before the job is done |
 | 409 | `job_not_cancellable` | `DELETE /v1/jobs/{id}` called on a terminal job |
 | 413 | `payload_too_large` | Body exceeds `--body-limit-bytes` (default 50 MiB) |
+| 413 | `audio_too_long` | Audio exceeds `--max-audio-secs` (opt-in, env `GIGASTT_MAX_AUDIO_SECS`, default unlimited), or a whole-buffer path (diarization/`channels=split`/telephony) hit its ~30-minute safety ceiling |
 | 422 | `invalid_audio` | Audio could not be decoded (unsupported/corrupt format) |
 | 422 | `transcription_error` | Audio decoded but inference failed |
 | 429 | `queue_full` | In-memory job store is full; `Retry-After` header included |

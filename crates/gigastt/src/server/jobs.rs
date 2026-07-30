@@ -125,6 +125,12 @@ pub struct Job {
     pub attempts: u32,
     /// Populated when status becomes `Done`.
     pub result: Option<gigastt_core::inference::TranscribeResult>,
+    /// Why speakers were or were not labeled, recorded when the run finishes and
+    /// only when `?diarization=true` was submitted. `GET /v1/jobs/{id}/result`
+    /// turns it into the same capability notice the synchronous endpoint
+    /// attaches, so an async job cannot answer with silently empty speaker
+    /// fields either. `None` when diarization was not requested.
+    pub diarization: Option<gigastt_core::inference::DiarizationOutcome>,
     /// Populated when status becomes `Failed`.
     pub error: Option<String>,
     /// Active SSE listeners.
@@ -158,6 +164,7 @@ impl Job {
             total_seconds: 0.0,
             attempts: 0,
             result: None,
+            diarization: None,
             error: None,
             event_channels: Vec::new(),
             abort: None,
@@ -615,6 +622,19 @@ fn is_retryable_error(e: &anyhow::Error) -> bool {
 }
 
 fn sanitize_job_error(e: &anyhow::Error) -> String {
+    // Preserve the typed length rejection so a client can tell "too long" (raise
+    // `--max-audio-secs` or split) from "corrupt" — the same distinction the REST
+    // path answers with 413. The blocking result reaches us via
+    // `anyhow::Error::from`, so the concrete variant survives the downcast.
+    if let Some(gigastt_core::error::GigasttError::AudioTooLong {
+        observed_secs,
+        limit_secs,
+    }) = e.downcast_ref::<gigastt_core::error::GigasttError>()
+    {
+        return format!(
+            "Audio too long: {observed_secs:.0}s exceeds the maximum of {limit_secs:.0}s."
+        );
+    }
     let msg = format!("{e:#}");
     if msg.contains("inference_timeout") {
         "Inference timed out.".into()
@@ -794,6 +814,13 @@ impl JobExecution for RealJobExecutor {
             })
         };
 
+        // Write-once sink for *why* speakers were or were not labeled. Armed
+        // only when diarization was requested, matching the synchronous path:
+        // an unarmed sink makes the engine record nothing.
+        let diar_sink: Option<
+            Arc<std::sync::OnceLock<gigastt_core::inference::DiarizationOutcome>>,
+        > = (params.diarization == Some(true)).then(|| Arc::new(std::sync::OnceLock::new()));
+
         // Check out a triplet from the batch pool and run inference.
         // This is wrapped in its own async block so the progress updater is
         // always cancelled and awaited before the function returns, even on
@@ -820,6 +847,13 @@ impl JobExecution for RealJobExecutor {
                 raw_codec: None,
                 abort: Some(abort.clone()),
                 progress: Some(progress.clone()),
+                // Same sink the synchronous endpoint uses, so an async job that
+                // produces no speaker labels can say why instead of returning a
+                // transcript with silently empty speaker fields. Only armed when
+                // diarization was actually requested; otherwise the engine
+                // records nothing and the response shape is untouched.
+                diarization_outcome: diar_sink.clone(),
+                max_audio_secs: limits.max_audio_secs_opt(),
             };
             let handle = tokio::task::spawn_blocking(move || {
                 let _enter = span.enter();
@@ -865,6 +899,16 @@ impl JobExecution for RealJobExecutor {
 
         progress_cancel.cancel();
         let _ = progress_handle.await;
+
+        // Record the outcome on the job before returning: the worker stores the
+        // transcript after this call, and `GET /v1/jobs/{id}/result` reads both
+        // together. Written even on a failed run — the sink is empty then, so
+        // this is a no-op rather than a stale value.
+        if let Some(outcome) = diar_sink.as_ref().and_then(|s| s.get().copied()) {
+            let _ = store
+                .update(id, Box::new(move |j| j.diarization = Some(outcome)))
+                .await;
+        }
 
         inference_result
     }
@@ -1296,6 +1340,17 @@ mod tests {
         assert_eq!(
             sanitize_job_error(&anyhow::anyhow!("some internal onnx path /foo/bar")),
             "Transcription failed."
+        );
+        // A typed AudioTooLong (arrives via `anyhow::Error::from`) surfaces the
+        // observed/limit seconds so a client can tell "too long" from "corrupt".
+        let too_long: anyhow::Error = gigastt_core::error::GigasttError::AudioTooLong {
+            observed_secs: 4000.0,
+            limit_secs: 1800.0,
+        }
+        .into();
+        assert_eq!(
+            sanitize_job_error(&too_long),
+            "Audio too long: 4000s exceeds the maximum of 1800s."
         );
     }
 

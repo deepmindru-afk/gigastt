@@ -458,6 +458,15 @@ enum Commands {
         #[arg(long, env = "GIGASTT_INFERENCE_TIMEOUT_SECS")]
         inference_timeout_secs: Option<u64>,
 
+        /// Maximum decoded audio length in seconds for file transcription.
+        /// `0` (default) means no limit — a file of any length transcribes,
+        /// since the default path decodes in bounded windows. Audio longer than
+        /// a positive value is rejected with HTTP 413 `audio_too_long`. The
+        /// whole-buffer paths (VAD, diarization, `channels=split`, telephony)
+        /// keep a ~30-minute safety ceiling regardless [default: 0].
+        #[arg(long, env = "GIGASTT_MAX_AUDIO_SECS")]
+        max_audio_secs: Option<u64>,
+
         /// Skip the automatic INT8 quantization step after download.
         /// Default behaviour is to quantize the encoder (~2 min, one-time)
         /// so the pool loads the 210 MB INT8 encoder instead of the 844 MB
@@ -548,9 +557,10 @@ enum Commands {
         force: bool,
     },
 
-    /// Prune stale ONNX Runtime optimized graphs (and optionally hardlink
-    /// exact duplicate files) under the model directory. Reclaims disk on
-    /// multi-head / FP32-polluted installs without changing accuracy.
+    /// Prune stale ONNX Runtime optimized graphs and stale CoreML compiled-model
+    /// caches (and optionally hardlink exact duplicate files) under the model
+    /// directory. Reclaims disk on multi-head / FP32-polluted installs and after
+    /// an ONNX Runtime upgrade, without changing accuracy.
     CacheGc {
         /// Model directory
         #[arg(long, default_value_t = model::default_model_dir())]
@@ -1051,6 +1061,7 @@ async fn main() -> anyhow::Result<()> {
             shutdown_drain_secs,
             pool_checkout_timeout_secs,
             inference_timeout_secs,
+            max_audio_secs,
             skip_quantize,
             trust_proxy,
             config,
@@ -1073,7 +1084,7 @@ async fn main() -> anyhow::Result<()> {
                 );
             }
             ensure_bind_allowed(&host, bind_all)?;
-            let limits = build_limits(
+            let mut limits = build_limits(
                 config.as_deref(),
                 idle_timeout_secs,
                 ws_frame_max_bytes,
@@ -1090,6 +1101,11 @@ async fn main() -> anyhow::Result<()> {
                 jobs_max_bytes,
                 jobs_retry,
             )?;
+            // `--max-audio-secs` overrides the config-file value with the same
+            // precedence as every other runtime limit; `0` (default) = unlimited.
+            if let Some(v) = max_audio_secs {
+                limits.max_audio_secs = v;
+            }
             let metrics_listen =
                 metrics_listen.unwrap_or_else(server::config::default_metrics_listen);
             ensure_metrics_bind_allowed(metrics, &metrics_listen, bind_all)?;
@@ -1296,6 +1312,21 @@ async fn main() -> anyhow::Result<()> {
             for p in &prune.removed {
                 println!("  - {}", p.display());
             }
+            let coreml = model::prune_coreml_cache(dir, dry_run)?;
+            println!(
+                "coreml_cache: kept {}, removed {} stale ({} {:.1} MiB)",
+                if coreml.kept.is_some() {
+                    "current"
+                } else {
+                    "none"
+                },
+                coreml.removed.len(),
+                action,
+                coreml.freed_bytes as f64 / (1024.0 * 1024.0),
+            );
+            for p in &coreml.removed {
+                println!("  - {}", p.display());
+            }
             if dedupe {
                 let d = model::dedupe_model_dir(dir, dry_run)?;
                 println!(
@@ -1355,7 +1386,7 @@ async fn main() -> anyhow::Result<()> {
             let mut guard = engine.pool.checkout().await?;
             let result = if let Some(codec_name) = codec.as_deref() {
                 // Raw headerless telephony input: decode via the codec tables
-                // and re-wrap as an in-memory WAV, bypassing container sniffing.
+                // straight to mono 16 kHz f32 and hand the samples to the engine.
                 let telephony_codec = inference::audio::TelephonyCodec::from_name(codec_name)
                     .ok_or_else(|| {
                         anyhow::anyhow!(
@@ -1371,9 +1402,31 @@ async fn main() -> anyhow::Result<()> {
                     .map_err(|e| anyhow::anyhow!("{e}"))?;
                 let raw = std::fs::read(&file)
                     .with_context(|| format!("Failed to open audio file: {file}"))?;
-                let samples = inference::audio::decode_telephony_raw(&raw, telephony_codec, rate)?;
-                let wav = inference::audio::encode_wav_pcm16(&samples, 16000);
-                engine.transcribe_bytes(&wav, &mut guard)
+                let mut samples =
+                    inference::audio::decode_telephony_raw(&raw, telephony_codec, rate)?;
+                // NOT a no-op: preserve transcript byte-identity. The former path
+                // encoded these samples into an in-memory WAV and let the engine
+                // decode it back, which snapped every value to 16-bit PCM. Passing
+                // the raw f32 straight through would change the transcript (measured:
+                // 153 token edits on a 9-minute call), so reproduce that quantization
+                // in place — clamp to [-1, 1], round via 32767, normalise via 32768,
+                // matching `encode_wav_pcm16` and the PCM decode path. Whether
+                // full-precision f32 is better is an open WER question tracked in
+                // roadmap/ (telephony precision); do not silently drop this snap.
+                for s in samples.iter_mut() {
+                    let v = if s.is_finite() {
+                        s.clamp(-1.0, 1.0)
+                    } else {
+                        0.0
+                    };
+                    *s = (v * 32767.0).round() as i16 as f32 / 32768.0;
+                }
+                engine.transcribe_request(
+                    inference::TranscribeRequest::new(inference::TranscribeSource::Samples(
+                        &samples,
+                    )),
+                    &mut guard,
+                )
             } else if stereo_speakers {
                 let channels = inference::audio::load_audio_channels(&file)?;
                 let fallback_reason = match channels.len() {

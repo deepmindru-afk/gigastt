@@ -31,6 +31,17 @@ pub(crate) struct FileTranscribeOpts {
     /// count of processed 16 kHz samples. The server watchdog reads it to reset
     /// its no-progress deadline and to drive a real job progress bar.
     pub progress: Option<Arc<AtomicU64>>,
+    /// Write-once sink for the offline-diarization outcome. When set (with
+    /// `diarization = true`), the engine records why speakers were or were not
+    /// labeled so a surface can turn a `?diarization=true` request that produced
+    /// no labels into a capability notice instead of an all-empty-speaker
+    /// transcript. `None` records nothing.
+    pub diarization_outcome:
+        Option<Arc<std::sync::OnceLock<gigastt_core::inference::DiarizationOutcome>>>,
+    /// Opt-in operator length limit from `--max-audio-secs` (`None` = unlimited).
+    /// Threaded into the engine's per-window decode and the `channels=split`
+    /// decode; the whole-buffer decoders clamp it to their fixed safety ceiling.
+    pub max_audio_secs: Option<f64>,
 }
 
 /// Sets a shared abort flag when dropped. Held in the REST handler's async
@@ -109,6 +120,19 @@ pub(crate) async fn await_transcription_watchdog<T>(
     }
 }
 
+/// Map a core decode `anyhow::Error` to a typed [`GigasttError`], preserving a
+/// typed `AudioTooLong` (so the HTTP layer answers 413 `audio_too_long` instead
+/// of a generic 422) rather than flattening every decode failure into
+/// `InvalidAudio`. Mirrors the core-internal seam the engine uses.
+pub(crate) fn map_decode_error(e: anyhow::Error) -> GigasttError {
+    match e.downcast::<GigasttError>() {
+        Ok(g) => g,
+        Err(e) => GigasttError::InvalidAudio {
+            reason: format!("{e:#}"),
+        },
+    }
+}
+
 /// Decode raw telephony bytes to an in-memory PCM16 WAV for engine paths.
 pub(crate) fn raw_codec_to_wav(
     body: &[u8],
@@ -116,9 +140,7 @@ pub(crate) fn raw_codec_to_wav(
     sample_rate: u32,
 ) -> Result<Bytes, GigasttError> {
     let samples = gigastt_core::inference::audio::decode_telephony_raw(body, codec, sample_rate)
-        .map_err(|e| GigasttError::InvalidAudio {
-            reason: format!("{e:#}"),
-        })?;
+        .map_err(map_decode_error)?;
     Ok(Bytes::from(
         gigastt_core::inference::audio::encode_wav_pcm16(&samples, 16000),
     ))
@@ -141,35 +163,49 @@ pub(crate) fn run_file_transcribe_blocking(
     };
 
     if opts.split_channels {
-        let channels =
-            gigastt_core::inference::audio::decode_audio_bytes_shared_channels(body.clone())
-                .map_err(|e| GigasttError::InvalidAudio {
-                    reason: format!("{e:#}"),
-                })?;
-        let fallback_reason = match channels.len() {
-            0 => Some("no channels"),
-            1 => Some("mono audio"),
-            2 if gigastt_core::inference::audio::is_dual_mono(&channels) => Some("dual-mono audio"),
-            n if n > 2 => Some("more than two channels"),
-            _ => None,
-        };
-        if let Some(reason) = fallback_reason {
-            // The mono path re-decodes from `body`; release the split channels
-            // first so both copies are never resident at once.
-            drop(channels);
+        // Deciding whether to split used to mean decoding every channel of the
+        // whole file and correlating two of them, which is what pinned this
+        // path to a duration ceiling. The scan answers it in one pass — from
+        // the header alone unless the file is exactly stereo.
+        let scan = gigastt_core::inference::audio::scan_channels(body.clone(), opts.max_audio_secs)
+            .map_err(map_decode_error)?;
+        if let Some(reason) = scan.mono_fallback_reason() {
             tracing::warn!(
                 "channels=split requested but {reason} detected; falling back to mono transcription"
             );
             engine.transcribe_request(
                 TranscribeRequest::new(TranscribeSource::Bytes(body))
                     .with_abort(opts.abort.clone())
-                    .with_progress(opts.progress.clone()),
+                    .with_progress(opts.progress.clone())
+                    .with_max_audio_secs(opts.max_audio_secs),
+                reservation,
+            )
+        } else if engine.has_vad() && opts.overrides.vad.unwrap_or(true) {
+            // The per-channel VAD pass still needs each channel resident, so a
+            // VAD-enabled server keeps the whole-buffer split (and its ceiling)
+            // until the VAD itself runs inside the window loop.
+            let channels =
+                gigastt_core::inference::audio::decode_audio_bytes_shared_channels_bounded(
+                    body.clone(),
+                    opts.max_audio_secs,
+                )
+                .map_err(map_decode_error)?;
+            engine.transcribe_request(
+                TranscribeRequest::new(TranscribeSource::Channels(&channels))
+                    .with_abort(opts.abort.clone())
+                    .with_max_audio_secs(opts.max_audio_secs),
                 reservation,
             )
         } else {
             engine.transcribe_request(
-                TranscribeRequest::new(TranscribeSource::Channels(&channels))
-                    .with_abort(opts.abort.clone()),
+                TranscribeRequest::new(TranscribeSource::ChannelStreams {
+                    data: body,
+                    channels: scan.channels,
+                })
+                .with_overrides(opts.overrides)
+                .with_hotwords(opts.hotwords.as_ref())
+                .with_abort(opts.abort.clone())
+                .with_max_audio_secs(opts.max_audio_secs),
                 reservation,
             )
         }
@@ -180,8 +216,10 @@ pub(crate) fn run_file_transcribe_blocking(
                 .with_overrides(opts.overrides)
                 .with_hotwords(opts.hotwords.as_ref())
                 .with_diarization(opts.diarization)
+                .with_diarization_outcome(opts.diarization_outcome.clone())
                 .with_abort(opts.abort.clone())
-                .with_progress(opts.progress.clone()),
+                .with_progress(opts.progress.clone())
+                .with_max_audio_secs(opts.max_audio_secs),
             reservation,
         )
     }

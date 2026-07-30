@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Opt-in `--max-audio-secs` duration cap for file transcription.** New CLI
+  flag (env `GIGASTT_MAX_AUDIO_SECS`, default `0` = unlimited) rejects audio
+  whose decoded duration exceeds `N` seconds with `413 Payload Too Large` and
+  the new machine-readable error code `audio_too_long`, checked before any
+  inference runs.
+
 - **Cooperative cancellation reaches the running transcription.** A client
   disconnect or shutdown on `POST /v1/transcribe`, and `DELETE /v1/jobs/{id}` on
   an in-flight job, now flip an abort flag that the engine's per-window decode
@@ -17,7 +23,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   into a result that is thrown away. Adds a `GigasttError::Cancelled` variant
   (additive; the enum is `#[non_exhaustive]`).
 
+- **`diarization` capability notice on transcription responses.** Asking for
+  diarization and getting none used to be indistinguishable from not asking:
+  HTTP 200, every speaker field empty, no explanation. An additive
+  `diarization` object now appears on the response **only** when
+  `?diarization=true` was requested and speakers could not be labeled, with a
+  `reason` separating the three cases that previously collapsed into the same
+  silence — `no_speaker_model`, `duration_ceiling` (carrying the actual input
+  and ceiling seconds), and `pipeline_error`. Clients that get diarization, or
+  never ask for it, see a byte-identical response. Served on both
+  `POST /v1/transcribe` and `GET /v1/jobs/{id}/result`.
+
+  Live WebSocket sessions deliberately do **not** carry this notice: `ready`
+  already advertises `diarization` as a server capability before any audio is
+  sent, and a `configure` for an unavailable capability is a documented
+  graceful no-op there (the same convention `punctuation` follows). The
+  request/response endpoints have no such handshake, which is why they need it.
+
+### Removed
+
+- **The 30-minute (1800 s) duration cap on the default file-transcription
+  path.** File decode streams through bounded windows regardless of length,
+  so peak memory stays roughly constant — files of any length now transcribe
+  fine. The paths that still need the whole decoded buffer in memory (speaker
+  diarization, `channels=split`, and the G.722 / raw telephony codecs) keep
+  the ~30-minute safety ceiling to avoid OOM, surfaced as the same
+  `audio_too_long` code introduced above.
+
+- **The same cap on the `--vad` file path.** Silence-skipping used to scan and
+  copy two whole-file buffers, which kept the ceiling in place exactly where
+  long files matter most — `--profile edge` turns VAD on by default, so the
+  smallest hosts were the ones still capped. The VAD now runs *inside* the
+  window loop: Silero is causal, so frames are scored as the container decodes
+  and kept audio is released as soon as the bounded look-ahead
+  (`min_speech_ms + min_silence_ms + speech_pad_ms`, ~850 ms at the defaults)
+  has passed. Peak audio memory is one decode window plus that look-ahead,
+  whatever the length. The speech spans, the windows fed to the encoder, and
+  therefore the transcript are byte-identical to the batch path — asserted
+  against it directly, including a proptest over random probability sequences
+  and configs. `--max-audio-secs` still applies verbatim when set.
+
+- **The same cap on OGG/Opus.** Symphonia demuxes Opus but ships no decoder, so
+  packets went through the `opus-rs` fallback, which accumulated every channel
+  of the whole file before anything could be mixed or resampled — leaving the
+  container behind voice messages, browser MediaRecorder captures and WebRTC
+  recordings as the last one that could not stream. A two-hour 24 kbps
+  `.ogg` is 25 MB and was refused outright. Opus now decodes packet-wise into
+  the same window loop as every other container: peak RSS across 5 min / 30 min
+  / 2 h is 780 / 910 / 822 MB — no slope, dominated by the ONNX arena. The
+  samples are identical to the whole-buffer decode, including the mono
+  downmix, which is asserted against it directly; the resampler is still fed in
+  the same fixed-size chunks so its flush boundaries do not move.
+
+- **The same cap on `POST /v1/transcribe/stream` (SSE).** The SSE endpoint drives
+  the streaming recognizer one second at a time, so it never needed the whole
+  buffer — but the eager decode in front of it materialized the upload, which
+  kept it on the whole-buffer ~30-minute ceiling while the single-shot endpoint
+  beside it had none. Uploading a 50-minute file for progressive results was
+  refused with `413 audio_too_long`. It now decodes on demand through the new
+  public `AudioChunks`, which yields the same fixed-size chunk sequence
+  `slice.chunks(n)` gives over a fully decoded buffer, so the recognizer state —
+  and the emitted segments — advance exactly as before. `--max-audio-secs` is
+  honoured verbatim and still answered as a clean `413` before the stream opens
+  for containers that declare a duration.
+
+- **The same cap on `?channels=split`.** Splitting stereo into two speakers
+  decoded every channel of the whole file up front, and decided *whether* to
+  split by correlating the two channels end to end — so a 35-minute call was
+  refused with `413 audio_too_long`. Both halves stream now: the decision comes
+  from `scan_channels`, which is header-only unless the file is exactly stereo
+  and otherwise a single pass over six accumulators, and each channel is then
+  pulled through the windowed decode in turn via the additive
+  `TranscribeSource::ChannelStreams`. A 35-minute stereo upload transcribes in
+  578 MiB peak with both speakers labeled. `channels=split` on a VAD-enabled
+  server keeps the whole-buffer path (and its ceiling) until the VAD itself
+  runs inside the window loop.
+
 ### Changed
+
+- **CLI contract change: `gigastt transcribe-batch` no longer fails on long
+  files.** Running `transcribe-batch` over a corpus that includes files
+  longer than 30 minutes now exits `0` instead of `1`, because those files
+  are no longer rejected by the default file-transcription path.
 
 - **`--inference-timeout-secs` is now a no-progress watchdog, not a total
   wall-clock cap.** The deadline resets every time a decode window completes, so
@@ -33,6 +120,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a wall-clock extrapolation that assumed a fixed RTF of 0.1; it now advances
   from the engine's real per-window processed-sample count. The SSE `progress`
   event shape is unchanged (additive-only).
+- **`ort` moved to exactly `2.0.0-rc.13`.** rc.13 relocated the `CoreML` / `CUDA` /
+  `NNAPI` execution providers behind `ort`'s own Cargo features, so the provider
+  match arms are now gated per feature — a default (CPU) build never names a
+  feature-gated type. The pin stays exact (`=`) so a future rc cannot arrive
+  unannounced. On macOS the CoreML EP behaviour is unchanged (MLProgram format,
+  static input shapes).
+  - **The CoreML compiled-model cache is recompiled once after this upgrade.**
+    The cache (`~/.gigastt/models/coreml_cache/`) is now scoped by ONNX Runtime
+    version (`coreml_cache/ort-<minor>/`), because a bundle compiled by one ONNX
+    Runtime is not loadable by another — loading a stale one made the CoreML EP
+    fail at prediction time and fall back to CPU silently on every run. After the
+    upgrade the first transcription recompiles the graph (a few seconds, a
+    one-time cost); subsequent runs are fast again. The pre-upgrade cache is left
+    on disk; `gigastt cache-gc` now reclaims stale CoreML caches (it previously
+    pruned only `optimized_cache/`).
 
 - **File decode resamples incrementally instead of in one whole-buffer pass.**
   Decoded packets now drain through a stateful resampler in ~1 s staged chunks, so

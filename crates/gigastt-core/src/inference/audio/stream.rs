@@ -33,15 +33,15 @@ use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 
 #[cfg(feature = "file-decode")]
-use super::decode::{BytesMediaSource, mix_channels_to_mono};
+use super::decode::BytesMediaSource;
 #[cfg(feature = "file-decode")]
-use super::opus::{decode_opus_channels, next_demux_packet};
+use super::opus::{OPUS_DECODE_RATE, OpusStream, next_demux_packet};
 #[cfg(feature = "file-decode")]
 use super::resample::{RESAMPLE_STAGING_FRAMES, ResampleTo16k, SampleRate};
 #[cfg(feature = "file-decode")]
 use super::telephony::{sniffs_as_g722_wav, try_decode_g722_wav};
 #[cfg(feature = "file-decode")]
-use super::{MAX_DURATION_S, MAX_SAMPLE_RATE, max_decode_samples};
+use super::{MAX_SAMPLE_RATE, audio_too_long_err, decode_error, resolve_budget};
 
 /// Samples per encoder output frame (`HOP_LENGTH * ENCODER_SUBSAMPLING`,
 /// 640 @16 kHz). Window starts are multiples of this so each window's frame
@@ -110,6 +110,111 @@ impl WindowSpec {
     pub(crate) fn flat() -> Self {
         Self::new(usize::MAX, usize::MAX, 0)
     }
+}
+
+/// Window-cursor arithmetic for a source that decodes as it goes.
+///
+/// Pure and shared, so every streaming source yields the one window sequence
+/// [`SliceWindows`] would over the same fully-decoded buffer:
+/// [`WindowCursor::fill_target`] says how far the source must decode before the
+/// next window can be decided, and [`WindowCursor::take`] turns "here is what
+/// is available" into that window.
+#[cfg(feature = "file-decode")]
+pub(crate) struct WindowCursor {
+    spec: WindowSpec,
+    /// Absolute start (@16 kHz) of the next window to yield.
+    next_start: usize,
+    /// True until the first window's single-pass-vs-windowed decision is made.
+    first: bool,
+    done: bool,
+}
+
+#[cfg(feature = "file-decode")]
+impl WindowCursor {
+    pub(crate) fn new(spec: WindowSpec) -> Self {
+        Self {
+            spec,
+            next_start: 0,
+            first: true,
+            done: false,
+        }
+    }
+
+    pub(crate) fn is_done(&self) -> bool {
+        self.done
+    }
+
+    pub(crate) fn next_start(&self) -> usize {
+        self.next_start
+    }
+
+    pub(crate) fn spec(&self) -> WindowSpec {
+        self.spec
+    }
+
+    /// Decode at least this many samples before calling [`WindowCursor::take`]:
+    /// one past the window end, so `end == total` is distinguishable from a
+    /// mid-stream boundary, and enough for the first window to decide
+    /// single-pass vs windowed.
+    pub(crate) fn fill_target(&self) -> usize {
+        if self.first {
+            self.spec
+                .single_pass_max()
+                .saturating_add(1)
+                .max(self.spec.window().saturating_add(1))
+        } else {
+            self.next_start + self.spec.window() + 1
+        }
+    }
+
+    /// The next `[start, end)` window given the samples decoded so far
+    /// (`avail_end`) and whether the stream is exhausted, or `None` once every
+    /// window has been yielded.
+    pub(crate) fn take(&mut self, avail_end: usize, eof: bool) -> Option<(usize, usize)> {
+        if self.done {
+            return None;
+        }
+        let start = self.next_start;
+        if self.first {
+            self.first = false;
+            if eof && avail_end <= self.spec.single_pass_max() {
+                // The whole stream fits the single-pass ceiling: one window over
+                // all of it. `decode_words_streaming` then runs one encoder pass
+                // with frame offset 0 and stitches onto an empty list —
+                // byte-identical to `decode_words`' non-windowed branch.
+                self.done = true;
+                return Some((start, avail_end));
+            }
+        }
+        if start >= avail_end {
+            // Reachable only at EOF, once the last window has been yielded.
+            self.done = true;
+            return None;
+        }
+        // Because the caller decoded one sample past `start + window` (or hit
+        // EOF), `end == avail_end` holds only when this window reaches the end.
+        let end = (start + self.spec.window()).min(avail_end);
+        if eof && end == avail_end {
+            self.done = true;
+        } else {
+            self.next_start = start + self.spec.stride();
+        }
+        Some((start, end))
+    }
+}
+
+/// Which channel a windowed decode yields.
+///
+/// The default file pipeline wants the mono mix; `channels=split` wants each
+/// channel on its own, and needs it *streamed* — materializing every channel of
+/// the whole file is what pinned that path to a duration ceiling.
+#[cfg(feature = "file-decode")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ChannelSelect {
+    /// Mean of every channel present in the packet.
+    Mono,
+    /// A single channel, by zero-based index.
+    One(usize),
 }
 
 /// One decode window lent by a [`PcmWindows`] source.
@@ -188,22 +293,49 @@ enum Source {
         format: Box<dyn FormatReader>,
         decoder: Box<dyn AudioDecoder>,
         track_id: u32,
-        /// Source (container) sample rate — the units the duration cap counts.
+        /// Source (container) sample rate — the units the length budget counts.
         sample_rate: u32,
         /// Running SOURCE-rate frame count, tracked separately from the 16 kHz
-        /// accumulator because the duration cap is expressed in source frames.
+        /// accumulator because the length budget is expressed in source frames.
         source_frames: usize,
-        /// Source-rate frame budget from a clamped rate (see [`max_decode_samples`]).
+        /// Source-rate frame budget. `usize::MAX` when the caller imposed no
+        /// limit — the streaming path is O(one window), so length is unbounded
+        /// by default; the flat drain and the whole-buffer callers pass a finite
+        /// budget (see [`max_samples_for_secs`]).
         max_samples: usize,
+        /// The seconds limit `max_samples` was derived from, echoed verbatim in
+        /// [`AudioTooLong`](crate::error::GigasttError::AudioTooLong) on a trip.
+        limit_secs: f64,
         /// Boxed: it carries the heavyweight rubato FIR state, so keeping it
         /// behind a pointer keeps the `Streaming` variant small.
         resampler: Box<ResampleTo16k>,
         /// Per-packet interleaved scratch, hoisted out of the decode loop.
         interleaved: Vec<f32>,
     },
+    /// OGG/Opus: symphonia demuxes it but ships no decoder, so packets go
+    /// through the `opus-rs` fallback ([`OpusStream`]) and are mixed to mono
+    /// and resampled as they arrive — same shape as `Streaming`, different
+    /// decoder.
+    Opus {
+        format: Box<dyn FormatReader>,
+        track_id: u32,
+        /// Boxed: it carries libopus decoder state.
+        stream: Box<OpusStream>,
+        /// Running decoded frame count at the Opus decode rate (48 kHz), which
+        /// is what the budget below counts and what a trip reports.
+        decoded_48k: usize,
+        max_samples: usize,
+        limit_secs: f64,
+        resampler: Box<ResampleTo16k>,
+        /// Decoded mono samples not yet staged. The whole-buffer path fed the
+        /// resampler in exact [`RESAMPLE_STAGING_FRAMES`] chunks; holding the
+        /// remainder here reproduces that chunk sequence packet-by-packet, so
+        /// the flush boundaries — and with them the resampled output — do not
+        /// move. Bounded by one chunk plus one packet.
+        pending: Vec<f32>,
+    },
     /// The whole 16 kHz stream is already in [`FileWindows::buf`]. Used by the
-    /// Opus fallback (it still accumulates per channel — streaming it is out of
-    /// scope) and the G.722-in-WAV telephony path (no symphonia decoder).
+    /// G.722-in-WAV telephony path (no symphonia decoder).
     Eager,
 }
 
@@ -237,22 +369,20 @@ pub(crate) struct FileWindows {
     /// Total 16 kHz samples decoded so far (== `buf_start_abs + buf.len()`).
     decoded_16k_total: usize,
     spec: WindowSpec,
-    /// Absolute start (@16 kHz) of the next window to yield.
-    next_start: usize,
-    /// True until the first window's single-pass-vs-windowed decision is made.
-    first: bool,
-    done: bool,
+    /// Which channel the packet loop keeps.
+    channel: ChannelSelect,
+    cursor: WindowCursor,
 }
 
 #[cfg(feature = "file-decode")]
 impl FileWindows {
     /// Open a file for windowed decode. Mirrors `decode_audio_file`'s probe/hint
     /// setup, including the G.722-in-WAV telephony sniff.
-    pub(crate) fn open(path: &str, spec: WindowSpec) -> Result<Self> {
+    pub(crate) fn open(path: &str, spec: WindowSpec, max_audio_secs: Option<f64>) -> Result<Self> {
         if sniffs_as_g722_wav(path)? {
             let bytes = std::fs::read(path)
                 .with_context(|| format!("Failed to read audio file: {path}"))?;
-            if let Some(result) = try_decode_g722_wav(&bytes) {
+            if let Some(result) = try_decode_g722_wav(&bytes, max_audio_secs) {
                 return Ok(Self::eager(result?, spec));
             }
         }
@@ -266,18 +396,22 @@ impl FileWindows {
         {
             hint.with_extension(ext);
         }
-        Self::from_mss(mss, hint, spec)
+        Self::from_mss(mss, hint, spec, max_audio_secs, ChannelSelect::Mono)
     }
 
     /// Open a shared [`Bytes`] buffer for windowed decode. `BytesMediaSource` is
     /// seekable, so the isomp4 demuxer's trailing-`moov` seek works; no spool.
-    pub(crate) fn from_bytes(data: Bytes, spec: WindowSpec) -> Result<Self> {
-        if let Some(result) = try_decode_g722_wav(&data) {
+    pub(crate) fn from_bytes(
+        data: Bytes,
+        spec: WindowSpec,
+        max_audio_secs: Option<f64>,
+    ) -> Result<Self> {
+        if let Some(result) = try_decode_g722_wav(&data, max_audio_secs) {
             return Ok(Self::eager(result?, spec));
         }
         let source = BytesMediaSource::new(data);
         let mss = MediaSourceStream::new(Box::new(source), Default::default());
-        Self::from_mss(mss, Hint::new(), spec)
+        Self::from_mss(mss, Hint::new(), spec, max_audio_secs, ChannelSelect::Mono)
     }
 
     /// Probe the container and either set up the streaming decoder or, for Opus /
@@ -285,8 +419,14 @@ impl FileWindows {
     /// copied out (and the non-Opus decoder built) inside one borrow scope so the
     /// `FormatReader` is free to move or be driven afterwards — the same shape as
     /// the whole-buffer `decode_audio_inner`.
-    fn from_mss(mss: MediaSourceStream<'static>, hint: Hint, spec: WindowSpec) -> Result<Self> {
-        let mut format = symphonia::default::get_probe()
+    fn from_mss(
+        mss: MediaSourceStream<'static>,
+        hint: Hint,
+        spec: WindowSpec,
+        max_audio_secs: Option<f64>,
+        channel: ChannelSelect,
+    ) -> Result<Self> {
+        let format = symphonia::default::get_probe()
             .probe(
                 &hint,
                 mss,
@@ -329,25 +469,36 @@ impl FileWindows {
             (track_id, sample_rate, channels, decoder_opt)
         };
 
-        let max_samples = max_decode_samples(sample_rate);
+        let (max_samples, limit_secs) = resolve_budget(max_audio_secs, sample_rate);
 
         match decoder_opt {
             None => {
-                let mono = mix_channels_to_mono(&decode_opus_channels(
-                    &mut *format,
-                    track_id,
-                    channels,
-                    max_samples,
-                )?);
-                let mut resampler = ResampleTo16k::new(SampleRate(sample_rate), None);
-                for piece in mono.chunks(RESAMPLE_STAGING_FRAMES) {
-                    resampler.stage().extend_from_slice(piece);
-                    resampler.flush_full()?;
-                }
-                let mut buf = Vec::new();
-                resampler.finish_into(&mut buf)?;
-                tracing::info!("Audio (opus): {sample_rate}Hz, {channels}ch (eager)");
-                Ok(Self::eager(buf, spec))
+                // The budget counts at the Opus decode rate (48 kHz), which is
+                // what the decoder actually emits and what a trip reports —
+                // the container's declared input rate is not necessarily the
+                // same number. No whole-buffer clamp: this path streams now.
+                let (max_samples, limit_secs) = resolve_budget(max_audio_secs, OPUS_DECODE_RATE);
+                tracing::info!("Audio (opus): {sample_rate}Hz, {channels}ch (streaming windows)");
+                Ok(Self {
+                    src: Source::Opus {
+                        format,
+                        track_id,
+                        stream: Box::new(OpusStream::new(channels, channel)?),
+                        decoded_48k: 0,
+                        max_samples,
+                        limit_secs,
+                        resampler: Box::new(ResampleTo16k::new(SampleRate(sample_rate), None)),
+                        pending: Vec::with_capacity(RESAMPLE_STAGING_FRAMES),
+                    },
+                    eof: false,
+                    finished: false,
+                    buf: Vec::new(),
+                    buf_start_abs: 0,
+                    decoded_16k_total: 0,
+                    spec,
+                    channel,
+                    cursor: WindowCursor::new(spec),
+                })
             }
             Some(decoder) => {
                 tracing::info!("Audio: {sample_rate}Hz, {channels}ch (streaming windows)");
@@ -359,6 +510,7 @@ impl FileWindows {
                         sample_rate,
                         source_frames: 0,
                         max_samples,
+                        limit_secs,
                         // No length hint: the windowed path never materializes the
                         // whole 16 kHz stream, so it must not reserve for it.
                         resampler: Box::new(ResampleTo16k::new(SampleRate(sample_rate), None)),
@@ -370,12 +522,42 @@ impl FileWindows {
                     buf_start_abs: 0,
                     decoded_16k_total: 0,
                     spec,
-                    next_start: 0,
-                    first: true,
-                    done: false,
+                    channel,
+                    cursor: WindowCursor::new(spec),
                 })
             }
         }
+    }
+
+    /// Open a shared [`Bytes`] buffer for windowed decode of **one** channel.
+    ///
+    /// The per-channel twin of [`FileWindows::from_bytes`], for the
+    /// `channels=split` path: channel `k` is extracted in the packet loop and
+    /// resampled on its own, so peak memory is one window rather than every
+    /// channel of the whole file.
+    ///
+    /// The samples are the ones the whole-buffer per-channel decode produced —
+    /// same packet cadence, same resampler, same staging — so the windows the
+    /// decoder sees are unchanged.
+    pub(crate) fn from_bytes_channel(
+        data: Bytes,
+        spec: WindowSpec,
+        max_audio_secs: Option<f64>,
+        channel: usize,
+    ) -> Result<Self> {
+        if let Some(result) = try_decode_g722_wav(&data, max_audio_secs) {
+            // G.722-in-WAV is mono by construction; there is no channel to pick.
+            return Ok(Self::eager(result?, spec));
+        }
+        let source = BytesMediaSource::new(data);
+        let mss = MediaSourceStream::new(Box::new(source), Default::default());
+        Self::from_mss(
+            mss,
+            Hint::new(),
+            spec,
+            max_audio_secs,
+            ChannelSelect::One(channel),
+        )
     }
 
     /// Build an eager source over an already-decoded 16 kHz buffer.
@@ -389,9 +571,8 @@ impl FileWindows {
             buf_start_abs: 0,
             decoded_16k_total: total,
             spec,
-            next_start: 0,
-            first: true,
-            done: false,
+            channel: ChannelSelect::Mono,
+            cursor: WindowCursor::new(spec),
         }
     }
 
@@ -411,20 +592,32 @@ impl FileWindows {
     }
 
     /// Flat-decode a file to 16 kHz mono. The window geometry is irrelevant to
-    /// `drain_to_vec`, so a sentinel spec is used.
-    pub(crate) fn decode_file(path: &str) -> Result<Vec<f32>> {
-        Self::open(path, WindowSpec::flat())?.drain_to_vec()
+    /// `drain_to_vec`, so a sentinel spec is used. `max_audio_secs` is the
+    /// whole-buffer length budget (this drain materializes the entire stream).
+    pub(crate) fn decode_file(path: &str, max_audio_secs: Option<f64>) -> Result<Vec<f32>> {
+        Self::open(path, WindowSpec::flat(), max_audio_secs)?.drain_to_vec()
     }
 
     /// Flat-decode a shared byte buffer to 16 kHz mono.
-    pub(crate) fn decode_bytes(data: Bytes) -> Result<Vec<f32>> {
-        Self::from_bytes(data, WindowSpec::flat())?.drain_to_vec()
+    pub(crate) fn decode_bytes(data: Bytes, max_audio_secs: Option<f64>) -> Result<Vec<f32>> {
+        Self::from_bytes(data, WindowSpec::flat(), max_audio_secs)?.drain_to_vec()
     }
 
     /// Decode until `decoded_16k_total >= target` (or EOF), appending 16 kHz
-    /// samples to `buf`. Enforces the source-rate duration cap incrementally with
+    /// samples to `buf`. Enforces the source-rate length budget incrementally with
     /// the exact same error string as the whole-buffer path.
     fn fill_to(&mut self, target: usize) -> Result<()> {
+        match self.src {
+            Source::Streaming { .. } => self.fill_streaming(target),
+            Source::Opus { .. } => self.fill_opus(target),
+            // The whole buffer is already resident.
+            Source::Eager => Ok(()),
+        }
+    }
+
+    /// [`FileWindows::fill_to`] for a container symphonia can decode itself.
+    fn fill_streaming(&mut self, target: usize) -> Result<()> {
+        let channel = self.channel;
         let Source::Streaming {
             format,
             decoder,
@@ -432,6 +625,7 @@ impl FileWindows {
             sample_rate,
             source_frames,
             max_samples,
+            limit_secs,
             resampler,
             interleaved,
         } = &mut self.src
@@ -460,14 +654,29 @@ impl FileWindows {
                 interleaved.clear();
                 decoded.copy_to_vec_interleaved(interleaved);
                 let stage = resampler.stage();
-                for frame in 0..num_frames {
-                    let mut sum = 0.0_f32;
-                    for c in 0..ch {
-                        sum += interleaved[frame * ch + c];
+                match channel {
+                    ChannelSelect::Mono => {
+                        for frame in 0..num_frames {
+                            let mut sum = 0.0_f32;
+                            for c in 0..ch {
+                                sum += interleaved[frame * ch + c];
+                            }
+                            stage.push(sum / ch as f32);
+                        }
                     }
-                    stage.push(sum / ch as f32);
+                    // A packet short of the requested channel contributes
+                    // nothing rather than shifting the timeline.
+                    ChannelSelect::One(k) if k < ch => {
+                        for frame in 0..num_frames {
+                            stage.push(interleaved[frame * ch + k]);
+                        }
+                    }
+                    ChannelSelect::One(_) => {}
                 }
-            } else {
+            } else if matches!(channel, ChannelSelect::Mono | ChannelSelect::One(0)) {
+                // Single-channel packet: it *is* channel 0. Asking for a higher
+                // index contributes nothing, rather than silently handing back
+                // channel 0's audio under another channel's name.
                 let stage = resampler.stage();
                 let offset = stage.len();
                 stage.resize(offset + num_frames, 0.0);
@@ -476,11 +685,11 @@ impl FileWindows {
             *source_frames += num_frames;
 
             if *source_frames > *max_samples {
-                let observed_s = *source_frames as f64 / *sample_rate as f64;
-                anyhow::bail!(
-                    "Audio file too long ({:.0}s). Maximum supported: {MAX_DURATION_S:.0}s.",
-                    observed_s
-                );
+                return Err(audio_too_long_err(
+                    *source_frames,
+                    *sample_rate,
+                    *limit_secs,
+                ));
             }
 
             resampler.flush_full()?;
@@ -497,6 +706,74 @@ impl FileWindows {
         }
         Ok(())
     }
+
+    /// [`FileWindows::fill_to`] for OGG/Opus, decoded through the `opus-rs`
+    /// fallback. Same loop as [`FileWindows::fill_streaming`]: one packet at a
+    /// time, budget checked incrementally, resampler drained into `buf`.
+    fn fill_opus(&mut self, target: usize) -> Result<()> {
+        let Source::Opus {
+            format,
+            track_id,
+            stream,
+            decoded_48k,
+            max_samples,
+            limit_secs,
+            resampler,
+            pending,
+        } = &mut self.src
+        else {
+            return Ok(());
+        };
+
+        while !self.eof && self.decoded_16k_total < target {
+            let have_pcm = *decoded_48k > 0;
+            let packet = match next_demux_packet(&mut **format, have_pcm)? {
+                Some(p) => p,
+                None => {
+                    self.eof = true;
+                    break;
+                }
+            };
+            if packet.track_id != *track_id {
+                continue;
+            }
+
+            *decoded_48k += stream.decode_packet(&packet.data, pending)?;
+            if *decoded_48k > *max_samples {
+                return Err(audio_too_long_err(
+                    *decoded_48k,
+                    OPUS_DECODE_RATE,
+                    *limit_secs,
+                ));
+            }
+
+            // Stage in exact `RESAMPLE_STAGING_FRAMES` chunks, keeping the
+            // remainder in `pending`: that is the chunk sequence the
+            // whole-buffer path produced, and the resampler drains whatever is
+            // staged, so any other cadence would move the flush boundaries and
+            // with them the output samples.
+            while pending.len() >= RESAMPLE_STAGING_FRAMES {
+                resampler
+                    .stage()
+                    .extend_from_slice(&pending[..RESAMPLE_STAGING_FRAMES]);
+                pending.drain(..RESAMPLE_STAGING_FRAMES);
+                resampler.flush_full()?;
+            }
+            let before = self.buf.len();
+            resampler.drain_ready_into(&mut self.buf);
+            self.decoded_16k_total += self.buf.len() - before;
+        }
+
+        if self.eof && !self.finished {
+            resampler.stage().extend_from_slice(pending);
+            pending.clear();
+            let before = self.buf.len();
+            resampler.finish_into(&mut self.buf)?;
+            self.decoded_16k_total += self.buf.len() - before;
+            self.finished = true;
+        }
+        Ok(())
+    }
 }
 
 #[cfg(feature = "file-decode")]
@@ -506,7 +783,7 @@ impl PcmWindows for FileWindows {
     }
 
     fn next_window(&mut self) -> Result<Option<PcmWindow<'_>>, GigasttError> {
-        if self.done {
+        if self.cursor.is_done() {
             return Ok(None);
         }
 
@@ -514,7 +791,8 @@ impl PcmWindows for FileWindows {
         // forward, so everything before `next_start` is dead. This is what keeps
         // the resident buffer at one window plus look-ahead.
         let drop = self
-            .next_start
+            .cursor
+            .next_start()
             .saturating_sub(self.buf_start_abs)
             .min(self.buf.len());
         if drop > 0 {
@@ -522,53 +800,12 @@ impl PcmWindows for FileWindows {
             self.buf_start_abs += drop;
         }
 
-        // Decode one sample past the window end so `end == total` is
-        // distinguishable from a mid-stream boundary; the first window also needs
-        // enough to decide single-pass vs windowed.
-        let target = if self.first {
-            (self.spec.single_pass_max() + 1).max(self.spec.window() + 1)
-        } else {
-            self.next_start + self.spec.window() + 1
-        };
-        self.fill_to(target)
-            .map_err(|e| GigasttError::InvalidAudio {
-                reason: format!("{e:#}"),
-            })?;
+        self.fill_to(self.cursor.fill_target())
+            .map_err(decode_error)?;
 
-        let avail_end = self.decoded_16k_total;
-        let start = self.next_start;
-
-        if self.first {
-            self.first = false;
-            if self.eof && avail_end <= self.spec.single_pass_max() {
-                // The whole stream fits the single-pass ceiling: yield exactly one
-                // window over all of it. `decode_words_streaming` then runs one
-                // encoder pass with frame offset 0 and stitches onto an empty list
-                // — byte-identical to `decode_words`' non-windowed branch.
-                self.done = true;
-                let e = avail_end - self.buf_start_abs;
-                return Ok(Some(PcmWindow {
-                    start_sample: start,
-                    samples: &self.buf[..e],
-                }));
-            }
-        }
-
-        if start >= avail_end {
-            // Reachable only at EOF, once the last window has been yielded.
-            self.done = true;
+        let Some((start, end)) = self.cursor.take(self.decoded_16k_total, self.eof) else {
             return Ok(None);
-        }
-
-        // Standard overlapping geometry, matching `SliceWindows` exactly. Because
-        // `fill_to` decoded one sample past `start + window` (or hit EOF),
-        // `end == avail_end` holds only when this window reaches the true end.
-        let end = (start + self.spec.window()).min(avail_end);
-        if self.eof && end == avail_end {
-            self.done = true;
-        } else {
-            self.next_start = start + self.spec.stride();
-        }
+        };
         let s = start - self.buf_start_abs;
         let e = end - self.buf_start_abs;
         Ok(Some(PcmWindow {
@@ -809,7 +1046,7 @@ mod file_windows_tests {
         for &n in &[1usize, 8_000, 480_000, 480_001, 560_000, 900_000] {
             let src = signal(n, 1.0);
             let wav = encode_wav_pcm16(&src, 16000);
-            let flat = FileWindows::from_bytes(Bytes::copy_from_slice(&wav), spec)
+            let flat = FileWindows::from_bytes(Bytes::copy_from_slice(&wav), spec, None)
                 .expect("open flat")
                 .drain_to_vec()
                 .expect("drain");
@@ -817,7 +1054,8 @@ mod file_windows_tests {
             // is exact.
             assert_eq!(flat.len(), n, "passthrough length changed at n={n}");
             let got = window_seq(
-                FileWindows::from_bytes(Bytes::copy_from_slice(&wav), spec).expect("open windows"),
+                FileWindows::from_bytes(Bytes::copy_from_slice(&wav), spec, None)
+                    .expect("open windows"),
             );
             assert_eq!(got, expected_seq(&flat, spec), "geometry mismatch at n={n}");
         }
@@ -833,7 +1071,7 @@ mod file_windows_tests {
         let left = signal(n, 0.3);
         let right = signal(n, 2.1);
         let wav = stereo_wav_pcm16(&left, &right, 48_000);
-        let flat = FileWindows::from_bytes(Bytes::copy_from_slice(&wav), spec)
+        let flat = FileWindows::from_bytes(Bytes::copy_from_slice(&wav), spec, None)
             .expect("open flat")
             .drain_to_vec()
             .expect("drain");
@@ -843,7 +1081,8 @@ mod file_windows_tests {
             flat.len()
         );
         let got = window_seq(
-            FileWindows::from_bytes(Bytes::copy_from_slice(&wav), spec).expect("open windows"),
+            FileWindows::from_bytes(Bytes::copy_from_slice(&wav), spec, None)
+                .expect("open windows"),
         );
         // Incremental resample + windowing is byte-identical to whole-buffer
         // resample + SliceWindows: the staged chunk sequence is the same either
@@ -851,13 +1090,67 @@ mod file_windows_tests {
         assert_eq!(got, slice_seq(&flat, spec));
     }
 
+    /// The load-bearing claim for streaming `channels=split`: pulling channel
+    /// `k` through the packet loop yields the *same samples* the whole-buffer
+    /// per-channel decode produced. Checked at 16 kHz (resampler passthrough)
+    /// and 48 kHz (real resampling), for both channels of a genuine stereo
+    /// stream whose channels differ.
+    #[test]
+    fn test_file_windows_channel_select_matches_batch_per_channel_decode() {
+        for rate in [16_000u32, 48_000] {
+            let n = rate as usize * 3;
+            let left = signal(n, 0.3);
+            let right = signal(n, 2.1);
+            let wav = stereo_wav_pcm16(&left, &right, rate);
+            let batch = crate::inference::audio::decode_audio_bytes_shared_channels(
+                Bytes::copy_from_slice(&wav),
+            )
+            .expect("batch per-channel decode");
+            assert_eq!(batch.len(), 2, "expected a stereo decode at {rate}Hz");
+            // The channels must actually differ, or the test proves nothing.
+            assert_ne!(batch[0], batch[1]);
+
+            for (k, want) in batch.iter().enumerate() {
+                let streamed = FileWindows::from_bytes_channel(
+                    Bytes::copy_from_slice(&wav),
+                    WindowSpec::flat(),
+                    None,
+                    k,
+                )
+                .expect("open channel")
+                .drain_to_vec()
+                .expect("drain channel");
+                assert_eq!(&streamed, want, "rate={rate} channel={k}");
+            }
+        }
+    }
+
+    /// Selecting a channel the stream does not have yields nothing rather than
+    /// silently falling back to another channel's audio.
+    #[test]
+    fn test_file_windows_channel_select_out_of_range_is_empty() {
+        let src = signal(16_000, 1.0);
+        let wav = encode_wav_pcm16(&src, 16000); // mono
+        let streamed = FileWindows::from_bytes_channel(
+            Bytes::copy_from_slice(&wav),
+            WindowSpec::flat(),
+            None,
+            5,
+        )
+        .expect("open")
+        .drain_to_vec()
+        .expect("drain");
+        assert!(streamed.is_empty(), "got {} samples", streamed.len());
+    }
+
     #[test]
     fn test_file_windows_single_pass_yields_one_window() {
         let spec = ort_spec();
         let src = signal(10_000, 0.7);
         let wav = encode_wav_pcm16(&src, 16000);
-        let got =
-            window_seq(FileWindows::from_bytes(Bytes::copy_from_slice(&wav), spec).expect("open"));
+        let got = window_seq(
+            FileWindows::from_bytes(Bytes::copy_from_slice(&wav), spec, None).expect("open"),
+        );
         assert_eq!(got.len(), 1);
         assert_eq!(got[0].0, 0);
         assert_eq!(got[0].1.len(), 10_000);
@@ -869,7 +1162,8 @@ mod file_windows_tests {
         let n = 700_000; // chunked
         let src = signal(n, 1.3);
         let wav = encode_wav_pcm16(&src, 16000);
-        let mut fw = FileWindows::from_bytes(Bytes::copy_from_slice(&wav), spec).expect("open");
+        let mut fw =
+            FileWindows::from_bytes(Bytes::copy_from_slice(&wav), spec, None).expect("open");
         while fw.next_window().expect("window").is_some() {}
         assert_eq!(fw.total_16k_samples(), n);
     }
@@ -935,9 +1229,9 @@ mod file_windows_tests {
         // grows with duration) for a same-build A/B against the default windowed
         // path (peak bounded by one window).
         let total = if std::env::var("GIGASTT_PEAK_MODE").as_deref() == Ok("drain") {
-            FileWindows::decode_file(p).expect("drain").len()
+            FileWindows::decode_file(p, None).expect("drain").len()
         } else {
-            let mut fw = FileWindows::open(p, ort_spec()).expect("open temp wav");
+            let mut fw = FileWindows::open(p, ort_spec(), None).expect("open temp wav");
             let mut counted = 0usize;
             while let Some(win) = fw.next_window().expect("window") {
                 counted += win.samples.len();
