@@ -73,13 +73,25 @@ impl EmbeddingExtractor for SharedExtractor {
 
 /// Load a WeSpeaker ResNet34 encoder from `model_path`.
 ///
-/// Uses the 3-arg fbank constructor (rank-3 input). A missing/corrupt path
-/// returns `Err` — never panics.
+/// Uses the fbank constructor (rank-3 input). A missing/corrupt path returns
+/// `Err` — never panics.
+///
+/// The execution provider is pinned to CPU rather than `ExecutionProvider::auto()`
+/// on purpose. polyvoice 0.9 registered no provider at all, so CPU is what the
+/// speaker embeddings were computed on; `auto()` would pick CoreML on Apple
+/// Silicon and XNNPACK on aarch64 Linux, and different numerics there mean
+/// different embeddings, different clustering, and a different DER — a quality
+/// change that belongs in its own measured task, not in a dependency bump.
 pub(crate) fn load_speaker_encoder(
     model_path: &Path,
     pool_size: usize,
 ) -> anyhow::Result<FbankOnnxExtractor> {
-    FbankOnnxExtractor::new(model_path, SPEAKER_EMBEDDING_DIM, pool_size)
+    FbankOnnxExtractor::new(
+        model_path,
+        SPEAKER_EMBEDDING_DIM,
+        pool_size,
+        polyvoice::onnx::ExecutionProvider::Cpu,
+    )
 }
 
 /// Lazy WeSpeaker handle: path probed at engine boot, ONNX session loaded on

@@ -101,6 +101,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`polyvoice` moved to 0.11.0.** `FbankOnnxExtractor::new` gained an
+  execution-provider argument. It is passed `ExecutionProvider::Cpu`, not
+  `ExecutionProvider::auto()`: 0.9 registered no provider at all, so CPU is what
+  the speaker embeddings were computed on, while `auto()` would pick CoreML on
+  Apple Silicon and XNNPACK on aarch64 Linux — different numerics, different
+  embeddings, different clustering, and a different DER. Moving diarization onto
+  an accelerator is a quality change that belongs in its own measured task, not
+  in a dependency bump. Verified label-identical against 0.9 on the synthetic
+  two-speaker corpus and on 146 s of real speech that clusters into seven
+  speakers: 366/366 words carry the same speaker, and the transcript is
+  byte-identical.
+
 - **CLI contract change: `gigastt transcribe-batch` no longer fails on long
   files.** Running `transcribe-batch` over a corpus that includes files
   longer than 30 minutes now exits `0` instead of `1`, because those files
