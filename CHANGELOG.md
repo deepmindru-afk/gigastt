@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.16.0] - 2026-07-30
+
 ### Added
 
 - **Opt-in `--max-audio-secs` duration cap for file transcription.** New CLI
@@ -184,8 +186,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   providers moved behind `ort`'s own Cargo features. `gigastt-core` then failed to compile
   with six `E0433` errors — affecting a fresh `cargo install gigastt`, any downstream
   `cargo add`, and `cargo-semver-checks`' isolated rustdoc build. Workspace builds were
-  shielded by the lockfile; new consumers were not. Adopting rc.13 is a separate change
-  that has to gate the provider arms per feature.
+  shielded by the lockfile; new consumers were not. Adopting rc.13 was left to a separate
+  change that gates the provider arms per feature — it landed in this same release, so
+  2.16.0 ships pinned to `2.0.0-rc.13` (see "`ort` moved to exactly `2.0.0-rc.13`" above).
 
 - **Punctuation restoration no longer silently gives up on long transcripts.**
   Restoration ran a single tokenizer pass over the whole transcript against a
@@ -194,6 +197,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unpunctuated and lowercase with HTTP 200. Restoration now runs over overlapping
   ~250-word windows, keeping each window's middle labels; transcripts that already
   fit in one window are byte-identical to before.
+
+- **Documentation no longer claims the VAD and OGG/Opus paths are capped at 30
+  minutes.** Once both were moved onto the windowed decode, the ~30-minute
+  whole-buffer ceiling stopped applying to them, but the CLI help, the
+  `RuntimeLimits` / `AudioTooLong` / `TranscribeRequest` rustdoc, `openapi.yaml`,
+  and the telephony workbook chapter still listed them alongside diarization,
+  `channels=split`, and the telephony codecs. Operators reading those surfaces
+  would have split long VAD or Opus uploads for no reason. `docs/api.md` and
+  `docs/cli.md` were already correct; everything else now matches them.
 
 ## [2.15.0] - 2026-07-27
 
@@ -2179,7 +2191,9 @@ _Release candidate for v0.9.0 — bundles five P0 fixes plus two supporting item
 - Multi-format audio support: WAV, MP3, M4A/AAC, OGG/Vorbis, FLAC (via symphonia).
 - 39 unit tests (tokenizer, features, decode, inference, protocol).
 
-[Unreleased]: https://github.com/ekhodzitsky/gigastt/compare/v2.14.4...HEAD
+[Unreleased]: https://github.com/ekhodzitsky/gigastt/compare/v2.16.0...HEAD
+[2.16.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.15.0...v2.16.0
+[2.15.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.14.4...v2.15.0
 [2.14.4]: https://github.com/ekhodzitsky/gigastt/compare/v2.14.3...v2.14.4
 [2.14.3]: https://github.com/ekhodzitsky/gigastt/compare/v2.14.2...v2.14.3
 [2.14.2]: https://github.com/ekhodzitsky/gigastt/compare/v2.14.1...v2.14.2

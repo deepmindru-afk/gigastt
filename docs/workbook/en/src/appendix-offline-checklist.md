@@ -6,7 +6,7 @@ Detailed install recipes live in [Getting started](01-getting-started.md) and
 
 ## On a connected machine
 
-- [ ] Resolve release tag: `TAG=$(gh api repos/ekhodzitsky/gigastt/releases/latest -q .tag_name)` (or pin `v2.15.0`)
+- [ ] Resolve release tag: `TAG=$(gh api repos/ekhodzitsky/gigastt/releases/latest -q .tag_name)` (or pin `v2.16.0`)
 - [ ] Download **offline bundle** for the target arch  
       (`gigastt-${VER}-offline-x86_64-unknown-linux-gnu.tar.gz` or aarch64)  
       **or** deb pair: `gigastt_…_amd64.deb` + `gigastt-model-int8_…_all.deb`

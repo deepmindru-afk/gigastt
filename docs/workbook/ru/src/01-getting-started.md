@@ -58,7 +58,7 @@ $ gigastt transcribe recording.wav
 `aarch64-unknown-linux-gnu`:
 
 ```sh
-# Определить тег последнего релиза (или задайте TAG=v2.15.0 вручную):
+# Определить тег последнего релиза (или задайте TAG=v2.16.0 вручную):
 TAG=$(curl -fsSL https://api.github.com/repos/ekhodzitsky/gigastt/releases/latest \
       | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
 VER=${TAG#v}
@@ -102,7 +102,7 @@ stdout, а `ls ~/.gigastt/models/` показывает файлы модели 
 
 ```powershell
 $rel = Invoke-RestMethod https://api.github.com/repos/ekhodzitsky/gigastt/releases/latest
-$TAG = $rel.tag_name          # например v2.15.0
+$TAG = $rel.tag_name          # например v2.16.0
 $VER = $TAG.TrimStart('v')
 $asset = "gigastt-$VER-x86_64-pc-windows-msvc.tar.gz"
 $base = "https://github.com/ekhodzitsky/gigastt/releases/download/$TAG"
@@ -163,7 +163,7 @@ curl -F file=@recording.wav http://127.0.0.1:9876/v1/transcribe
 **Проверка:** `/health` возвращает
 
 ```json
-{"status":"ok","model":"gigaam-v3-rnnt","variant":"rnnt","version":"2.15.0","punctuation":true,"itn":true}
+{"status":"ok","model":"gigaam-v3-rnnt","variant":"rnnt","version":"2.16.0","punctuation":true,"itn":true}
 ```
 
 (поле `version` отражает скачанный образ), а POST возвращает JSON с

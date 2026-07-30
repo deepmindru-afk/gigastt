@@ -8,7 +8,7 @@ result → common pitfalls → links**.
 This book is a **cookbook, not a reference**. The canonical references stay in
 [`docs/`](../../../) — the workbook links to them instead of duplicating them.
 
-**Documented against gigastt 2.15.x.** Prefer resolving the latest release tag
+**Documented against gigastt 2.16.x.** Prefer resolving the latest release tag
 in install scripts (`gh api …/releases/latest`) rather than hard-coding older
 minors.
 

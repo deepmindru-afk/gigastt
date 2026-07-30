@@ -290,8 +290,8 @@ Applies everywhere: there is no default duration cap on a decoded upload —
 long calls transcribe fine — and `?codec=` / `?sample_rate=` work on
 `/v1/transcribe`, `/v1/transcribe/stream`, and `/v1/jobs` alike. Operators who
 want an explicit cap can start the server with `--max-audio-secs` (see the
-pitfall below); the whole-buffer paths (VAD, diarization, `channels=split`,
-telephony/Opus decoding) keep a fixed ~30-minute safety ceiling regardless. A
+pitfall below); the whole-buffer paths (diarization, `channels=split`, and the
+G.722 / raw telephony codecs) keep a fixed ~30-minute safety ceiling regardless. A
 Deepgram-compatible `/v1/listen` endpoint that accepts the same telephony
 inputs is in progress.
 
@@ -355,8 +355,8 @@ fixtures pass, the problem is the file, not the server — go back to Step 0.
 - **"Audio file too long"** (`audio_too_long`, HTTP 413). By default there is
   no duration cap, so this only fires when the server was started with an
   explicit `--max-audio-secs <N>`, or when the upload hits the fixed
-  ~30-minute safety ceiling on a whole-buffer path — VAD, diarization,
-  `channels=split`, or telephony/Opus decoding. Splitting is no longer
+  ~30-minute safety ceiling on a whole-buffer path — diarization,
+  `channels=split`, or the G.722 / raw telephony codecs. Splitting is no longer
   required for length on the default path; on one of the whole-buffer paths,
   split per call leg (or skip that feature for the file) instead.
 - **A-law/μ-law swapped.** Both laws decode "successfully", so the wrong
