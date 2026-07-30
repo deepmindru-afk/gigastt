@@ -633,11 +633,13 @@ default 50 MiB ≈ 26 min of 16 kHz mono WAV); raise it for larger single files.
 Operators who want an explicit duration limit can start the server with
 `--max-audio-secs <N>` (env `GIGASTT_MAX_AUDIO_SECS`, default `0` = unlimited);
 audio longer than `N` seconds is rejected with `413 Payload Too Large` and code
-`audio_too_long` before any inference runs. VAD segmentation, speaker
-diarization, `channels=split`, and telephony/Opus decoding hold the whole
-decoded buffer in memory, so those paths always enforce a fixed ~30-minute
-safety ceiling regardless of `--max-audio-secs`, returning the same
-`audio_too_long` code. A batch worker should gate on `GET /ready` (not just
+`audio_too_long` before any inference runs. `?channels=split` streams too — the
+stereo-vs-dual-mono decision is made in one pass and each channel is then
+decoded in windows — except on a VAD-enabled server, where it keeps the
+whole-buffer path. VAD segmentation, speaker diarization, and telephony/Opus
+decoding hold the whole decoded buffer in memory, so those paths always enforce
+a fixed ~30-minute safety ceiling regardless of `--max-audio-secs`, returning
+the same `audio_too_long` code. A batch worker should gate on `GET /ready` (not just
 `/health`) so it backs off on `503` pool saturation instead of failing
 mid-job.
 

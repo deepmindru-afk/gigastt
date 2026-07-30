@@ -264,6 +264,21 @@ pub enum TranscribeSource<'a> {
     /// `--stereo-speakers`). Channel index becomes the speaker label;
     /// [`TranscribeRequest::diarization`] is ignored for this source.
     Channels(&'a [Vec<f32>]),
+    /// `channels=split` over a container that is **not** materialized: each
+    /// channel is pulled through the windowed decode in turn, so peak audio
+    /// memory is one window rather than every channel of the whole file.
+    ///
+    /// Prefer this over [`TranscribeSource::Channels`] when the caller has the
+    /// encoded bytes: that variant needs every channel decoded up front, which
+    /// is what puts a duration ceiling on the split path. Decide the channel
+    /// count — and whether splitting is right at all — with
+    /// [`scan_channels`](crate::inference::audio::scan_channels).
+    ChannelStreams {
+        /// Encoded container bytes; cloned per channel (a refcount bump).
+        data: bytes::Bytes,
+        /// Channels to decode, each transcribed as its own speaker.
+        channels: usize,
+    },
 }
 
 /// Unified file-transcription request (builder-friendly).

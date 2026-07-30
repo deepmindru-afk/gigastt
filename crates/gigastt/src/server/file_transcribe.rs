@@ -163,22 +163,13 @@ pub(crate) fn run_file_transcribe_blocking(
     };
 
     if opts.split_channels {
-        let channels = gigastt_core::inference::audio::decode_audio_bytes_shared_channels_bounded(
-            body.clone(),
-            opts.max_audio_secs,
-        )
-        .map_err(map_decode_error)?;
-        let fallback_reason = match channels.len() {
-            0 => Some("no channels"),
-            1 => Some("mono audio"),
-            2 if gigastt_core::inference::audio::is_dual_mono(&channels) => Some("dual-mono audio"),
-            n if n > 2 => Some("more than two channels"),
-            _ => None,
-        };
-        if let Some(reason) = fallback_reason {
-            // The mono path re-decodes from `body`; release the split channels
-            // first so both copies are never resident at once.
-            drop(channels);
+        // Deciding whether to split used to mean decoding every channel of the
+        // whole file and correlating two of them, which is what pinned this
+        // path to a duration ceiling. The scan answers it in one pass — from
+        // the header alone unless the file is exactly stereo.
+        let scan = gigastt_core::inference::audio::scan_channels(body.clone(), opts.max_audio_secs)
+            .map_err(map_decode_error)?;
+        if let Some(reason) = scan.mono_fallback_reason() {
             tracing::warn!(
                 "channels=split requested but {reason} detected; falling back to mono transcription"
             );
@@ -189,11 +180,32 @@ pub(crate) fn run_file_transcribe_blocking(
                     .with_max_audio_secs(opts.max_audio_secs),
                 reservation,
             )
-        } else {
+        } else if engine.has_vad() && opts.overrides.vad.unwrap_or(true) {
+            // The per-channel VAD pass still needs each channel resident, so a
+            // VAD-enabled server keeps the whole-buffer split (and its ceiling)
+            // until the VAD itself runs inside the window loop.
+            let channels =
+                gigastt_core::inference::audio::decode_audio_bytes_shared_channels_bounded(
+                    body.clone(),
+                    opts.max_audio_secs,
+                )
+                .map_err(map_decode_error)?;
             engine.transcribe_request(
                 TranscribeRequest::new(TranscribeSource::Channels(&channels))
                     .with_abort(opts.abort.clone())
                     .with_max_audio_secs(opts.max_audio_secs),
+                reservation,
+            )
+        } else {
+            engine.transcribe_request(
+                TranscribeRequest::new(TranscribeSource::ChannelStreams {
+                    data: body,
+                    channels: scan.channels,
+                })
+                .with_overrides(opts.overrides)
+                .with_hotwords(opts.hotwords.as_ref())
+                .with_abort(opts.abort.clone())
+                .with_max_audio_secs(opts.max_audio_secs),
                 reservation,
             )
         }

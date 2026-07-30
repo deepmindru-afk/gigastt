@@ -1919,3 +1919,98 @@ fn test_dual_mono_detector_uses_the_overlap_only() {
     let batch = super::decode::normalized_correlation_for_test(&a[..3], &b);
     assert!((det.correlation() - batch).abs() < 1e-9);
 }
+
+// --- One-pass channel scan (channels=split decision) ---
+
+/// Two-channel PCM16 WAV with the given channels.
+#[cfg(feature = "file-decode")]
+fn stereo_wav(left: &[f32], right: &[f32], rate: u32) -> bytes::Bytes {
+    let frames = left.len().min(right.len());
+    let data_bytes = (frames * 4) as u32;
+    let mut w = Vec::with_capacity(44 + data_bytes as usize);
+    w.extend_from_slice(b"RIFF");
+    w.extend_from_slice(&(36 + data_bytes).to_le_bytes());
+    w.extend_from_slice(b"WAVE");
+    w.extend_from_slice(b"fmt ");
+    w.extend_from_slice(&16u32.to_le_bytes());
+    w.extend_from_slice(&1u16.to_le_bytes());
+    w.extend_from_slice(&2u16.to_le_bytes());
+    w.extend_from_slice(&rate.to_le_bytes());
+    w.extend_from_slice(&(rate * 4).to_le_bytes());
+    w.extend_from_slice(&4u16.to_le_bytes());
+    w.extend_from_slice(&16u16.to_le_bytes());
+    w.extend_from_slice(b"data");
+    w.extend_from_slice(&data_bytes.to_le_bytes());
+    let q = |s: f32| (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
+    for i in 0..frames {
+        w.extend_from_slice(&q(left[i]).to_le_bytes());
+        w.extend_from_slice(&q(right[i]).to_le_bytes());
+    }
+    bytes::Bytes::from(w)
+}
+
+/// The scan replaces "decode every channel of the whole file, then correlate".
+/// Its verdict picks between transcribing two speakers and mixing to mono, so
+/// it must match the batch answer exactly — checked at both a passthrough and a
+/// resampling rate, on dual-mono and on genuine stereo.
+#[test]
+fn test_scan_channels_matches_batch_dual_mono_verdict() {
+    for rate in [16_000u32, 48_000] {
+        let n = rate as usize * 2;
+        let a: Vec<f32> = (0..n)
+            .map(|i| 0.5 * ((i as f32) * 0.011).sin() + 0.15 * ((i as f32) * 0.0009).cos())
+            .collect();
+        let b: Vec<f32> = (0..n)
+            .map(|i| 0.45 * ((i as f32) * 0.029 + 0.9).sin())
+            .collect();
+
+        for (label, left, right) in [
+            ("identical", a.clone(), a.clone()),
+            ("attenuated", a.clone(), a.iter().map(|v| v * 0.8).collect()),
+            ("stereo", a.clone(), b.clone()),
+        ] {
+            let wav = stereo_wav(&left, &right, rate);
+            let batch = decode_audio_bytes_shared_channels(wav.clone()).expect("batch");
+            let want = is_dual_mono(&batch);
+            let scan = scan_channels(wav, None).expect("scan");
+            assert_eq!(scan.channels, 2, "{label} @{rate}");
+            assert_eq!(
+                scan.dual_mono, want,
+                "{label} @{rate}: scan verdict diverged from batch"
+            );
+            assert_eq!(
+                scan.mono_fallback_reason().is_some(),
+                want,
+                "{label} @{rate}"
+            );
+        }
+    }
+}
+
+/// Anything that is not exactly two channels is decided from the header, so the
+/// scan must not need to decode — and must report the same fallback the
+/// whole-buffer path chose.
+#[test]
+fn test_scan_channels_non_stereo_is_header_only() {
+    let mono = encode_wav_pcm16(&vec![0.2f32; 16_000], 16000);
+    let scan = scan_channels(bytes::Bytes::from(mono), None).expect("scan mono");
+    assert_eq!(scan.channels, 1);
+    assert!(!scan.dual_mono);
+    assert_eq!(scan.mono_fallback_reason(), Some("mono audio"));
+}
+
+#[test]
+fn test_channel_scan_fallback_reasons() {
+    let r = |channels, dual_mono| {
+        ChannelScan {
+            channels,
+            dual_mono,
+        }
+        .mono_fallback_reason()
+    };
+    assert_eq!(r(0, false), Some("no channels"));
+    assert_eq!(r(1, false), Some("mono audio"));
+    assert_eq!(r(2, true), Some("dual-mono audio"));
+    assert_eq!(r(2, false), None);
+    assert_eq!(r(6, false), Some("more than two channels"));
+}
