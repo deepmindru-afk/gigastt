@@ -42,11 +42,12 @@ info:
       `413 Payload Too Large` with code `audio_too_long`. The default file
       transcription path has no duration limit of its own: long files decode
       and transcribe in bounded windows, so peak memory stays roughly constant
-      regardless of length. VAD segmentation, speaker diarization,
-      `channels=split`, and telephony/Opus decoding hold the whole decoded
-      buffer in memory and always enforce a fixed ~30-minute safety ceiling on
-      those paths, independent of `--max-audio-secs`, returning the same
-      `audio_too_long` code
+      regardless of length. The VAD file path and streamed OGG/Opus are
+      windowed the same way. Speaker diarization, `channels=split` (including
+      its per-channel Opus decode), and the G.722 / raw telephony codecs hold
+      the whole decoded buffer in memory and always enforce a fixed ~30-minute
+      safety ceiling on those paths, independent of `--max-audio-secs`,
+      returning the same `audio_too_long` code
     - Pool saturation: REST returns `503 Service Unavailable` + `Retry-After: 30`
 
     ## Error Responses
@@ -66,7 +67,7 @@ info:
     |--------|------|---------|
     | 400 | `empty_body` | Request body is empty |
     | 413 | `payload_too_large` | Body exceeds `--body-limit-bytes` |
-    | 413 | `audio_too_long` | Decoded audio exceeds `--max-audio-secs`, or a whole-buffer path (VAD/diarization/`channels=split`/telephony) hit its ~30-minute safety ceiling |
+    | 413 | `audio_too_long` | Decoded audio exceeds `--max-audio-secs`, or a whole-buffer path (diarization/`channels=split`/telephony) hit its ~30-minute safety ceiling |
     | 422 | `transcription_error` | Audio decoded but inference failed |
     | 422 | `invalid_audio` | Audio could not be decoded |
     | 429 | `rate_limited` | Per-IP rate limit exceeded |
@@ -110,7 +111,7 @@ paths:
                 status: ok
                 model: gigaam-v3-rnnt
                 variant: rnnt
-                version: "2.15.0"
+                version: "2.16.0"
                 punctuation: true
                 itn: true
 
@@ -162,7 +163,7 @@ paths:
                 id: gigaam-v3-rnnt
                 name: GigaAM v3 RNN-T
                 variant: rnnt
-                version: "2.15.0"
+                version: "2.16.0"
                 encoder: int8
                 vocab_size: 34
                 sample_rate: 16000
@@ -207,10 +208,11 @@ paths:
         limit. Start the server with `--max-audio-secs <N>` (env
         `GIGASTT_MAX_AUDIO_SECS`) to reject audio longer than `N` seconds with
         `413 Payload Too Large` and code `audio_too_long`; the default (`0`)
-        is unlimited. VAD segmentation, speaker diarization, `channels=split`,
-        and telephony/Opus decoding hold the whole decoded buffer in memory
-        and always enforce a fixed ~30-minute safety ceiling on those paths,
-        independent of `--max-audio-secs`.
+        is unlimited. The VAD file path and streamed OGG/Opus are windowed the
+        same way and carry no ceiling of their own. Speaker diarization,
+        `channels=split`, and the G.722 / raw telephony codecs hold the whole
+        decoded buffer in memory and always enforce a fixed ~30-minute safety
+        ceiling on those paths, independent of `--max-audio-secs`.
       operationId: transcribeFile
       parameters:
         - name: format
@@ -1005,7 +1007,7 @@ components:
           description: Recognition head in use
         version:
           type: string
-          example: "2.15.0"
+          example: "2.16.0"
           description: Server version (semver)
         punctuation:
           type: boolean
@@ -1078,7 +1080,7 @@ components:
           description: Recognition head in use
         version:
           type: string
-          example: "2.15.0"
+          example: "2.16.0"
         encoder:
           type: string
           enum: [fp32, int8]
@@ -1369,8 +1371,8 @@ components:
       description: |
         Request body exceeds `--body-limit-bytes`, or decoded audio exceeds a
         configured duration limit (`--max-audio-secs`, or the fixed
-        ~30-minute safety ceiling on whole-buffer paths: VAD, diarization,
-        `channels=split`, telephony/Opus).
+        ~30-minute safety ceiling on whole-buffer paths: diarization,
+        `channels=split`, telephony).
       content:
         application/json:
           schema:

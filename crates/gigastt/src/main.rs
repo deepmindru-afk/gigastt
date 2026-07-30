@@ -462,7 +462,7 @@ enum Commands {
         /// `0` (default) means no limit — a file of any length transcribes,
         /// since the default path decodes in bounded windows. Audio longer than
         /// a positive value is rejected with HTTP 413 `audio_too_long`. The
-        /// whole-buffer paths (VAD, diarization, `channels=split`, telephony)
+        /// whole-buffer paths (diarization, `channels=split`, telephony)
         /// keep a ~30-minute safety ceiling regardless [default: 0].
         #[arg(long, env = "GIGASTT_MAX_AUDIO_SECS")]
         max_audio_secs: Option<u64>,
