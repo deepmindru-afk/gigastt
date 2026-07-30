@@ -1,5 +1,6 @@
 use anyhow::Context;
-use clap::{Args, Parser, Subcommand};
+use clap::parser::ValueSource;
+use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 use gigastt::batch;
 use gigastt::boot::{
     EngineRecipe, ItnMode, PunctuationMode, ensure_int8_encoder, parse_itn_mode,
@@ -118,13 +119,17 @@ struct OfflineEngineArgs {
 
     /// Intra-op thread count for the encoder session on the CPU build. When
     /// unset, defaults to the logical CPU count divided across the pool.
+    /// Do not set `1` on multi-core hosts unless debugging — it is ~3× slower
+    /// than auto. Explicit `1` is still honoured for debug passthrough.
     /// Env: GIGASTT_ENCODER_INTRA_THREADS.
     #[arg(long, env = "GIGASTT_ENCODER_INTRA_THREADS")]
     encoder_intra_threads: Option<usize>,
 
     /// Number of concurrent transcription workers (engine session pool). Each
     /// session loads its own encoder copy (~0.4 GB resident for the INT8
-    /// encoder), so the default is 2 to bound the memory footprint.
+    /// encoder). Default 2 suits multi-file hosts; use `--pool-size 1` on
+    /// edge / low-RAM (~400 MB RSS). Pool > 1 costs RAM and can cost ~10–20%
+    /// single-job RTF (threads split across slots).
     #[arg(long, default_value_t = 2)]
     pool_size: usize,
 }
@@ -169,6 +174,19 @@ struct BatchOutputArgs {
 // `Serve` carries many optional CLI flags, so it is much larger than the other
 // variants. The enum is parsed once at startup and never stored in bulk, so
 // boxing the fields would only hurt readability.
+
+/// Optional deploy profile for `serve`. `Edge` applies weak-host defaults
+/// (`--pool-size 1`, `--vad`) only when the operator did not set those flags
+/// explicitly.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, ValueEnum)]
+enum ServeProfile {
+    /// Stock defaults (pool=2, VAD off unless `--vad`).
+    #[default]
+    Default,
+    /// Low-RAM / single-stream hosts: pool-size 1 + VAD on (unless overridden).
+    Edge,
+}
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 enum Commands {
@@ -185,6 +203,12 @@ enum Commands {
         /// Model directory
         #[arg(long, default_value_t = model::default_model_dir())]
         model_dir: String,
+
+        /// Deploy profile: `default` (stock) or `edge` (pool-size 1 + VAD when
+        /// those flags are left at defaults). Explicit `--pool-size` / `--vad`
+        /// always win. Env: GIGASTT_PROFILE.
+        #[arg(long, env = "GIGASTT_PROFILE", value_enum, default_value_t = ServeProfile::Default)]
+        profile: ServeProfile,
 
         /// Recognition head to use. Omit to auto-detect from the model
         /// directory: if a model is already installed its variant is used as-is
@@ -295,10 +319,12 @@ enum Commands {
         endpoint_mode: String,
 
         /// Number of concurrent inference sessions. Each session deserializes
-        /// its own encoder copy (~0.4 GB resident for the INT8 encoder), so the
-        /// default is 2 to bound the idle footprint; raise it for higher
-        /// concurrency when RAM allows. The server auto-caps this by available
-        /// RAM at load and logs a warning if it has to clamp.
+        /// its own encoder copy (~0.4 GB resident for the INT8 encoder). Default
+        /// 2 suits multi-connection / multi-user hosts; raise when RAM allows.
+        /// Edge / low-RAM: use `--pool-size 1` (~400 MB RSS, full cores for one
+        /// job). Pool > 1 costs extra RAM and can cost ~10–20% single-job RTF
+        /// because encoder threads are split across slots. The server auto-caps
+        /// by available RAM at load and logs a warning if it clamps.
         #[arg(long, default_value_t = 2)]
         pool_size: usize,
 
@@ -333,8 +359,16 @@ enum Commands {
         #[arg(long, env = "GIGASTT_JOBS_MAX")]
         jobs_max: Option<usize>,
 
-        /// Maximum retry attempts for a job that hits inference_timeout or panics
-        /// [default: 3]. Env: GIGASTT_JOBS_RETRY.
+        /// Maximum total bytes of buffered job uploads kept in memory across the
+        /// queue (queued + processing). Bounds RAM independently of --jobs-max,
+        /// which counts jobs but not their size; a submission over budget gets
+        /// 429 + Retry-After [default: 536870912 = 512 MiB].
+        /// Env: GIGASTT_JOBS_MAX_BYTES.
+        #[arg(long, env = "GIGASTT_JOBS_MAX_BYTES")]
+        jobs_max_bytes: Option<usize>,
+
+        /// Maximum retry attempts for a job that panics [default: 3].
+        /// Env: GIGASTT_JOBS_RETRY.
         #[arg(long, env = "GIGASTT_JOBS_RETRY")]
         jobs_retry: Option<u32>,
 
@@ -343,9 +377,11 @@ enum Commands {
         /// weak CPUs / long single-file jobs. When unset, defaults to the logical
         /// CPU count divided across the concurrently-running pool triplets
         /// (`pool_size + batch_pool_size`), so a default install uses every core.
-        /// An explicit value (flag or env, including `1`) is honoured as-is. The
-        /// resolved value is still auto-clamped so `pool_size * threads` can't
-        /// exceed the logical CPU count. No effect on CoreML / CUDA builds.
+        /// Do not set `1` on multi-core hosts unless debugging — it is ~3× slower
+        /// than auto. An explicit value (flag or env, including `1`) is still
+        /// honoured as-is for debug passthrough. The resolved value is auto-
+        /// clamped so `pool_size * threads` can't exceed the logical CPU count.
+        /// No effect on CoreML / CUDA builds.
         #[arg(long, env = "GIGASTT_ENCODER_INTRA_THREADS")]
         encoder_intra_threads: Option<usize>,
 
@@ -422,6 +458,15 @@ enum Commands {
         #[arg(long, env = "GIGASTT_INFERENCE_TIMEOUT_SECS")]
         inference_timeout_secs: Option<u64>,
 
+        /// Maximum decoded audio length in seconds for file transcription.
+        /// `0` (default) means no limit — a file of any length transcribes,
+        /// since the default path decodes in bounded windows. Audio longer than
+        /// a positive value is rejected with HTTP 413 `audio_too_long`. The
+        /// whole-buffer paths (VAD, diarization, `channels=split`, telephony)
+        /// keep a ~30-minute safety ceiling regardless [default: 0].
+        #[arg(long, env = "GIGASTT_MAX_AUDIO_SECS")]
+        max_audio_secs: Option<u64>,
+
         /// Skip the automatic INT8 quantization step after download.
         /// Default behaviour is to quantize the encoder (~2 min, one-time)
         /// so the pool loads the 210 MB INT8 encoder instead of the 844 MB
@@ -463,20 +508,23 @@ enum Commands {
         #[arg(long, default_value_t = false)]
         skip_diarization: bool,
 
-        /// Skip the automatic INT8 quantization step after download.
-        /// Default behaviour is to quantize the encoder (~2 min, one-time)
-        /// so subsequent `gigastt serve` calls load the 210 MB INT8 encoder.
-        /// Opt out when you need the FP32 encoder for debugging.
+        /// Skip the automatic INT8 quantization step after an **FP32** download
+        /// (`--fp32`). The default lean path already ships INT8 and ignores this.
+        /// Env: GIGASTT_SKIP_QUANTIZE.
         #[arg(long, env = "GIGASTT_SKIP_QUANTIZE", default_value_t = false)]
         skip_quantize: bool,
 
-        /// Fetch the pre-quantized INT8 bundle from the pinned GitHub Release
-        /// instead of the FP32 set + on-device quantization. The lean path:
-        /// no ~844 MB FP32 download, no ~2-minute quantize, no `protoc`.
-        /// Mutually exclusive with `--skip-quantize` (which only applies to the
-        /// FP32 download path).
-        #[arg(long, default_value_t = false)]
+        /// Lean pre-quantized INT8 bundle (default **true**). The default
+        /// `gigastt download` path; ignored when `--fp32` is set. Kept so
+        /// existing scripts that pass `--prequantized` keep working.
+        #[arg(long, default_value_t = true)]
         prequantized: bool,
+
+        /// Download the full FP32 encoder set from HuggingFace and quantize
+        /// on-device (unless `--skip-quantize`). Overrides the default lean
+        /// pre-quantized INT8 path (~220 MB class from the pinned GitHub Release).
+        #[arg(long, default_value_t = false)]
+        fp32: bool,
 
         /// Progress reporting format: `human` (default — interactive `\r`
         /// progress on stderr) or `json` (NDJSON events on stdout, one object
@@ -507,6 +555,25 @@ enum Commands {
         /// Force re-quantization even if INT8 model exists
         #[arg(long)]
         force: bool,
+    },
+
+    /// Prune stale ONNX Runtime optimized graphs and stale CoreML compiled-model
+    /// caches (and optionally hardlink exact duplicate files) under the model
+    /// directory. Reclaims disk on multi-head / FP32-polluted installs and after
+    /// an ONNX Runtime upgrade, without changing accuracy.
+    CacheGc {
+        /// Model directory
+        #[arg(long, default_value_t = model::default_model_dir())]
+        model_dir: String,
+
+        /// Report reclaimable files without deleting or hardlinking
+        #[arg(long, default_value_t = false)]
+        dry_run: bool,
+
+        /// Also hardlink content-identical files under the model dir
+        /// (SHA-256 groups). Off by default — optimized_cache prune always runs.
+        #[arg(long, default_value_t = false)]
+        dedupe: bool,
     },
 
     /// Transcribe an audio file (offline)
@@ -607,9 +674,10 @@ enum Commands {
         /// Intra-op thread count for the encoder session on the CPU build. The
         /// encoder dominates the single-utterance cost, so more threads speed up
         /// long single-file jobs on weak CPUs. When unset, defaults to the logical
-        /// CPU count (offline transcription runs a single triplet). An explicit
-        /// value (flag or env, including `1`) is honoured as-is. No effect on
-        /// CoreML / CUDA builds.
+        /// CPU count (offline transcription runs a single triplet). Do not set
+        /// `1` on multi-core hosts unless debugging — it is ~3× slower than auto.
+        /// An explicit value (flag or env, including `1`) is still honoured as-is
+        /// for debug passthrough. No effect on CoreML / CUDA builds.
         #[arg(long, env = "GIGASTT_ENCODER_INTRA_THREADS")]
         encoder_intra_threads: Option<usize>,
 
@@ -713,6 +781,7 @@ fn build_limits(
     jobs_enabled: Option<bool>,
     jobs_ttl_secs: Option<u64>,
     jobs_max: Option<usize>,
+    jobs_max_bytes: Option<usize>,
     jobs_retry: Option<u32>,
 ) -> anyhow::Result<RuntimeLimits> {
     let mut limits = if let Some(path) = config_path {
@@ -758,6 +827,9 @@ fn build_limits(
     }
     if let Some(v) = jobs_max {
         limits.jobs_max = v;
+    }
+    if let Some(v) = jobs_max_bytes {
+        limits.jobs_max_bytes = v;
     }
     if let Some(v) = jobs_retry {
         limits.jobs_retry = v;
@@ -918,7 +990,8 @@ fn build_batch_options(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let cli = Cli::parse();
+    let matches = Cli::command().get_matches();
+    let cli = Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
 
     if cli.offline {
         // Translate the flag into the env var the download guard in
@@ -952,6 +1025,7 @@ async fn main() -> anyhow::Result<()> {
             port,
             host,
             model_dir,
+            profile,
             model_variant,
             punctuation,
             punct_model_dir,
@@ -959,17 +1033,18 @@ async fn main() -> anyhow::Result<()> {
             hotwords_file,
             hotwords_default,
             hotwords_boost,
-            vad,
+            mut vad,
             vad_threshold,
             vad_min_silence_ms,
             vad_model_dir,
             endpoint_mode,
-            pool_size,
+            mut pool_size,
             pool_min_size,
             batch_pool_size,
             enable_jobs,
             jobs_ttl_secs,
             jobs_max,
+            jobs_max_bytes,
             jobs_retry,
             encoder_intra_threads,
             bind_all,
@@ -986,12 +1061,30 @@ async fn main() -> anyhow::Result<()> {
             shutdown_drain_secs,
             pool_checkout_timeout_secs,
             inference_timeout_secs,
+            max_audio_secs,
             skip_quantize,
             trust_proxy,
             config,
         } => {
+            // Edge profile fills weak-host defaults only when the operator left
+            // the corresponding flags at clap defaults (explicit flags always win).
+            if profile == ServeProfile::Edge
+                && let Some(serve_m) = matches.subcommand_matches("serve")
+            {
+                if serve_m.value_source("pool_size") == Some(ValueSource::DefaultValue) {
+                    pool_size = 1;
+                }
+                if serve_m.value_source("vad") == Some(ValueSource::DefaultValue) {
+                    vad = true;
+                }
+                tracing::info!(
+                    pool_size,
+                    vad,
+                    "serve profile=edge (pool/vad defaults applied when unset)"
+                );
+            }
             ensure_bind_allowed(&host, bind_all)?;
-            let limits = build_limits(
+            let mut limits = build_limits(
                 config.as_deref(),
                 idle_timeout_secs,
                 ws_frame_max_bytes,
@@ -1005,8 +1098,14 @@ async fn main() -> anyhow::Result<()> {
                 Some(enable_jobs),
                 jobs_ttl_secs,
                 jobs_max,
+                jobs_max_bytes,
                 jobs_retry,
             )?;
+            // `--max-audio-secs` overrides the config-file value with the same
+            // precedence as every other runtime limit; `0` (default) = unlimited.
+            if let Some(v) = max_audio_secs {
+                limits.max_audio_secs = v;
+            }
             let metrics_listen =
                 metrics_listen.unwrap_or_else(server::config::default_metrics_listen);
             ensure_metrics_bind_allowed(metrics, &metrics_listen, bind_all)?;
@@ -1084,7 +1183,8 @@ async fn main() -> anyhow::Result<()> {
             #[cfg(feature = "diarization")]
             skip_diarization,
             skip_quantize,
-            prequantized,
+            prequantized: _prequantized,
+            fp32,
             progress,
             #[cfg(feature = "ane")]
             ane,
@@ -1092,7 +1192,7 @@ async fn main() -> anyhow::Result<()> {
             model::set_progress_mode(progress);
             // `download` is an explicit action: the requested variant maps to
             // the default (Rnnt) so a bare `gigastt download` fetches something
-            // useful.
+            // useful. Default = lean pre-quantized INT8; `--fp32` = HF FP32 + quantize.
             //
             // The flow runs on its own task: the INT8 quantization pass and the
             // large-file SHA-256 verify are synchronous, and polled inline they
@@ -1101,17 +1201,17 @@ async fn main() -> anyhow::Result<()> {
             let dl_model_dir = model_dir.clone();
             let mut download = tokio::spawn(async move {
                 let model_dir = dl_model_dir;
-                if prequantized && !model_variant.is_ctc() {
-                    // Lean path: fetch the INT8 bundle from the pinned Release — no
-                    // FP32 download, no on-device quantization, no protoc.
+                if !fp32 && !model_variant.is_ctc() {
+                    // Lean path (default): INT8 bundle from the pinned Release.
                     model::ensure_prequantized_model_variant(Some(model_variant), &model_dir)
                         .await?;
+                } else if fp32 && !model_variant.is_ctc() {
+                    // Explicit FP32 path for debugging / offline quantize workflows.
+                    let resolved =
+                        model::ensure_fp32_model_variant(Some(model_variant), &model_dir).await?;
+                    ensure_int8_encoder(resolved, &model_dir, skip_quantize)?;
                 } else {
-                    // The Multilingual CTC heads' standard download already fetches
-                    // istupakov's pre-quantized INT8 encoder directly from HuggingFace,
-                    // so `--prequantized` is a no-op refinement for them (no separate
-                    // GitHub-Release bundle). `ensure_int8_encoder` then finds the INT8
-                    // encoder already present and skips on-device quantization.
+                    // CTC heads: HF pre-quantized INT8 encoder (+ vocab) directly.
                     let resolved =
                         model::ensure_model_variant(Some(model_variant), &model_dir).await?;
                     ensure_int8_encoder(resolved, &model_dir, skip_quantize)?;
@@ -1194,6 +1294,50 @@ async fn main() -> anyhow::Result<()> {
             gigastt_core::quantize::quantize_model(&input, &output)?;
             tracing::info!("Quantized model saved to {}", output.display());
         }
+        Commands::CacheGc {
+            model_dir,
+            dry_run,
+            dedupe,
+        } => {
+            let dir = std::path::Path::new(&model_dir);
+            let prune = model::prune_optimized_cache(dir, dry_run)?;
+            let action = if dry_run { "would free" } else { "freed" };
+            println!(
+                "optimized_cache: kept {} graph(s), removed {} ({} {:.1} MiB)",
+                prune.kept.len(),
+                prune.removed.len(),
+                action,
+                prune.freed_bytes as f64 / (1024.0 * 1024.0),
+            );
+            for p in &prune.removed {
+                println!("  - {}", p.display());
+            }
+            let coreml = model::prune_coreml_cache(dir, dry_run)?;
+            println!(
+                "coreml_cache: kept {}, removed {} stale ({} {:.1} MiB)",
+                if coreml.kept.is_some() {
+                    "current"
+                } else {
+                    "none"
+                },
+                coreml.removed.len(),
+                action,
+                coreml.freed_bytes as f64 / (1024.0 * 1024.0),
+            );
+            for p in &coreml.removed {
+                println!("  - {}", p.display());
+            }
+            if dedupe {
+                let d = model::dedupe_model_dir(dir, dry_run)?;
+                println!(
+                    "dedupe: {} group(s), {} hardlink(s), {} {:.1} MiB",
+                    d.groups,
+                    d.hardlinked,
+                    action,
+                    d.freed_bytes as f64 / (1024.0 * 1024.0),
+                );
+            }
+        }
         Commands::Transcribe {
             file,
             model_dir,
@@ -1242,7 +1386,7 @@ async fn main() -> anyhow::Result<()> {
             let mut guard = engine.pool.checkout().await?;
             let result = if let Some(codec_name) = codec.as_deref() {
                 // Raw headerless telephony input: decode via the codec tables
-                // and re-wrap as an in-memory WAV, bypassing container sniffing.
+                // straight to mono 16 kHz f32 and hand the samples to the engine.
                 let telephony_codec = inference::audio::TelephonyCodec::from_name(codec_name)
                     .ok_or_else(|| {
                         anyhow::anyhow!(
@@ -1258,9 +1402,31 @@ async fn main() -> anyhow::Result<()> {
                     .map_err(|e| anyhow::anyhow!("{e}"))?;
                 let raw = std::fs::read(&file)
                     .with_context(|| format!("Failed to open audio file: {file}"))?;
-                let samples = inference::audio::decode_telephony_raw(&raw, telephony_codec, rate)?;
-                let wav = inference::audio::encode_wav_pcm16(&samples, 16000);
-                engine.transcribe_bytes(&wav, &mut guard)
+                let mut samples =
+                    inference::audio::decode_telephony_raw(&raw, telephony_codec, rate)?;
+                // NOT a no-op: preserve transcript byte-identity. The former path
+                // encoded these samples into an in-memory WAV and let the engine
+                // decode it back, which snapped every value to 16-bit PCM. Passing
+                // the raw f32 straight through would change the transcript (measured:
+                // 153 token edits on a 9-minute call), so reproduce that quantization
+                // in place — clamp to [-1, 1], round via 32767, normalise via 32768,
+                // matching `encode_wav_pcm16` and the PCM decode path. Whether
+                // full-precision f32 is better is an open WER question tracked in
+                // roadmap/ (telephony precision); do not silently drop this snap.
+                for s in samples.iter_mut() {
+                    let v = if s.is_finite() {
+                        s.clamp(-1.0, 1.0)
+                    } else {
+                        0.0
+                    };
+                    *s = (v * 32767.0).round() as i16 as f32 / 32768.0;
+                }
+                engine.transcribe_request(
+                    inference::TranscribeRequest::new(inference::TranscribeSource::Samples(
+                        &samples,
+                    )),
+                    &mut guard,
+                )
             } else if stereo_speakers {
                 let channels = inference::audio::load_audio_channels(&file)?;
                 let fallback_reason = match channels.len() {
@@ -1539,6 +1705,26 @@ mod tests {
     }
 
     #[test]
+    fn test_cli_serve_profile_edge_defaults_pool_and_vad_flags() {
+        // Parsing only: profile field is Edge; runtime applies pool/vad in main.
+        let cli = Cli::try_parse_from(["gigastt", "serve", "--profile", "edge"]).expect("parse");
+        match cli.command {
+            Commands::Serve {
+                profile,
+                pool_size,
+                vad,
+                ..
+            } => {
+                assert_eq!(profile, ServeProfile::Edge);
+                // clap defaults before profile application:
+                assert_eq!(pool_size, 2);
+                assert!(!vad);
+            }
+            _ => panic!("expected Serve"),
+        }
+    }
+
+    #[test]
     fn test_cli_serve_encoder_intra_threads_default() {
         // Unset → None, so the default resolves from the pool size at load time.
         let _guard = ENV_LOCK.lock().unwrap();
@@ -1674,6 +1860,31 @@ mod tests {
                 assert_eq!(model_variant, ModelVariant::E2eRnnt);
             }
             _ => panic!("expected Download"),
+        }
+    }
+
+    #[test]
+    fn test_cli_cache_gc_parsing() {
+        let cli = Cli::try_parse_from([
+            "gigastt",
+            "cache-gc",
+            "--model-dir",
+            "/tmp/models",
+            "--dry-run",
+            "--dedupe",
+        ])
+        .expect("parse cache-gc");
+        match cli.command {
+            Commands::CacheGc {
+                model_dir,
+                dry_run,
+                dedupe,
+            } => {
+                assert_eq!(model_dir, "/tmp/models");
+                assert!(dry_run);
+                assert!(dedupe);
+            }
+            _ => panic!("expected CacheGc"),
         }
     }
 
@@ -2047,6 +2258,7 @@ mod tests {
     fn test_build_limits_defaults_when_no_config() {
         let limits = build_limits(
             None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+            None,
         )
         .unwrap();
         assert_eq!(limits.idle_timeout_secs, 300);
@@ -2069,12 +2281,14 @@ mod tests {
             Some(true),
             Some(7200),
             Some(50),
+            Some(2 * 1024 * 1024),
             Some(5),
         )
         .unwrap();
         assert!(limits.jobs_enabled);
         assert_eq!(limits.jobs_ttl_secs, 7200);
         assert_eq!(limits.jobs_max, 50);
+        assert_eq!(limits.jobs_max_bytes, 2 * 1024 * 1024);
         assert_eq!(limits.jobs_retry, 5);
     }
 
@@ -2088,6 +2302,8 @@ mod tests {
             "7200",
             "--jobs-max",
             "50",
+            "--jobs-max-bytes",
+            "1048576",
             "--jobs-retry",
             "5",
         ]);
@@ -2096,12 +2312,14 @@ mod tests {
                 enable_jobs,
                 jobs_ttl_secs,
                 jobs_max,
+                jobs_max_bytes,
                 jobs_retry,
                 ..
             } => {
                 assert!(enable_jobs);
                 assert_eq!(jobs_ttl_secs, Some(7200));
                 assert_eq!(jobs_max, Some(50));
+                assert_eq!(jobs_max_bytes, Some(1048576));
                 assert_eq!(jobs_retry, Some(5));
             }
             _ => panic!("expected Serve"),
@@ -2145,6 +2363,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         )
         .unwrap();
         assert_eq!(limits.idle_timeout_secs, 600);
@@ -2164,6 +2383,7 @@ mod tests {
         std::fs::write(tmp.path(), b"idle_timeout_secs = 123\n").unwrap();
         let limits = build_limits(
             Some(tmp.path().to_str().unwrap()),
+            None,
             None,
             None,
             None,
@@ -2201,6 +2421,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         );
         assert!(result.is_err());
     }
@@ -2214,6 +2435,7 @@ mod tests {
             None,
             Some(30),
             Some(0),
+            None,
             None,
             None,
             None,
@@ -2237,6 +2459,7 @@ mod tests {
             None,
             Some(0),
             Some(0),
+            None,
             None,
             None,
             None,
@@ -2569,6 +2792,29 @@ mod tests {
                 assert!(cors_allow_any);
             }
             _ => panic!("expected Serve"),
+        }
+    }
+
+    #[test]
+    fn test_cli_download_defaults_to_lean() {
+        let cli = Cli::try_parse_from(["gigastt", "download"]).expect("parse");
+        match cli.command {
+            Commands::Download {
+                fp32, prequantized, ..
+            } => {
+                assert!(!fp32, "default download is lean, not fp32");
+                assert!(prequantized, "legacy prequantized defaults true");
+            }
+            _ => panic!("expected Download"),
+        }
+    }
+
+    #[test]
+    fn test_cli_download_fp32_flag() {
+        let cli = Cli::try_parse_from(["gigastt", "download", "--fp32"]).expect("parse");
+        match cli.command {
+            Commands::Download { fp32, .. } => assert!(fp32),
+            _ => panic!("expected Download"),
         }
     }
 
