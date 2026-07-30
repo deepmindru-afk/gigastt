@@ -1953,6 +1953,7 @@ fn stereo_wav(left: &[f32], right: &[f32], rate: u32) -> bytes::Bytes {
 /// Its verdict picks between transcribing two speakers and mixing to mono, so
 /// it must match the batch answer exactly — checked at both a passthrough and a
 /// resampling rate, on dual-mono and on genuine stereo.
+#[cfg(feature = "file-decode")]
 #[test]
 fn test_scan_channels_matches_batch_dual_mono_verdict() {
     for rate in [16_000u32, 48_000] {
@@ -1990,6 +1991,7 @@ fn test_scan_channels_matches_batch_dual_mono_verdict() {
 /// Anything that is not exactly two channels is decided from the header, so the
 /// scan must not need to decode — and must report the same fallback the
 /// whole-buffer path chose.
+#[cfg(feature = "file-decode")]
 #[test]
 fn test_scan_channels_non_stereo_is_header_only() {
     let mono = encode_wav_pcm16(&vec![0.2f32; 16_000], 16000);
@@ -1999,6 +2001,7 @@ fn test_scan_channels_non_stereo_is_header_only() {
     assert_eq!(scan.mono_fallback_reason(), Some("mono audio"));
 }
 
+#[cfg(feature = "file-decode")]
 #[test]
 fn test_channel_scan_fallback_reasons() {
     let r = |channels, dual_mono| {

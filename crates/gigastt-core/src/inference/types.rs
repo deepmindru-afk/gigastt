@@ -273,6 +273,7 @@ pub enum TranscribeSource<'a> {
     /// is what puts a duration ceiling on the split path. Decide the channel
     /// count — and whether splitting is right at all — with
     /// [`scan_channels`](crate::inference::audio::scan_channels).
+    #[cfg(feature = "file-decode")]
     ChannelStreams {
         /// Encoded container bytes; cloned per channel (a refcount bump).
         data: bytes::Bytes,
