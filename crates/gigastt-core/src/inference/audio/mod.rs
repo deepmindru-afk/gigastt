@@ -129,7 +129,7 @@ pub(crate) fn audio_too_long_err(
 #[cfg(test)]
 pub(crate) use decode::BytesMediaSource;
 #[cfg(feature = "file-decode")]
-pub use decode::scan_channels;
+pub use decode::{ChannelScan, scan_channels};
 #[cfg(feature = "file-decode")]
 pub use decode::{
     decode_audio_bytes, decode_audio_bytes_shared, decode_audio_bytes_shared_bounded,
@@ -142,7 +142,7 @@ pub use decode::{
 // buffers itself; the path variant is engine-only.
 #[cfg(feature = "file-decode")]
 pub(crate) use decode::decode_audio_file_bounded;
-pub use decode::{ChannelScan, DualMonoDetector, is_dual_mono, mix_channels_to_mono};
+pub use decode::{DualMonoDetector, is_dual_mono, mix_channels_to_mono};
 
 pub(crate) use pcm::{consume_audio_buffer, prepare_audio_buffer};
 pub use pcm::{parse_pcm16_with_carry, parse_pcm16_with_carry_into};

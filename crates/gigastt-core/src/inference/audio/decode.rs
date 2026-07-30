@@ -371,6 +371,7 @@ pub struct ChannelScan {
     pub dual_mono: bool,
 }
 
+#[cfg(feature = "file-decode")]
 impl ChannelScan {
     /// Whether `channels=split` should fall back to the mono mix, and why.
     /// `None` means genuine stereo: split it.
