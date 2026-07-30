@@ -220,8 +220,8 @@ Use the HTTP probes to drive client-side state machines — do not spawn
 - `GET /health` — **liveness**. Returns 200 as soon as the listener is up,
   including during first-run model download/quantization, when it is served by a
   minimal bootstrap responder:
-  `{"status":"ok","model":"loading","version":"2.15.0"}`. Once the engine is up:
-  `{"status":"ok","model":"gigaam-v3-rnnt","variant":"rnnt","version":"2.15.0","punctuation":true,"itn":true}`.
+  `{"status":"ok","model":"loading","version":"2.16.0"}`. Once the engine is up:
+  `{"status":"ok","model":"gigaam-v3-rnnt","variant":"rnnt","version":"2.16.0","punctuation":true,"itn":true}`.
   The `version` field is present in **both** phases — use it for version gates
   instead of executing the binary.
 - `GET /ready` — **readiness**. 200 `{"status":"ready","pool_available":N,"pool_total":M}`

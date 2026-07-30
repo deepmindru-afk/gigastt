@@ -4,7 +4,7 @@
 
 | Version | Supported |
 |---------|-----------|
-| 2.15.x  | Yes (current)  |
+| 2.16.x  | Yes (current)  |
 | 2.14.x  | Yes (previous) |
 | < 2.14  | No             |
 
