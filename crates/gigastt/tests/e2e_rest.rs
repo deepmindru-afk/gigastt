@@ -1726,3 +1726,47 @@ async fn test_openai_transcriptions_missing_file_returns_400() {
 
     let _ = shutdown.send(());
 }
+
+/// The SSE path used to decode the whole upload before chunking it, so it
+/// refused anything past the whole-buffer ~30 min ceiling with `413
+/// audio_too_long` while the single-shot endpoint next to it had no limit at
+/// all. It decodes on demand now, and the only length limit left is the
+/// operator's own `--max-audio-secs` — which must still be answered as a clean
+/// status *before* the stream opens, not as an error event once it has.
+///
+/// (The "long audio actually streams" half is a multi-hour-scale check that
+/// belongs with the local-only load tests, not in CI; this pins the contract
+/// that the fix had to preserve.)
+#[ignore = "requires model"]
+#[tokio::test]
+async fn test_transcribe_stream_sse_operator_limit_is_a_clean_413() {
+    let limits = gigastt::server::RuntimeLimits {
+        max_audio_secs: 2,
+        ..Default::default()
+    };
+    let (port, shutdown) = common::start_server_with_limits(&common::model_dir(), limits).await;
+
+    let resp = tokio::time::timeout(Duration::from_secs(60), async {
+        reqwest::Client::new()
+            .post(format!("http://127.0.0.1:{port}/v1/transcribe/stream"))
+            .body(common::generate_wav(10, 16000))
+            .send()
+            .await
+            .expect("POST /v1/transcribe/stream failed")
+    })
+    .await
+    .expect("POST /v1/transcribe/stream timed out");
+
+    assert_eq!(
+        resp.status(),
+        413,
+        "an operator length limit must trip before the stream opens"
+    );
+    let body = resp.text().await.expect("error body");
+    assert!(
+        body.contains("audio_too_long"),
+        "expected the audio_too_long code, got: {body}"
+    );
+
+    let _ = shutdown.send(());
+}
