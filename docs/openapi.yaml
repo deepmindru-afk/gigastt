@@ -960,34 +960,30 @@ components:
       name: punctuation
       in: query
       schema:
-        type: string
-        enum: [on, off, auto]
+        type: boolean
       description: Override punctuation policy
     Itn:
       name: itn
       in: query
       schema:
-        type: string
-        enum: [on, off, auto]
+        type: boolean
       description: Override inverse text normalization policy
     Vad:
       name: vad
       in: query
       schema:
-        type: string
-        enum: [on, off, auto]
+        type: boolean
       description: Override voice activity detection policy
 
   schemas:
     HealthResponse:
       type: object
+      # Only these two are present in every phase: while the model is still
+      # downloading/loading the payload is {"status":"ok","model":"loading",
+      # "version":"…"} and the capability fields are absent.
       required:
         - status
-        - model
-        - variant
         - version
-        - punctuation
-        - itn
       properties:
         status:
           type: string
@@ -1022,8 +1018,6 @@ components:
       type: object
       required:
         - status
-        - pool_available
-        - pool_total
       properties:
         status:
           type: string
@@ -1040,11 +1034,13 @@ components:
           description: Total inference session pool size
         reason:
           type: string
-          enum: [pool_exhausted, shutting_down]
+          enum: [initializing, pool_exhausted, shutting_down]
           example: pool_exhausted
           description: |
             Why the service is not ready. Present only when status is not_ready
-            (pool_exhausted when all sessions are busy, shutting_down during drain).
+            (initializing while the model is still downloading/loading — the pool
+            fields are absent in that phase, pool_exhausted when all sessions are
+            busy, shutting_down during drain).
 
     ModelInfo:
       type: object
@@ -1489,8 +1485,6 @@ components:
               value:
                 error: "Job not found"
                 code: job_not_found
-            jobs_disabled:
-              summary: Job API is disabled
-              value:
-                error: "Job API is not enabled"
-                code: jobs_disabled
+            # Note: when the server runs without `--enable-jobs` the /v1/jobs
+            # routes are not registered at all, so the response is a bare 404
+            # with no JSON body — not this payload.
