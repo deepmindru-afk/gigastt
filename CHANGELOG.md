@@ -75,6 +75,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   downmix, which is asserted against it directly; the resampler is still fed in
   the same fixed-size chunks so its flush boundaries do not move.
 
+- **The same cap on `POST /v1/transcribe/stream` (SSE).** The SSE endpoint drives
+  the streaming recognizer one second at a time, so it never needed the whole
+  buffer — but the eager decode in front of it materialized the upload, which
+  kept it on the whole-buffer ~30-minute ceiling while the single-shot endpoint
+  beside it had none. Uploading a 50-minute file for progressive results was
+  refused with `413 audio_too_long`. It now decodes on demand through the new
+  public `AudioChunks`, which yields the same fixed-size chunk sequence
+  `slice.chunks(n)` gives over a fully decoded buffer, so the recognizer state —
+  and the emitted segments — advance exactly as before. `--max-audio-secs` is
+  honoured verbatim and still answered as a clean `413` before the stream opens
+  for containers that declare a duration.
+
 ### Changed
 
 - **CLI contract change: `gigastt transcribe-batch` no longer fails on long

@@ -1953,3 +1953,66 @@ fn test_telephony_raw_streaming_matches_whole_buffer_resample() {
     let streamed = decode_telephony_raw(&encoded, TelephonyCodec::Pcmu, 8_000).unwrap();
     assert_matches_whole_buffer(&streamed, &reference, "pcmu 8k");
 }
+
+// --- AudioChunks (fixed-size streaming decode) ---
+
+/// The chunk sequence must be exactly `slice.chunks(n)` over the flat decode —
+/// same samples, same boundaries — because the streaming recognizer's state
+/// depends on the chunk cadence, so any drift here would change a transcript.
+#[test]
+fn test_audio_chunks_match_flat_decode_chunked() {
+    for &n in &[1usize, 999, 16_000, 16_001, 48_000, 120_000] {
+        for &chunk in &[16_000usize, 640, 7_000] {
+            let src: Vec<f32> = (0..n)
+                .map(|i| 0.4 * ((i as f32) * 0.017).sin() + 0.2 * ((i as f32) * 0.0031).sin())
+                .collect();
+            let wav = bytes::Bytes::from(encode_wav_pcm16(&src, 16000));
+            let flat = decode_audio_bytes(&wav).expect("flat decode");
+
+            let mut chunks = AudioChunks::from_bytes(wav, chunk, None).expect("open chunks");
+            let mut got: Vec<Vec<f32>> = Vec::new();
+            while let Some(c) = chunks.next_chunk().expect("chunk") {
+                got.push(c.to_vec());
+            }
+            let want: Vec<Vec<f32>> = flat.chunks(chunk).map(<[f32]>::to_vec).collect();
+            assert_eq!(got, want, "n={n} chunk={chunk}");
+            assert_eq!(
+                chunks.total_16k_samples(),
+                flat.len(),
+                "n={n} chunk={chunk}"
+            );
+        }
+    }
+}
+
+/// An operator length limit still trips, and as the typed `AudioTooLong` so the
+/// HTTP layer can answer 413 rather than a generic decode failure.
+#[test]
+fn test_audio_chunks_honour_max_audio_secs() {
+    let src = vec![0.1f32; 16_000 * 5];
+    let wav = bytes::Bytes::from(encode_wav_pcm16(&src, 16000));
+    // Unbounded: the whole clip streams.
+    let mut ok = AudioChunks::from_bytes(wav.clone(), 16_000, None).expect("open");
+    let mut total = 0;
+    while let Some(c) = ok.next_chunk().expect("chunk") {
+        total += c.len();
+    }
+    assert_eq!(total, src.len());
+
+    // Bounded below the clip length: the budget trips during the pull.
+    let mut capped = AudioChunks::from_bytes(wav, 16_000, Some(1.0)).expect("open");
+    let err = loop {
+        match capped.next_chunk() {
+            Ok(Some(_)) => continue,
+            Ok(None) => panic!("a 5 s clip must not drain under a 1 s limit"),
+            Err(e) => break e,
+        }
+    };
+    assert!(
+        matches!(
+            err.downcast_ref::<crate::error::GigasttError>(),
+            Some(crate::error::GigasttError::AudioTooLong { .. })
+        ),
+        "expected a typed AudioTooLong, got: {err:#}"
+    );
+}
