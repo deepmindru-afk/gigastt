@@ -81,7 +81,7 @@ pub struct DiarizationNotice {
 /// successful or unrequested diarization leaves the response shape untouched.
 /// Every declined case carries a distinct `reason`, and the duration ceiling
 /// also carries the input and ceiling seconds.
-fn diarization_notice(outcome: DiarizationOutcome) -> Option<DiarizationNotice> {
+pub(super) fn diarization_notice(outcome: DiarizationOutcome) -> Option<DiarizationNotice> {
     match outcome {
         DiarizationOutcome::Applied => None,
         DiarizationOutcome::NoSpeakerModel => Some(DiarizationNotice {
