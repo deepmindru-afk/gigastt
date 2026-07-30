@@ -36,7 +36,7 @@ and auto-invoked on first `serve`/`download` unless `--skip-quantize` is passed.
 ## Technology Stack
 
 - **Language**: Rust 2024 edition, stable toolchain (1.88+)
-- **ONNX Runtime**: `ort` 2.0.0-rc.12
+- **ONNX Runtime**: `ort` pinned to exactly `2.0.0-rc.13`
 - **Async runtime**: tokio (full features)
 - **HTTP + WebSocket server**: axum 0.8 (`ws`, `multipart`)
 - **CLI**: clap 4 (derive, env)
@@ -57,9 +57,16 @@ and auto-invoked on first `serve`/`download` unless `--skip-quantize` is passed.
 | macOS ARM64 | `--features coreml` | CoreML + Neural Engine |
 | Linux x86_64 + NVIDIA | `--features cuda` | CUDA 12+ |
 | Android / ARM64 | `--features nnapi` | NNAPI (via `ort/nnapi`) |
+| macOS ARM64 | `--features ane` | Apple Neural Engine via a compiled `.mlpackage`, file mode only (see `docs/ane-backend.md`) |
+| macOS ARM64 | `--features candle` | Candle/Metal, experimental — output byte-identical to `ort` (see `docs/candle-backend.md`) |
 | Any | _(default)_ | CPU |
 
 Features `coreml` and `cuda` are **mutually exclusive**. `nnapi` is not mutually exclusive with either.
+`ane` and `candle` select a non-`ort` backend under `runtime/` rather than an `ort` execution provider.
+
+Lean-build axes, all **on** by default: `diarization`, `net`, `async-pool`, `file-decode`. Turn them
+off (`--no-default-features`) for embedded targets that side-load models and feed raw PCM — note
+this means `--features diarization` is redundant, and opting *out* is the meaningful direction.
 
 ## Build Requirements
 
@@ -92,8 +99,8 @@ cargo build --release --features cuda
 # Android with NNAPI
 cargo build --release --features nnapi
 
-# With speaker diarization support
-cargo build --release --features diarization
+# Lean embedded build: drop diarization / HTTP download / tokio / file decode
+cargo build --release --no-default-features
 ```
 
 ## Test Commands
@@ -103,7 +110,7 @@ The project uses a three-tier test architecture:
 ### Unit tests (no model required, run in CI on every PR)
 
 ```sh
-cargo test --workspace               # unit tests across the workspace
+cargo test --workspace --lib --bins  # unit tests across the workspace (see note below)
 cargo clippy                         # Lint (zero warnings expected)
 cargo fmt --check                    # Format check
 ```
@@ -162,24 +169,41 @@ crates/
     error.rs              # Typed error types (GigasttError)
     quantize.rs           # Native Rust INT8 quantization pipeline
     onnx_proto.rs         # prost-generated ONNX types (included from OUT_DIR)
+    export.rs             # Transcript export: TXT / SRT / VTT / Markdown
+    punctuation.rs        # Punctuation restoration (windowed)
+    itn.rs · lexicon.rs   # Inverse text normalization, lexicon
+    vad.rs                # Voice activity detection
     inference/
-      mod.rs              # Engine: ONNX session management, SessionPool, StreamingState
+      mod.rs              # Module wiring + shared constants (N_MELS, N_FFT, HOP_LENGTH, PRED_HIDDEN)
+      engine.rs           # Engine: load, warmup, transcribe, streaming decode loop
+      pool.rs             # SessionPool (checkout, backpressure)
+      state.rs            # StreamingState / DecoderState
       features.rs         # Mel spectrogram (64 bins, FFT=320, hop=160, HTK)
-      tokenizer.rs        # BPE tokenizer (1025 tokens)
+      tokenizer.rs        # Vocabulary: char (rnnt, 34) / BPE (e2e_rnnt, 1025) / multilingual char (ml_ctc, 71)
       decode.rs           # RNN-T greedy decode loop
-      audio.rs            # Audio loading, resampling, channel mixing
+      ctc.rs              # Greedy CTC decode (ml_ctc heads — no decoder / joiner)
+      bias.rs             # Hotword biasing
+      diarization.rs      # polyvoice glue: Embedder adapter, offline + streaming pipelines
+      types.rs            # TranscribeRequest / TranscribeResult and friends
+      audio/              # Decode, resample, channel mixing, windowing, VAD windows, telephony
+    runtime/              # Backend seam — THIS is where execution providers are chosen
+      factory.rs          # cfg-gated EP/backend selection (coreml / cuda / nnapi / ane / candle / CPU)
+      session.rs · tensor.rs · error.rs
+      ort/ · coreml/ · candle/ · mock/
     protocol/mod.rs       # WebSocket JSON message types (Ready, Partial, Final, Error)
-    model/mod.rs          # HuggingFace model download (streaming + SHA256 + atomic rename)
+    model/                # Model download (streaming + SHA256 + atomic rename), cache, manifest
   gigastt-core/proto/
     onnx.proto            # Vendored ONNX protobuf schema
   gigastt-ffi/src/        # C-ABI FFI layer (cdylib for Android/mobile)
     lib.rs                # Exported C functions: engine_new, transcribe_file, stream_*, etc.
+  gigastt-node/           # napi-rs Node binding
+  gigastt-uniffi/         # UniFFI bindings (Swift / Kotlin / Python)
   gigastt/src/            # Server binary + CLI
     lib.rs                # Re-exports gigastt-core::* for backward compat
     main.rs               # CLI (clap): serve, download, transcribe, quantize
     server/
       mod.rs              # axum router, origin middleware, graceful shutdown
-      http.rs             # REST handlers: /health, /v1/models, /v1/transcribe, SSE
+      http/                # REST handlers: health, models, transcribe, export, jobs_api, admin
       rate_limit.rs       # In-tree per-IP token-bucket rate limiter
       metrics.rs          # In-tree Prometheus text encoder
   gigastt/tests/
@@ -229,21 +253,22 @@ The `e2e_rnnt` head (`--model-variant e2e_rnnt`) uses the parallel `v3_e2e_rnnt_
 - **No `unwrap()` in production paths** — use `?`, `.context()`, or `unwrap_or_else`
 - Shared constants live in `inference/mod.rs`, referenced by sub-modules
 - `ort` errors are converted to typed `RuntimeError` at the `runtime/ort` seam (no `anyhow` wrapping)
-- Execution provider selection uses `#[cfg(feature = "coreml")]` / `#[cfg(feature = "cuda")]` blocks
+- Execution provider / backend selection lives in `crates/gigastt-core/src/runtime/factory.rs`
+  (`#[cfg(feature = "…")]` blocks, default falls through to the CPU EP) — **not** in `inference/`
 - **No internal task-tracker IDs outside the tracker itself.** Never write tracker indices (`TTX-NN`, `T-NNN`, `V1-NN`, `SUS-NN`, `TODO-NN`, ticket keys, etc.) into:
   - source comments or code strings
   - `CHANGELOG.md`, `docs/`, CI/workflows, README, user-facing text
   - **git branch names**, **commit subjects/bodies**, **PR titles/descriptions**, tags
   They mean nothing without the tracker and are not conventional git/product language.
   - **Do** describe *what* and *why* in plain English (e.g. branch `ttx/lazy-speaker`, commit `feat(core): lazy-load speaker encoder until diarization is requested`).
-  - **Do** keep the link from work → tracked item only in tracker docs: `specs/prod-readiness-v1.0.md`, `specs/resource-ttx-roadmap.md`, and lab notes under `specs/research/` (gitignored).
+  - **Do** keep the link from work → tracked item only in tracker docs: anything under `specs/` (notably `specs/todo.md`, `specs/plan.md`, `specs/prod-readiness-v1.0.md`, `specs/resource-ttx-roadmap.md`, and lab notes under `specs/research/`) or `roadmap/`. Everything outside those two directories must stay index-free.
 
 ### TDD workflow
 
 1. Write failing test first
 2. Implement minimal code to pass
 3. Refactor, verify tests still pass
-4. `cargo test && cargo clippy` before every commit (or `make check`)
+4. `cargo test --workspace --lib --bins && cargo clippy` before every commit (or `make check`)
 5. Enable the pre-commit hook so step 4 is enforced automatically:
    ```sh
    git config core.hooksPath .githooks
@@ -422,7 +447,7 @@ reference: [`docs/cli.md`](docs/cli.md) (enforced by `scripts/check-docs-drift.p
 
 ```sh
 # Quick iteration cycle
-cargo test && cargo clippy
+cargo test --workspace --lib --bins && cargo clippy
 
 # Run with model (after `cargo run -- download`)
 cargo run --release -- serve
@@ -431,7 +456,9 @@ cargo run --release -- transcribe recording.wav
 # Check all feature combinations compile
 cargo check --features coreml
 cargo check --features cuda
-cargo check --features diarization
+cargo check --features ane
+cargo check --features candle
+cargo check --no-default-features
 
 # Security audit
 cargo audit
@@ -456,7 +483,9 @@ RUST_LOG=gigastt=debug cargo run -- serve
 
 ## Notes for AI Agents
 
-- **Always run `cargo test && cargo clippy` before finishing any change.**
+- **Always run `cargo test --workspace --lib --bins && cargo clippy` before finishing any change.**
+  Never a bare `cargo test` / `cargo test --workspace`: the WER benchmark is a `harness = false`
+  target, so `--ignored` does not skip it and the run takes ~2.5 hours.
 - When modifying the WebSocket protocol, update `PROTOCOL_VERSION` in
   `protocol/mod.rs` and add tests in `tests/e2e_ws.rs`.
 - When adding new CLI flags, add the corresponding env var and document it in

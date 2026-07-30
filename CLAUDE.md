@@ -17,8 +17,8 @@ cargo build                          # CPU-only debug build (default, any platfo
 cargo build --features coreml        # macOS ARM64 (CoreML / Neural Engine)
 cargo build --features cuda          # Linux x86_64 (CUDA 12+)
 cargo build --release                # Release build (LTO, stripped)
-cargo test --workspace               # Run all unit tests, CPU (no model required)
-cargo test --features coreml         # Same tests with CoreML EP enabled (macOS)
+cargo test --workspace --lib --bins  # Run all unit tests, CPU (no model required)
+cargo test --workspace --lib --bins --features coreml  # Same tests with CoreML EP enabled (macOS)
 cargo test --test e2e_rest --test e2e_ws --test e2e_errors --test e2e_shutdown --test e2e_rate_limit --test e2e_jobs --test e2e_cli --test e2e_admin_reload --test e2e_http_cov -- --ignored --test-threads=1  # E2E tests (requires model)
 cargo test --test load_test -- --ignored           # Load tests (requires model, local only)
 cargo test --test soak_test -- --ignored           # Soak test (requires model, local only)
@@ -64,23 +64,35 @@ crates/
     lib.rs                # Public module exports
     model/mod.rs          # HuggingFace model download (streaming + SHA256 + atomic rename)
     inference/
-      mod.rs              # Engine: ONNX session management, SessionPool, StreamingState, DecoderState
+      mod.rs              # Module wiring + shared constants
+      engine.rs           # Engine: load, warmup, transcribe, streaming decode loop
+      pool.rs             # SessionPool (checkout, backpressure)
+      state.rs            # StreamingState / DecoderState
       features.rs         # Mel spectrogram (64 bins, FFT=320, hop=160, HTK)
-      tokenizer.rs        # BPE tokenizer (1025 tokens)
+      tokenizer.rs        # Vocabulary per head: char (rnnt) / BPE (e2e_rnnt) / multilingual char (ml_ctc)
       decode.rs           # RNN-T greedy decode loop
-      audio.rs            # Audio loading, resampling, channel mixing (symphonia + rubato)
+      ctc.rs              # Greedy CTC decode (ml_ctc heads)
+      bias.rs             # Hotword biasing
+      diarization.rs      # polyvoice glue (Embedder adapter, offline + streaming)
+      types.rs            # TranscribeRequest / TranscribeResult
+      audio/              # Decode, resample, channel mixing, windowing, VAD windows, telephony
+    runtime/              # Backend seam: EP/backend selection lives here, NOT in inference/
+      factory.rs          # cfg-gated coreml / cuda / nnapi / ane / candle / CPU
+      ort/ · coreml/ · candle/ · mock/
     error.rs              # Typed error types (GigasttError)
     quantize.rs           # Native Rust INT8 quantizer (always compiled since v0.9.0)
     onnx_proto.rs         # prost-generated ONNX types from proto/onnx.proto
     protocol/mod.rs       # JSON message types (Ready, Partial, Final, Error + retry_after_ms)
   gigastt-ffi/src/        # C-ABI FFI layer (cdylib for Android/mobile)
     lib.rs                # Exported C functions: engine_new, transcribe_file, stream_*, etc.
+  gigastt-node/           # napi-rs Node binding
+  gigastt-uniffi/         # UniFFI bindings (Swift / Kotlin / Python)
   gigastt/src/            # Server binary + CLI
     lib.rs                # Re-exports gigastt-core::* for backward compat
     main.rs               # CLI (clap): serve, download, transcribe, quantize
     server/
       mod.rs              # axum router: HTTP + WebSocket on single port, origin middleware, graceful drain
-      http.rs             # REST handlers: /health, /v1/models, /v1/transcribe, /v1/transcribe/stream (SSE)
+      http/               # REST handlers: health, models, transcribe, SSE, export, jobs_api, admin
       rate_limit.rs       # In-tree per-IP token-bucket rate limiter (dashmap-backed)
       metrics.rs          # In-tree Prometheus text encoder (counters + histograms)
 ```
@@ -108,7 +120,8 @@ crates/
 ### Data flow
 ```
 Audio (PCM16) → Mel Spectrogram → Conformer Encoder (ONNX)
-  → RNN-T Decoder+Joiner loop → BPE tokens → Text
+  → RNN-T Decoder+Joiner loop → tokens → Text          (rnnt / e2e_rnnt)
+  → greedy CTC decode → tokens → Text                  (ml_ctc / ml_ctc_large, no decoder/joiner)
 ```
 
 ### Streaming
@@ -130,7 +143,7 @@ Audio (PCM16) → Mel Spectrogram → Conformer Encoder (ONNX)
 1. Write failing test first
 2. Implement minimal code to pass
 3. Refactor, verify tests still pass
-4. `cargo test && cargo clippy` before every commit
+4. `cargo test --workspace --lib --bins && cargo clippy` before every commit
 
 ### API versioning & backward compatibility
 - WebSocket protocol version: `PROTOCOL_VERSION = "1.0"` (in `crates/gigastt-core/src/protocol/mod.rs`)
@@ -148,8 +161,9 @@ Three-tier test architecture:
 **Unit tests** (no model required, run in CI on every PR):
 - Live in `#[cfg(test)] mod tests` at bottom of each file
 - Use synthetic data, test names: `test_<what>_<expected_behavior>`
-- 600+ unit tests across the workspace (`cargo test --workspace --lib`)
-- `cargo test` — runs all unit tests
+- 600+ unit tests across the workspace (`cargo test --workspace --lib --bins`)
+- Always pass `--lib --bins`. A bare `cargo test` (or `cargo test --workspace`) pulls in the
+  ~2.5-hour WER benchmark: it is a `harness = false` target, so `--ignored` does not skip it.
 
 **E2E tests** (require model ~850MB, run in CI on main push only):
 - `tests/e2e_rest.rs` — REST API tests (health, transcribe, SSE streaming, error paths)
@@ -182,7 +196,7 @@ OpenSLR download that does not fit the CI cache budget, so these never run in CI
 - `tests/benchmark.rs` — WER evaluation on Golos fixtures (custom harness, `harness = false`)
 
 ### CI structure
-- **PR CI** (`.github/workflows/ci.yml`, fast): fmt, clippy, unit tests, feature compile checks (CoreML, CUDA, diarization), `cargo audit`, `cargo deny`
+- **PR CI** (`.github/workflows/ci.yml`, fast): fmt, clippy, unit tests, feature compile checks (CoreML, CUDA, Diarization, Candle/Metal, ANE), `cargo audit`, `cargo deny`
 - **Main push CI**: all PR checks + e2e tests with cached model (~850MB, OS-independent cache key) + CoreML runtime smoke on macos-14 (transcribes `golos_00.wav`, fails on inference error or silent CPU fallback)
 - **Nightly soak** (`.github/workflows/soak.yml`): `cargo test --test soak_test` at 03:17 UTC, reuses the main CI model cache
 - **Release** (`.github/workflows/release.yml`, tag-triggered): multi-arch tarballs, per-asset `.sha256` + `SHA256SUMS.txt`, CycloneDX SBOM, SLSA provenance, minisign signatures
@@ -194,8 +208,8 @@ OpenSLR download that does not fit the CI cache budget, so these never run in CI
 - No `unwrap()` in production paths (use `?`, `context()`, or `unwrap_or_else`)
 - Shared constants in `crates/gigastt-core/src/inference/mod.rs`, referenced by sub-modules
 - `ort` errors are converted to typed `RuntimeError` at the `runtime/ort` seam (no `anyhow` wrapping)
-- Execution provider selection uses `#[cfg(feature = "coreml")]` / `#[cfg(feature = "cuda")]` blocks in `crates/gigastt-core/src/inference/mod.rs`; default falls through to CPU EP
-- **No internal task-tracker IDs outside the tracker itself.** Never write tracker indices (`TTX-NN`, `T-NNN`, `V1-NN`, `SUS-NN`, `TODO-NN`, ticket keys, etc.) into source comments/code, `CHANGELOG.md`, `docs/`, CI/workflows, README, user-facing text, **git branch names**, **commit subjects/bodies**, or **PR titles/descriptions**. They are noise without the tracker. Use conventional language only (e.g. branch `ttx/lazy-speaker`, commit `feat(core): lazy-load speaker encoder…`). Link work to a tracked item only inside tracker docs: `specs/prod-readiness-v1.0.md`, `specs/resource-ttx-roadmap.md`, and lab notes under `specs/research/` (gitignored).
+- Execution provider / backend selection lives in `crates/gigastt-core/src/runtime/factory.rs` (`#[cfg(feature = "…")]` blocks for coreml / cuda / nnapi / ane / candle); default falls through to CPU EP. It is **not** in `inference/`
+- **No internal task-tracker IDs outside the tracker itself.** Never write tracker indices (`TTX-NN`, `T-NNN`, `V1-NN`, `SUS-NN`, `TODO-NN`, ticket keys, etc.) into source comments/code, `CHANGELOG.md`, `docs/`, CI/workflows, README, user-facing text, **git branch names**, **commit subjects/bodies**, or **PR titles/descriptions**. They are noise without the tracker. Use conventional language only (e.g. branch `ttx/lazy-speaker`, commit `feat(core): lazy-load speaker encoder…`). Link work to a tracked item only inside tracker docs: anything under `specs/` (notably `specs/todo.md`, `specs/plan.md`, `specs/prod-readiness-v1.0.md`, `specs/resource-ttx-roadmap.md`, and lab notes under `specs/research/`) or `roadmap/` — both are the tracker. Everything outside those two directories must stay index-free.
 
 ### Audio format support
 - File transcription: WAV, M4A/AAC, MP3, OGG/Vorbis, FLAC (via symphonia)
@@ -244,3 +258,19 @@ Engine auto-detects and prefers INT8 if available; falls back to FP32.
 - `protoc` must be on `PATH` at build time (in-tree ONNX quantization pipeline regenerates types via `prost-build`)
 - The model can be hot-reloaded after `serve` boot without a restart via the loopback-only `POST /v1/admin/reload` endpoint (rebuilds the engine from the boot recipe, warms it, then atomically swaps; keeps the old engine on failure). Replacing the model *files* on disk still requires that endpoint (or a restart) for the change to take effect.
 - Agent-facing setup and conventions: prefer [`AGENTS.md`](AGENTS.md) as the longer form; keep this file aligned when changing build/test commands.
+
+## Which file owns what
+
+This file is loaded into every agent's context automatically; `AGENTS.md` is not.
+So both stay self-contained on the essentials, and the two overlap on purpose:
+
+- **This file** — the operational minimum an agent needs without opening anything
+  else: build/test commands, the code map, key constants, and the hard rules
+  (safe test invocation, no `unwrap()` in production paths, loopback-only bind,
+  no tracker indices outside `specs/` and `roadmap/`).
+- **[`AGENTS.md`](AGENTS.md)** — the canonical long form: full crate layout,
+  dependency and feature matrix, test tiers, CI structure, release process.
+
+When a fact appears in both, `AGENTS.md` wins and this file must be updated to
+match. Facts that live in exactly one place: the shipped state of the code is
+`CHANGELOG.md`, the active backlog is `specs/resource-ttx-roadmap.md`.
