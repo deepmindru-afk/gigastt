@@ -1631,14 +1631,17 @@ impl Engine {
         match req.source {
             #[cfg(feature = "file-decode")]
             TranscribeSource::Path(path) => {
-                if self.stream_eligible(&req.overrides, req.diarization) {
-                    let windows = audio::FileWindows::open(
-                        path,
-                        window_spec(self.ane_encoder),
-                        max_audio_secs,
+                if self.stream_eligible(req.diarization) {
+                    self.transcribe_stream_file(
+                        |spec| {
+                            audio::FileWindows::open(path, spec, max_audio_secs)
+                                .map_err(audio::decode_error)
+                        },
+                        triplet,
+                        &req.overrides,
+                        req.hotwords,
+                        ctl,
                     )
-                    .map_err(audio::decode_error)?;
-                    self.transcribe_stream_mono(windows, triplet, &req.overrides, req.hotwords, ctl)
                 } else {
                     let float_samples = audio::decode_audio_file_bounded(path, max_audio_secs)
                         .map_err(audio::decode_error)?;
@@ -1655,14 +1658,17 @@ impl Engine {
             }
             #[cfg(feature = "file-decode")]
             TranscribeSource::Bytes(data) => {
-                if self.stream_eligible(&req.overrides, req.diarization) {
-                    let windows = audio::FileWindows::from_bytes(
-                        data,
-                        window_spec(self.ane_encoder),
-                        max_audio_secs,
+                if self.stream_eligible(req.diarization) {
+                    self.transcribe_stream_file(
+                        |spec| {
+                            audio::FileWindows::from_bytes(data.clone(), spec, max_audio_secs)
+                                .map_err(audio::decode_error)
+                        },
+                        triplet,
+                        &req.overrides,
+                        req.hotwords,
+                        ctl,
                     )
-                    .map_err(audio::decode_error)?;
-                    self.transcribe_stream_mono(windows, triplet, &req.overrides, req.hotwords, ctl)
                 } else {
                     let float_samples =
                         audio::decode_audio_bytes_shared_bounded(data, max_audio_secs)
@@ -1701,15 +1707,88 @@ impl Engine {
     /// streaming decode, whose peak audio memory is O(one window) rather than
     /// O(file).
     ///
-    /// VAD scans the whole 16 kHz buffer for speech regions and diarization
-    /// embeds the whole buffer; neither can run against a stream that is never
-    /// fully resident, so both fall back to the whole-buffer decode. `diarize`
-    /// only matters with the `diarization` feature compiled in.
+    /// Diarization embeds the whole clip in a second pass, so it cannot run
+    /// against a stream that is never fully resident: it still forces the
+    /// whole-buffer decode, and with it the duration ceiling. VAD does not — it
+    /// is causal, and [`VadWindows`](audio::VadWindows) runs it inside the
+    /// stream. `diarize` only matters with the `diarization` feature compiled
+    /// in.
     #[cfg(feature = "file-decode")]
-    fn stream_eligible(&self, overrides: &TranscribeOverrides, diarize: bool) -> bool {
+    fn stream_eligible(&self, diarize: bool) -> bool {
+        !(cfg!(feature = "diarization") && diarize)
+    }
+
+    /// Streaming mono file transcription, with the VAD stage in front when one
+    /// is attached and the request did not opt out.
+    ///
+    /// `open` builds a fresh window source for a given geometry. It is called
+    /// once, or twice when the VAD stage declines — the model failed mid-stream,
+    /// or the scan found no speech at all in a non-empty clip — in which case
+    /// the clip is decoded whole, exactly as the batch path did.
+    #[cfg(feature = "file-decode")]
+    fn transcribe_stream_file(
+        &self,
+        open: impl Fn(WindowSpec) -> Result<audio::FileWindows, GigasttError>,
+        triplet: &mut SessionTriplet,
+        overrides: &TranscribeOverrides,
+        hotwords: Option<&HotwordOverride>,
+        ctl: DecodeControls,
+    ) -> Result<TranscribeResult, GigasttError> {
         let use_vad = self.vad.is_some() && overrides.vad.unwrap_or(true);
-        let will_diarize = cfg!(feature = "diarization") && diarize;
-        !use_vad && !will_diarize
+        if let (true, Some(vad)) = (use_vad, &self.vad) {
+            let wall_start = std::time::Instant::now();
+            let request_biaser = hotwords.and_then(|hw| self.build_request_biaser(hw));
+            let biaser: Option<&bias::Biaser> = match hotwords {
+                None => self.biaser.as_ref(),
+                Some(_) => request_biaser.as_ref(),
+            };
+            let mut windows = audio::VadWindows::new(
+                open(audio::VadWindows::pull_spec())?,
+                vad,
+                &self.vad_config,
+                window_spec(self.ane_encoder),
+                ctl.abort,
+            );
+            let mut words = self.decode_words_streaming(&mut windows, triplet, biaser, ctl)?;
+            if !windows.needs_fallback() {
+                // Words are decoded on the compressed (silence-removed)
+                // timeline; put them back on the clip's own.
+                let regions = windows.regions();
+                for w in &mut words {
+                    w.start = crate::vad::remap_compressed_seconds(w.start, regions, 16000.0);
+                    w.end = crate::vad::remap_compressed_seconds(w.end, regions, 16000.0);
+                }
+                let duration_s = windows.total_16k_samples() as f64 / 16000.0;
+                let wall_s = wall_start.elapsed().as_secs_f64();
+                tracing::info!(
+                    audio_s = format_args!("{duration_s:.2}"),
+                    wall_s = format_args!("{wall_s:.2}"),
+                    rtf = format_args!(
+                        "{:.3}",
+                        if duration_s > 0.0 {
+                            wall_s / duration_s
+                        } else {
+                            0.0
+                        }
+                    ),
+                    regions = regions.len(),
+                    "transcribe complete (streaming windows, vad)"
+                );
+                return Ok(self.finish_transcribe_result(words, duration_s, overrides));
+            }
+            // Either the VAD found no speech at all — tone or continuous speech
+            // against a bad threshold — or the model failed mid-stream (already
+            // logged with the cause). Both re-read the clip and decode it whole
+            // rather than returning an empty transcript.
+            tracing::warn!("VAD produced no usable speech regions; decoding full audio");
+        }
+        self.transcribe_stream_mono(
+            open(window_spec(self.ane_encoder))?,
+            triplet,
+            overrides,
+            hotwords,
+            ctl,
+        )
     }
 
     /// Mono file-transcription tail that pulls windows straight from the

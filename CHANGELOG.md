@@ -45,10 +45,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The 30-minute (1800 s) duration cap on the default file-transcription
   path.** File decode streams through bounded windows regardless of length,
   so peak memory stays roughly constant — files of any length now transcribe
-  fine. The paths that still need the whole decoded buffer in memory (VAD
-  segmentation, speaker diarization, `channels=split`, and telephony/Opus
-  decoding) keep the ~30-minute safety ceiling to avoid OOM, surfaced as the
-  same `audio_too_long` code introduced above.
+  fine. The paths that still need the whole decoded buffer in memory (speaker
+  diarization, `channels=split`, and the G.722 / raw telephony codecs) keep
+  the ~30-minute safety ceiling to avoid OOM, surfaced as the same
+  `audio_too_long` code introduced above.
+
+- **The same cap on the `--vad` file path.** Silence-skipping used to scan and
+  copy two whole-file buffers, which kept the ceiling in place exactly where
+  long files matter most — `--profile edge` turns VAD on by default, so the
+  smallest hosts were the ones still capped. The VAD now runs *inside* the
+  window loop: Silero is causal, so frames are scored as the container decodes
+  and kept audio is released as soon as the bounded look-ahead
+  (`min_speech_ms + min_silence_ms + speech_pad_ms`, ~850 ms at the defaults)
+  has passed. Peak audio memory is one decode window plus that look-ahead,
+  whatever the length. The speech spans, the windows fed to the encoder, and
+  therefore the transcript are byte-identical to the batch path — asserted
+  against it directly, including a proptest over random probability sequences
+  and configs. `--max-audio-secs` still applies verbatim when set.
+
+- **The same cap on OGG/Opus.** Symphonia demuxes Opus but ships no decoder, so
+  packets went through the `opus-rs` fallback, which accumulated every channel
+  of the whole file before anything could be mixed or resampled — leaving the
+  container behind voice messages, browser MediaRecorder captures and WebRTC
+  recordings as the last one that could not stream. A two-hour 24 kbps
+  `.ogg` is 25 MB and was refused outright. Opus now decodes packet-wise into
+  the same window loop as every other container: peak RSS across 5 min / 30 min
+  / 2 h is 780 / 910 / 822 MB — no slope, dominated by the ONNX arena. The
+  samples are identical to the whole-buffer decode, including the mono
+  downmix, which is asserted against it directly; the resampler is still fed in
+  the same fixed-size chunks so its flush boundaries do not move.
 
 ### Changed
 
