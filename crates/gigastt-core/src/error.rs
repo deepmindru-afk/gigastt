@@ -127,10 +127,12 @@ pub enum GigasttError {
     /// exhaust memory. `observed_secs` is how long the decoded input turned out
     /// to be; `limit_secs` is the ceiling that fired. Two sources trip this: the
     /// opt-in `--max-audio-secs` (default `0` = unlimited), and the fixed safety
-    /// ceiling that the whole-buffer paths (VAD, diarization, `channels=split`,
-    /// telephony / Opus) keep because they must materialize the entire decoded
-    /// buffer in RAM. The default streaming file path is O(one window) and has
-    /// no length limit. Additive: the enum is `#[non_exhaustive]`.
+    /// ceiling that the whole-buffer paths (diarization, `channels=split` —
+    /// including its per-channel Opus decode — and the G.722 / raw telephony
+    /// codecs) keep because they must materialize the entire decoded buffer in
+    /// RAM. The default streaming file path, the VAD file path, and streamed
+    /// OGG/Opus are O(one window) and have no length limit. Additive: the enum
+    /// is `#[non_exhaustive]`.
     #[error("audio too long: {observed_secs:.0}s exceeds the maximum of {limit_secs:.0}s")]
     AudioTooLong {
         /// Observed decoded audio length, in seconds.

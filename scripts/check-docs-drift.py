@@ -467,7 +467,7 @@ def check_openapi() -> list[str]:
     oas_text = OPENAPI_YAML.read_text(encoding="utf-8")
     # The default file-transcription path has no duration cap: long files decode
     # in bounded windows. Forbid a stale unconditional cap claim creeping back in;
-    # the ~30-minute safety ceiling on whole-buffer paths (VAD/diarization/
+    # the ~30-minute safety ceiling on whole-buffer paths (diarization/
     # channels=split/telephony) is a separate, correctly-scoped statement.
     for stale in (
         r"File transcription cap:\s*30\s+minutes?",
