@@ -8,6 +8,8 @@ mod pcm;
 mod resample;
 mod stream;
 mod telephony;
+#[cfg(feature = "file-decode")]
+mod vad_windows;
 
 #[cfg(test)]
 #[path = "tests.rs"]
@@ -29,12 +31,15 @@ pub(crate) use super::{HOP_LENGTH, N_FFT};
 
 pub(crate) const MAX_BUFFER_SAMPLES: usize = 16000 * 5; // 5 seconds at 16kHz
 /// Explicit, documented safety ceiling (seconds) for the decode paths that must
-/// hold the **whole** decoded buffer in RAM: VAD segmentation, speaker
-/// diarization, `channels=split`, and the telephony / Opus whole-buffer codecs.
-/// The default file path streams overlapping windows (see
-/// `Engine::decode_words_streaming`), so its peak audio memory is O(one window)
-/// regardless of length and it has *no* duration limit; these paths keep this
-/// bound so a multi-hour input refuses with a typed
+/// hold the **whole** decoded buffer in RAM: speaker diarization,
+/// `channels=split` (including its per-channel Opus decode), and the G.722 /
+/// raw telephony codecs, which have no packet-wise decoder. The default
+/// file path streams overlapping windows (see `Engine::decode_words_streaming`),
+/// the VAD file path streams through
+/// [`VadWindows`](super::audio::VadWindows), and OGG/Opus streams packet-wise
+/// through the `opus-rs` fallback, so all three have peak audio memory O(one
+/// window) regardless of length and *no* duration limit; the remaining paths
+/// keep this bound so a multi-hour input refuses with a typed
 /// [`AudioTooLong`](crate::error::GigasttError::AudioTooLong) instead of driving
 /// the process into OOM. Operators can lower the effective limit for every path
 /// (including the streaming one) with `--max-audio-secs`; there is no way to
@@ -157,6 +162,10 @@ pub(crate) use stream::{PcmWindows, SliceWindows, WindowSpec};
 // windows from it; the public `decode_audio_*` functions drain it flat.
 #[cfg(feature = "file-decode")]
 pub(crate) use stream::FileWindows;
+// VAD-compressed window source: same geometry over the silence-free timeline,
+// so the VAD file path is O(one window) too and needs no duration ceiling.
+#[cfg(feature = "file-decode")]
+pub(crate) use vad_windows::VadWindows;
 // Fixed-size streaming decode for callers driving the streaming recognizer
 // (SSE file transcription, embedders). Public: it is the only way to decode a
 // container without materializing it.

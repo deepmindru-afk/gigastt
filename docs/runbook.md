@@ -259,8 +259,8 @@ gigastt serve --vad --pool-size 1
 
 | Path | When | Behaviour |
 |------|------|-----------|
-| **Speech regions (`--vad`)** | VAD loaded and not overridden off | Silero `speech_regions` → decode speech-only buffer; word times remapped to original timeline. Peak RSS drops on pause-rich / multi-utt files. |
-| **Empty VAD regions** | VAD returns zero spans (e.g. tone) | **Fallback** to full / fixed-window decode (does not return empty text). |
+| **Speech regions (`--vad`)** | VAD loaded and not overridden off | Silero scores the stream causally, kept audio is decoded in the same overlapping windows as the plain path, word times remapped to the original timeline. Peak audio memory is O(one window) — no duration ceiling. |
+| **Empty VAD regions** | VAD returns zero spans (e.g. tone), or the model fails mid-stream | **Fallback** to full / fixed-window decode (does not return empty text); the clip is re-read from the source. |
 | **Fixed-window chunking** | File ≳ 30 s and no usable VAD path | Overlapping ~24 s windows (30 s on ANE), stitch words at overlap midpoints — bounds encoder activation memory. |
 
 There is no separate client-side stitch API: operators use **`--vad`** for

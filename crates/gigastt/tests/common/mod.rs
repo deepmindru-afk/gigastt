@@ -502,3 +502,28 @@ pub fn assert_msg_type(
     );
     v
 }
+
+/// A link-farm of the real model directory with `wespeaker_resnet34.onnx` left
+/// out, so a server started on it loads the recognition model but advertises no
+/// diarization capability.
+///
+/// Lets the "diarization requested but unavailable" path be exercised
+/// deterministically instead of depending on whether a speaker model happens to
+/// be installed on the machine. The returned `TempDir` must outlive the server.
+/// Unix only: it relies on symlinks to avoid copying ~850 MB.
+#[cfg(unix)]
+#[allow(dead_code)]
+pub fn model_dir_without_speaker() -> (tempfile::TempDir, String) {
+    let src = model_dir();
+    let dir = tempfile::tempdir().expect("tempdir");
+    for entry in std::fs::read_dir(&src).expect("read model dir") {
+        let entry = entry.expect("dir entry");
+        let name = entry.file_name();
+        if name.to_string_lossy() == "wespeaker_resnet34.onnx" {
+            continue;
+        }
+        std::os::unix::fs::symlink(entry.path(), dir.path().join(&name)).expect("symlink");
+    }
+    let path = dir.path().to_string_lossy().into_owned();
+    (dir, path)
+}
