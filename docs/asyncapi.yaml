@@ -56,8 +56,10 @@ info:
     - `--max-session-secs` (default 3600) — wall-clock session cap (silence-stream DoS guard; 0 disables)
     - `--shutdown-drain-secs` (default 10) — max wait for in-flight sessions on SIGTERM
     - `--rate-limit-per-minute` (default 0 = off) — per-IP token-bucket limit on `/v1/*` (HTTP 429 + `Retry-After` when exhausted; `/health` exempt)
-    - Audio buffer cap: 5 seconds (WebSocket streaming)
-    - File transcription cap: 10 minutes (offline mode)
+    - Audio duration: no cap on the default file path, the VAD path, or OGG/Opus — all decode in
+      bounded windows. Whole-buffer paths (diarization, `channels=split`, G.722 / raw telephony)
+      enforce a fixed ~30-minute ceiling; `--max-audio-secs` (default 0 = unlimited) can lower it
+      for every path but never raise it above that ceiling.
     - Bind address: 127.0.0.1 by default; `--bind-all` / `GIGASTT_ALLOW_BIND_ANY=1` required for non-loopback
     - Cross-origin requests: denied by default; use `--allow-origin URL` (repeatable) or `--cors-allow-any` to opt in
     - Pool saturation: WebSocket `error` payload includes `retry_after_ms`; REST returns 503 + `Retry-After: 30`
@@ -409,6 +411,13 @@ components:
           type: string
           const: configure
           description: Message type discriminator
+        protocol_version:
+          type: string
+          example: "1.0"
+          description: >-
+            Protocol version the client wants to speak. Omitted = the server's
+            current version. Present but unsupported yields
+            `unsupported_protocol_version` listing the supported range.
         sample_rate:
           type: integer
           example: 16000

@@ -146,7 +146,7 @@ replies with `configure_too_late` and keeps the previous settings).
 | `punctuation` | boolean | Per-session punctuation/casing override for `final` segments only. `true` on a server without a punctuation model is a graceful no-op — finals stay raw, no error |
 | `itn` | boolean | Per-session inverse text normalization override (`final` segments only) |
 | `endpoint_mode` | string | `auto` \| `assistant` \| `manual` — overrides server `--endpoint-mode` for this session |
-| `min_silence_ms` | number | Per-session VAD trailing silence (ms); ignored if server has no VAD |
+| `min_silence_ms` | integer | Per-session VAD trailing silence (ms); ignored if server has no VAD |
 
 All fields are optional. Omitting a field keeps the server default; repeated
 `configure` messages compose (an absent field leaves the previous value).
@@ -468,6 +468,24 @@ them in.
   Actual diarization output requires the speaker-encoder model to be loaded on the
   server (downloaded automatically when the `diarization` feature is enabled).
 
+Per-request overrides of the boot defaults (all optional; absent means "use the
+server default", so a request that sets none is byte-identical to before these
+existed). They are validated *before* a pool session is checked out, so an
+impossible combination fails fast instead of holding a triplet:
+
+- `punctuation` (boolean) — turn punctuation restoration on/off for this request.
+  `409 punctuation_not_available` if the server has no punctuation model.
+- `itn` (boolean) — turn inverse text normalization on/off for this request.
+- `vad` (boolean) — turn the VAD file path on/off for this request.
+  `409 vad_not_loaded` if the server was started without `--vad`.
+- `hotwords` (string) — comma-separated phrases to bias the decoder toward.
+  `409 too_many_hotwords` above 64 phrases, `409 hotword_phrase_too_long` above
+  64 characters in one phrase.
+- `hotwords_boost` (number) — strength of that bias.
+- `variant` (string) — forward-compatibility guard naming the expected recognition
+  head. A single-variant engine cannot switch, so any value other than the loaded
+  head (including an unknown token) returns `409 variant_not_loaded`.
+
 When `diarization=true` was requested but speakers could **not** be labeled, the
 response carries an additive `diarization` object explaining why, instead of a
 200 with silently empty speaker fields. It is absent when diarization was not
@@ -476,13 +494,11 @@ same object appears on `GET /v1/jobs/{id}/result`.
 
 ```json
 {
-  "text": "…", "words": [...], "duration": 4200.0,
+  "text": "…", "words": [...], "duration": 812.4,
   "diarization": {
     "status": "unavailable",
-    "reason": "duration_ceiling",
-    "message": "diarization skipped: input 4200s exceeds the 3600s single-pass limit; the transcript is complete but has no speaker labels",
-    "input_seconds": 4200.0,
-    "ceiling_seconds": 3600.0
+    "reason": "no_speaker_model",
+    "message": "diarization unavailable: no speaker model is loaded; the transcript is complete but has no speaker labels"
   }
 }
 ```
@@ -490,7 +506,7 @@ same object appears on `GET /v1/jobs/{id}/result`.
 | `reason` | When |
 |---|---|
 | `no_speaker_model` | No speaker-encoder model is loaded, or the build lacks the `diarization` feature |
-| `duration_ceiling` | The clusterer refused the input; `input_seconds` and `ceiling_seconds` carry the clusterer's own numbers |
+| `duration_ceiling` | The clusterer refused the input; `input_seconds` and `ceiling_seconds` carry the clusterer's own numbers. Not reachable with the shipped defaults: diarization runs on the whole-buffer path, which refuses anything over ~30 minutes with `413 audio_too_long` long before the clusterer's own 1-hour limit applies |
 | `pipeline_error` | Diarization was attempted and failed for another reason (logged server-side) |
 
 The transcript itself is complete in every case — only the speaker labels are
@@ -690,6 +706,11 @@ mid-job.
 | 404 | `job_not_found` | Unknown or expired job id |
 | 409 | `job_not_finished` | `GET /v1/jobs/{id}/result` called before the job is done |
 | 409 | `job_not_cancellable` | `DELETE /v1/jobs/{id}` called on a terminal job |
+| 409 | `variant_not_loaded` | `?variant=` names a head this engine does not have loaded |
+| 409 | `vad_not_loaded` | `?vad=true` but the server was started without `--vad` |
+| 409 | `punctuation_not_available` | `?punctuation=true` but no punctuation model is loaded |
+| 409 | `too_many_hotwords` | More than 64 phrases in `?hotwords=` |
+| 409 | `hotword_phrase_too_long` | A `?hotwords=` phrase exceeds 64 characters |
 | 413 | `payload_too_large` | Body exceeds `--body-limit-bytes` (default 50 MiB) |
 | 413 | `audio_too_long` | Audio exceeds `--max-audio-secs` (opt-in, env `GIGASTT_MAX_AUDIO_SECS`, default unlimited), or a whole-buffer path (diarization/`channels=split`/telephony) hit its ~30-minute safety ceiling |
 | 422 | `invalid_audio` | Audio could not be decoded (unsupported/corrupt format) |
@@ -698,6 +719,7 @@ mid-job.
 | 429 | `rate_limited` | Per-IP token bucket exhausted; `Retry-After` header included |
 | 503 | `timeout` | All inference sessions busy; `Retry-After` + `retry_after_ms` |
 | 503 | `pool_closed` | Server is shutting down, pool closed to new checkouts |
+| 503 | `cancelled` | The run was aborted cooperatively — client disconnect, `DELETE /v1/jobs/{id}`, or shutdown |
 
 ```
 HTTP/1.1 503 Service Unavailable
