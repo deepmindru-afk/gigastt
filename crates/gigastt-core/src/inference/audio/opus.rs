@@ -7,6 +7,14 @@ use symphonia::core::formats::FormatReader;
 
 #[cfg(feature = "file-decode")]
 use super::audio_too_long_err;
+#[cfg(feature = "file-decode")]
+use super::stream::ChannelSelect;
+
+/// Opus always decodes at 48 kHz regardless of the container's declared input
+/// rate (RFC 7845 §5.1), so this — not the header rate — is the unit the length
+/// budget counts and a duration trip reports.
+#[cfg(feature = "file-decode")]
+pub(super) const OPUS_DECODE_RATE: u32 = 48_000;
 
 /// Maximum decoded samples per channel for one Opus packet: 120 ms at 48 kHz
 /// (RFC 6716 §3.2.5). A packet claiming more is malformed.
@@ -86,6 +94,115 @@ pub(super) fn next_demux_packet(
     }
 }
 
+/// Reject channel layouts the `opus-rs` fallback cannot decode. Mono/stereo
+/// covers Telegram voice notes, browser MediaRecorder captures, and `.opus`
+/// files; multistream (>2ch) OGG/Opus is out.
+#[cfg(feature = "file-decode")]
+fn check_opus_channels(channels: usize) -> Result<()> {
+    if !(1..=2).contains(&channels) {
+        anyhow::bail!("Opus with {channels} channels is not supported (mono/stereo only)");
+    }
+    Ok(())
+}
+
+/// Per RFC 7845 the decode rate is always 48 kHz, whatever the container's
+/// declared input rate.
+#[cfg(feature = "file-decode")]
+fn new_opus_decoder(channels: usize) -> Result<opus_rs::OpusDecoder> {
+    opus_rs::OpusDecoder::new(OPUS_DECODE_RATE as i32, channels)
+        .map_err(|e| anyhow::anyhow!("Opus decoder init failed: {e}"))
+}
+
+/// Decode one packet into `pcm` (interleaved, `channels` deep), returning the
+/// per-channel frame count. The single place that knows the packet contract —
+/// the `opus-rs` API takes the exact packet duration rather than a buffer
+/// capacity — shared by the whole-buffer and streaming decoders so they cannot
+/// drift apart.
+#[cfg(feature = "file-decode")]
+fn decode_packet_interleaved(
+    decoder: &mut opus_rs::OpusDecoder,
+    channels: usize,
+    data: &[u8],
+    pcm: &mut Vec<f32>,
+) -> Result<usize> {
+    let frame_size =
+        opus_packet_frame_size(data).ok_or_else(|| anyhow::anyhow!("Malformed Opus packet"))?;
+    pcm.resize(frame_size * channels, 0.0);
+    let decoded = decoder
+        .decode(data, frame_size, pcm)
+        .map_err(|e| anyhow::anyhow!("Opus decode error: {e}"))?
+        .min(frame_size);
+    Ok(decoded)
+}
+
+/// Packet-at-a-time Opus decode, mixed down to mono as it goes.
+///
+/// The streaming counterpart of [`decode_opus_channels`], which has to hold
+/// every channel of the whole file before anything can be mixed or resampled —
+/// the reason the Opus path stayed on the whole-buffer duration ceiling while
+/// every other container streamed. This one holds a single packet.
+///
+/// The mix is the same mean
+/// [`mix_channels_to_mono`](super::decode::mix_channels_to_mono) computes, in
+/// the same summation order, so the samples are identical rather than merely
+/// equivalent.
+#[cfg(feature = "file-decode")]
+pub(super) struct OpusStream {
+    decoder: opus_rs::OpusDecoder,
+    channels: usize,
+    /// Mix down, or keep one channel — `channels=split` needs the latter, and
+    /// without it a per-channel read of an `.opus` would silently get the mix.
+    channel: ChannelSelect,
+    /// Interleaved per-packet scratch, hoisted out of the decode loop.
+    pcm: Vec<f32>,
+}
+
+#[cfg(feature = "file-decode")]
+impl OpusStream {
+    pub(super) fn new(channels: usize, channel: ChannelSelect) -> Result<Self> {
+        check_opus_channels(channels)?;
+        Ok(Self {
+            decoder: new_opus_decoder(channels)?,
+            channels,
+            channel,
+            pcm: Vec::new(),
+        })
+    }
+
+    /// Decode one packet, appending its mono 48 kHz samples to `out`. Returns
+    /// the number of frames appended.
+    pub(super) fn decode_packet(&mut self, data: &[u8], out: &mut Vec<f32>) -> Result<usize> {
+        let frames =
+            decode_packet_interleaved(&mut self.decoder, self.channels, data, &mut self.pcm)?;
+        match self.channel {
+            ChannelSelect::Mono => push_mono_mix(&self.pcm, self.channels, frames, out),
+            ChannelSelect::One(k) if k < self.channels => {
+                for frame in 0..frames {
+                    out.push(self.pcm[frame * self.channels + k]);
+                }
+            }
+            ChannelSelect::One(_) => {}
+        }
+        Ok(frames)
+    }
+}
+
+/// Append the mono mix of the first `frames` interleaved frames of `pcm`.
+///
+/// Deliberately the same arithmetic as
+/// [`mix_channels_to_mono`](super::decode::mix_channels_to_mono) over the same
+/// samples de-interleaved — same summation order, same divisor — so mixing
+/// per packet cannot drift from mixing the whole file at once. Pinned against
+/// it in `tests.rs`.
+#[cfg(feature = "file-decode")]
+pub(super) fn push_mono_mix(pcm: &[f32], channels: usize, frames: usize, out: &mut Vec<f32>) {
+    let ch = channels as f32;
+    for frame in 0..frames {
+        let base = frame * channels;
+        out.push(pcm[base..base + channels].iter().sum::<f32>() / ch);
+    }
+}
+
 /// Decode the packets of an Opus track (OGG container) to per-channel f32
 /// samples at 48 kHz.
 ///
@@ -107,11 +224,8 @@ pub(super) fn decode_opus_channels(
     max_samples: usize,
     limit_secs: f64,
 ) -> Result<Vec<Vec<f32>>> {
-    if !(1..=2).contains(&channels) {
-        anyhow::bail!("Opus with {channels} channels is not supported (mono/stereo only)");
-    }
-    let mut decoder = opus_rs::OpusDecoder::new(48_000, channels)
-        .map_err(|e| anyhow::anyhow!("Opus decoder init failed: {e}"))?;
+    check_opus_channels(channels)?;
+    let mut decoder = new_opus_decoder(channels)?;
     let mut per_channel: Vec<Vec<f32>> = (0..channels).map(|_| Vec::new()).collect();
     let mut pcm: Vec<f32> = Vec::new();
     loop {
@@ -122,13 +236,7 @@ pub(super) fn decode_opus_channels(
         if packet.track_id != track_id {
             continue;
         }
-        let frame_size = opus_packet_frame_size(&packet.data)
-            .ok_or_else(|| anyhow::anyhow!("Malformed Opus packet"))?;
-        pcm.resize(frame_size * channels, 0.0);
-        let decoded = decoder
-            .decode(&packet.data, frame_size, &mut pcm)
-            .map_err(|e| anyhow::anyhow!("Opus decode error: {e}"))?
-            .min(frame_size);
+        let decoded = decode_packet_interleaved(&mut decoder, channels, &packet.data, &mut pcm)?;
         if channels == 1 {
             per_channel[0].extend_from_slice(&pcm[..decoded]);
         } else {
@@ -141,7 +249,11 @@ pub(super) fn decode_opus_channels(
         // Incremental length budget, same as the symphonia decode loops.
         let decoded_len = per_channel.first().map(|v| v.len()).unwrap_or(0);
         if decoded_len > max_samples {
-            return Err(audio_too_long_err(decoded_len, 48_000, limit_secs));
+            return Err(audio_too_long_err(
+                decoded_len,
+                OPUS_DECODE_RATE,
+                limit_secs,
+            ));
         }
     }
     Ok(per_channel)
