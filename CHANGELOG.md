@@ -101,6 +101,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`rubato` moved to 4.0.** Two API changes: `SincInterpolationParameters::f_cutoff`
+  became `Option<f32>`, and the chunk-resize hook moved out of `Resampler` into a
+  new `Resizable` trait. The cutoff is passed as `Some(0.95)` rather than left
+  `None` on purpose — `None` derives a cutoff from `sinc_len` and the window
+  instead, which is a *different filter*, so it would change the resampled
+  samples and with them every transcript from a source that is not already
+  16 kHz. Both 3.x and 4.0 scale the cutoff by the resample ratio when
+  downsampling, so `Some(0.95)` is the filter 3.x built. Verified transcript-neutral
+  on 13 clips: 8 / 11.025 / 22.05 / 32 / 44.1 / 96 kHz WAV (8 kHz being the
+  upsampling branch, where the cutoff is *not* scaled), four 48 kHz OGG/Opus
+  fixtures including a stereo one, and real 48 kHz speech — byte-identical output
+  in every case.
+
 - **CLI contract change: `gigastt transcribe-batch` no longer fails on long
   files.** Running `transcribe-batch` over a corpus that includes files
   longer than 30 minutes now exits `0` instead of `1`, because those files
