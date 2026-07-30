@@ -3,7 +3,8 @@
 #[cfg(feature = "file-decode")]
 use anyhow::Context;
 use anyhow::Result;
-use rubato::Resampler;
+// rubato 4 split the chunk-resize hook out of `Resampler` into `Resizable`.
+use rubato::{Resampler, Resizable};
 
 /// Sample rate in Hz. Invariant: `rate > 0`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -58,7 +59,12 @@ pub fn resample(samples: &[f32], from_rate: SampleRate, to_rate: SampleRate) -> 
 
     let params = SincInterpolationParameters {
         sinc_len: 256,
-        f_cutoff: 0.95,
+        // rubato 4 made this `Option`; `None` would derive a cutoff from
+        // `sinc_len` and the window instead of using this one, which is a
+        // different filter and so a different transcript. Both versions scale
+        // it by the resample ratio when downsampling, so `Some(0.95)` is the
+        // same filter 3.x built.
+        f_cutoff: Some(0.95),
         interpolation: SincInterpolationType::Linear,
         oversampling_factor: 256,
         window: WindowFunction::BlackmanHarris2,
@@ -145,7 +151,12 @@ pub fn resample_with_cache(
         };
         let params = SincInterpolationParameters {
             sinc_len: 256,
-            f_cutoff: 0.95,
+            // rubato 4 made this `Option`; `None` would derive a cutoff from
+            // `sinc_len` and the window instead of using this one, which is a
+            // different filter and so a different transcript. Both versions scale
+            // it by the resample ratio when downsampling, so `Some(0.95)` is the
+            // same filter 3.x built.
+            f_cutoff: Some(0.95),
             interpolation: SincInterpolationType::Linear,
             oversampling_factor: 256,
             window: WindowFunction::BlackmanHarris2,
