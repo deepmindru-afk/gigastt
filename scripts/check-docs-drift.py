@@ -465,24 +465,61 @@ def check_openapi() -> list[str]:
             failures.append(f"openapi.yaml: missing required path `{required}`")
 
     oas_text = OPENAPI_YAML.read_text(encoding="utf-8")
-    # The default file-transcription path has no duration cap: long files decode
-    # in bounded windows. Forbid a stale unconditional cap claim creeping back in;
-    # the ~30-minute safety ceiling on whole-buffer paths (diarization/
-    # channels=split/telephony) is a separate, correctly-scoped statement.
-    for stale in (
-        r"File transcription cap:\s*30\s+minutes?",
-        r"Max audio duration:\s*30\s+minutes?",
-    ):
-        if re.search(stale, oas_text, re.IGNORECASE):
-            failures.append(
-                f"openapi.yaml: stale unconditional duration-cap claim matching {stale!r}; "
-                "the default file-transcription path no longer has a duration limit"
-            )
 
     # Formats intro must mention Opus (full surface is in FORMATS gate for api/cli).
     if not re.search(r"Opus", oas_text):
         failures.append("openapi.yaml: audio formats description must mention Opus")
 
+    return failures
+
+
+# Words that legitimately scope a duration ceiling to the paths that really have
+# one. A claim carrying any of these is correct; a bare one is not.
+_DURATION_SCOPE = re.compile(
+    r"whole[- ]buffer|diariz|channels=split|telephony|G\.722|max-audio-secs|"
+    r"MAX_AUDIO_SECS|safety ceiling",
+    re.IGNORECASE,
+)
+
+# "<something> cap: 10 minutes", "Max audio duration: 30 min", "audio limit: 1800 s".
+_DURATION_CLAIM = re.compile(
+    r"(?P<label>[A-Za-z][A-Za-z /]*(?:cap|limit|duration|ceiling))\s*[:=]\s*"
+    r"~?\s*(?P<num>\d+(?:\.\d+)?)\s*"
+    r"(?P<unit>minutes?|mins?\b|hours?|hrs?\b|seconds?|secs?\b|[smh]\b)",
+    re.IGNORECASE,
+)
+
+
+def check_duration_claims() -> list[str]:
+    """Forbid unconditional audio-duration ceilings in the contract docs.
+
+    The default file path, the VAD path and OGG/Opus all decode in bounded
+    windows and have no duration limit; only the whole-buffer paths keep one.
+    A claim like "File transcription cap: 10 minutes" is therefore always wrong
+    unless it names the paths it applies to.
+
+    This deliberately checks every contract surface, not just openapi.yaml: the
+    previous version of this gate scanned that one file for the literal string
+    "30 minutes", so a bogus 10-minute cap sat in asyncapi.yaml unnoticed.
+    """
+    failures: list[str] = []
+    for path in (OPENAPI_YAML, ASYNCAPI_YAML, API_MD, CLI_MD):
+        if not path.exists():
+            failures.append(f"{path.name} missing")
+            continue
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            m = _DURATION_CLAIM.search(line)
+            if not m or _DURATION_SCOPE.search(line):
+                continue
+            # Session/idle/request budgets are unrelated to audio length.
+            if re.search(r"session|idle|drain|checkout|retry|ttl|timeout", line, re.IGNORECASE):
+                continue
+            failures.append(
+                f"{path.name}:{lineno}: unconditional duration claim "
+                f"{m.group('label').strip()!r} = {m.group('num')} {m.group('unit')}; "
+                "audio length is unlimited by default — name the whole-buffer paths "
+                "(diarization / channels=split / telephony) or --max-audio-secs"
+            )
     return failures
 
 
@@ -589,7 +626,8 @@ def main() -> int:
     results.append(("mdBook SUMMARY + build", check_workbook(args.skip_mdbook)))
     results.append(("workbook EN/RU parity", check_parity()))
     results.append(("relative links", check_links()))
-    results.append(("OpenAPI paths + duration/format claims", check_openapi()))
+    results.append(("OpenAPI paths + format claims", check_openapi()))
+    results.append(("no unconditional duration caps (all contract docs)", check_duration_claims()))
     results.append(("SECURITY.md supported versions", check_security_versions()))
     results.append(("crate version pins (README/architecture)", check_crate_pins()))
     results.append(("workbook currency + required recipes", check_workbook_currency()))
