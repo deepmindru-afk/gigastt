@@ -181,7 +181,7 @@ pub use telephony::{decode_telephony_raw, encode_wav_pcm16};
 // Internals re-exported so unit tests (`use super::*`) keep resolving them.
 #[cfg(all(test, feature = "file-decode"))]
 #[allow(unused_imports)]
-pub(crate) use opus::{is_recoverable_packet_eof, opus_packet_frame_size};
+pub(crate) use opus::is_recoverable_packet_eof;
 #[cfg(all(test, feature = "file-decode"))]
 #[allow(unused_imports)]
 pub(crate) use telephony::try_decode_g722_wav;
