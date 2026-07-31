@@ -1603,6 +1603,51 @@ fn test_decode_audio_bytes_opus_code3_multiframe_matches_ffmpeg_reference() {
 }
 
 #[test]
+fn test_decode_audio_bytes_webm_opus_live_matches_ffmpeg_reference() {
+    // A browser's MediaRecorder writes a *live* WebM: the Segment and every
+    // Cluster carry an unknown size, because the length is not known while
+    // recording. Nothing ffmpeg writes has that shape, so the fixture is built
+    // by rewriting each Cluster's size to the unknown-size vint (see
+    // scripts/generate_opus_fixtures.sh) — the byte layout a browser produces.
+    // Verified against ffmpeg's own decode of the same file.
+    let webm = include_bytes!("../../../tests/fixtures/opus/opus_tone_webm_live.webm");
+    let reference_pcm =
+        include_bytes!("../../../tests/fixtures/opus/opus_tone_webm_live_ffmpeg.pcm");
+    let ours = decode_audio_bytes(webm).expect("live WebM/Opus must decode");
+    let reference: Vec<f32> = reference_pcm
+        .chunks_exact(2)
+        .map(|c| f32::from(i16::from_le_bytes([c[0], c[1]])) / 32768.0)
+        .collect();
+    assert!(
+        ours.len() > 46_000 && ours.len() < 50_000,
+        "unexpected decoded length {}",
+        ours.len()
+    );
+    let rmse = best_lag_rmse(&ours, &reference, 1024);
+    assert!(
+        rmse < 0.02,
+        "WebM/Opus decode diverged from ffmpeg reference: RMSE {rmse}"
+    );
+}
+
+#[test]
+fn test_decode_audio_file_webm_extension_matches_bytes() {
+    // Uploads arrive as bytes and are sniffed by content; the CLI goes through
+    // the path-based probe with a `.webm` hint. Both must reach the same
+    // Matroska demuxer and produce the same samples.
+    let webm = include_bytes!("../../../tests/fixtures/opus/opus_tone_webm_live.webm");
+    let mut tmp = tempfile::NamedTempFile::with_suffix(".webm").expect("temp file");
+    std::io::Write::write_all(&mut tmp, webm).expect("write temp file");
+    let via_file =
+        decode_audio_file(tmp.path().to_str().expect("utf-8 path")).expect("WebM file must decode");
+    let via_bytes = decode_audio_bytes(webm).expect("WebM bytes must decode");
+    assert_eq!(via_file.len(), via_bytes.len());
+    for (a, b) in via_file.iter().zip(via_bytes.iter()) {
+        assert!((a - b).abs() < f32::EPSILON);
+    }
+}
+
+#[test]
 fn test_decode_audio_file_opus_extension_matches_bytes() {
     // The file path probes with an `.opus` extension hint; the bytes path
     // sniffs content only. Both must decode the same OGG/Opus stream

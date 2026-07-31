@@ -47,6 +47,80 @@ ffmpeg -y -v error -i "$TONE" -ar 48000 -ac 2 -c:a libopus -frame_duration 60 \
 ffmpeg -y -v error -i "$CORE_DIR/opus_tone_60ms.ogg" -f s16le -acodec pcm_s16le \
   -ar 16000 -ac 1 "$CORE_DIR/opus_tone_60ms_ffmpeg.pcm"
 
+# WebM/Opus in the shape a browser's MediaRecorder writes: a *live* stream,
+# where the Segment and every Cluster carry an unknown size because the length
+# is not known while recording. ffmpeg's `-live 1` gives an unknown-size Segment
+# but still writes known-size Clusters, so the Clusters are rewritten afterwards
+# to the one-byte unknown-size vint (0xFF). No sample is touched — only the size
+# field — and ffmpeg decodes the result to byte-identical PCM.
+ffmpeg -y -v error -i "$TONE" -ar 48000 -ac 1 -c:a libopus -frame_duration 60 \
+  -f webm -live 1 "$CORE_DIR/.tone_live_known_clusters.webm"
+
+python3 - "$CORE_DIR/.tone_live_known_clusters.webm" \
+         "$CORE_DIR/opus_tone_webm_live.webm" <<'PY'
+import sys
+
+CLUSTER = bytes.fromhex("1f43b675")
+SEGMENT = bytes.fromhex("18538067")
+
+
+def read_id(d, i):
+    b, n = d[i], 1
+    while n <= 4 and not (b & (0x80 >> (n - 1))):
+        n += 1
+    return d[i : i + n], i + n
+
+
+def read_size(d, i):
+    s, m = d[i], 1
+    while m <= 8 and not (s & (0x80 >> (m - 1))):
+        m += 1
+    raw = d[i : i + m]
+    val = raw[0] & (0xFF >> m)
+    for k in raw[1:]:
+        val = (val << 8) | k
+    return val, val == (1 << (7 * m)) - 1, i + m
+
+
+d = open(sys.argv[1], "rb").read()
+out, i = bytearray(), 0
+
+# EBML header, verbatim.
+_, j = read_id(d, i)
+size, _, j = read_size(d, j)
+out += d[i : j + size]
+i = j + size
+
+# Segment header, verbatim (already unknown-size thanks to -live 1).
+eid, j = read_id(d, i)
+size, unknown, j = read_size(d, j)
+assert eid == SEGMENT and unknown, "expected an unknown-size Segment from -live 1"
+out += d[i:j]
+i = j
+
+# Children of the Segment: every Cluster gets the unknown-size vint.
+clusters = 0
+while i < len(d):
+    start = i
+    eid, j = read_id(d, i)
+    size, unknown, j = read_size(d, j)
+    end = len(d) if unknown else j + size
+    if eid == CLUSTER and not unknown:
+        out += eid + b"\xff" + d[j:end]
+        clusters += 1
+    else:
+        out += d[start:end]
+    i = end
+
+open(sys.argv[2], "wb").write(bytes(out))
+print(f"rewrote {clusters} clusters to unknown size")
+PY
+
+rm -f "$CORE_DIR/.tone_live_known_clusters.webm"
+
+ffmpeg -y -v error -i "$CORE_DIR/opus_tone_webm_live.webm" -f s16le -acodec pcm_s16le \
+  -ar 16000 -ac 1 "$CORE_DIR/opus_tone_webm_live_ffmpeg.pcm"
+
 # ── E2E: real speech transcodes ─────────────────────────────────────────────
 
 # OGG/Opus from a 16 kHz mono source.

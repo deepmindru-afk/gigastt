@@ -24,7 +24,8 @@ info:
     ## Audio Formats
 
     Supported upload formats: WAV, MP3, M4A/AAC, OGG/Vorbis, OGG/Opus (`.opus`),
-    FLAC. Raw headerless telephony streams are accepted with
+    WebM/Opus (what a browser's `MediaRecorder` produces), FLAC. Raw headerless
+    telephony streams are accepted with
     `?codec=pcmu|pcma|g722&sample_rate=N` (see the transcribe parameters).
     Containers are decoded server-side via [symphonia](https://github.com/pdeljanov/Symphonia)
     (Opus packets via pure-Rust `opus-rs`) and resampled to 16 kHz mono.
