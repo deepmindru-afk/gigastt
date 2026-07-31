@@ -83,6 +83,7 @@ FORMATS = {
     "m4a": (r"M4A", r"M4A"),
     "ogg-vorbis": (r"OGG/Vorbis", r"OGG/Vorbis"),
     "ogg-opus": (r"OGG/Opus", r"OGG/Opus"),
+    "webm-opus": (r"WebM/Opus", r"WebM/Opus"),
     "flac": (r"FLAC", r"FLAC"),
     "raw-pcmu": (r"\.ulaw", r"\.ulaw"),
     "raw-pcma": (r"\.alaw", r"\.alaw"),

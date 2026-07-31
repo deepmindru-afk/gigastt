@@ -13,7 +13,7 @@ use std::time::Duration;
 
 /// Audio extensions accepted by the batch / watch walkers (case-insensitive).
 /// Mirrors the symphonia-backed file support of `Engine::transcribe_file`.
-pub const SUPPORTED_EXTENSIONS: &[&str] = &["wav", "mp3", "m4a", "ogg", "flac"];
+pub const SUPPORTED_EXTENSIONS: &[&str] = &["wav", "mp3", "m4a", "ogg", "flac", "webm"];
 
 /// Injectable transcription step: maps an audio file path to its result. The
 /// production closure checks out a pool triplet and calls
@@ -601,6 +601,9 @@ mod tests {
         assert!(is_audio_file(Path::new("a.m4a")));
         assert!(is_audio_file(Path::new("a.OGG")));
         assert!(is_audio_file(Path::new("a.flac")));
+        // A folder of browser recordings is a plausible batch input, and every
+        // one of them carries this extension.
+        assert!(is_audio_file(Path::new("a.webm")));
     }
 
     #[test]

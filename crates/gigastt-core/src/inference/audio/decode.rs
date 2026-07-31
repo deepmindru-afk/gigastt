@@ -113,6 +113,7 @@ impl MediaSource for BytesMediaSource {
 // m4a
 // ogg-vorbis
 // ogg-opus
+// webm-opus
 // flac
 // raw-pcmu
 // raw-pcma

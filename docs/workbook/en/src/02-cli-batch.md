@@ -378,7 +378,7 @@ gigastt transcribe call.g722 --codec g722 --sample-rate 8000   # 16000 also acce
 ```
 
 `--codec` accepts `pcmu` (alias `ulaw`), `pcma` (alias `alaw`), `g722`, and
-requires `--sample-rate`. Anything else — WebM, AMR, MP4 video, a corrupt
+requires `--sample-rate`. Anything else — AMR, MP4 video, a corrupt
 file — fails with `invalid audio: Unsupported audio format: ...` (REST:
 `422 invalid_audio`).
 
@@ -439,11 +439,12 @@ time gigastt transcribe-batch calls/ transcripts/ --pool-size 4 --move-to calls/
 - **Expecting parallelism you did not get.** `--pool-size 16` on 8 GB RAM is
   silently clamped at load (warning logged). Check the startup log, and
   remember FP32 quadruples per-worker memory.
-- **`invalid audio` / 422 on an unsupported container.** WebM, AMR, MP4 video,
+- **`invalid audio` / 422 on an unsupported container.** AMR, MP4 video,
   or a corrupt upload fails decoding. Convert first
-  (`ffmpeg -i in.webm -ar 16000 -ac 1 out.wav`) or, for raw telephony streams,
-  declare `--codec` + `--sample-rate`. A `.opus` file is decodable but
-  invisible to batch/watch — rename to `.ogg`.
+  (`ffmpeg -i in.amr -ar 16000 -ac 1 out.wav`) or, for raw telephony streams,
+  declare `--codec` + `--sample-rate`. WebM/Opus from a browser needs no
+  conversion. A `.opus` file is decodable but invisible to batch/watch —
+  rename to `.ogg`.
 - **Watch "forgets" failures.** A file that failed all retries is not retried
   until its content changes, and restarting the watcher registers it as
   backlog (never processed). Fix or replace the file, or point
