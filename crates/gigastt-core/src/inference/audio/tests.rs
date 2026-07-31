@@ -1354,6 +1354,12 @@ fn test_opus_streaming_decode_matches_whole_buffer() {
             "opus_tone_no_eos.ogg",
             &include_bytes!("../../../tests/fixtures/opus/opus_tone_no_eos.ogg")[..],
         ),
+        // Multi-frame packets: the per-packet decode now splits three frames
+        // where the other fixtures carry one, so both paths must still agree.
+        (
+            "opus_tone_60ms.ogg",
+            &include_bytes!("../../../tests/fixtures/opus/opus_tone_60ms.ogg")[..],
+        ),
     ] {
         let streamed = decode_audio_bytes(bytes).expect("streaming decode");
         let eager = eager_opus_reference(bytes).expect("whole-buffer decode");
@@ -1540,26 +1546,6 @@ fn test_decode_audio_bytes_random_bytes_still_errors() {
 }
 
 #[test]
-fn test_opus_packet_frame_size_toc_parsing() {
-    // Config 0 (SILK 10 ms), code 0: one 10 ms frame = 480 samples.
-    assert_eq!(opus_packet_frame_size(&[0b0000_0000]), Some(480));
-    // Config 3 (SILK 60 ms), code 1: two 60 ms frames = 5760 (the max).
-    assert_eq!(opus_packet_frame_size(&[0b0001_1001]), Some(5760));
-    // Config 16 (CELT 2.5 ms), code 0: 120 samples.
-    assert_eq!(opus_packet_frame_size(&[0b1000_0000]), Some(120));
-    // Config 31 (CELT 20 ms), code 2: two 20 ms frames = 1920.
-    assert_eq!(opus_packet_frame_size(&[0b1111_1010]), Some(1920));
-    // Config 12 (hybrid 10 ms), code 3: M=3 frames from the second byte.
-    assert_eq!(opus_packet_frame_size(&[0b0110_0011, 3]), Some(1440));
-    // Code 3 with M=0 frames is invalid.
-    assert_eq!(opus_packet_frame_size(&[0b0110_0011, 0]), None);
-    // Over 120 ms total (60 ms x 3) exceeds the RFC 6716 packet maximum.
-    assert_eq!(opus_packet_frame_size(&[0b0001_1011, 3]), None);
-    // Empty packet.
-    assert_eq!(opus_packet_frame_size(&[]), None);
-}
-
-#[test]
 fn test_decode_audio_bytes_opus_ogg_matches_ffmpeg_reference() {
     // Independent-reference verification: `opus_tone.ogg` was ENCODED by
     // ffmpeg (libopus) and `opus_tone_ffmpeg.pcm` is ffmpeg's own DECODE
@@ -1587,6 +1573,32 @@ fn test_decode_audio_bytes_opus_ogg_matches_ffmpeg_reference() {
     assert!(
         rmse < 0.02,
         "Opus decode diverged from ffmpeg reference: RMSE {rmse}"
+    );
+}
+
+#[test]
+fn test_decode_audio_bytes_opus_code3_multiframe_matches_ffmpeg_reference() {
+    // `opus_tone_60ms.ogg` carries 60 ms packets — three 20 ms CELT frames per
+    // packet, code 3 CBR — which is what Chromium's MediaRecorder emits and no
+    // other fixture exercises (`opus_tone.ogg` is code 0 throughout). Verified
+    // against ffmpeg's own decode of the same file, so a packet split that
+    // silently mis-slices the frames fails here rather than merely not erroring.
+    let ogg = include_bytes!("../../../tests/fixtures/opus/opus_tone_60ms.ogg");
+    let reference_pcm = include_bytes!("../../../tests/fixtures/opus/opus_tone_60ms_ffmpeg.pcm");
+    let ours = decode_audio_bytes(ogg).expect("multi-frame OGG/Opus must decode");
+    let reference: Vec<f32> = reference_pcm
+        .chunks_exact(2)
+        .map(|c| f32::from(i16::from_le_bytes([c[0], c[1]])) / 32768.0)
+        .collect();
+    assert!(
+        ours.len() > 46_000 && ours.len() < 50_000,
+        "unexpected decoded length {}",
+        ours.len()
+    );
+    let rmse = best_lag_rmse(&ours, &reference, 1024);
+    assert!(
+        rmse < 0.02,
+        "multi-frame Opus decode diverged from ffmpeg reference: RMSE {rmse}"
     );
 }
 
