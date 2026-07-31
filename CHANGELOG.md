@@ -34,6 +34,19 @@ were released without a git tag, so their headings carry no compare link.
   to per-session streaming pipelines. This also retires the deprecation
   containment boundary: `diarization.rs` no longer needs `#![allow(deprecated)]`.
 
+### Fixed
+
+- **Hotword biasing no longer stutters a phrase inside one encoder frame.** At
+  the shipped `--hotwords-boost 5.0`, a glossary made the `rnnt` head render the
+  very terms it was meant to help as a burst of their own prefix — `гигаэм`
+  became `ги Г. А. А. А. …` — and the damage grew with the boost (#260).
+  Emitting a non-blank token does not advance the encoder frame, so a boosted
+  continuation kept outrunning blank on the same 40 ms slot until the decoder
+  had spent its whole ten-token per-frame budget there. Biasing may now overturn
+  the model's own pick once per frame; the prefix state still spans frames, so a
+  hotword completes at the pace speech is spoken. Reported confidence is now the
+  model's own probability for the chosen token rather than the boosted score.
+
 ## [2.16.0] - 2026-07-30
 
 ### Added
