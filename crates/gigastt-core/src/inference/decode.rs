@@ -11,6 +11,17 @@ use super::bias::Biaser;
 use super::{DecoderState, PRED_HIDDEN};
 
 const MAX_TOKENS_PER_STEP: usize = 10;
+
+/// How many times per encoder frame hotword biasing may overturn the model's
+/// own greedy pick.
+///
+/// Emitting a non-blank token does not advance the frame, so without a cap a
+/// boosted continuation keeps outrunning blank on the same 40 ms slot and the
+/// decoder spends its whole [`MAX_TOKENS_PER_STEP`] budget stuttering one
+/// hotword prefix. The prefix state survives across frames, so one flip per
+/// frame still lets a phrase complete — at the pace speech is actually spoken,
+/// which is slower than one token per frame.
+const MAX_BIAS_OVERRIDES_PER_STEP: usize = 1;
 const ENC_DIM: usize = 768;
 /// Number of consecutive blank frames to trigger endpointing (~600ms at 40ms/frame).
 /// This is the streaming endpoint signal only when no VAD is attached; with a
@@ -58,6 +69,17 @@ pub(crate) fn argmax(logits: &[f32], blank_id: usize) -> usize {
         .unwrap_or(blank_id)
 }
 
+/// Softmax probability `logits` assigns to `token`. Zero for an empty buffer or
+/// a token beyond it.
+pub(crate) fn token_confidence(logits: &[f32], token: usize) -> f32 {
+    let Some(&logit) = logits.get(token) else {
+        return 0.0;
+    };
+    let max_logit = logits.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+    let sum_exp: f32 = logits.iter().map(|&l| (l - max_logit).exp()).sum();
+    (logit - max_logit).exp() / sum_exp
+}
+
 /// Argmax with softmax confidence score.
 ///
 /// Returns `(token_id, confidence)` where confidence is the softmax probability.
@@ -65,11 +87,8 @@ pub(crate) fn argmax_with_confidence(logits: &[f32], blank_id: usize) -> (usize,
     if logits.is_empty() {
         return (blank_id, 0.0);
     }
-    let max_logit = logits.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-    let sum_exp: f32 = logits.iter().map(|&l| (l - max_logit).exp()).sum();
     let token = argmax(logits, blank_id);
-    let confidence = (logits[token] - max_logit).exp() / sum_exp;
-    (token, confidence)
+    (token, token_confidence(logits, token))
 }
 
 /// Decoder call result — owned, reusable buffers for caching across frames.
@@ -345,6 +364,8 @@ fn greedy_decode_impl<B: DecodeBackend>(
     // Hotword prefix-tracking state, only when biasing is active. `None` keeps
     // the loop on its exact pre-biasing path.
     let mut bias_state = biaser.map(|b| b.new_state());
+    // Boosted copy of the joiner logits, allocated only when biasing is active.
+    let mut biased_buf: Vec<f32> = Vec::new();
 
     anyhow::ensure!(
         encoded.len() >= ENC_DIM * encoded_len,
@@ -355,6 +376,9 @@ fn greedy_decode_impl<B: DecodeBackend>(
 
     for t in 0..encoded_len {
         let mut tokens_this_step = 0;
+        // Per-frame biasing budget, spent only by picks the boost actually
+        // flipped. Reset here so a hotword resumes on the next frame.
+        let mut bias_overrides = 0usize;
 
         extract_encoder_frame(encoded, encoded_len, t, &mut enc_frame);
 
@@ -386,15 +410,23 @@ fn greedy_decode_impl<B: DecodeBackend>(
             )?;
 
             // === CONTEXTUAL HOTWORD BIASING (shallow fusion) ===
-            // Add the boost to continuation tokens of any active hotword prefix
-            // BEFORE the argmax, so a boosted token can overtake the bare model
-            // pick. No-op unless biasing is active.
-            if let (Some(b), Some(bs)) = (biaser, bias_state.as_ref()) {
-                b.boost_logits(bs, &mut logits_buf);
-            }
-
-            // Greedy: argmax with confidence over (possibly biased) logits
-            let (token, confidence) = argmax_with_confidence(&logits_buf, blank_id);
+            // The boost is applied to a copy so `logits_buf` keeps the model's
+            // own scores: it decides the pick, it does not get to report on it.
+            // A pick it flips spends this frame's budget — see
+            // MAX_BIAS_OVERRIDES_PER_STEP.
+            let (token, confidence) = match (biaser, bias_state.as_ref()) {
+                (Some(b), Some(bs)) if bias_overrides < MAX_BIAS_OVERRIDES_PER_STEP => {
+                    biased_buf.clear();
+                    biased_buf.extend_from_slice(&logits_buf);
+                    b.boost_logits(bs, &mut biased_buf);
+                    let boosted = argmax(&biased_buf, blank_id);
+                    if boosted != argmax(&logits_buf, blank_id) {
+                        bias_overrides += 1;
+                    }
+                    (boosted, token_confidence(&logits_buf, boosted))
+                }
+                _ => argmax_with_confidence(&logits_buf, blank_id),
+            };
 
             // === TOKEN CLASSIFICATION ===
             if token == blank_id {
@@ -584,6 +616,121 @@ mod tests {
             logits_buf[tok] = 10.0; // argmax → tok
             Ok(())
         }
+    }
+
+    /// Stub backend returning the same joiner logits on every call — the shape
+    /// where the model prefers blank but a hotword token sits just below it.
+    struct FlatLogitsBackend {
+        logits: Vec<f32>,
+    }
+
+    impl DecodeBackend for FlatLogitsBackend {
+        fn decode_step(
+            &mut self,
+            _state: &DecoderState,
+            out: &mut DecoderOutput,
+            _bufs: &mut DecodeBuffers,
+        ) -> Result<()> {
+            DecoderOutput::fill(&mut out.dec_data, &[0.0; PRED_HIDDEN]);
+            DecoderOutput::fill(&mut out.new_h, &[0.0; PRED_HIDDEN]);
+            DecoderOutput::fill(&mut out.new_c, &[0.0; PRED_HIDDEN]);
+            Ok(())
+        }
+
+        fn joiner_step(
+            &mut self,
+            _enc_frame: &[f32],
+            _dec_data: &[f32],
+            logits_buf: &mut Vec<f32>,
+            _bufs: &mut DecodeBuffers,
+        ) -> Result<()> {
+            logits_buf.clear();
+            logits_buf.extend_from_slice(&self.logits);
+            Ok(())
+        }
+    }
+
+    /// vocab=5, blank=4: blank leads, and the hotword phrase [1, 2] trails it by
+    /// less than the boost, so biasing decides every pick.
+    fn blank_leading_logits() -> Vec<f32> {
+        let mut logits = vec![0.0; 5];
+        logits[4] = 3.0; // blank
+        logits[1] = 1.0; // first token of the hotword
+        logits[2] = 1.5; // its continuation
+        logits
+    }
+
+    #[test]
+    fn test_biasing_emits_at_most_one_token_per_frame() {
+        // The reported failure: with the model wanting blank on every call, the
+        // boost kept re-winning the *same* encoder frame, and the decoder
+        // emptied MAX_TOKENS_PER_STEP into one 40 ms slot — a hotword rendered
+        // as a stutter of its own prefix. Biasing may flip the greedy pick only
+        // once per frame now, so the phrase advances at the pace of speech.
+        let biaser = Biaser::from_sequences(vec![vec![1, 2]], 5.0).expect("biaser compiles");
+        let mut backend = FlatLogitsBackend {
+            logits: blank_leading_logits(),
+        };
+        let mut state = DecoderState::new(4);
+        let enc = fake_enc_tensor(3);
+        let result =
+            greedy_decode_impl(&mut backend, &enc.view(), 3, 4, &mut state, Some(&biaser)).unwrap();
+
+        let frames: Vec<usize> = result.tokens.iter().map(|t| t.frame_index).collect();
+        assert_eq!(
+            frames,
+            vec![0, 1, 2],
+            "each frame may contribute one biased token, not a burst"
+        );
+        // The hotword still completes: its prefix is emitted in order across
+        // frames rather than being stuttered inside one.
+        let ids: Vec<usize> = result.tokens.iter().map(|t| t.token_id).collect();
+        assert_eq!(&ids[..2], &[1, 2], "hotword advances across frames");
+    }
+
+    #[test]
+    fn test_biasing_reports_the_models_own_confidence() {
+        // The boost exists to steer the pick, not to inflate what we report
+        // about it: confidence must come from the model's logits.
+        let logits = blank_leading_logits();
+        let biaser = Biaser::from_sequences(vec![vec![1, 2]], 5.0).expect("biaser compiles");
+        let mut backend = FlatLogitsBackend {
+            logits: logits.clone(),
+        };
+        let mut state = DecoderState::new(4);
+        let enc = fake_enc_tensor(1);
+        let result =
+            greedy_decode_impl(&mut backend, &enc.view(), 1, 4, &mut state, Some(&biaser)).unwrap();
+
+        assert_eq!(result.tokens.len(), 1);
+        let expected = token_confidence(&logits, 1);
+        assert!(
+            (result.tokens[0].confidence - expected).abs() < 1e-6,
+            "confidence {} should be the un-boosted {expected}",
+            result.tokens[0].confidence
+        );
+    }
+
+    #[test]
+    fn test_biasing_leaves_a_confident_model_pick_alone() {
+        // When the model already outranks the boost, biasing changes nothing and
+        // spends no per-frame budget.
+        let mut logits = vec![0.0; 5];
+        logits[3] = 10.0; // a non-hotword token the model is sure about
+        logits[1] = 1.0;
+        let biaser = Biaser::from_sequences(vec![vec![1, 2]], 5.0).expect("biaser compiles");
+        let mut backend = FlatLogitsBackend { logits };
+        let mut state = DecoderState::new(4);
+        let enc = fake_enc_tensor(1);
+        let result =
+            greedy_decode_impl(&mut backend, &enc.view(), 1, 4, &mut state, Some(&biaser)).unwrap();
+
+        assert_eq!(
+            result.tokens.len(),
+            MAX_TOKENS_PER_STEP,
+            "an unbiased pick is not rationed by the biasing budget"
+        );
+        assert!(result.tokens.iter().all(|t| t.token_id == 3));
     }
 
     /// Encoder buffer of `frames` zeroed frames (content is irrelevant to the stub).

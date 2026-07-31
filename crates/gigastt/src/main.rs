@@ -84,7 +84,9 @@ struct OfflineEngineArgs {
     itn: ItnMode,
 
     /// Contextual hotword biasing: path to a file of phrases to boost (one
-    /// phrase per line, optional `\t<weight>` suffix). Env: GIGASTT_HOTWORDS_FILE.
+    /// phrase per line, optional `\t<weight>` suffix). Applies to the rnnt and
+    /// e2e_rnnt heads only; the multilingual CTC heads ignore it.
+    /// Env: GIGASTT_HOTWORDS_FILE.
     #[arg(long, env = "GIGASTT_HOTWORDS_FILE")]
     hotwords_file: Option<String>,
 
@@ -263,7 +265,8 @@ enum Commands {
 
         /// Contextual hotword biasing: path to a file of phrases to boost during
         /// recognition (one phrase per line, optional `\t<weight>` suffix; blank
-        /// lines and `#` comments ignored). Off when unset. Env:
+        /// lines and `#` comments ignored). Off when unset. Applies to the rnnt
+        /// and e2e_rnnt heads only; the multilingual CTC heads ignore it. Env:
         /// GIGASTT_HOTWORDS_FILE.
         #[arg(long, env = "GIGASTT_HOTWORDS_FILE")]
         hotwords_file: Option<String>,
@@ -633,7 +636,8 @@ enum Commands {
 
         /// Contextual hotword biasing: path to a file of phrases to boost during
         /// recognition (one phrase per line, optional `\t<weight>` suffix; blank
-        /// lines and `#` comments ignored). Off when unset. Env:
+        /// lines and `#` comments ignored). Off when unset. Applies to the rnnt
+        /// and e2e_rnnt heads only; the multilingual CTC heads ignore it. Env:
         /// GIGASTT_HOTWORDS_FILE.
         #[arg(long, env = "GIGASTT_HOTWORDS_FILE")]
         hotwords_file: Option<String>,
