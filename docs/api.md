@@ -480,10 +480,11 @@ impossible combination fails fast instead of holding a triplet:
   `409 vad_not_loaded` if the server was started without `--vad`.
 - `hotwords` (string) — comma-separated phrases to bias the decoder toward.
   `409 too_many_hotwords` above 64 phrases, `409 hotword_phrase_too_long` above
-  64 characters in one phrase. Biasing is shallow fusion over the transducer's
-  continuation scores, so it applies to the `rnnt` and `e2e_rnnt` heads only —
-  a `ml_ctc` / `ml_ctc_large` server accepts the parameter and ignores it,
-  logging a warning at startup.
+  64 characters in one phrase. The `rnnt` and `e2e_rnnt` heads bias their greedy
+  transducer decode directly; the `ml_ctc` / `ml_ctc_large` heads switch to a
+  prefix beam search when a glossary is present, since a per-frame argmax has no
+  continuation to steer. Without hotwords those heads decode greedily exactly as
+  before.
 - `hotwords_boost` (number) — strength of that bias.
 - `variant` (string) — forward-compatibility guard naming the expected recognition
   head. A single-variant engine cannot switch, so any value other than the loaded

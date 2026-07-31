@@ -10,9 +10,283 @@
 //! axis, the vocab the inner. This differs from the RNN-T encoder's channels-first
 //! `[1, D, T]` layout (see [`super::decode::extract_encoder_frame`]).
 
+use super::bias::{BiasPath, Biaser};
 use super::decode::{TokenInfo, argmax_with_confidence};
 use super::tokenizer::{Tokenizer, WORD_BOUNDARY};
 use super::{SECONDS_PER_FRAME, WordInfo};
+
+/// Hypotheses kept per frame by [`ctc_prefix_beam_decode`].
+///
+/// Small on purpose: the vocabulary is 71 classes and biasing needs breadth
+/// only where a hotword competes with what the model heard, not everywhere.
+const BEAM_WIDTH: usize = 8;
+
+/// Acoustic candidates considered per frame before hotword continuations are
+/// added. Everything below this rank is too unlikely to survive pruning anyway.
+const BEAM_TOP_K: usize = 6;
+
+/// `ln(exp(a) + exp(b))`, stable for the log-domain accumulation below.
+fn log_add_exp(a: f32, b: f32) -> f32 {
+    if a == f32::NEG_INFINITY {
+        return b;
+    }
+    if b == f32::NEG_INFINITY {
+        return a;
+    }
+    let (hi, lo) = if a > b { (a, b) } else { (b, a) };
+    hi + (lo - hi).exp().ln_1p()
+}
+
+/// One prefix under consideration, with the two probabilities CTC prefix search
+/// has to keep apart: paths that end in a blank and paths that end in the
+/// prefix's own last label. Collapsing them would lose the distinction between
+/// "aa" written as one label and as two.
+struct Hypothesis {
+    /// Log-probability of paths reaching this prefix and ending in blank.
+    p_blank: f32,
+    /// Log-probability of paths reaching this prefix and ending in its last label.
+    p_nonblank: f32,
+    /// Emitted labels with the frame and confidence that produced them; word
+    /// timestamps downstream are built from these, so a prefix has to carry its
+    /// alignment rather than just its text.
+    tokens: Vec<TokenInfo>,
+    /// Where this hypothesis sits in the hotword trie.
+    bias: BiasPath,
+    /// Probability of the contribution that supplied `tokens` and `bias`. When
+    /// two extensions land on the same prefix, the better-supported alignment
+    /// is the one worth keeping.
+    anchor: f32,
+}
+
+impl Hypothesis {
+    fn total(&self) -> f32 {
+        log_add_exp(self.p_blank, self.p_nonblank)
+    }
+
+    /// Score with any un-earned hotword boost taken back.
+    ///
+    /// Pruning uses [`Self::total`], boost included — that credit is what keeps
+    /// a half-matched phrase alive long enough to finish. Choosing the winner
+    /// uses this instead: a hypothesis still inside a phrase when the audio ran
+    /// out never finished it, and paying it for the attempt is how a glossary
+    /// starts inventing words that were not said.
+    fn settled_total(&self) -> f32 {
+        self.total() - self.bias.pending()
+    }
+}
+
+/// Contextual CTC decoding by prefix beam search.
+///
+/// Greedy CTC takes a per-frame argmax and has no continuation state, so there
+/// is nothing for a hotword boost to steer — biasing was inert on these heads.
+/// A beam keeps competing prefixes alive, which gives a boost something to act
+/// on and, just as importantly, gives a wrong guess somewhere to lose: a
+/// hypothesis that walks into a hotword and abandons it is refunded the boost
+/// it was granted (see [`Biaser::score_token`]), so only a phrase the audio
+/// actually supports keeps its advantage.
+///
+/// Arguments match [`ctc_greedy_decode`]; `log_probs` is likewise the raw
+/// encoder output, normalized per frame here.
+pub(crate) fn ctc_prefix_beam_decode(
+    log_probs: &[f32],
+    t_len: usize,
+    vocab: usize,
+    blank_id: usize,
+    biaser: &Biaser,
+) -> Vec<TokenInfo> {
+    if vocab == 0 {
+        return Vec::new();
+    }
+    let usable = t_len.min(log_probs.len() / vocab);
+
+    // The empty prefix, reached by a blank-only path with probability 1.
+    let mut beams: Vec<(Vec<usize>, Hypothesis)> = vec![(
+        Vec::new(),
+        Hypothesis {
+            p_blank: 0.0,
+            p_nonblank: f32::NEG_INFINITY,
+            tokens: Vec::new(),
+            bias: BiasPath::default(),
+            anchor: 0.0,
+        },
+    )];
+
+    let mut lp = vec![0.0_f32; vocab];
+    let mut candidates: Vec<usize> = Vec::new();
+
+    for t in 0..usable {
+        log_softmax(&log_probs[t * vocab..(t + 1) * vocab], &mut lp);
+
+        // Candidates: the most likely classes this frame, plus every token that
+        // could extend a hotword any live beam is inside. The second half is
+        // what lets a boosted continuation be considered at all when the model
+        // ranks it below the cut.
+        candidates.clear();
+        top_k_into(&lp, BEAM_TOP_K, &mut candidates);
+        if !candidates.contains(&blank_id) {
+            candidates.push(blank_id);
+        }
+        for (_, hyp) in &beams {
+            biaser.continuations(hyp.bias, &mut candidates);
+        }
+        // A hotword compiled against a different vocabulary can name a token id
+        // this head does not have; drop those rather than index past the frame.
+        candidates.retain(|&c| c < vocab);
+        candidates.sort_unstable();
+        candidates.dedup();
+
+        let mut next: Vec<(Vec<usize>, Hypothesis)> = Vec::new();
+        for (labels, hyp) in &beams {
+            for &c in &candidates {
+                if lp[c] == f32::NEG_INFINITY {
+                    continue;
+                }
+                if c == blank_id {
+                    // No label emitted: the prefix is unchanged and the path
+                    // now ends in blank.
+                    let p = hyp.total() + lp[c];
+                    merge(&mut next, labels, hyp, Emission::Blank(p));
+                    continue;
+                }
+                if labels.last() == Some(&c) {
+                    // Repeat of the last label. Without an intervening blank it
+                    // collapses into the same prefix; with one it emits a
+                    // second copy.
+                    let same = hyp.p_nonblank + lp[c];
+                    merge(&mut next, labels, hyp, Emission::Repeat(same));
+                    let (bonus, bias) = biaser.score_token(hyp.bias, c);
+                    let extended = hyp.p_blank + lp[c] + bonus;
+                    merge_extension(&mut next, labels, hyp, c, extended, bias, t, lp[c].exp());
+                    continue;
+                }
+                let (bonus, bias) = biaser.score_token(hyp.bias, c);
+                let extended = hyp.total() + lp[c] + bonus;
+                merge_extension(&mut next, labels, hyp, c, extended, bias, t, lp[c].exp());
+            }
+        }
+
+        if next.is_empty() {
+            break;
+        }
+        next.sort_by(|a, b| b.1.total().total_cmp(&a.1.total()));
+        next.truncate(BEAM_WIDTH);
+        beams = next;
+    }
+
+    beams
+        .into_iter()
+        .max_by(|a, b| a.1.settled_total().total_cmp(&b.1.settled_total()))
+        .map(|(_, hyp)| hyp.tokens)
+        .unwrap_or_default()
+}
+
+/// A contribution to a prefix that emits no new label.
+enum Emission {
+    /// Path ends in blank.
+    Blank(f32),
+    /// Path ends in the prefix's own last label.
+    Repeat(f32),
+}
+
+/// Fold a same-prefix contribution into `next`.
+fn merge(
+    next: &mut Vec<(Vec<usize>, Hypothesis)>,
+    labels: &[usize],
+    from: &Hypothesis,
+    emission: Emission,
+) {
+    let slot = match next.iter_mut().find(|(l, _)| l == labels) {
+        Some((_, hyp)) => hyp,
+        None => {
+            next.push((
+                labels.to_vec(),
+                Hypothesis {
+                    p_blank: f32::NEG_INFINITY,
+                    p_nonblank: f32::NEG_INFINITY,
+                    tokens: from.tokens.clone(),
+                    bias: from.bias,
+                    anchor: from.anchor,
+                },
+            ));
+            &mut next.last_mut().expect("just pushed").1
+        }
+    };
+    match emission {
+        Emission::Blank(p) => slot.p_blank = log_add_exp(slot.p_blank, p),
+        Emission::Repeat(p) => slot.p_nonblank = log_add_exp(slot.p_nonblank, p),
+    }
+}
+
+/// Fold an extension by `token` into `next`, keeping the alignment of whichever
+/// contribution is best supported.
+#[allow(clippy::too_many_arguments)]
+fn merge_extension(
+    next: &mut Vec<(Vec<usize>, Hypothesis)>,
+    labels: &[usize],
+    from: &Hypothesis,
+    token: usize,
+    p: f32,
+    bias: BiasPath,
+    frame: usize,
+    confidence: f32,
+) {
+    if p == f32::NEG_INFINITY {
+        return;
+    }
+    let mut extended = Vec::with_capacity(labels.len() + 1);
+    extended.extend_from_slice(labels);
+    extended.push(token);
+
+    let build = |from: &Hypothesis| {
+        let mut tokens = Vec::with_capacity(from.tokens.len() + 1);
+        tokens.extend_from_slice(&from.tokens);
+        tokens.push(TokenInfo {
+            token_id: token,
+            frame_index: frame,
+            confidence,
+        });
+        tokens
+    };
+
+    match next.iter_mut().find(|(l, _)| *l == extended) {
+        Some((_, hyp)) => {
+            hyp.p_nonblank = log_add_exp(hyp.p_nonblank, p);
+            if p > hyp.anchor {
+                hyp.tokens = build(from);
+                hyp.bias = bias;
+                hyp.anchor = p;
+            }
+        }
+        None => next.push((
+            extended,
+            Hypothesis {
+                p_blank: f32::NEG_INFINITY,
+                p_nonblank: p,
+                tokens: build(from),
+                bias,
+                anchor: p,
+            },
+        )),
+    }
+}
+
+/// Normalize one frame of encoder output into log-probabilities.
+fn log_softmax(row: &[f32], out: &mut [f32]) {
+    let max = row.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+    let sum: f32 = row.iter().map(|&l| (l - max).exp()).sum();
+    let log_sum = max + sum.ln();
+    for (o, &l) in out.iter_mut().zip(row) {
+        *o = l - log_sum;
+    }
+}
+
+/// Indices of the `k` largest values in `lp`, appended to `out`.
+fn top_k_into(lp: &[f32], k: usize, out: &mut Vec<usize>) {
+    let mut idx: Vec<usize> = (0..lp.len()).collect();
+    let k = k.min(idx.len());
+    idx.select_nth_unstable_by(k.saturating_sub(1), |&a, &b| lp[b].total_cmp(&lp[a]));
+    out.extend_from_slice(&idx[..k]);
+}
 
 /// Greedy CTC decode over a flat `log_probs` buffer of shape `[t_total, vocab]`
 /// (row-major). Returns the collapsed, blank-stripped tokens with a per-token
@@ -178,6 +452,109 @@ mod tests {
         let toks = ctc_greedy_decode(&lp, 2, 3, 2);
         assert_eq!(toks.len(), 2);
         assert_eq!(toks[1].frame_index, 1);
+    }
+
+    /// Two-class-plus-blank frames where `ids[t]` leads by `margin` nats over
+    /// every other class. A small margin is what a boost can overturn.
+    fn logits_with_margin(ids: &[usize], vocab: usize, margin: f32) -> Vec<f32> {
+        let mut lp = vec![0.0f32; ids.len() * vocab];
+        for (t, &id) in ids.iter().enumerate() {
+            lp[t * vocab + id] = margin;
+        }
+        lp
+    }
+
+    fn ids_of(tokens: &[TokenInfo]) -> Vec<usize> {
+        tokens.iter().map(|t| t.token_id).collect()
+    }
+
+    #[test]
+    fn beam_without_a_hotword_hit_matches_greedy() {
+        // The biaser names a token this vocabulary does not have, so nothing is
+        // ever boosted and the beam must land where the argmax does — including
+        // the collapse rules.
+        let b = Biaser::from_sequences(vec![vec![99]], 5.0).expect("biaser");
+        for ids in [
+            vec![0usize, 0, 2, 1],
+            vec![0, 0, 2, 0],
+            vec![1, 2, 2, 1, 0],
+            vec![2, 2, 2],
+        ] {
+            let lp = logits(&ids, 3);
+            let beam = ctc_prefix_beam_decode(&lp, ids.len(), 3, 2, &b);
+            let greedy = ctc_greedy_decode(&lp, ids.len(), 3, 2);
+            assert_eq!(
+                ids_of(&beam),
+                ids_of(&greedy),
+                "beam diverged from greedy on {ids:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn beam_keeps_the_frame_of_each_emitted_label() {
+        // Word timestamps are built from these, so a prefix has to carry its
+        // alignment, not just its text.
+        let b = Biaser::from_sequences(vec![vec![99]], 5.0).expect("biaser");
+        let lp = logits(&[0, 0, 2, 1], 3);
+        let beam = ctc_prefix_beam_decode(&lp, 4, 3, 2, &b);
+        let greedy = ctc_greedy_decode(&lp, 4, 3, 2);
+        assert_eq!(
+            beam.iter().map(|t| t.frame_index).collect::<Vec<_>>(),
+            greedy.iter().map(|t| t.frame_index).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn boost_recovers_a_hotword_the_model_narrowly_missed() {
+        // vocab: 0, 1, 2 are labels, 3 is blank. Frame 0 is label 0; on frame 1
+        // the model puts label 2 narrowly ahead of label 1. The hotword is
+        // [0, 1] — the phrase the model just missed.
+        let vocab = 4;
+        let mut lp = logits_with_margin(&[0, 2], vocab, 5.0);
+        lp[vocab + 1] = 4.6; // frame 1: label 1 just behind label 2
+
+        let inert = Biaser::from_sequences(vec![vec![99]], 3.0).expect("biaser");
+        let unbiased = ids_of(&ctc_prefix_beam_decode(&lp, 2, vocab, 3, &inert));
+        assert_eq!(unbiased, vec![0, 2], "model's own pick");
+
+        let hot = Biaser::from_sequences(vec![vec![0, 1]], 3.0).expect("biaser");
+        let biased = ids_of(&ctc_prefix_beam_decode(&lp, 2, vocab, 3, &hot));
+        assert_eq!(biased, vec![0, 1], "boost recovers the hotword");
+    }
+
+    #[test]
+    fn abandoned_partial_match_is_refunded() {
+        // The hotword is [0, 1, 1, 1] but the audio only supports its first
+        // token, so no beam can finish the phrase. The refund must leave the
+        // transcript exactly where the unbiased decode put it — a partial match
+        // that wins would be the greedy path's failure mode all over again.
+        let lp = logits(&[0, 2, 1, 2, 0], 3);
+        let inert = Biaser::from_sequences(vec![vec![99]], 8.0).expect("biaser");
+        let hot = Biaser::from_sequences(vec![vec![0, 1, 1, 1]], 8.0).expect("biaser");
+        assert_eq!(
+            ids_of(&ctc_prefix_beam_decode(&lp, 5, 3, 2, &hot)),
+            ids_of(&ctc_prefix_beam_decode(&lp, 5, 3, 2, &inert)),
+            "an unfinishable hotword must not bend the transcript"
+        );
+    }
+
+    #[test]
+    fn beam_tolerates_a_hotword_token_outside_the_vocab() {
+        // A glossary compiled against another head can name ids this one does
+        // not have. Those must be dropped, not indexed.
+        let b = Biaser::from_sequences(vec![vec![0, 250]], 5.0).expect("biaser");
+        let lp = logits(&[0, 1], 3);
+        let out = ctc_prefix_beam_decode(&lp, 2, 3, 2, &b);
+        assert_eq!(ids_of(&out), vec![0, 1]);
+    }
+
+    #[test]
+    fn beam_honours_t_len_truncation() {
+        let b = Biaser::from_sequences(vec![vec![99]], 5.0).expect("biaser");
+        let lp = logits(&[0, 1, 0], 3);
+        let out = ctc_prefix_beam_decode(&lp, 2, 3, 2, &b);
+        assert_eq!(ids_of(&out), vec![0, 1]);
     }
 
     #[test]
