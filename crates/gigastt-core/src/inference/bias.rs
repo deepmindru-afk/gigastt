@@ -23,6 +23,34 @@
 
 use super::tokenizer::Tokenizer;
 
+/// Encode `phrase` in whatever spelling the active vocab can actually
+/// represent, or `None` if none of them fit.
+///
+/// The heads disagree about spelling: the `e2e_rnnt` BPE vocab carries case,
+/// the `rnnt` char vocab is 32 lowercase Cyrillic letters with no `ё`, and the
+/// multilingual one adds Latin and `ё`. Users write a glossary the way the
+/// words are written — `Гигаэм`, `AmoCRM`, `Пётр` — so the phrase is tried as
+/// spelled first (the only form a cased vocab wants), then lowercased, then
+/// with `ё` folded to the `е` a head without `ё` emits in its place. The first
+/// spelling that encodes whole wins; nothing beyond that is guessed, so a Latin
+/// brand still cannot be biased on a Cyrillic-only head.
+fn encode_representable(tokenizer: &Tokenizer, phrase: &str) -> Option<Vec<usize>> {
+    if let Some(ids) = tokenizer.encode_phrase(phrase) {
+        return Some(ids);
+    }
+    let lowercased = phrase.to_lowercase();
+    if lowercased != phrase
+        && let Some(ids) = tokenizer.encode_phrase(&lowercased)
+    {
+        return Some(ids);
+    }
+    let folded = lowercased.replace('ё', "е");
+    if folded != lowercased {
+        return tokenizer.encode_phrase(&folded);
+    }
+    None
+}
+
 /// One node of the hotword prefix trie. The root is index 0.
 struct TrieNode {
     /// Edges keyed by token id → child node index.
@@ -103,22 +131,25 @@ impl Biaser {
         // as a phrase-level filter (weight <= 0 drops the phrase). A future
         // per-edge weight can extend TrieNode without touching the decode loop.
         let mut sequences = Vec::new();
-        let mut dropped = 0usize;
+        let mut dropped: Vec<&str> = Vec::new();
         for (phrase, weight) in phrases {
             if *weight <= 0.0 {
                 continue;
             }
-            match tokenizer.encode_phrase(phrase) {
+            match encode_representable(tokenizer, phrase) {
                 Some(ids) => sequences.push(ids),
-                None => {
-                    dropped += 1;
-                    tracing::debug!(phrase = %phrase, "hotword dropped: not representable in active vocab");
-                }
+                None => dropped.push(phrase),
             }
         }
-        if dropped > 0 {
+        if !dropped.is_empty() {
+            // Named, not just counted: which phrases fell out is the whole
+            // actionable content — a Cyrillic-only head can never represent a
+            // Latin brand, and the only way a user learns that is by reading
+            // its name here.
             tracing::warn!(
-                "{dropped} hotword phrase(s) dropped (not representable in active vocab)"
+                "{} hotword phrase(s) dropped, not representable in the active vocab: {}",
+                dropped.len(),
+                dropped.join(", ")
             );
         }
         Self::from_sequences(sequences, boost)
@@ -354,6 +385,71 @@ mod tests {
         // survives; the count reflects only the compiled phrase.
         let tok = char_tokenizer();
         let phrases = vec![("аб".to_string(), 1.0), ("аz".to_string(), 1.0)];
+        let b = Biaser::from_phrases(&tok, &phrases, 5.0).expect("one phrase compiles");
+        assert_eq!(b.phrase_count(), 1);
+    }
+
+    /// A lowercase Cyrillic char vocab without `ё`, the shape of the `rnnt`
+    /// head's 34-token vocabulary.
+    fn cyrillic_tokenizer() -> Tokenizer {
+        let tokens = [
+            "г", "и", "а", "э", "м", "п", "т", "р", "е", "\u{2581}", "<unk>", "<blk>",
+        ];
+        Tokenizer::from_tokens(tokens.iter().map(|t| (*t).to_string()).collect())
+    }
+
+    #[test]
+    fn test_from_phrases_capitalized_phrase_is_kept() {
+        // Users write brands capitalized; every shipped vocab is lowercase, so
+        // the written form was dropped outright and glossaries silently lost
+        // most of their entries.
+        let tok = cyrillic_tokenizer();
+        let phrases = vec![("Гигаэм".to_string(), 1.0)];
+        let b = Biaser::from_phrases(&tok, &phrases, 5.0).expect("capitalized phrase compiles");
+        assert_eq!(b.phrase_count(), 1);
+        // It compiles to exactly the lowercase spelling's tokens.
+        let ids = tok.encode_phrase("гигаэм").expect("representable");
+        let state = b.new_state();
+        let mut logits = vec![0.0; 12];
+        b.boost_logits(&state, &mut logits);
+        assert_eq!(logits[ids[0]], 5.0);
+    }
+
+    #[test]
+    fn test_from_phrases_yo_folds_to_e_when_the_vocab_lacks_it() {
+        // A head with no `ё` token emits `е` in its place, so that is the
+        // spelling a hotword has to match.
+        let tok = cyrillic_tokenizer();
+        assert!(tok.encode_phrase("пётр").is_none(), "vocab has no ё");
+        let phrases = vec![("Пётр".to_string(), 1.0)];
+        let b = Biaser::from_phrases(&tok, &phrases, 5.0).expect("ё folds to е");
+        assert_eq!(b.phrase_count(), 1);
+    }
+
+    #[test]
+    fn test_from_phrases_cased_vocab_keeps_the_written_spelling() {
+        // The `e2e_rnnt` BPE vocab carries case. Lowercasing unconditionally
+        // would re-tokenize — and worsen — phrases that already fit.
+        let tokens = ["Аб", "а", "б", "\u{2581}", "<unk>", "<blk>"];
+        let tok = Tokenizer::from_tokens(tokens.iter().map(|t| (*t).to_string()).collect());
+        let written = tok.encode_phrase("Аб").expect("cased vocab represents it");
+        let b = Biaser::from_phrases(&tok, &[("Аб".to_string(), 1.0)], 5.0).expect("compiles");
+        let state = b.new_state();
+        let mut logits = vec![0.0; 6];
+        b.boost_logits(&state, &mut logits);
+        assert_eq!(
+            logits[written[0]], 5.0,
+            "the written form must survive untouched"
+        );
+    }
+
+    #[test]
+    fn test_from_phrases_latin_stays_unrepresentable_on_a_cyrillic_vocab() {
+        // The honest ceiling: no amount of case folding puts Latin letters in a
+        // Cyrillic-only vocabulary, so `ChatGPT` is still dropped — and the
+        // warning names it so the user can write it phonetically instead.
+        let tok = cyrillic_tokenizer();
+        let phrases = vec![("ChatGPT".to_string(), 1.0), ("Гигаэм".to_string(), 1.0)];
         let b = Biaser::from_phrases(&tok, &phrases, 5.0).expect("one phrase compiles");
         assert_eq!(b.phrase_count(), 1);
     }
