@@ -522,7 +522,7 @@ impl Engine {
     /// Unrepresentable phrases are dropped by [`Biaser::from_phrases`]; if none
     /// survive, returns `None` (decode continues without biasing).
     fn build_request_biaser(&self, hw: &HotwordOverride) -> Option<bias::Biaser> {
-        if hw.phrases.is_empty() || self.hotwords_unsupported() {
+        if hw.phrases.is_empty() {
             return None;
         }
         let boost = hw.boost.unwrap_or(DEFAULT_HOTWORDS_BOOST);
@@ -554,7 +554,7 @@ impl Engine {
     /// the active vocab, the biaser resolves to `None` and the decode path stays
     /// byte-for-byte unchanged. Replaces any previously attached biaser.
     pub fn with_hotwords(mut self, phrases: &[(String, f32)], boost: f32) -> Self {
-        self.biaser = if phrases.is_empty() || self.hotwords_unsupported() {
+        self.biaser = if phrases.is_empty() {
             None
         } else {
             bias::Biaser::from_phrases(&self.tokenizer, phrases, boost)
@@ -566,25 +566,6 @@ impl Engine {
             );
         }
         self
-    }
-
-    /// Whether the loaded head has nowhere to apply a hotword boost, warning
-    /// once if a glossary was supplied anyway.
-    ///
-    /// Biasing is shallow fusion over the transducer's continuation scores. A
-    /// charwise-CTC head decodes by per-frame argmax with no continuation state
-    /// to steer, so a glossary is inert there — and saying "biasing enabled"
-    /// anyway is how a user ends up trusting a glossary that never ran.
-    fn hotwords_unsupported(&self) -> bool {
-        if !self.variant.is_ctc() {
-            return false;
-        }
-        tracing::warn!(
-            "Hotword biasing is not applied on the {:?} head: it decodes with greedy CTC, \
-             which has no continuation state to bias. The glossary is ignored.",
-            self.variant
-        );
-        true
     }
 
     /// Whether a hotword biaser is attached (biasing active).
@@ -2577,21 +2558,35 @@ impl Engine {
         tracing::debug!("Encoder output: {} frames", enc_len);
 
         // CTC head: the single encoder emits per-frame class log-probs
-        // (`[1, T', 71]`, row-major). Greedy-decode them directly — there is no
+        // (`[1, T', 71]`, row-major). Decode them directly — there is no
         // prediction network / joiner, so we return before the RNN-T block
         // borrows `encoder_outputs` for the decode loop.
+        //
+        // A glossary switches the decode to a prefix beam, which is the only
+        // form that can act on one: a per-frame argmax has no continuation
+        // state to steer. Without hotwords the greedy path runs untouched, so
+        // output for everyone else is byte-for-byte what it was.
         if self.variant.is_ctc() {
             let log_probs = encoder_outputs[0]
                 .view()
                 .data()
                 .as_f32()
                 .context("CTC log_probs tensor is not f32")?;
-            let tokens = ctc::ctc_greedy_decode(
-                log_probs,
-                enc_len,
-                self.tokenizer.vocab_size(),
-                self.tokenizer.blank_id(),
-            );
+            let tokens = match biaser {
+                Some(b) => ctc::ctc_prefix_beam_decode(
+                    log_probs,
+                    enc_len,
+                    self.tokenizer.vocab_size(),
+                    self.tokenizer.blank_id(),
+                    b,
+                ),
+                None => ctc::ctc_greedy_decode(
+                    log_probs,
+                    enc_len,
+                    self.tokenizer.vocab_size(),
+                    self.tokenizer.blank_id(),
+                ),
+            };
             let words = ctc::ctc_tokens_to_words(&self.tokenizer, &tokens, frame_offset);
             return Ok((words, false)); // CTC has no endpoint signal
         }
@@ -5618,27 +5613,27 @@ vocab = "pack_vocab.txt"
         }
 
         #[test]
-        fn test_ctc_head_reports_hotwords_as_off() {
+        fn test_ctc_head_attaches_a_biaser() {
             use crate::inference::HotwordOverride;
             use crate::model::ModelVariant;
 
-            // A charwise-CTC head decodes by per-frame argmax and never reads a
-            // biaser, so attaching one and logging "biasing enabled" told users
-            // their glossary was live when nothing applied it. Both the boot
-            // biaser and the per-request one must now report the truth.
+            // A glossary used to be inert here: greedy CTC has no continuation
+            // state, so the biaser was refused outright to stop the engine
+            // claiming otherwise. The prefix beam gives it somewhere to act, so
+            // both the boot biaser and the per-request one attach again.
             let (mut engine, _tmp) = tiny_mock_engine();
             engine.variant = ModelVariant::MlCtc;
 
             let engine = engine.with_hotwords(&[("hi".into(), 1.0)], 5.0);
             assert!(
-                !engine.has_hotwords(),
-                "a CTC head must not claim an active biaser"
+                engine.has_hotwords(),
+                "a CTC head biases through the prefix beam"
             );
 
             let per_request = HotwordOverride::new(vec!["hi".into()], Some(7.0));
             assert!(
-                engine.build_request_biaser(&per_request).is_none(),
-                "a per-request glossary is inert on a CTC head too"
+                engine.build_request_biaser(&per_request).is_some(),
+                "a per-request glossary applies on a CTC head too"
             );
         }
 
