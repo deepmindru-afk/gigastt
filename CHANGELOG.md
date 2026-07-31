@@ -47,6 +47,17 @@ were released without a git tag, so their headings carry no compare link.
   hotword completes at the pace speech is spoken. Reported confidence is now the
   model's own probability for the chosen token rather than the boosted score.
 
+- **Hotword phrases written with capitals are no longer dropped.** Every shipped
+  vocabulary is lowercase, and a phrase was discarded whole if any character
+  fell outside it — so the brands and product names users actually put in a
+  glossary were silently thrown away, 104 of 133 entries in one report (#260). A
+  phrase is now tried as written (the form a cased BPE vocab wants), then
+  lowercased, then with `ё` folded to the `е` a head without `ё` emits in its
+  place. The warning names the phrases it still drops instead of only counting
+  them: on the Cyrillic-only `rnnt` vocabulary a Latin brand cannot be
+  represented at any casing, and naming it is what tells the user to write it
+  phonetically.
+
 ## [2.16.0] - 2026-07-30
 
 ### Added
