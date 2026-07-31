@@ -10,6 +10,26 @@ were released without a git tag, so their headings carry no compare link.
 
 ## [Unreleased]
 
+### Added
+
+- **WebM/Opus uploads**, the container a browser's `MediaRecorder` produces and
+  the only one it offers a page (#263). A recording made in Chromium or Electron
+  now posts straight to `/v1/transcribe` instead of needing a client-side remux
+  to OGG. The container is Matroska, so an `.mkv` holding audio this build can
+  already decode works too, and `.webm` joins the extensions `batch` / `watch`
+  walk.
+
+  This is the symphonia `mkv` demuxer feeding the same in-tree Opus decode path
+  as OGG, plus one fix the demuxer needed: a live WebM leaves the Segment *and*
+  every Cluster without a declared size, and the element iterator could not
+  terminate an unknown-size Cluster — it checked the schema's minimum depth
+  against the ancestor's own depth where the child's was required, so the
+  Cluster that should have ended the previous one was rejected as
+  `UnexpectedElement`. `symphonia-format-mkv` is vendored under `vendor/` with
+  that one-line fix until it ships upstream; the fixture is a live WebM built by
+  rewriting each Cluster's size field, which no ffmpeg invocation produces on
+  its own, and it is checked against ffmpeg's own decode of the same bytes.
+
 ### Changed
 
 - **`polyvoice` moved to 0.12.0** (from 0.9.0), picking up two API changes.

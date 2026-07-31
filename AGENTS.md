@@ -287,9 +287,11 @@ The `e2e_rnnt` head (`--model-variant e2e_rnnt`) uses the parallel `v3_e2e_rnnt_
 ### Audio format support
 
 - **File transcription**: WAV, M4A/AAC, MP3, OGG/Vorbis, FLAC (via symphonia);
-  OGG/Opus and `.opus` (Telegram voice, MediaRecorder — symphonia demuxes the
-  OGG container, packets are decoded by the pure-Rust BSD-3 `opus-rs` crate,
-  mono/stereo only)
+  OGG/Opus and `.opus` (Telegram voice) plus WebM/Opus and Matroska (a browser's
+  `MediaRecorder` emits nothing else) — symphonia demuxes the container, packets
+  are decoded by the pure-Rust BSD-3 `opus-rs` crate, mono/stereo only. Packet
+  framing is sliced in-tree per RFC 6716 §3.2 rather than by `opus-rs`, whose
+  own parser mis-reads CBR code 3 and long explicit frame lengths.
 - **Telephony codecs**: G.711 A-law/μ-law in WAV (via symphonia); G.722 ADPCM
   in WAV (format tags 0x0064/0x028F, via the MIT `audio-codec` crate as a
   fallback when symphonia declines the tag); headerless raw `.ulaw`/`.alaw`/
