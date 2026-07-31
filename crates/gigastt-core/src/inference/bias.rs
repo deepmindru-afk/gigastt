@@ -55,13 +55,50 @@ fn encode_representable(tokenizer: &Tokenizer, phrase: &str) -> Option<Vec<usize
 struct TrieNode {
     /// Edges keyed by token id → child node index.
     children: std::collections::HashMap<usize, usize>,
+    /// True when a hotword phrase ends here. Only the beam search reads it: a
+    /// finished phrase keeps the boost it was granted, an abandoned one does
+    /// not.
+    is_end: bool,
+    /// Token length of the shortest phrase running through this node, used to
+    /// spread one phrase's worth of boost across its tokens.
+    shortest_phrase: usize,
 }
 
 impl TrieNode {
     fn new() -> Self {
         Self {
             children: std::collections::HashMap::new(),
+            is_end: false,
+            shortest_phrase: usize::MAX,
         }
+    }
+}
+
+/// Where one beam sits in the hotword trie, and how much boost it has been
+/// granted for a phrase it has not finished.
+///
+/// The greedy transducer path cannot take a bonus back — it has already emitted
+/// the token — so it lives with a rationed boost instead
+/// ([`super::decode::greedy_decode`]). A beam search can: a hypothesis that
+/// walked halfway into a hotword and then left is refunded, so a partial match
+/// wins nothing and only a phrase actually spoken keeps its advantage.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct BiasPath {
+    /// Current trie node; 0 is the root.
+    node: usize,
+    /// Boost granted so far for the unfinished phrase under way.
+    pending: f32,
+}
+
+impl BiasPath {
+    /// Boost this path has been granted for a phrase it has not finished.
+    ///
+    /// Owed back: a hypothesis still mid-phrase when the audio runs out never
+    /// earned it, so the final ranking has to discount it. During the search
+    /// the amount stays credited — that is what keeps a half-matched phrase in
+    /// the beam long enough to finish.
+    pub(crate) fn pending(&self) -> f32 {
+        self.pending
     }
 }
 
@@ -90,6 +127,7 @@ impl Biaser {
                 continue;
             }
             phrase_count += 1;
+            let len = seq.len();
             let mut node = 0usize;
             for tok in seq {
                 node = match nodes[node].children.get(&tok) {
@@ -101,7 +139,9 @@ impl Biaser {
                         child
                     }
                 };
+                nodes[node].shortest_phrase = nodes[node].shortest_phrase.min(len);
             }
+            nodes[node].is_end = true;
         }
         if phrase_count == 0 {
             return None;
@@ -158,6 +198,72 @@ impl Biaser {
     /// Number of hotword phrases compiled into the trie.
     pub fn phrase_count(&self) -> usize {
         self.phrase_count
+    }
+
+    /// Score emitting `tok` from `path`, returning the log-domain delta to add
+    /// to the hypothesis and the path that follows.
+    ///
+    /// Three cases, and the middle one is why this exists:
+    /// - the token continues the phrase under way — grant the boost;
+    /// - it does not, but starts some phrase — refund everything the abandoned
+    ///   partial match was granted, then grant the boost for the new start;
+    /// - it is not a hotword token at all — refund and return to the root.
+    ///
+    /// A node that ends a phrase clears the pending amount: the phrase was
+    /// spoken, so its boost is earned and is never taken back.
+    pub(crate) fn score_token(&self, path: BiasPath, tok: usize) -> (f32, BiasPath) {
+        // A phrase is worth `boost` however long it is, so each of its tokens
+        // is granted a share rather than the whole amount.
+        //
+        // A character vocabulary makes the difference stark: paid per token, a
+        // nine-letter phrase would earn nine times the boost and outrank
+        // whatever was actually said — `любовницы` really did displace
+        // `люк кейдж` that way. Clawing the excess back on completion is worse
+        // still: the correction lands as one large negative step and the
+        // hypothesis that just finished the phrase gets pruned for it. Granting
+        // the right amount from the start keeps every step small.
+        let enter = |from: BiasPath, child: usize| {
+            let share = self.boost / self.nodes[child].shortest_phrase.max(1) as f32;
+            (
+                share,
+                BiasPath {
+                    node: child,
+                    // A finished phrase owes nothing back; an unfinished one
+                    // owes everything it has been granted so far.
+                    pending: if self.nodes[child].is_end {
+                        0.0
+                    } else {
+                        from.pending + share
+                    },
+                },
+            )
+        };
+
+        if let Some(&child) = self.nodes[path.node].children.get(&tok) {
+            return enter(path, child);
+        }
+
+        // The phrase under way dies here: take back what it was granted, and
+        // let a fresh phrase start on the same token.
+        let refund = -path.pending;
+        match self.nodes[0].children.get(&tok) {
+            Some(&child) => {
+                let (delta, next) = enter(BiasPath::default(), child);
+                (refund + delta, next)
+            }
+            None => (refund, BiasPath::default()),
+        }
+    }
+
+    /// Token ids that would extend the phrase `path` is in, plus every phrase
+    /// start. A beam search hands these to the candidate set so a boosted
+    /// continuation can be considered even when the acoustic model ranks it
+    /// below the pruning cut — which is the entire point of biasing.
+    pub(crate) fn continuations(&self, path: BiasPath, out: &mut Vec<usize>) {
+        out.extend(self.nodes[path.node].children.keys().copied());
+        if path.node != 0 {
+            out.extend(self.nodes[0].children.keys().copied());
+        }
     }
 
     /// Create a fresh per-decode prefix-tracking state rooted at the trie root.
@@ -301,6 +407,49 @@ mod tests {
             "<blk>".to_string(),
         ];
         Tokenizer::from_tokens(tokens)
+    }
+
+    #[test]
+    fn a_phrase_earns_one_boost_however_long_it_is() {
+        // Paid per token, a nine-letter phrase would be worth nine boosts and
+        // outrank whatever was actually said — that is how `любовницы`
+        // displaced `люк кейдж` on real audio. Length must not buy rank.
+        for len in [1usize, 3, 9] {
+            let seq: Vec<usize> = (1..=len).collect();
+            let b = Biaser::from_sequences(vec![seq.clone()], 6.0).expect("biaser");
+            let mut path = BiasPath::default();
+            let mut earned = 0.0;
+            for &tok in &seq {
+                let (delta, next) = b.score_token(path, tok);
+                earned += delta;
+                path = next;
+            }
+            assert!(
+                (earned - 6.0).abs() < 1e-4,
+                "a {len}-token phrase earned {earned}, expected the boost once"
+            );
+            assert_eq!(path.pending(), 0.0, "a finished phrase owes nothing back");
+        }
+    }
+
+    #[test]
+    fn an_abandoned_phrase_earns_nothing() {
+        // Credit accrues while a phrase is under way so the beam keeps it
+        // alive; walking away has to give all of it back, or a partial match
+        // would be rewarded for going nowhere.
+        let b = Biaser::from_sequences(vec![vec![1, 2, 3, 4]], 6.0).expect("biaser");
+        let mut path = BiasPath::default();
+        let mut earned = 0.0;
+        for tok in [1usize, 2] {
+            let (delta, next) = b.score_token(path, tok);
+            earned += delta;
+            path = next;
+        }
+        assert!(path.pending() > 0.0, "mid-phrase credit is outstanding");
+        let (delta, path) = b.score_token(path, 99);
+        earned += delta;
+        assert!(earned.abs() < 1e-4, "abandoned phrase netted {earned}");
+        assert_eq!(path.pending(), 0.0);
     }
 
     #[test]
