@@ -34,6 +34,26 @@ were released without a git tag, so their headings carry no compare link.
   to per-session streaming pipelines. This also retires the deprecation
   containment boundary: `diarization.rs` no longer needs `#![allow(deprecated)]`.
 
+### Fixed
+
+- **Opus packets carrying more than one frame now decode** instead of failing
+  the upload with `invalid audio: Opus decode error: Code 3: frame length
+  exceeds packet`. Chromium's `MediaRecorder` emits 60 ms packets — three 20 ms
+  frames under a single TOC, code 3 with implicit CBR lengths — so every
+  browser- or Electron-produced OGG/Opus was rejected on its first packet
+  (#259). The `opus-rs` packet parser never reads the code 3 VBR flag, so it
+  looked for frame lengths a CBR packet does not carry, and it decoded explicit
+  lengths with a 15-bit continuation scheme rather than RFC 6716 §3.2.1,
+  mis-slicing every length of 128 bytes or more. Packets are now sliced in-tree
+  per RFC 6716 §3.2 and handed to the decoder one frame at a time, which also
+  repairs two failures nobody had reported yet: padded VBR packets used to
+  decode to silently wrong audio, and two-frame (code 2) packets broke as soon
+  as the first frame reached 128 bytes. Pinned by a fixture in the shape
+  Chromium produces, checked against ffmpeg's own decode of it.
+
+  WebM is still not a supported container, so `audio/webm;codecs=opus` from a
+  browser needs remuxing to OGG before upload.
+
 ## [2.16.0] - 2026-07-30
 
 ### Added

@@ -38,6 +38,15 @@ ffmpeg -y -v error -i "$TONE" -ac 1 -c:a libopus -b:a 24k "$CORE_DIR/opus_tone.o
 ffmpeg -y -v error -i "$CORE_DIR/opus_tone.ogg" -f s16le -acodec pcm_s16le \
   -ar 16000 -ac 1 "$CORE_DIR/opus_tone_ffmpeg.pcm"
 
+# Multi-frame packets, the shape Chromium's MediaRecorder emits: 48 kHz stereo
+# CELT at the browser's 60 ms default, i.e. three 20 ms frames per packet
+# (code 3, CBR). Every packet of this file is code 3, where opus_tone.ogg is
+# code 0 throughout. Plus ffmpeg's own decode of it as the reference.
+ffmpeg -y -v error -i "$TONE" -ar 48000 -ac 2 -c:a libopus -frame_duration 60 \
+  "$CORE_DIR/opus_tone_60ms.ogg"
+ffmpeg -y -v error -i "$CORE_DIR/opus_tone_60ms.ogg" -f s16le -acodec pcm_s16le \
+  -ar 16000 -ac 1 "$CORE_DIR/opus_tone_60ms_ffmpeg.pcm"
+
 # ── E2E: real speech transcodes ─────────────────────────────────────────────
 
 # OGG/Opus from a 16 kHz mono source.

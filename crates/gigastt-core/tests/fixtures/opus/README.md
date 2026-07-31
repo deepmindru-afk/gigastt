@@ -5,3 +5,7 @@
 - `opus_tone_no_eos.ogg` — same bitstream as `opus_tone.ogg` with the Ogg EOS
   bit cleared on the final page and the page CRC recomputed. Reproduces
   Telegram Android-style streams for soft-EOF demux coverage (issue #217).
+- `opus_tone_60ms.ogg` / `opus_tone_60ms_ffmpeg.pcm` — 48 kHz stereo CELT at a
+  60 ms packet duration, so every packet holds three 20 ms frames (code 3,
+  CBR). This is what Chromium's `MediaRecorder` emits; `opus_tone.ogg` is code 0
+  throughout and never exercises multi-frame packet splitting.
