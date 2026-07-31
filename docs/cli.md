@@ -51,7 +51,8 @@ gigastt serve [OPTIONS]
                             e2e_rnnt]. Runs before punctuation. Env: GIGASTT_ITN.
   --hotwords-file <FILE>    Contextual hotword biasing: file of phrases to boost
                             (one per line, optional `\t<weight>` suffix). Off when
-                            unset. Env: GIGASTT_HOTWORDS_FILE.
+                            unset. rnnt / e2e_rnnt only; the multilingual CTC
+                            heads ignore it. Env: GIGASTT_HOTWORDS_FILE.
   --hotwords-default        Also bias the built-in Russian brand/acronym lexicon.
                             Env: GIGASTT_HOTWORDS_DEFAULT.
   --hotwords-boost <N>      Additive logit boost for hotword continuation tokens
@@ -206,7 +207,8 @@ gigastt transcribe [OPTIONS] <FILE>
                               auto | on | off [default: auto = on for rnnt, off for
                               e2e_rnnt]. Runs before punctuation. Env: GIGASTT_ITN.
   --hotwords-file <FILE>      Hotword biasing: file of phrases to boost (one per
-                              line, optional `\t<weight>`). Env: GIGASTT_HOTWORDS_FILE.
+                              line, optional `\t<weight>`). rnnt / e2e_rnnt only.
+                              Env: GIGASTT_HOTWORDS_FILE.
   --hotwords-default          Also bias the built-in brand/acronym lexicon.
                               Env: GIGASTT_HOTWORDS_DEFAULT.
   --hotwords-boost <N>        Logit boost for hotword tokens [default: 5.0].

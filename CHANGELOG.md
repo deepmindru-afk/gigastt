@@ -58,6 +58,15 @@ were released without a git tag, so their headings carry no compare link.
   represented at any casing, and naming it is what tells the user to write it
   phonetically.
 
+- **A CTC head no longer reports hotword biasing as enabled.** `ml_ctc` and
+  `ml_ctc_large` decode by per-frame argmax, which has no continuation state for
+  shallow fusion to steer, so a glossary was inert there — while the server
+  still logged `Hotword biasing enabled (N phrase(s))` at startup and left
+  users trusting a glossary that never ran (#260). Supplying one on a CTC head
+  now warns that it is ignored, `has_hotwords()` reports the truth, and the CLI
+  help and API docs say which heads biasing applies to. Contextual biasing for
+  CTC needs a prefix-beam decoder and is tracked separately.
+
 ## [2.16.0] - 2026-07-30
 
 ### Added
