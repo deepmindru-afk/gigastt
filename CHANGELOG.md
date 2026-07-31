@@ -12,6 +12,26 @@ were released without a git tag, so their headings carry no compare link.
 
 ### Added
 
+- **Hotword biasing now works on the multilingual CTC heads**, via a prefix beam
+  search that replaces the greedy decode whenever a glossary is present. Greedy
+  CTC picks a per-frame argmax and has no continuation to steer, which is why a
+  glossary was inert on `ml_ctc` / `ml_ctc_large` and the previous release could
+  only say so out loud. A beam gives the boost something to act on and, as
+  importantly, gives a wrong guess somewhere to lose.
+
+  Two properties keep it from inventing words. A hypothesis that walks into a
+  hotword and abandons it is refunded every bit of boost it was granted, so a
+  partial match wins nothing; and a phrase is worth one boost however long it
+  is, spread across its tokens. Without that second rule a nine-letter phrase
+  earned nine times the boost — enough that `любовницы` displaced `люк кейдж` on
+  real audio.
+
+  Measured on 62 s of Russian speech with a three-phrase glossary, `ml_ctc`
+  corrected every one of them (`ростоу`→`ростов`, `гетта`→`гетто`,
+  `любовница`→`любовницы`) and split a run-together `развалиныищи`, with the rest
+  of the transcript untouched. With no glossary the greedy path runs exactly as
+  before, so output for everyone else is unchanged.
+
 - **WebM/Opus uploads**, the container a browser's `MediaRecorder` produces and
   the only one it offers a page (#263). A recording made in Chromium or Electron
   now posts straight to `/v1/transcribe` instead of needing a client-side remux
