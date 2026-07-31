@@ -5,6 +5,13 @@
 - `opus_tone_no_eos.ogg` — same bitstream as `opus_tone.ogg` with the Ogg EOS
   bit cleared on the final page and the page CRC recomputed. Reproduces
   Telegram Android-style streams for soft-EOF demux coverage (issue #217).
+- `opus_tone_webm_live.webm` / `opus_tone_webm_live_ffmpeg.pcm` — Opus in a
+  Matroska/WebM container in the shape a browser's `MediaRecorder` writes: a
+  *live* stream whose Segment **and every Cluster** carry an unknown size. No
+  ffmpeg invocation produces that on its own (`-live 1` gives an unknown-size
+  Segment but known-size Clusters), so the generator rewrites each Cluster's
+  size field to the one-byte unknown-size vint afterwards. Only the size field
+  changes — ffmpeg decodes the result to byte-identical PCM.
 - `opus_tone_60ms.ogg` / `opus_tone_60ms_ffmpeg.pcm` — 48 kHz stereo CELT at a
   60 ms packet duration, so every packet holds three 20 ms frames (code 3,
   CBR). This is what Chromium's `MediaRecorder` emits; `opus_tone.ogg` is code 0
