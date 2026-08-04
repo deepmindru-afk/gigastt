@@ -75,7 +75,7 @@ fn optimized_cache_is_fresh(cache_path: &Path, source_path: &Path) -> bool {
 /// the file we write here is exactly the one `cache-gc` keeps.
 fn optimized_cache_path(cache_dir: &Path, model_path: &Path) -> std::path::PathBuf {
     let basename = crate::model::optimized_cache_basename(model_path)
-        .unwrap_or_else(|| "encoder_optimized.onnx".into());
+        .unwrap_or_else(|| "encoder_optimized.ort".into());
     cache_dir.join(basename)
 }
 
@@ -124,6 +124,16 @@ impl OrtRuntime {
     /// Returns `None` when the fast path does not apply or the cached graph
     /// fails to load (the broken entry is deleted so the next boot rewrites
     /// it cleanly).
+    ///
+    /// The cache is an ORT flatbuffer model (`.ort`), loaded with
+    /// `session.use_memory_mapped_ort_model` +
+    /// `session.use_ort_model_bytes_for_initializers`: sessions reference
+    /// the encoder weights directly from a shared read-only file mapping
+    /// instead of copying them into per-session anonymous memory, and the
+    /// flatbuffer graph avoids retaining a parsed ModelProto object graph.
+    /// Prepacking is disabled on this path — for this model it only
+    /// duplicated the weights into per-session buffers (~145 MiB each) with
+    /// no measurable RTF benefit.
     fn try_load_cached_encoder(&self, model_path: &Path) -> Option<Result<Session, RuntimeError>> {
         if !self.provider.is_cpu() {
             return None;
@@ -136,6 +146,18 @@ impl OrtRuntime {
         let result = self
             .session_builder(model_path, true)
             .and_then(|mut builder| {
+                builder = builder
+                    .with_config_entry("session.load_model_format", "ORT")
+                    .map_err(|e| load_failed(&cache_path, e))?;
+                builder = builder
+                    .with_config_entry("session.use_memory_mapped_ort_model", "1")
+                    .map_err(|e| load_failed(&cache_path, e))?;
+                builder = builder
+                    .with_config_entry("session.use_ort_model_bytes_for_initializers", "1")
+                    .map_err(|e| load_failed(&cache_path, e))?;
+                builder = builder
+                    .with_prepacking(false)
+                    .map_err(|e| load_failed(&cache_path, e))?;
                 builder
                     .commit_from_file(&cache_path)
                     .map_err(|e| load_failed(&cache_path, e))
@@ -194,6 +216,11 @@ impl Runtime for OrtRuntime {
             );
             builder = builder
                 .with_optimized_model_path(&cache_path)
+                .map_err(|e| load_failed(model_path, e))?;
+            // Persist the optimized graph in ORT flatbuffer format so the
+            // next boot can memory-map it (see `try_load_cached_encoder`).
+            builder = builder
+                .with_config_entry("session.save_model_format", "ORT")
                 .map_err(|e| load_failed(model_path, e))?;
         }
 
@@ -266,7 +293,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let dir = tmp.path();
         let source = dir.join("v3_rnnt_encoder_int8.onnx");
-        let cache = dir.join("optimized_cache/v3_rnnt_encoder_int8_optimized.onnx");
+        let cache = dir.join("optimized_cache/v3_rnnt_encoder_int8_optimized.ort");
         write_file(&source, b"source");
         write_file(&cache, b"optimized");
         assert!(optimized_cache_is_fresh(&cache, &source));
@@ -277,7 +304,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let dir = tmp.path();
         let source = dir.join("encoder.onnx");
-        let cache = dir.join("optimized_cache/encoder_optimized.onnx");
+        let cache = dir.join("optimized_cache/encoder_optimized.ort");
         write_file(&source, b"source");
 
         // Missing cache file → not fresh.
@@ -297,7 +324,7 @@ mod tests {
         let encoder = Path::new("/models/v3_rnnt_encoder_int8.onnx");
         assert_eq!(
             optimized_cache_path(cache_dir, encoder),
-            Path::new("/models/optimized_cache/v3_rnnt_encoder_int8_optimized.onnx")
+            Path::new("/models/optimized_cache/v3_rnnt_encoder_int8_optimized.ort")
         );
     }
 }
