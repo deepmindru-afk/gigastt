@@ -10,6 +10,35 @@ were released without a git tag, so their headings carry no compare link.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A hotword glossary now depends on its contents.** It did not: on the `rnnt`
+  head three different glossaries — one of them a word that never occurs in the
+  recording — produced byte-identical transcripts, all three differing from the
+  same audio decoded with no glossary at all. `encode_phrase` prepends a
+  word-boundary marker to every phrase, so the trie's root had exactly one child
+  — that marker — and the root is always active. Every glossary therefore did
+  the same single thing: add the boost to the space token at every step,
+  inserting word breaks (`Твихаила` → `ТВ Михаила`) with nothing to do with what
+  the user had asked to bias.
+
+  The marker is a precondition for entering a phrase, not part of what makes the
+  phrase distinctive, so it is matched and never scored. A glossary whose
+  phrases do not occur now leaves the transcript exactly where it was, and
+  biasing spends its budget on the characters that identify the hotword.
+
+  This also revises the second finding in #260: the per-frame cap shipped in
+  2.16 did stop the ten-token bursts, but what was bursting was the space token,
+  and the cap it consumed was starving the hotword's own characters.
+
+  The per-phrase normalization added for the CTC beam deliberately does **not**
+  extend to the greedy transducer. A beam compares totals, so spreading one
+  boost across a phrase is what keeps a long phrase from outranking a short one;
+  a greedy argmax decides each step alone, and the same split leaves a long
+  hotword unable to win any single step. Measured: with the boost divided across
+  characters, a glossary changed nothing at all until the per-step amount was
+  restored.
+
 ### Added
 
 - **Hotword biasing now works on the multilingual CTC heads**, via a prefix beam
