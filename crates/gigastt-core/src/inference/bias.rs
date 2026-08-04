@@ -59,17 +59,29 @@ struct TrieNode {
     /// finished phrase keeps the boost it was granted, an abandoned one does
     /// not.
     is_end: bool,
-    /// Token length of the shortest phrase running through this node, used to
+    /// Scored length of the shortest phrase running through this node, used to
     /// spread one phrase's worth of boost across its tokens.
     shortest_phrase: usize,
+    /// Distance from the root; 1 for a phrase's first token.
+    depth: usize,
+    /// True when this node is only the word-boundary marker that opens a
+    /// phrase. Matched, never paid for — it is the same token for every hotword
+    /// ever configured.
+    is_entry: bool,
+    /// Boost paid for entering this node under the beam search's per-phrase
+    /// budget. Zero at the entry marker.
+    grant: f32,
 }
 
 impl TrieNode {
-    fn new() -> Self {
+    fn new(depth: usize) -> Self {
         Self {
             children: std::collections::HashMap::new(),
             is_end: false,
             shortest_phrase: usize::MAX,
+            depth,
+            is_entry: false,
+            grant: 0.0,
         }
     }
 }
@@ -117,34 +129,59 @@ impl Biaser {
     /// must be non-empty; empty ones are skipped. Returns `None` if no sequence
     /// survives (so callers treat "no usable hotwords" as biasing-off).
     ///
-    /// `pub(crate)` so the decode-loop unit tests can construct a biaser from
-    /// raw token-id sequences without a tokenizer.
+    /// Test-only, and the raw sequences carry no word-boundary marker: this is
+    /// how the decode-loop tests build a biaser without a tokenizer, so nothing
+    /// here is treated as a phrase-entry precondition.
+    #[cfg(test)]
     pub(crate) fn from_sequences(sequences: Vec<Vec<usize>>, boost: f32) -> Option<Self> {
-        let mut nodes = vec![TrieNode::new()];
+        Self::build(sequences, boost, false)
+    }
+
+    /// Compile `sequences` into the trie.
+    ///
+    /// `leading_is_entry` says the first token of every sequence is the
+    /// word-boundary marker that [`Tokenizer::encode_phrase`] prepends. That
+    /// token is a *precondition* for the phrase, not part of what makes it
+    /// distinctive — it is the same token for every hotword ever configured, so
+    /// paying for it means paying at every word boundary in the audio no matter
+    /// what the glossary says. It is matched but never scored.
+    fn build(sequences: Vec<Vec<usize>>, boost: f32, leading_is_entry: bool) -> Option<Self> {
+        let mut nodes = vec![TrieNode::new(0)];
         let mut phrase_count = 0;
+        let entry_tokens = usize::from(leading_is_entry);
         for seq in sequences {
             if seq.is_empty() {
                 continue;
             }
             phrase_count += 1;
-            let len = seq.len();
+            // Tokens the boost is actually spread over.
+            let scored = seq.len().saturating_sub(entry_tokens).max(1);
             let mut node = 0usize;
             for tok in seq {
                 node = match nodes[node].children.get(&tok) {
                     Some(&child) => child,
                     None => {
+                        let depth = nodes[node].depth + 1;
                         let child = nodes.len();
-                        nodes.push(TrieNode::new());
+                        nodes.push(TrieNode::new(depth));
                         nodes[node].children.insert(tok, child);
                         child
                     }
                 };
-                nodes[node].shortest_phrase = nodes[node].shortest_phrase.min(len);
+                nodes[node].shortest_phrase = nodes[node].shortest_phrase.min(scored);
             }
             nodes[node].is_end = true;
         }
         if phrase_count == 0 {
             return None;
+        }
+        for node in nodes.iter_mut().skip(1) {
+            node.is_entry = leading_is_entry && node.depth == 1;
+            node.grant = if node.is_entry {
+                0.0
+            } else {
+                boost / node.shortest_phrase.max(1) as f32
+            };
         }
         Some(Self {
             nodes,
@@ -192,7 +229,7 @@ impl Biaser {
                 dropped.join(", ")
             );
         }
-        Self::from_sequences(sequences, boost)
+        Self::build(sequences, boost, true)
     }
 
     /// Number of hotword phrases compiled into the trie.
@@ -223,7 +260,7 @@ impl Biaser {
         // hypothesis that just finished the phrase gets pruned for it. Granting
         // the right amount from the start keeps every step small.
         let enter = |from: BiasPath, child: usize| {
-            let share = self.boost / self.nodes[child].shortest_phrase.max(1) as f32;
+            let share = self.nodes[child].grant;
             (
                 share,
                 BiasPath {
@@ -279,8 +316,14 @@ impl Biaser {
     /// hotword could continue here), so non-hotword regions are untouched.
     pub(crate) fn boost_logits(&self, state: &BiasState, logits: &mut [f32]) {
         for &node in &state.active {
-            for &tok in self.nodes[node].children.keys() {
-                if tok < logits.len() {
+            for (&tok, &child) in &self.nodes[node].children {
+                if tok < logits.len() && !self.nodes[child].is_entry {
+                    // The full boost, not the beam's per-phrase share: a greedy
+                    // argmax decides each step on its own, so the step delta is
+                    // the whole mechanism. Splitting it across a phrase's
+                    // characters — right when totals compete in a beam — leaves
+                    // a long hotword too weak to win any single step, which is
+                    // to say it turns biasing off.
                     logits[tok] += self.boost;
                 }
             }
@@ -333,6 +376,8 @@ mod tests {
     #[test]
     fn test_boost_applies_to_first_token_of_each_hotword() {
         // Two hotwords: [1,2] and [3]. At the root both 1 and 3 are boostable.
+        // The greedy path pays the configured boost per step, whatever the
+        // phrase's length — see `boost_logits`.
         let b = biaser(vec![vec![1, 2], vec![3]], 5.0);
         let state = b.new_state();
         let mut logits = vec![0.0; 5];
@@ -407,6 +452,36 @@ mod tests {
             "<blk>".to_string(),
         ];
         Tokenizer::from_tokens(tokens)
+    }
+
+    #[test]
+    fn the_phrase_entry_marker_is_never_boosted() {
+        // Every phrase `encode_phrase` produces starts with the same
+        // word-boundary marker, so paying for it means paying at every word
+        // boundary in the audio whatever the glossary says. That is exactly
+        // what happened: three different glossaries — one of them a word absent
+        // from the recording — produced byte-identical transcripts, because the
+        // only token being boosted was the space.
+        let tok = char_tokenizer();
+        let marker = tok.encode_phrase("а").expect("representable")[0];
+        for phrases in [
+            vec![("а".to_string(), 1.0)],
+            vec![("аб".to_string(), 1.0)],
+            vec![("вг".to_string(), 1.0), ("д".to_string(), 1.0)],
+        ] {
+            let b = Biaser::from_phrases(&tok, &phrases, 6.0).expect("compiles");
+            let state = b.new_state();
+            let mut logits = vec![0.0; 8];
+            b.boost_logits(&state, &mut logits);
+            assert_eq!(
+                logits[marker], 0.0,
+                "the entry marker took a boost for {phrases:?}"
+            );
+            assert!(
+                logits.iter().all(|&l| l == 0.0),
+                "nothing is boostable before a word boundary is emitted"
+            );
+        }
     }
 
     #[test]
@@ -490,19 +565,26 @@ mod tests {
 
     #[test]
     fn test_from_phrases_single_token_phrase_boosts_first_token() {
-        // "а" encodes to a leading ▁ (id 5) then char id 0. The first emitted
-        // token of the hotword is the boundary marker, so the root boosts id 5.
+        // "а" encodes to a leading ▁ (id 5) then char id 0. The marker only
+        // opens the phrase; the character is what gets paid for.
         let tok = char_tokenizer();
         let phrases = vec![("а".to_string(), 1.0)];
         let b = Biaser::from_phrases(&tok, &phrases, 7.0).expect("phrase compiles");
         assert_eq!(b.phrase_count(), 1);
 
         let ids = tok.encode_phrase("а").expect("representable");
-        let state = b.new_state();
+        let mut state = b.new_state();
         let mut logits = vec![0.0; 8];
         b.boost_logits(&state, &mut logits);
-        // First token of the encoded phrase is boostable at the root.
-        assert_eq!(logits[ids[0]], 7.0, "first token of phrase boosted at root");
+        assert_eq!(logits[ids[0]], 0.0, "the boundary marker is never boosted");
+
+        b.advance(&mut state, ids[0]);
+        let mut logits = vec![0.0; 8];
+        b.boost_logits(&state, &mut logits);
+        assert_eq!(
+            logits[ids[1]], 7.0,
+            "a one-character phrase is worth it all"
+        );
     }
 
     #[test]
@@ -558,10 +640,14 @@ mod tests {
         assert_eq!(b.phrase_count(), 1);
         // It compiles to exactly the lowercase spelling's tokens.
         let ids = tok.encode_phrase("гигаэм").expect("representable");
-        let state = b.new_state();
+        let mut state = b.new_state();
+        b.advance(&mut state, ids[0]); // past the boundary marker
         let mut logits = vec![0.0; 12];
         b.boost_logits(&state, &mut logits);
-        assert_eq!(logits[ids[0]], 5.0);
+        assert!(
+            logits[ids[1]] > 0.0,
+            "the lowercased spelling is what biases"
+        );
     }
 
     #[test]
@@ -583,11 +669,12 @@ mod tests {
         let tok = Tokenizer::from_tokens(tokens.iter().map(|t| (*t).to_string()).collect());
         let written = tok.encode_phrase("Аб").expect("cased vocab represents it");
         let b = Biaser::from_phrases(&tok, &[("Аб".to_string(), 1.0)], 5.0).expect("compiles");
-        let state = b.new_state();
+        let mut state = b.new_state();
+        b.advance(&mut state, written[0]); // past the boundary marker
         let mut logits = vec![0.0; 6];
         b.boost_logits(&state, &mut logits);
         assert_eq!(
-            logits[written[0]], 5.0,
+            logits[written[1]], 5.0,
             "the written form must survive untouched"
         );
     }
