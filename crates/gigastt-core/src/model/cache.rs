@@ -41,8 +41,8 @@ pub(crate) fn coreml_cache_dir(model_dir: &Path) -> PathBuf {
 }
 
 /// Basename of the optimized graph ORT would open for `model_path`'s stem:
-/// `{file_stem}_optimized.ort` (ORT flatbuffer format — loaded via mmap,
-/// see `runtime::ort::session`).
+/// `{file_stem}_optimized.ort` (ORT flatbuffer format — loaded via mmap
+/// by the encoder session loader).
 pub fn optimized_cache_basename(encoder_path: &Path) -> Option<String> {
     encoder_path
         .file_stem()
