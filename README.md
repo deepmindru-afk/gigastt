@@ -21,7 +21,7 @@ gigastt turns any machine into a private Russian speech-recognition server — o
 |---|---|---|---|
 | No cloud, no keys — after the one-time model download the runtime is 100% local. MIT engine on MIT weights, commercial-ready. | One static binary, a C-ABI FFI for mobile, or the `gigastt-core` crate — with incremental WebSocket partials, no Python. | Most accurate on 3 of 4 Russian domains: far-field 4.08%, phone 18.50%, YouTube 10.91%; statistical tie on clean read. | ~225 MB INT8 model, RTF ~0.10 (~10× real-time on CPU), 0.94 s cold-start. |
 
-**WER** clean 3.55% / far-field 4.08% / phone 18.50% / YouTube 10.91%  ·  **held-out** CV **2.63%** (beats Vosk+FW) · FLEURS 5.26% (FW 3.84 leads) · RuLS **4.21%** (beats Vosk+FW) · SOVA device: Vosk ahead  · ToneWebinars: FW 8.33 leads (gigastt 13.0)  ·  **RTF** ~0.10  ·  **Model** ~225 MB INT8  ·  **Cold-start** 0.94 s  ·  **RAM** ~750 MB single / 1.3 GB pool-2  ·  **Streaming** first partial ~0.78 s
+**WER** clean 3.55% / far-field 4.08% / phone 18.50% / YouTube 10.91%  ·  **held-out** CV **2.63%** (beats Vosk+FW) · FLEURS 5.26% (FW 3.84 leads) · RuLS **4.21%** (beats Vosk+FW) · SOVA device: Vosk ahead  · ToneWebinars: FW 8.33 leads (gigastt 13.0)  ·  **RTF** ~0.10  ·  **Model** ~225 MB INT8  ·  **Cold-start** 0.94 s  ·  **RAM** ~46 MB resident (~277 MB `ps`) · ~66 MB pool-2 (~510 MB `ps`)  ·  **Streaming** first partial ~0.78 s
 
 > GigaAM v3 `rnnt` head, INT8, Apple M1 CPU, 1000 samples/domain (FLEURS n=775), failures = 100% WER, 95% bootstrap CIs. Every competitor is measured like-for-like through the [same harness](docs/benchmarks.md), manifests, and normalization.
 
@@ -31,7 +31,7 @@ WER (%) on four Russian domains, lower is better — plus every axis that decide
 
 | Engine | Clean | Far-field | Phone | YouTube | RTF | Disk | Peak RAM | Cold-start | Streaming | Punct. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|---|---|
-| **gigastt** (GigaAM v3 `rnnt`) | 3.55 | **4.08** | **18.50** | **10.91** | 0.10 | ~225 MB | 1.3 GB / ~750 MB | **0.94 s** | **Yes** — incremental WS | **Yes** |
+| **gigastt** (GigaAM v3 `rnnt`) | 3.55 | **4.08** | **18.50** | **10.91** | 0.10 | ~225 MB | ~46 MB · ~66 MB pool-2 | **0.94 s** | **Yes** — incremental WS | **Yes** |
 | Vosk 0.54 (Zipformer2) | **2.97** | 6.29 | 22.74 | 17.24 | ~0.03 | 966 MB | 560 MB | 1.16 s | Yes (server) | Add-on |
 | T-one (beam + LM) | 6.61 | 14.62 | 21.73 | 23.23 | 0.065 | 138 MB + 5.5 GB LM | — | — | Yes (300 ms) | No |
 | T-one (greedy, no LM) | 7.85 | 17.22 | 22.37 | 26.54 | 0.065 | 138 MB | 672 MB | 1.87 s | Yes (300 ms) | No |
@@ -39,7 +39,7 @@ WER (%) on four Russian domains, lower is better — plus every axis that decide
 | faster-whisper (Large v3) | 15.53 | 17.34 | 24.93 | 15.45 | &gt;1.0 | 2.9 GB | 2619 MB | 8.2 s | No | Yes |
 | faster-whisper-turbo | 14.45 | 18.30 | 26.58 | 15.45 | &gt;1.0 | 1.6 GB | 2154 MB | 6.8 s | No | Yes |
 
-Conditions: Apple M1, CPU EP, INT8/greedy, 1000 samples/domain (clean read 992; turbo = 300-sample slice), 95% bootstrap CIs. Clean read 3.55 (2.9–4.2) overlaps Vosk 0.54 2.97 (2.4–3.6) — a statistical tie; far-field / phone / YouTube wins are CI-separated. RTF &gt; 1.0 = slower than real-time on CPU. gigastt RAM is process footprint at /ready, measured on Apple M1 (INT8): ~1.3 GB at the default `--pool-size 2`, ~750 MB at `--pool-size 1`. "—" = not measured. Full methodology and caveats: [Benchmarks](docs/benchmarks.md).
+Conditions: Apple M1, CPU EP, INT8/greedy, 1000 samples/domain (clean read 992; turbo = 300-sample slice), 95% bootstrap CIs. Clean read 3.55 (2.9–4.2) overlaps Vosk 0.54 2.97 (2.4–3.6) — a statistical tie; far-field / phone / YouTube wins are CI-separated. RTF &gt; 1.0 = slower than real-time on CPU. gigastt RAM is the resident footprint (dirty + compressed pages, macOS `footprint`) after warm decodes on Apple M1 Pro (INT8): ~46 MB at `--pool-size 1`, ~66 MB at the default `--pool-size 2`; `ps` RSS reads ~277 / ~510 MB because it counts the shared memory-mapped model, whose clean pages the OS reclaims under pressure. "—" = not measured. Full methodology and caveats: [Benchmarks](docs/benchmarks.md).
 
 **Raspberry Pi / edge:** performance on Pi hardware is **not yet measured** — no RTF, RAM, or cold-start claims for edge devices; status and protocol: [Benchmarks § Edge / Raspberry Pi](docs/benchmarks.md#edge--raspberry-pi) and the [edge roadmap](specs/edge-raspberry-pi-roadmap.md).
 
@@ -54,7 +54,7 @@ Where rivals win, and when not to reach for gigastt:
 - **Clean read is a tie, not a win** — gigastt 3.55% (2.9–4.2) vs Vosk 0.54 2.97% (2.4–3.6); the CIs overlap and Vosk's point estimate is slightly ahead.
 - **Russian-first, narrowly multilingual** — the default `rnnt` / `e2e_rnnt` heads are Russian-only; the opt-in `ml_ctc` / `ml_ctc_large` heads add just ru/en/kk/ky/uz. For real breadth use Vosk (20+ languages) or whisper.cpp / faster-whisper / sherpa-onnx (~99). gigastt is a specialist.
 - **Not the speed leader** — Vosk (RTF ~0.03) and T-one (~0.06) are faster; gigastt (~0.10) is comfortably real-time, not the fastest.
-- **Peak RAM at the default `--pool-size 2` (~1.3 GB) is the heavyweight option** — it loses to Vosk 0.54 (560 MB) and T-one greedy (672 MB), and even a single session (~750 MB, `--pool-size 1`) sits slightly above Vosk. Use `--pool-size 1` for lean deployments.
+- **RAM is tiny but easy to misread** — resident footprint is ~46 MB at `--pool-size 1` / ~66 MB at the default pool 2, the lightest in the table (Vosk 0.54 is 560 MB, T-one greedy 672 MB; an extra pool slot costs only ~20 MB resident). But `ps` / Activity Monitor shows ~277 / ~510 MB because RSS counts the shared memory-mapped model; the OS reclaims those clean pages under pressure, so the resident figure is what you actually need to budget.
 - **Streaming is buffered/chunked** over an offline RNN-T, not a natively streaming acoustic model; ~0.78 s TTFP is not a lowest-latency claim.
 - **Training-data overlap** — GigaAM v3 is trained heavily on Golos; Golos / OpenSTT numbers are best-case in-distribution upper bounds. **Held-out** public sets (CV / FLEURS / RuLS / SOVA / Podlodka / ToneWebinars) give a second column — see [Benchmarks](docs/benchmarks.md#held-out--additional-public-sets--wer--95-ci).
 
@@ -130,7 +130,7 @@ $ gigastt serve
 
 ## Requirements
 
-Rust **1.88+**, `protoc` on `PATH`. macOS 14+ (Apple Silicon, CoreML) or Linux x86_64 (optional NVIDIA CUDA 12+). ~1.5 GB disk, ~1.3 GB RAM at the default `--pool-size 2` (~750 MB single-session). The `gigastt-core` crate has no server dependencies — embed it directly: `gigastt-core = "2.16"`.
+Rust **1.88+**, `protoc` on `PATH`. macOS 14+ (Apple Silicon, CoreML) or Linux x86_64 (optional NVIDIA CUDA 12+). ~1.5 GB disk, ~66 MB resident RAM at the default `--pool-size 2` (~46 MB single-session; `ps` RSS reads ~510 / ~277 MB because it counts the shared memory-mapped model). The `gigastt-core` crate has no server dependencies — embed it directly: `gigastt-core = "2.16"`.
 
 ## License
 

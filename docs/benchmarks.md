@@ -214,20 +214,28 @@ the 1025-token BPE one.)
 
 ## Footprint
 
-| Engine | Deployable model on disk | Peak RSS (cold) | Cold-start |
+| Engine | Deployable model on disk | Peak RAM | Cold-start |
 |---|---|---|---|
-| **gigastt** | **~225 MB** (INT8) | ~1.3 GB ¹ | **0.94 s** |
+| **gigastt** | **~225 MB** (INT8) | **~510 MB RSS / ~66 MB resident** ¹ | **0.94 s** |
 | T-one (greedy) | 138 MB | 672 MB | 1.87 s |
 | T-one (beam+LM) | 138 MB + 5.5 GB KenLM | — | — |
-| Vosk 0.54 | 966 MB | **560 MB** | 1.16 s |
+| Vosk 0.54 | 966 MB | 560 MB | 1.16 s |
 | Vosk 0.42 | 3.5 GB | 1100 MB | 29.8 s |
 | faster-whisper-turbo | 1.6 GB | 2154 MB | 6.8 s |
 | whisper.cpp (Large v3) | 2.9 GB | — | — |
 | faster-whisper (Large v3) | 2.9 GB | 2619 MB | 8.2 s |
 
-¹ gigastt RSS is measured on Apple M1 16 GB (macOS), INT8 `rnnt`,
-`--punctuation off --itn off`, read at `/ready`: ~750 MB at `--pool-size 1`,
-~1.3 GB at the default `--pool-size 2` (~550–570 MB per extra pool slot). The
+¹ gigastt memory is measured on Apple M1 Pro 16 GB (macOS), INT8 `rnnt`,
+`--punctuation off --itn off`, steady state after 5 warm decodes. Two metrics,
+because they now diverge: **resident footprint** (dirty + compressed pages,
+`/usr/bin/footprint`) is ~46 MB at `--pool-size 1` and ~66 MB at the default
+`--pool-size 2` (~35 / ~57 MB at `/ready`) — the honest "RAM you actually
+need" figure, since the 215 MB model is memory-mapped and file-backed and the
+OS reclaims those clean pages under pressure. **`ps` RSS** — what
+`top`/Activity Monitor shows — reads ~277 MB (pool 1) / ~510 MB (pool 2)
+because it counts the shared model mapping per mapping. The server's own
+`memory_after_load rss_mb=` startup log samples before the mapping is touched
+and reads only ~55 / ~83 MB — a known under-read, not a number to quote. The
 pre-v2.3 default was `--pool-size 4`; v2.3 lowered it to 2 plus a RAM-aware
 auto-cap.
 
@@ -235,10 +243,12 @@ gigastt wins **on-disk size** (4–13× smaller than the Whisper/Vosk engines) a
 **cold-start** (0.94 s; Vosk 0.42 is a dreadful ~30 s). It is honestly **not** the
 absolute smallest — T-one greedy is 138 MB — but T-one's *production* config adds a
 5.5 GB KenLM, so gigastt is the smallest model **with no language-model trade-off**.
-gigastt does **not** win peak RAM: at the default `--pool-size 2` (~1.3 GB) it
-is the heavyweight option in this table, and even at `--pool-size 1` (~750 MB)
-it sits slightly above Vosk 0.54 (560 MB) and T-one greedy (672 MB). Use
-`--pool-size 1` for lean deployments.
+gigastt now also wins **peak RAM**: ~46 MB resident / ~277 MB `ps` RSS at
+`--pool-size 1` makes it the lightest engine in this table, and even the
+default `--pool-size 2` (~66 MB resident / ~510 MB RSS, ~20 MB marginal per
+extra slot) sits below Vosk 0.54 (560 MB) and T-one greedy (672 MB). The
+resident figure is what to budget: RSS counts the shared memory-mapped model,
+whose pages the OS reclaims under pressure.
 
 ## Streaming latency
 
@@ -276,21 +286,30 @@ head. Filled from `benchmark/results_edge_m1.json`; **not** a Pi prediction.
 
 | Head | RTF | Peak RSS | Cold-start | TTFP |
 |---|---|---|---|---|
-| `rnnt` INT8 | 0.043 (0.041–0.045) | 755 MiB | 1.01 s | 766 ms |
-| `ml_ctc` INT8 | 0.032 (0.030–0.036) | 752 MiB | 0.83 s | 749 ms |
+| `rnnt` INT8 | 0.043 (0.041–0.045) | ~277 MiB RSS / ~46 MB resident | ~0.4 s warm boot | 766 ms |
+| `ml_ctc` INT8 | 0.032 (0.030–0.036) | ~261 MiB RSS / ~28 MB resident | ~0.3 s warm boot | 749 ms |
 
-Measured 2026-08-03, gigastt 2.16.0, M1 16 GB, 5 warm `golos_0{0..4}` fixtures;
-RTF is mean (min–max). Peak RSS is the larger of RSS@ready and RSS-after-decode
-(process RSS, `ps`). TTFP is time to first partial on a real-time-paced 4 s
-stream; finalization lag ≈ audio duration + ~150 ms for both heads.
+RTF and TTFP measured 2026-08-03, gigastt 2.16.0, M1 16 GB, 5 warm
+`golos_0{0..4}` fixtures; RTF is mean (min–max). TTFP is time to first partial
+on a real-time-paced 4 s stream; finalization lag ≈ audio duration + ~150 ms
+for both heads. RAM and cold-start re-measured 2026-08-04 on M1 Pro after the
+memory-mapped ORT-cache change (`--pool-size 1`): RSS is process `ps`
+RSS after warm decodes, resident is the macOS `footprint` dirty+compressed
+figure; the warm boot reads the cached `.ort` file, and the first boot after a
+model update pays a one-time ~2.7 s `.onnx`→`.ort` conversion. `ml_ctc` is the
+lighter head — a single encoder-only session, no decoder/joiner pair.
 
-> **RAM note.** The ~750 MB pool-1 footprint breaks down as roughly
-> ~215 MB INT8 weights + ~300 MB ONNX runtime/protobuf per session +
-> ~180 MB base; the default `--pool-size 2` measures ~1.3 GB, a marginal
-> cost of ~550–570 MB per extra slot. One methodology caveat: on macOS
-> under memory pressure `ps RSS` of an idle process collapses (pages get
-> compressed/swapped), so the honest figure is the process footprint/RSS
-> read at `/ready`, not an idle reading.
+> **RAM note.** The encoder weights now load from a memory-mapped ORT-format
+> cache (`.ort`) with zero-copy initializers and ORT prepacking disabled: the
+> 215 MB model is file-backed, shared across pool sessions, and the OS
+> reclaims those clean pages under memory pressure. Hence two honest metrics:
+> **resident footprint** (dirty + compressed pages) — ~46 MB pool-1 / ~66 MB
+> pool-2 after warm decodes (~35 / ~57 MB at `/ready`), ~20 MB marginal per
+> extra slot — and **`ps` RSS**, which counts the shared mapping per mapping
+> (~277 / ~510 MB). Budget the resident figure. The server's own
+> `memory_after_load rss_mb=` startup log samples before the mapping is
+> touched and reads only ~55 / ~83 MB — a known under-read, not a number to
+> quote.
 
 **Caveats (read before quoting any of this):**
 
@@ -317,7 +336,7 @@ cross-engine Python harness so they line up with the table above.
 | WER — other domains | far-field **4.08%** · phone **18.50%** · YouTube **10.91%** |
 | Verbatim → normalized WER | clean 9.73→3.55 · far-field 4.69→4.08 · phone 19.39→18.50 · YouTube 12.19→10.91. The gap is number/filler formatting, normalized **symmetrically for every engine** (so it neither helps nor hurts gigastt relative to competitors). |
 | RTF (`rnnt` INT8, M1 CPU) | ~0.10 |
-| Peak RSS (default `--pool-size 2`) | ~1.3 GB (single session ~750 MB) |
+| RAM (default `--pool-size 2`) | ~66 MB resident / ~510 MB `ps` RSS (single session ~46 MB / ~277 MB — RSS counts the shared memory-mapped model; resident is the honest figure) |
 | INT8 encoder | 844 MB → 215 MB (**3.9×**), ~0% WER degradation |
 
 ## Held-out queue
