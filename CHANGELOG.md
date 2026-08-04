@@ -39,6 +39,24 @@ were released without a git tag, so their headings carry no compare link.
   characters, a glossary changed nothing at all until the per-step amount was
   restored.
 
+### Performance
+
+- **CPU cold start no longer re-serializes the optimized encoder graph on every
+  boot.** Since 0.5.0 the CPU encoder session was built with ORT's
+  `with_optimized_model_path`, which rewrites
+  `optimized_cache/<stem>_optimized.onnx` (~224 MiB for the INT8 encoder) on
+  every process start — and nothing ever read that file back, so each boot paid
+  a full graph serialization plus disk write for zero benefit, on a Raspberry
+  Pi microSD most of all. The file is now a cache in both directions: when it
+  exists, is non-empty, and is no older than the source encoder, the session
+  loads from it directly and skips re-optimizing the source model; otherwise
+  the source model is loaded and the cache rewritten, exactly as before. A
+  cached graph that fails to load — for example one serialized by an older
+  ONNX Runtime — is deleted first, so the next boot rewrites it cleanly rather
+  than tripping over the same broken file again. Measured on an M1, `serve`
+  process start → `/ready` drops from ~1.1 s to ~0.7 s; transcription output is
+  byte-identical to the previous behavior.
+
 ### Added
 
 - **Hotword biasing now works on the multilingual CTC heads**, via a prefix beam
