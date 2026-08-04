@@ -30,7 +30,7 @@ and auto-invoked on first `serve`/`download` unless `--skip-quantize` is passed.
 |---|---|
 | WER (Russian) | **3.55%** clean read (rnnt head, `golos_crowd_1k`); leads far-field/phone/YouTube — see [docs/benchmarks.md](docs/benchmarks.md) |
 | RTF (INT8, M1 CPU) | ~0.10 |
-| Memory (RSS) | ~790 MB (default `--pool-size 2`; ~400 MB single session) |
+| Memory (RSS) | ~1.3 GB (default `--pool-size 2`; ~750 MB single session — INT8, M1, measured at ready) |
 | Concurrent sessions | 2 (configurable via `--pool-size`) |
 
 ## Technology Stack
@@ -443,7 +443,7 @@ reference: [`docs/cli.md`](docs/cli.md) (enforced by `scripts/check-docs-drift.p
 | `GIGASTT_SOAK_DURATION_SECS` | soak test duration (tests only) | 300 |
 | `RUST_LOG` | tracing filter | `gigastt=info` |
 
-`--pool-size` is CLI-only (no `GIGASTT_POOL_SIZE`); default 2 for multi-connection hosts — use `--pool-size 1` on edge / low-RAM (~400 MB RSS). Pool > 1 costs RAM and can cost ~10–20% single-job RTF (thread split). Leave `--encoder-intra-threads` unset (auto); avoid `1` on multi-core (~3× slower; explicit `1` still allowed for debug).
+`--pool-size` is CLI-only (no `GIGASTT_POOL_SIZE`); default 2 for multi-connection hosts — use `--pool-size 1` on edge / low-RAM (~750 MB RSS). Pool > 1 costs RAM and can cost ~10–20% single-job RTF (thread split). Leave `--encoder-intra-threads` unset (auto); avoid `1` on multi-core (~3× slower; explicit `1` still allowed for debug).
 
 ## Useful Commands for Agents
 
