@@ -1,0 +1,214 @@
+{
+  "dataset": "fleurs_en",
+  "audio_root": "~/.gigastt/benchmarks/fleurs_en",
+  "slice_seed": 42,
+  "slice_size": 50,
+  "total_available": 647,
+  "language": "en",
+  "fleurs_config": "en_us",
+  "license": "CC BY 4.0",
+  "source": "https://huggingface.co/datasets/google/fleurs",
+  "attribution": "FLEURS (Conneau et al., 2022)",
+  "samples": [
+    {
+      "filename": "12906384443438076827.wav",
+      "reference": "in a carriage they traveled back to paris surrounded by a mob of people screaming and shouting threats against the king and queen"
+    },
+    {
+      "filename": "10614481583312370701.wav",
+      "reference": "alloys are basically a mixture of two or more metals don't forget that there are many elements on the periodic table"
+    },
+    {
+      "filename": "17567046183557458641.wav",
+      "reference": "the disease is carried by pigs which then migrates to humans through mosquitos"
+    },
+    {
+      "filename": "16824485789160047135.wav",
+      "reference": "australia's mitchell gourley finished eleventh in the men's standing super-g czech competitor oldrich jelinek finished sixteenth in the men's sitting super-g"
+    },
+    {
+      "filename": "16200495359369533302.wav",
+      "reference": "saint petersburg cruises include time in town. cruise passengers are exempted from visa requirements check the terms"
+    },
+    {
+      "filename": "13713355703439016228.wav",
+      "reference": "giancarlo fisichella lost control of his car and ended the race very soon after the start"
+    },
+    {
+      "filename": "12728606633758857674.wav",
+      "reference": "similarly by having a schengen visa you do not need to apply for visas to each of the schengen member countries separately hence saving time money and paperwork"
+    },
+    {
+      "filename": "7702334162140062110.wav",
+      "reference": "this is not going to be goodbye this is the closing of one chapter and the opening of a new one"
+    },
+    {
+      "filename": "1242235796224521830.wav",
+      "reference": "the parade of buildings that make the hong kong skyline has been likened to a glittering bar chart that is made apparent by the presence of the waters of victoria harbour"
+    },
+    {
+      "filename": "9052682159806783261.wav",
+      "reference": "regular announcements in the metro are made only in catalan but unplanned disruptions are announced by an automated system in a wide variety of languages including spanish english french arabic and japanese"
+    },
+    {
+      "filename": "4498797456222901763.wav",
+      "reference": "four skiers in the women's sitting group failed to finish their runs and 45 of the 117 total skiers in the giant slalom failed to rank in the race"
+    },
+    {
+      "filename": "10894616243452123700.wav",
+      "reference": "a well rounded athlete the tiger can climb though not well swim leap great distances and pull with five times the force of a strong human"
+    },
+    {
+      "filename": "10849792007407044602.wav",
+      "reference": "virtual teams are held to the same standards of excellence as conventional teams but there are subtle differences"
+    },
+    {
+      "filename": "12570605547501325774.wav",
+      "reference": "the same month saw another airliner overrun a runway at mashhad and strike a wall killing seventeen"
+    },
+    {
+      "filename": "16010170383637871536.wav",
+      "reference": "people have known about basic chemical elements such as gold silver and copper from antiquity as these can all be discovered in nature in native form and are relatively simple to mine with primitive tools"
+    },
+    {
+      "filename": "16437430878550556483.wav",
+      "reference": "usa gymnastics and the usoc have the same goal making the sport of gymnastics and others as safe as possible for athletes to follow their dreams in a safe positive and empowered environment"
+    },
+    {
+      "filename": "6774385073956642067.wav",
+      "reference": "but being placed in the high tropics just a few degrees north of equator you will need to deal with both heat always and strong sun when the sky is clear more rarely"
+    },
+    {
+      "filename": "9253409408372025849.wav",
+      "reference": "the tiger's roar is not like the full-voiced roar of a lion but more like a sentence of snarly shouted words"
+    },
+    {
+      "filename": "10731896540541531669.wav",
+      "reference": "his work is of such recognized quality and detail that he is one of the very few household names among philatelists some specialize in collecting his work alone"
+    },
+    {
+      "filename": "814068542761107022.wav",
+      "reference": "according to japan's nuclear agency radioactive caesium and iodine has been identified at the plant"
+    },
+    {
+      "filename": "15533201887617185536.wav",
+      "reference": "these theories look at what it is about certain people that make them want the things that they do and what things in their environment will make them do or not do certain things"
+    },
+    {
+      "filename": "4491697341889976683.wav",
+      "reference": "if you're not used to driving on country roads keep your wits about you steep grades narrow lanes and sharp curves predominate"
+    },
+    {
+      "filename": "1616366247253366320.wav",
+      "reference": "it also attacked anything that entered the water even a giant dinosaur such as t rex would be no match for it"
+    },
+    {
+      "filename": "5152804099019194563.wav",
+      "reference": "since 1988 ballot boxes must be transparent so that voters and observers can witness that no envelopes are present at the start of the vote and that no envelopes are added except those of the duly counted and authorized voters"
+    },
+    {
+      "filename": "899317378039624755.wav",
+      "reference": "first among its 78 recommendations is that a new diplomatic initiative should be taken before the end of this year to secure iraq's borders against hostile interventions and to re-establish diplomatic relations with its neighbors"
+    },
+    {
+      "filename": "17637008742317695762.wav",
+      "reference": "entertainment news website tmz understands the photographer stopped his vehicle on the other side of sepulveda boulevard and attempted to take pictures of the police stop before crossing the road and continuing prompting the california highway patrol police officer conducting the traffic stop to order him back across twice"
+    },
+    {
+      "filename": "10323357556845456822.wav",
+      "reference": "the northern marianas emergency management office said that there were no damages reported in the nation"
+    },
+    {
+      "filename": "14328568808003469713.wav",
+      "reference": "europe is a continent that is relatively small but with many independent countries under normal circumstances travelling through multiple countries would mean having to go through visa applications and passport control multiple times"
+    },
+    {
+      "filename": "2512373209802184926.wav",
+      "reference": "the presence of a true  invisible team” larson and lafasto 1989 p109 is also a unique component of a virtual team"
+    },
+    {
+      "filename": "14212778709566873555.wav",
+      "reference": "the moroccan sultan rebuilt the city as daru l-badya and it was given the name casablanca by spanish traders who established trading bases there"
+    },
+    {
+      "filename": "15945599843667387523.wav",
+      "reference": "the archipelago lies 120 km north of the peninsula the largest is king george island with the settlement of villa las estrellas"
+    },
+    {
+      "filename": "2479496904141533095.wav",
+      "reference": "the three kingdoms was one of the bloodiest eras in ancient china's history thousands of people died fighting to sit in the highest seat in the grand palace at xi'an"
+    },
+    {
+      "filename": "12519810849995407480.wav",
+      "reference": "it may also be beneficial for one to buy a wild card which provides entry to either selections of parks in south africa or all of the south african national parks"
+    },
+    {
+      "filename": "3474684838723877021.wav",
+      "reference": "middle order batsmen sachin tendulkar and rahul dravid performed well and made a hundred-run partnership"
+    },
+    {
+      "filename": "12618421744672029626.wav",
+      "reference": "beyond wednesday's event carpanedo competed in two individual races at the championships"
+    },
+    {
+      "filename": "2939761992885557861.wav",
+      "reference": "during the revolutionary war the thirteen states first formed a weak central government-with the congress being its only component-under the articles of confederation"
+    },
+    {
+      "filename": "2634994688992335656.wav",
+      "reference": "other subjects on the agenda in bali include saving the world's remaining forests and sharing technologies to help developing nations grow in less-polluting ways"
+    },
+    {
+      "filename": "9327483361259434782.wav",
+      "reference": "romanticism had a large element of cultural determinism drawn from writers such as goethe fichte and schlegel"
+    },
+    {
+      "filename": "17390731724222522492.wav",
+      "reference": "for the springboks it ended a five-match losing streak"
+    },
+    {
+      "filename": "1116401173651214130.wav",
+      "reference": "during this period of european history the catholic church which had become rich and powerful came under scrutiny"
+    },
+    {
+      "filename": "5407053594615190090.wav",
+      "reference": "ancient china had a unique way of showing different time periods each stage of china or each family that was in power was a distinctive dynasty"
+    },
+    {
+      "filename": "7481269528554216749.wav",
+      "reference": "\"he [wales] basically lied to us from the start. first by acting as if this was for legal reasons. second by pretending he was listening to us right up to his art deletion."
+    },
+    {
+      "filename": "13153302236168048197.wav",
+      "reference": "large areas further north are quite sparsely populated and some is nearly uninhabited wilderness"
+    },
+    {
+      "filename": "3401231636665586110.wav",
+      "reference": "since the foundation of asunción in 1537 paraguay has managed to keep a lot of its indigenous character and identity"
+    },
+    {
+      "filename": "1218355507714944126.wav",
+      "reference": "in its early days the show was featured solely at the long-running internet radio site toginet radio a site focused on talk radio"
+    },
+    {
+      "filename": "7853008702989503136.wav",
+      "reference": "liberal criticism of the reconstruction effort has focused on the awarding of reconstruction contracts to perceived washington insiders"
+    },
+    {
+      "filename": "17991438134494400884.wav",
+      "reference": "appropriate use of blogs can empower students to become more analytical and critical; through actively responding to internet materials students can define their positions in the context of others' writings as well as outline their own perspectives on particular issues oravec 2002"
+    },
+    {
+      "filename": "997218759918036906.wav",
+      "reference": "barcelona's official languages are catalan and spanish about a half prefer to speak catalan a vast majority understands it and virtually everyone knows spanish"
+    },
+    {
+      "filename": "9794832621341165457.wav",
+      "reference": "at the other end of the spectrum one morphs into an unrecognizable individual that feels he or she must change everything the team has been doing and make it their own"
+    },
+    {
+      "filename": "3083929122891715513.wav",
+      "reference": "ottawa is canada's charming bilingual capital and features an array of art galleries and museums that showcase canada's past and present"
+    }
+  ]
+}
