@@ -1,0 +1,214 @@
+{
+  "dataset": "fleurs_tr",
+  "audio_root": "~/.gigastt/benchmarks/fleurs_tr",
+  "slice_seed": 42,
+  "slice_size": 50,
+  "total_available": 743,
+  "language": "tr",
+  "fleurs_config": "tr_tr",
+  "license": "CC BY 4.0",
+  "source": "https://huggingface.co/datasets/google/fleurs",
+  "attribution": "FLEURS (Conneau et al., 2022)",
+  "samples": [
+    {
+      "filename": "8259077905524112070.wav",
+      "reference": "i̇ktidar partisi güneybatı afrika halk örgütü swapo de parlamento seçimlerinde çoğunluğunu korumayı başardı"
+    },
+    {
+      "filename": "12806793864526178804.wav",
+      "reference": "keçilerin ilk kez yaklaşık 10.000 yıl önce i̇ran'ın zagros dağları'nda evcilleştirildikleri tahmin edilmektedir"
+    },
+    {
+      "filename": "10553789323222308394.wav",
+      "reference": "sonrasında fotoğrafçılar tuvalete gitmesi gereken yaşlı bir kadının yerine geçti mendoza vuruldu"
+    },
+    {
+      "filename": "16222696873341846444.wav",
+      "reference": "daha sonra cambridge'deki addenbrooke hastanesi'ne nakledildi"
+    },
+    {
+      "filename": "15582687392435515976.wav",
+      "reference": "sosyalleşmenin önemini göstermek için kullanılan en yaygın yöntemlerden birisi büyürken yetişkinler tarafından ihmal yoluyla istemeyerek veya bilerek taciz ederek sosyalleşmesi sağlanan çocukların yer aldığı birkaç talihsiz olaya dikkat çekmektir"
+    },
+    {
+      "filename": "15170092636500952308.wav",
+      "reference": "bu oyunculara cihazı havada hareket ettirerek video oyunlarındaki hareket ve eylemleri kontrol etme imkanı sunacaktır"
+    },
+    {
+      "filename": "13306942636636224192.wav",
+      "reference": "layton başbakan ile toplantı sırasında muhafazakarların çevre kanun teklifinde değişiklikler talep ederek muhafazakar partinin çevre kanun teklifinin kapsamlı ve bütüncül bir şekilde yeniden yazımını istedi"
+    },
+    {
+      "filename": "12450073905085325972.wav",
+      "reference": "belgenin en eski kopyaları hala var olduğu bilinen 25 dunlap broşürdür geriye hiç orijinal el yazısı versiyonu kalmamıştır"
+    },
+    {
+      "filename": "9007819435618669824.wav",
+      "reference": "safari teriminin sıkça kullanılan kullanımı özellikle savanalarda yaşayan çarpıcı afrika yaban hayvanlarını izlemek için yapılan yolculukları ifade etmektedir"
+    },
+    {
+      "filename": "6195658550098923340.wav",
+      "reference": "bize treni arabayı ve daha birçok ulaşım aracını getirdi"
+    },
+    {
+      "filename": "12074613235060050857.wav",
+      "reference": "askerlerin gelmesinden önce haiti 1800'lerden beri hastalıkla ilgili sorunlarla karşılaşmamıştı"
+    },
+    {
+      "filename": "7279071812002827795.wav",
+      "reference": "tesisin etrafındaki çoğu bina turistlere orijinalde nasıl göründüklerine dair daha iyi bir fikir vermek için yeniden inşa edilmiştir"
+    },
+    {
+      "filename": "3221402651347514555.wav",
+      "reference": "güney afrika'daki çeşitli parklara veya güney afrika ulusal parklarının tümüne giriş sağlayan bir yaban kart satın alınması faydalı olabilir"
+    },
+    {
+      "filename": "10657798416573898692.wav",
+      "reference": "gianarlo fisichella arabasının kontrolünü kaybetti ve starttan çok kısa bir süre sonra yarışı bitirdi"
+    },
+    {
+      "filename": "10624291443218471784.wav",
+      "reference": "moldova'nın başkenti kişinev'dir ülkenin yerel dili rumencedir fakat yaygın olarak rusça kullanılmaktadır"
+    },
+    {
+      "filename": "1228876447420012394.wav",
+      "reference": "i̇nternette yapılan 'düşman çevre rotası' araması muhtemelen yerel bir şirketin adresini sağlayacaktır"
+    },
+    {
+      "filename": "15106340692636518407.wav",
+      "reference": "medeniyet birlikte yaşayan ve çalışan önemli ölçüde büyük bir grup insan yani bir toplum tarafından paylaşılan tekil bir kültürdür"
+    },
+    {
+      "filename": "15340415026548922557.wav",
+      "reference": "kilisenin merkezi otoritesi bin yılı aşkın süredir roma'da bulunuyordu güç ve paranın burada yoğunlaşması birçok kişinin bu ilkeye uygun davranılıp davranılmadığını sorgulamasına neden oldu"
+    },
+    {
+      "filename": "5391320702022320346.wav",
+      "reference": "örneğin kuzey carolina'daki bennet okulu'ndan öğrenciler her yıl eyalet başkenti'ne yaptıkları gezilerle ilgili bir web sitesi tasarlarlar her yıl web sitesi yeniden düzenlenir ancak eski sürümler bir not defteri olarak kullanılmak üzere çevrimiçi olarak tutulur"
+    },
+    {
+      "filename": "7442802829668128797.wav",
+      "reference": "kuzeyde ve kolayca ulaşılabilecek mesafede romantik ve büyüleyici sintra kasabası vardır ve lord byron tarafından ihtişamına olan övgüsünün kaydedilmesinin ardından yabancılar tarafından ünlenmiştir"
+    },
+    {
+      "filename": "10586596331450835487.wav",
+      "reference": "misafirleri iyi bir ruh halinde tutmak ve hoşnut etmek için genellikle özel olarak hazırlanan yiyecek içecek ve eğlence ikramları olur"
+    },
+    {
+      "filename": "650839995061173894.wav",
+      "reference": "spektrumun diğer ucunda kişi ekibin yaptığı her şeyi değiştirip kendisi yapması gerektiğini düşünen tanınamaz bir bireye dönüşür"
+    },
+    {
+      "filename": "14668067879053382944.wav",
+      "reference": "ayrıca gelişme kademelerinin,mesuliyetlerinin ve kabiliyetlerinin ötesine geçen sorumlulukları üstlenmeleri istenmemelidir diye ekledi"
+    },
+    {
+      "filename": "9710712441223264491.wav",
+      "reference": "403 numaralı scotturb otobüsü oldukça sık bir şekilde cabo da roca'da durarak sintra'ya gider"
+    },
+    {
+      "filename": "8471678873805970837.wav",
+      "reference": "sundarbans 1966 yılından beri vahşi hayatı koruma bölgesidir ve şu anda bölgede 400 royal bengal kaplanı ve yaklaşık 30.000 benekli geyik olduğu düşünülmektedir"
+    },
+    {
+      "filename": "9394144658822050352.wav",
+      "reference": "japonya'nın nükleer ajansına göre tesiste radyoaktif sezyum ve iyodin tespit edildi"
+    },
+    {
+      "filename": "3166437323945914853.wav",
+      "reference": "kaliforniya valisi arnold schwarzenegger şiddet içeren video oyunlarının küçük yaştakilere satılmasını veya kiralanmasını yasaklayan bir yasa tasarısını imzaladı"
+    },
+    {
+      "filename": "1511453975508432374.wav",
+      "reference": "evlerimizi bitkilerden yapıyoruz ve kıyafetlerimizi bitkilerden yapıyoruz yediğimiz yiyeceklerin çoğu bitkidir bitkiler olmadan hayvanlar hayatta kalamazdı"
+    },
+    {
+      "filename": "3884567449197541668.wav",
+      "reference": "fakat kuşlar hakkında hâlâ dinozor gibi görünen pek çok şey vardır"
+    },
+    {
+      "filename": "7224822320122249894.wav",
+      "reference": "burası i̇ngiliz sömürgecilerin kendileri için aldıkları yer ve bu sebeple bölgenin sömürge geçmişine dair delil arıyorsanız başlamak için burası iyi bir yerdir"
+    },
+    {
+      "filename": "1626707359375815702.wav",
+      "reference": "oy sandıkları 1988'den beri şeffaftır böylece seçmenler ve gözlemciler oylama başlangıcında oy sandıkları içinde hiçbir zarfın olmadığını ve sandıklara usulüne uygun sayılan ve onaylı seçmenlerin attığı zarflar dışında herhangi bir zarf eklenmediğini teyit edebilmektedir"
+    },
+    {
+      "filename": "10153339660659037735.wav",
+      "reference": "apia samoa'nın başkentidir şehir upolu adasındadır ve 40.000'in biraz altında bir nüfusa sahiptir"
+    },
+    {
+      "filename": "13770063171876313516.wav",
+      "reference": "carpanedo çarşamba günkü etkinliğin yanı sıra şampiyonluk turnuvasında iki farklı yarışta yer aldı"
+    },
+    {
+      "filename": "9325287647800106561.wav",
+      "reference": "i̇nternet hem kitle iletişim hem de bireylerarası iletişim elemanlarını bir araya getirir"
+    },
+    {
+      "filename": "17739169122122825314.wav",
+      "reference": "grönland seyrek yerleşime sahiptir. i̇skandinav destanlarında kızıl erik'in cinayet sebebiyle i̇zlanda'dan sürüldüğü ve batıya seyahat ederken grönland'ı bulup ona grönland adını verdiği anlatılmaktadır"
+    },
+    {
+      "filename": "13740560530852581406.wav",
+      "reference": "erkekleri reddederken katı olun ve istemediğinizi belirtmekten korkmayın kültürel farklılıklar olsa da olmasa da davranışın doğru olduğu anlamına gelmez!"
+    },
+    {
+      "filename": "14978300616178681620.wav",
+      "reference": "yeniden inşa çabasının liberal eleştirisi yeniden inşa sözleşmelerinin washington içinden olarak algılanan kişilere verilmesine odaklandı"
+    },
+    {
+      "filename": "17605379566031572537.wav",
+      "reference": "bali'de gündemdeki diğer konular arasında dünyanın geriye kalan ormanlarının kurtarılması ve gelişmekte olan ülkelerin daha az kirlenmeye neden olan yöntemlerle büyümelerine yardımcı olacak teknolojileri paylaşmak yer alıyor"
+    },
+    {
+      "filename": "12268353232675450526.wav",
+      "reference": "blog yazma işbirliğine kapı aralayan ve öğrencilerin öğrenmeyi geleneksel okul müfredatının çok ötesine taşımaya teşvik eden bir araçtır"
+    },
+    {
+      "filename": "2050706128990475783.wav",
+      "reference": "bazı rotalarda büyük şirketlerin kendi uçakları vardır ancak diğer rotalar ve küçük şirketler sorun yaşıyordu"
+    },
+    {
+      "filename": "12332158054154488030.wav",
+      "reference": "aynı şekilde schengen vizesine sahip olarak her bir schengen üye ülkesine ayrıca vize başvurusunda bulunmanıza gerek kalmaz böylece zaman para ve evrak işlemlerinden tasarruf sağlarsınız"
+    },
+    {
+      "filename": "18210242206231405463.wav",
+      "reference": "bali'de gündemdeki diğer konular arasında dünyanın geriye kalan ormanlarının kurtarılması ve gelişmekte olan ülkelerin daha az kirlenmeye neden olan yöntemlerle büyümelerine yardımcı olacak teknolojileri paylaşmak yer alıyor"
+    },
+    {
+      "filename": "17827111547010752255.wav",
+      "reference": "abd mühendisler birliği 6 inçlik yağışın daha önce zarar gören setleri aşabileceğine ihtimal vermiştir"
+    },
+    {
+      "filename": "7520058621971283623.wav",
+      "reference": "savaş sona erdikten sonra iki yıl geçmesiyle birlikte eski müttefikler artık düşmandı ve soğuk savaş başladı"
+    },
+    {
+      "filename": "1602855393940409786.wav",
+      "reference": "vatikan'ın nüfusu 800 civarındadır o dünyadaki en küçük bağımsız ülkedir ve en az nüfusa sahip ülke"
+    },
+    {
+      "filename": "10865804320068913800.wav",
+      "reference": "ulaşılması en kolay olan bitki kaynakları yapraklardan ve baklagillerden elde edilen proteinler olabilirdi ancak bitkilerin bizim gibi primatlar tarafından pişirilmeden sindirilmesi pek mümkün değildir"
+    },
+    {
+      "filename": "4104225732856888601.wav",
+      "reference": "antik çin farklı zaman dönemlerini göstermek konusunda özgün bir yol izlemiştir çin'in her dönemi veya iktidardaki her aile ayrı bir hanedanlıktır"
+    },
+    {
+      "filename": "5888432274557329534.wav",
+      "reference": "takımada yarımadanın 120 km kuzeyinde bulunmaktadır en büyüğü villa las estrellas yerleşiminin bulunduğu king george adası'dır"
+    },
+    {
+      "filename": "13130578112627586594.wav",
+      "reference": "uzun çeneleri ağzının üst kısmında fazladan bir grup diş ile birlikte 70'ten fazla jilet keskinliğinde diş ile doluydu bu da yolunun kesiştiği hiçbir şey için kaçış olmadığı anlamına geliyordu"
+    },
+    {
+      "filename": "201053168611324690.wav",
+      "reference": "güreşçi arkadaşları da luna'ya saygılarını sundular"
+    }
+  ]
+}
