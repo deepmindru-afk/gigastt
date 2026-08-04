@@ -57,6 +57,27 @@ were released without a git tag, so their headings carry no compare link.
   process start → `/ready` drops from ~1.1 s to ~0.7 s; transcription output is
   byte-identical to the previous behavior.
 
+- **Per-session encoder memory collapses: the optimized cache is now an ORT
+  flatbuffer model, memory-mapped, with zero-copy initializers and no
+  prepacking.** Every CPU encoder session used to carry its own private copy
+  of the INT8 weights plus the parsed protobuf graph of the optimized ONNX
+  cache — roughly 250–300 MB of anonymous memory per pool slot, so the
+  default `--pool-size 2` idled near ~650 MB before serving a single request.
+  The cache is now written as `<stem>_optimized.ort` and read back with
+  ORT 1.28's `session.use_memory_mapped_ort_model` +
+  `session.use_ort_model_bytes_for_initializers`: all sessions reference the
+  weights in one shared read-only file mapping (page-cache backed, reclaimable
+  under pressure), and the flatbuffer graph skips the protobuf object graph
+  entirely. Prepacking is disabled on this path because for this model it only
+  duplicated the weights into ~145 MB of per-session buffers with no RTF
+  benefit. Measured on an M-series MacBook (`--pool-size 2`, INT8 rnnt,
+  at `/ready`): physical footprint ~650 MB → ~60 MB, per-session marginal
+  ~310 MB → ~20 MB; steady-state RTF on the Golos fixture set unchanged
+  (0.045–0.053 both before and after); cold start unchanged at ~1.0 s.
+  Transcription output is byte-identical. Legacy `*_optimized.onnx` caches
+  are treated as zombies by `cache-gc` and are regenerated in the new format
+  on the next boot that finds them stale or missing.
+
 ### Added
 
 - **Hotword biasing now works on the multilingual CTC heads**, via a prefix beam

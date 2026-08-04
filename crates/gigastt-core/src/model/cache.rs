@@ -41,11 +41,12 @@ pub(crate) fn coreml_cache_dir(model_dir: &Path) -> PathBuf {
 }
 
 /// Basename of the optimized graph ORT would open for `model_path`'s stem:
-/// `{file_stem}_optimized.onnx`.
+/// `{file_stem}_optimized.ort` (ORT flatbuffer format — loaded via mmap,
+/// see `runtime::ort::session`).
 pub fn optimized_cache_basename(encoder_path: &Path) -> Option<String> {
     encoder_path
         .file_stem()
-        .map(|s| format!("{}_optimized.onnx", s.to_string_lossy()))
+        .map(|s| format!("{}_optimized.ort", s.to_string_lossy()))
 }
 
 /// Preferred encoder path on disk for `variant`: INT8 when present, else FP32
@@ -105,8 +106,10 @@ pub struct DedupeReport {
 
 /// Drop non-active optimized graphs under `model_dir/optimized_cache/`.
 ///
-/// Keeps only `{preferred_encoder_stem}_optimized.onnx` for the variant
-/// detected in `model_dir` (INT8 preferred). When no head is detected, the
+/// Keeps only `{preferred_encoder_stem}_optimized.ort` for the variant
+/// detected in `model_dir` (INT8 preferred). Legacy `*_optimized.onnx`
+/// graphs (written by versions before the switch to the ORT flatbuffer
+/// format) count as zombies and are pruned. When no head is detected, the
 /// cache is left untouched so a half-installed tree is not wiped.
 ///
 /// With `dry_run`, reports what would be deleted without removing files.
@@ -142,8 +145,9 @@ pub fn prune_optimized_cache(model_dir: &Path, dry_run: bool) -> Result<Optimize
         }
         let name = entry.file_name();
         let name = name.to_string_lossy();
-        // Only touch ORT optimized graphs; leave unrelated files alone.
-        if !name.ends_with("_optimized.onnx") {
+        // Only touch ORT optimized graphs (current `.ort` and legacy
+        // `.onnx`); leave unrelated files alone.
+        if !name.ends_with("_optimized.ort") && !name.ends_with("_optimized.onnx") {
             continue;
         }
         if name.as_ref() == keep_name {
@@ -416,7 +420,7 @@ mod tests {
         let p = Path::new("/m/v3_rnnt_encoder_int8.onnx");
         assert_eq!(
             optimized_cache_basename(p).as_deref(),
-            Some("v3_rnnt_encoder_int8_optimized.onnx")
+            Some("v3_rnnt_encoder_int8_optimized.ort")
         );
     }
 
@@ -429,14 +433,14 @@ mod tests {
             write_file(&dir.join(f), b"stub");
         }
         let cache = dir.join("optimized_cache");
-        let keep = cache.join("v3_rnnt_encoder_int8_optimized.onnx");
+        let keep = cache.join("v3_rnnt_encoder_int8_optimized.ort");
+        let legacy_active = cache.join("v3_rnnt_encoder_int8_optimized.onnx");
         let fp32 = cache.join("v3_rnnt_encoder_optimized.onnx");
-        let e2e = cache.join("v3_e2e_rnnt_encoder_int8_optimized.onnx");
-        let legacy = cache.join("encoder_optimized.onnx");
+        let e2e = cache.join("v3_e2e_rnnt_encoder_int8_optimized.ort");
         write_file(&keep, &[1u8; 100]);
-        write_file(&fp32, &[2u8; 200]);
-        write_file(&e2e, &[3u8; 300]);
-        write_file(&legacy, &[4u8; 400]);
+        write_file(&legacy_active, &[2u8; 200]);
+        write_file(&fp32, &[3u8; 300]);
+        write_file(&e2e, &[4u8; 400]);
         // Unrelated file must stay.
         write_file(&cache.join("notes.txt"), b"keep me");
 
@@ -444,9 +448,9 @@ mod tests {
         assert_eq!(report.kept, vec![keep.clone()]);
         assert_eq!(report.removed.len(), 3);
         assert!(keep.exists());
+        assert!(!legacy_active.exists());
         assert!(!fp32.exists());
         assert!(!e2e.exists());
-        assert!(!legacy.exists());
         assert!(cache.join("notes.txt").exists());
         assert_eq!(report.freed_bytes, 200 + 300 + 400);
     }
