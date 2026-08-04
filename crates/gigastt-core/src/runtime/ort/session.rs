@@ -40,12 +40,55 @@ fn load_failed(path: &Path, e: impl std::fmt::Display) -> RuntimeError {
     }
 }
 
-impl Runtime for OrtRuntime {
-    fn load_session(
+/// Pure freshness decision for an ORT optimized-graph cache entry: the cache
+/// must be non-empty and no older than the source model it was derived from.
+/// An ORT/binary upgrade typically rewrites the source model install or fails
+/// to load the stale graph — the load-failure fallback covers the latter.
+fn cache_is_fresh(
+    cache_len: u64,
+    cache_mtime: std::time::SystemTime,
+    source_mtime: std::time::SystemTime,
+) -> bool {
+    cache_len > 0 && cache_mtime >= source_mtime
+}
+
+/// Filesystem wiring for [`cache_is_fresh`]: any metadata error (missing cache,
+/// missing source, unreadable mtime) means "not fresh" so the caller falls
+/// back to loading the source model and rewriting the cache.
+fn optimized_cache_is_fresh(cache_path: &Path, source_path: &Path) -> bool {
+    let (Ok(cache), Ok(source)) = (
+        std::fs::metadata(cache_path),
+        std::fs::metadata(source_path),
+    ) else {
+        return false;
+    };
+    match (cache.modified(), source.modified()) {
+        (Ok(cache_mtime), Ok(source_mtime)) => {
+            cache_is_fresh(cache.len(), cache_mtime, source_mtime)
+        }
+        _ => false,
+    }
+}
+
+/// Path of the optimized graph ORT writes for `model_path` under `cache_dir`.
+/// Uses the same basename rule as `model::cache::optimized_cache_basename` so
+/// the file we write here is exactly the one `cache-gc` keeps.
+fn optimized_cache_path(cache_dir: &Path, model_path: &Path) -> std::path::PathBuf {
+    let basename = crate::model::optimized_cache_basename(model_path)
+        .unwrap_or_else(|| "encoder_optimized.onnx".into());
+    cache_dir.join(basename)
+}
+
+impl OrtRuntime {
+    /// Assemble the session builder with prepacked weights, execution
+    /// providers, and (CPU-only) thread counts. Cheap: no model parsing
+    /// happens until `commit_from_file`, so the cache-miss fallback can
+    /// simply build a second one.
+    fn session_builder(
         &self,
         model_path: &Path,
         is_encoder: bool,
-    ) -> Result<Box<dyn RuntimeSession>, RuntimeError> {
+    ) -> Result<ort::session::builder::SessionBuilder, RuntimeError> {
         let mut builder = Session::builder().map_err(|e| load_failed(model_path, e))?;
 
         if let Some(prepacked) = self.prepacked.as_ref() {
@@ -71,17 +114,87 @@ impl Runtime for OrtRuntime {
             builder = builder
                 .with_inter_threads(1)
                 .map_err(|e| load_failed(model_path, e))?;
+        }
+        Ok(builder)
+    }
 
-            if is_encoder && let Some(cache_dir) = &self.optimized_cache_dir {
-                std::fs::create_dir_all(cache_dir).map_err(|e| load_failed(model_path, e))?;
-                let stem = model_path
-                    .file_stem()
-                    .map(|s| s.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| "encoder".into());
-                builder = builder
-                    .with_optimized_model_path(cache_dir.join(format!("{stem}_optimized.onnx")))
-                    .map_err(|e| load_failed(model_path, e))?;
+    /// CPU-encoder fast path: when a fresh optimized graph from a previous
+    /// boot exists, load the session from it and skip both re-optimizing the
+    /// source model and re-serializing the cache (~224 MiB write per boot).
+    /// Returns `None` when the fast path does not apply or the cached graph
+    /// fails to load (the broken entry is deleted so the next boot rewrites
+    /// it cleanly).
+    fn try_load_cached_encoder(&self, model_path: &Path) -> Option<Result<Session, RuntimeError>> {
+        if !self.provider.is_cpu() {
+            return None;
+        }
+        let cache_dir = self.optimized_cache_dir.as_ref()?;
+        let cache_path = optimized_cache_path(cache_dir, model_path);
+        if !optimized_cache_is_fresh(&cache_path, model_path) {
+            return None;
+        }
+        let result = self
+            .session_builder(model_path, true)
+            .and_then(|mut builder| {
+                builder
+                    .commit_from_file(&cache_path)
+                    .map_err(|e| load_failed(&cache_path, e))
+            });
+        match result {
+            Ok(session) => {
+                tracing::info!(
+                    path = %cache_path.display(),
+                    "encoder: loaded fresh optimized graph cache, skipped source model"
+                );
+                Some(Ok(session))
             }
+            Err(e) => {
+                tracing::warn!(
+                    path = %cache_path.display(),
+                    error = %e,
+                    "encoder: optimized graph cache failed to load; deleting it and falling back to the source model"
+                );
+                if let Err(rm) = std::fs::remove_file(&cache_path) {
+                    tracing::warn!(
+                        path = %cache_path.display(),
+                        error = %rm,
+                        "encoder: failed to delete broken optimized graph cache"
+                    );
+                }
+                None
+            }
+        }
+    }
+}
+
+impl Runtime for OrtRuntime {
+    fn load_session(
+        &self,
+        model_path: &Path,
+        is_encoder: bool,
+    ) -> Result<Box<dyn RuntimeSession>, RuntimeError> {
+        if is_encoder && let Some(result) = self.try_load_cached_encoder(model_path) {
+            let session = result?;
+            return Ok(Box::new(OrtSession {
+                session: Mutex::new(session),
+            }));
+        }
+
+        let mut builder = self.session_builder(model_path, is_encoder)?;
+
+        if self.provider.is_cpu()
+            && is_encoder
+            && let Some(cache_dir) = &self.optimized_cache_dir
+        {
+            std::fs::create_dir_all(cache_dir).map_err(|e| load_failed(model_path, e))?;
+            let cache_path = optimized_cache_path(cache_dir, model_path);
+            tracing::info!(
+                path = %cache_path.display(),
+                "encoder: loading source model and refreshing optimized graph cache"
+            );
+            builder = builder
+                .with_optimized_model_path(&cache_path)
+                .map_err(|e| load_failed(model_path, e))?;
         }
 
         let session = builder
@@ -117,5 +230,74 @@ impl RuntimeSession for OrtSession {
             .into_iter()
             .map(|(_name, value)| value_to_tensor(value))
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use std::time::{Duration, SystemTime};
+
+    fn write_file(path: &Path, bytes: &[u8]) {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        let mut f = std::fs::File::create(path).unwrap();
+        f.write_all(bytes).unwrap();
+    }
+
+    #[test]
+    fn test_cache_is_fresh_nonempty_and_not_older_than_source() {
+        let now = SystemTime::now();
+        assert!(cache_is_fresh(100, now, now));
+        assert!(cache_is_fresh(100, now + Duration::from_secs(1), now));
+    }
+
+    #[test]
+    fn test_cache_is_fresh_rejects_stale_or_empty() {
+        let now = SystemTime::now();
+        assert!(!cache_is_fresh(100, now - Duration::from_secs(1), now));
+        assert!(!cache_is_fresh(0, now + Duration::from_secs(1), now));
+    }
+
+    #[test]
+    fn test_optimized_cache_is_fresh_with_real_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        let source = dir.join("v3_rnnt_encoder_int8.onnx");
+        let cache = dir.join("optimized_cache/v3_rnnt_encoder_int8_optimized.onnx");
+        write_file(&source, b"source");
+        write_file(&cache, b"optimized");
+        assert!(optimized_cache_is_fresh(&cache, &source));
+    }
+
+    #[test]
+    fn test_optimized_cache_is_fresh_missing_or_empty_cache() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        let source = dir.join("encoder.onnx");
+        let cache = dir.join("optimized_cache/encoder_optimized.onnx");
+        write_file(&source, b"source");
+
+        // Missing cache file → not fresh.
+        assert!(!optimized_cache_is_fresh(&cache, &source));
+
+        // Empty cache file → not fresh even though it is newer than the source.
+        write_file(&cache, b"");
+        assert!(!optimized_cache_is_fresh(&cache, &source));
+
+        // Missing source model → not fresh (nothing trustworthy to compare).
+        assert!(!optimized_cache_is_fresh(&cache, &dir.join("absent.onnx")));
+    }
+
+    #[test]
+    fn test_optimized_cache_path_matches_gc_keep_name() {
+        let cache_dir = Path::new("/models/optimized_cache");
+        let encoder = Path::new("/models/v3_rnnt_encoder_int8.onnx");
+        assert_eq!(
+            optimized_cache_path(cache_dir, encoder),
+            Path::new("/models/optimized_cache/v3_rnnt_encoder_int8_optimized.onnx")
+        );
     }
 }
