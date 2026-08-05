@@ -29,7 +29,16 @@ pub mod punctuation;
 /// side-load a pre-quantized model can turn it off and drop `prost` — and the
 /// `protoc` build requirement — entirely.
 #[cfg(feature = "quantize")]
-pub use gigastt_quantize as quantize;
+pub mod quantize {
+    pub use gigastt_quantize::*;
+}
+
+/// ONNX protobuf types used by the quantizer. Re-exported at the historical
+/// `gigastt_core::onnx_proto` path so existing dependents keep compiling.
+#[cfg(feature = "quantize")]
+pub mod onnx_proto {
+    pub use gigastt_quantize::onnx_proto::*;
+}
 pub(crate) mod runtime;
 mod sha256;
 pub mod vad;
