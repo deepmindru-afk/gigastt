@@ -31,6 +31,7 @@ pub mod punctuation;
 #[cfg(feature = "quantize")]
 pub use gigastt_quantize as quantize;
 pub(crate) mod runtime;
+mod sha256;
 pub mod vad;
 mod wordpiece;
 
