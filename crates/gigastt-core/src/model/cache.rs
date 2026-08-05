@@ -6,8 +6,8 @@
 //! that reclaim **hundreds of MiB to ~1 GiB** on polluted installs without
 //! changing inference accuracy.
 
+use crate::sha256::{Sha256, hex_lower};
 use anyhow::{Context, Result};
-use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -383,7 +383,7 @@ fn sha256_file_streaming(path: &Path) -> Result<String> {
         }
         hasher.update(&buf[..n]);
     }
-    Ok(hex::encode(hasher.finalize()))
+    Ok(hex_lower(&hasher.finalize()))
 }
 
 fn same_file(a: &Path, b: &Path) -> Result<bool> {
