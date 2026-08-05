@@ -467,12 +467,6 @@ jobs:
           # implementation detail, not a semver contract — adding config fields
           # to it must not force a workspace-wide major bump.
           exclude: gigastt
-          # One-shot for the gigastt-quantize extract: public paths
-          # (`quantize::quantize_model`, `onnx_proto::*`) are preserved via
-          # re-export and still resolve for dependents, but cargo-semver-checks
-          # treats foreign-crate re-exports as removals. Self-baseline of the
-          # re-export tree is clean. Remove this after the extract is on main.
-          release-type: major
 
   coverage:
     runs-on: ubuntu-latest
