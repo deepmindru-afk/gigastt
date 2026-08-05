@@ -386,29 +386,226 @@ fn read_baseline(path: &Path) -> serde_json::Value {
         .unwrap_or_else(|| serde_json::json!({ "tolerance_pp": 0.5, "sets": {} }))
 }
 
-/// Pure regression-gate decision: returns the list of failure messages (empty
-/// = pass). Two checks — (1) relative: WER must not exceed the committed
-/// baseline by more than `tolerance` (skipped when no baseline is committed);
-/// (2) absolute: WER must stay below the `max_wer` ceiling. Factored out of
+/// Measured quality metrics for one benchmark run. Absolute ceilings always
+/// apply; relative baselines apply only when the matching field is populated
+/// in `benchmark_baseline.json`.
+#[derive(Clone, Copy, Debug)]
+struct QualityMetrics {
+    wer: f64,
+    rtf: f64,
+    rss_after_load_mb: u64,
+    rss_after_decode_mb: u64,
+    cold_start_ms: u64,
+}
+
+/// Absolute + relative ceilings loaded from the baseline file (with defaults).
+#[derive(Clone, Copy, Debug)]
+struct QualityCeilings {
+    max_wer: f64,
+    max_rtf: f64,
+    max_rss_after_load_mb: u64,
+    max_rss_after_decode_mb: u64,
+    max_cold_start_ms: u64,
+    wer_tolerance_pp: f64,
+    rtf_tolerance_abs: f64,
+    rss_tolerance_mb: u64,
+    cold_start_tolerance_ms: u64,
+}
+
+impl Default for QualityCeilings {
+    fn default() -> Self {
+        // Generous absolute ceilings so GitHub Actions CPU runners still pass,
+        // while still catching catastrophic regressions (wrong EP, FP32-only
+        // load, OOM-adjacent RSS, hung cold start).
+        Self {
+            max_wer: MAX_WER,
+            max_rtf: 5.0,
+            max_rss_after_load_mb: 2048,
+            max_rss_after_decode_mb: 2560,
+            max_cold_start_ms: 180_000,
+            wer_tolerance_pp: 1.5,
+            rtf_tolerance_abs: 1.0,
+            rss_tolerance_mb: 400,
+            cold_start_tolerance_ms: 30_000,
+        }
+    }
+}
+
+fn ceilings_from_baseline(baseline: &serde_json::Value) -> QualityCeilings {
+    let mut c = QualityCeilings::default();
+    c.wer_tolerance_pp = baseline["tolerance_pp"]
+        .as_f64()
+        .unwrap_or(c.wer_tolerance_pp);
+    if let Some(ceil) = baseline.get("ceilings") {
+        c.max_wer = ceil["max_wer"].as_f64().unwrap_or(c.max_wer);
+        c.max_rtf = ceil["max_rtf"].as_f64().unwrap_or(c.max_rtf);
+        c.max_rss_after_load_mb = ceil["max_rss_after_load_mb"]
+            .as_u64()
+            .unwrap_or(c.max_rss_after_load_mb);
+        c.max_rss_after_decode_mb = ceil["max_rss_after_decode_mb"]
+            .as_u64()
+            .unwrap_or(c.max_rss_after_decode_mb);
+        c.max_cold_start_ms = ceil["max_cold_start_ms"]
+            .as_u64()
+            .unwrap_or(c.max_cold_start_ms);
+    }
+    if let Some(tol) = baseline.get("tolerances") {
+        c.rtf_tolerance_abs = tol["rtf_abs"].as_f64().unwrap_or(c.rtf_tolerance_abs);
+        c.rss_tolerance_mb = tol["rss_mb"].as_u64().unwrap_or(c.rss_tolerance_mb);
+        c.cold_start_tolerance_ms = tol["cold_start_ms"]
+            .as_u64()
+            .unwrap_or(c.cold_start_tolerance_ms);
+    }
+    c
+}
+
+/// Pure multi-metric regression gate. Empty return = pass. Factored out of
 /// `main` so the comparison (sign, boundary, null-skip) can be self-tested
 /// model-free — the rest of the benchmark needs the ~850 MB model, this does
 /// not.
-fn gate_verdict(wer: f64, baseline_wer: Option<f64>, tolerance: f64, max_wer: f64) -> Vec<String> {
+fn gate_verdict_quality(
+    m: QualityMetrics,
+    baseline: &serde_json::Value,
+    set_key: &str,
+    ceilings: QualityCeilings,
+) -> Vec<String> {
     let mut failures = Vec::new();
-    if let Some(base) = baseline_wer {
-        let delta = wer - base;
-        if delta > tolerance {
+    let set = &baseline["sets"][set_key];
+
+    // ---- absolute ceilings (always) ----
+    if m.wer >= ceilings.max_wer {
+        failures.push(format!(
+            "WER {wer:.1}% exceeds absolute ceiling {max:.1}%",
+            wer = m.wer,
+            max = ceilings.max_wer
+        ));
+    }
+    if m.rtf > ceilings.max_rtf {
+        failures.push(format!(
+            "RTF {rtf:.3} exceeds absolute ceiling {max:.3}",
+            rtf = m.rtf,
+            max = ceilings.max_rtf
+        ));
+    }
+    if m.rss_after_load_mb > ceilings.max_rss_after_load_mb {
+        failures.push(format!(
+            "RSS after load {rss} MB exceeds absolute ceiling {max} MB",
+            rss = m.rss_after_load_mb,
+            max = ceilings.max_rss_after_load_mb
+        ));
+    }
+    if m.rss_after_decode_mb > ceilings.max_rss_after_decode_mb {
+        failures.push(format!(
+            "RSS after decode {rss} MB exceeds absolute ceiling {max} MB",
+            rss = m.rss_after_decode_mb,
+            max = ceilings.max_rss_after_decode_mb
+        ));
+    }
+    if m.cold_start_ms > ceilings.max_cold_start_ms {
+        failures.push(format!(
+            "cold-start {ms} ms exceeds absolute ceiling {max} ms",
+            ms = m.cold_start_ms,
+            max = ceilings.max_cold_start_ms
+        ));
+    }
+
+    // ---- relative baselines (only when committed) ----
+    if let Some(base) = set["wer"].as_f64() {
+        let delta = m.wer - base;
+        if delta > ceilings.wer_tolerance_pp {
             failures.push(format!(
-                "WER regressed {delta:+.1}pp vs baseline {base:.1}% (current {wer:.1}%, tolerance {tolerance:.1}pp)"
+                "WER regressed {delta:+.1}pp vs baseline {base:.1}% (current {wer:.1}%, tolerance {tol:.1}pp)",
+                wer = m.wer,
+                tol = ceilings.wer_tolerance_pp
             ));
         }
     }
-    if wer >= max_wer {
-        failures.push(format!(
-            "WER {wer:.1}% exceeds absolute ceiling {max_wer:.1}%"
-        ));
+    if let Some(base) = set["rtf"].as_f64() {
+        let delta = m.rtf - base;
+        if delta > ceilings.rtf_tolerance_abs {
+            failures.push(format!(
+                "RTF regressed {delta:+.3} vs baseline {base:.3} (current {rtf:.3}, tolerance {tol:.3})",
+                rtf = m.rtf,
+                tol = ceilings.rtf_tolerance_abs
+            ));
+        }
     }
+    if let Some(base) = set["rss_after_load_mb"].as_u64() {
+        let delta = m.rss_after_load_mb as i64 - base as i64;
+        if delta > ceilings.rss_tolerance_mb as i64 {
+            failures.push(format!(
+                "RSS after load regressed {delta:+} MB vs baseline {base} MB (current {cur} MB, tolerance {tol} MB)",
+                cur = m.rss_after_load_mb,
+                tol = ceilings.rss_tolerance_mb
+            ));
+        }
+    }
+    if let Some(base) = set["cold_start_ms"].as_u64() {
+        let delta = m.cold_start_ms as i64 - base as i64;
+        if delta > ceilings.cold_start_tolerance_ms as i64 {
+            failures.push(format!(
+                "cold-start regressed {delta:+} ms vs baseline {base} ms (current {cur} ms, tolerance {tol} ms)",
+                cur = m.cold_start_ms,
+                tol = ceilings.cold_start_tolerance_ms
+            ));
+        }
+    }
+
     failures
+}
+
+/// Back-compat wrapper used by the original WER-only self-tests.
+fn gate_verdict(wer: f64, baseline_wer: Option<f64>, tolerance: f64, max_wer: f64) -> Vec<String> {
+    let mut baseline = serde_json::json!({ "sets": { "t": {} } });
+    if let Some(b) = baseline_wer {
+        baseline["sets"]["t"]["wer"] = serde_json::json!(b);
+    }
+    let ceilings = QualityCeilings {
+        max_wer,
+        wer_tolerance_pp: tolerance,
+        ..QualityCeilings::default()
+    };
+    let m = QualityMetrics {
+        wer,
+        rtf: 0.0,
+        rss_after_load_mb: 0,
+        rss_after_decode_mb: 0,
+        cold_start_ms: 0,
+    };
+    gate_verdict_quality(m, &baseline, "t", ceilings)
+}
+
+/// Best-effort process RSS in mebibytes (Linux VmRSS / macOS `ps`).
+fn current_rss_mb() -> u64 {
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(status) = std::fs::read_to_string("/proc/self/status")
+            && let Some(line) = status.lines().find(|l| l.starts_with("VmRSS:"))
+        {
+            let kb: u64 = line
+                .split_whitespace()
+                .nth(1)
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0);
+            kb / 1024
+        } else {
+            0
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        if let Ok(output) = std::process::Command::new("ps")
+            .args(["-o", "rss=", "-p", &std::process::id().to_string()])
+            .output()
+            && let Ok(rss_kb) = String::from_utf8_lossy(&output.stdout)
+                .trim()
+                .parse::<u64>()
+        {
+            rss_kb / 1024
+        } else {
+            0
+        }
+    }
 }
 
 /// Model-free assertions for `gate_verdict` + `read_baseline`, run via
@@ -502,6 +699,75 @@ fn run_gate_self_test() {
         0,
         "the normalized (ITN) pass forgives the digit/word number convention"
     );
+
+    // Multi-metric gate: absolute ceilings fire independently of relative baselines.
+    let clean = QualityMetrics {
+        wer: 1.0,
+        rtf: 0.2,
+        rss_after_load_mb: 300,
+        rss_after_decode_mb: 400,
+        cold_start_ms: 1000,
+    };
+    let empty = serde_json::json!({ "sets": { "bundled": {} } });
+    assert!(
+        gate_verdict_quality(clean, &empty, "bundled", QualityCeilings::default()).is_empty(),
+        "clean metrics under absolute ceilings must pass"
+    );
+
+    let hot = QualityMetrics {
+        wer: 1.0,
+        rtf: 9.0, // over default max_rtf 5.0
+        rss_after_load_mb: 300,
+        rss_after_decode_mb: 400,
+        cold_start_ms: 1000,
+    };
+    let rtf_fail = gate_verdict_quality(hot, &empty, "bundled", QualityCeilings::default());
+    assert!(
+        rtf_fail.iter().any(|f| f.contains("RTF")),
+        "RTF absolute ceiling must fire: {rtf_fail:?}"
+    );
+
+    // Relative RTF regression with a committed baseline.
+    let with_rtf = serde_json::json!({
+        "sets": { "bundled": { "rtf": 0.15 } }
+    });
+    let regressed = QualityMetrics {
+        wer: 1.0,
+        rtf: 1.5, // +1.35 over baseline, > default rtf_tolerance_abs 1.0
+        rss_after_load_mb: 300,
+        rss_after_decode_mb: 400,
+        cold_start_ms: 1000,
+    };
+    let rel = gate_verdict_quality(regressed, &with_rtf, "bundled", QualityCeilings::default());
+    assert!(
+        rel.iter().any(|f| f.contains("RTF regressed")),
+        "relative RTF gate must fire: {rel:?}"
+    );
+
+    // RSS absolute ceiling.
+    let fat = QualityMetrics {
+        wer: 1.0,
+        rtf: 0.2,
+        rss_after_load_mb: 5000,
+        rss_after_decode_mb: 5000,
+        cold_start_ms: 1000,
+    };
+    let rss_fail = gate_verdict_quality(fat, &empty, "bundled", QualityCeilings::default());
+    assert!(
+        rss_fail.iter().any(|f| f.contains("RSS after load")),
+        "RSS absolute ceiling must fire: {rss_fail:?}"
+    );
+
+    // ceilings_from_baseline reads committed ceilings.
+    let custom = ceilings_from_baseline(&serde_json::json!({
+        "tolerance_pp": 2.0,
+        "ceilings": { "max_rtf": 1.5, "max_wer": 10.0 },
+        "tolerances": { "rtf_abs": 0.25 }
+    }));
+    assert_eq!(custom.max_rtf, 1.5);
+    assert_eq!(custom.max_wer, 10.0);
+    assert_eq!(custom.wer_tolerance_pp, 2.0);
+    assert_eq!(custom.rtf_tolerance_abs, 0.25);
 }
 
 fn main() {
@@ -523,10 +789,16 @@ fn main() {
         .ok()
         .and_then(|s| s.parse::<usize>().ok());
 
-    // Prefer external Golos benchmark set if available.
-    let external_manifest = home_dir()
-        .map(|h| h.join(".gigastt/benchmarks/golos_wav/manifest.json"))
-        .filter(|p| p.exists());
+    // Prefer external Golos benchmark set if available, unless CI forces the
+    // hermetic bundled fixtures (stable sample count for RTF/RSS ceilings).
+    let force_bundled = std::env::var_os("GIGASTT_BENCHMARK_FORCE_BUNDLED").is_some();
+    let external_manifest = if force_bundled {
+        None
+    } else {
+        home_dir()
+            .map(|h| h.join(".gigastt/benchmarks/golos_wav/manifest.json"))
+            .filter(|p| p.exists())
+    };
 
     let using_bundled = external_manifest.is_none();
     let (manifest_path, fixture_dir) = if let Some(path) = external_manifest {
@@ -573,7 +845,13 @@ fn main() {
     }
 
     let model_dir_str = model_dir.to_string_lossy();
+    // Cold-start: wall time of Engine::load (model mmap + session build + pool).
+    // Measured before the decode loop so RTF is pure inference throughput.
+    let cold_t0 = std::time::Instant::now();
     let engine = gigastt::inference::Engine::load(&model_dir_str).expect("Failed to load engine");
+    let cold_start_ms = cold_t0.elapsed().as_millis() as u64;
+    let rss_after_load_mb = current_rss_mb();
+    eprintln!("  cold-start: {cold_start_ms} ms | RSS after load: {rss_after_load_mb} MB");
 
     let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
     let mut guard = rt
@@ -584,6 +862,7 @@ fn main() {
     let mut total_errors = 0usize;
     let mut total_naive_ref_words = 0usize;
     let mut total_naive_errors = 0usize;
+    let mut total_audio_s = 0.0_f64;
     let mut details = Vec::new();
     let mut per_sample: Vec<(usize, usize)> = Vec::with_capacity(manifest.len());
     let mut naive_per_sample: Vec<(usize, usize)> = Vec::with_capacity(manifest.len());
@@ -600,6 +879,7 @@ fn main() {
         let hypothesis = engine
             .transcribe_file(wav_path.to_str().unwrap(), &mut guard)
             .expect("Transcription failed");
+        total_audio_s += hypothesis.duration_s;
 
         let ref_words = normalize_for_wer(&sample.reference);
         let hyp_words = normalize_for_wer(&hypothesis.text);
@@ -676,6 +956,15 @@ fn main() {
     let naive_ci_hi_r = (naive_ci_hi * 10.0).round() / 10.0;
     let naive_delta_r = ((wer - naive_wer) * 10.0).round() / 10.0;
 
+    let decode_wall_s = start_time.elapsed().as_secs_f64();
+    let rtf = if total_audio_s > 0.0 {
+        decode_wall_s / total_audio_s
+    } else {
+        0.0
+    };
+    let rtf_rounded = (rtf * 1000.0).round() / 1000.0;
+    let rss_after_decode_mb = current_rss_mb();
+
     eprintln!(
         "\n  WER: {:.1}% ({} errors / {} words)  Score: {:.1}  Samples: {}",
         wer,
@@ -689,14 +978,21 @@ fn main() {
         "  Verbatim (naive) WER: {:.1}% ({} errors / {} words)  Δ {:+.1}pp vs normalized",
         naive_wer_rounded, total_naive_errors, total_naive_ref_words, naive_delta_r
     );
+    eprintln!(
+        "  RTF: {:.3} (wall {:.2}s / audio {:.2}s) | RSS load/decode: {}/{} MB | cold-start: {} ms",
+        rtf_rounded,
+        decode_wall_s,
+        total_audio_s,
+        rss_after_load_mb,
+        rss_after_decode_mb,
+        cold_start_ms
+    );
 
-    // ---- Regression gate ---------------------------------------------------
-    // Two hard checks (non-zero exit so CI actually fails on regression):
-    //   1. relative — WER must not exceed the committed per-set baseline by more
-    //      than `tolerance_pp`. This is the load-bearing gate; populate/refresh
-    //      it with GIGASTT_BENCHMARK_UPDATE_BASELINE=1 on a machine with the
-    //      model. An unpopulated baseline ("wer": null) skips this check.
-    //   2. absolute — WER must stay below the MAX_WER ceiling (coarse backstop).
+    // ---- Multi-metric regression gate --------------------------------------
+    // Hard checks (non-zero exit so CI fails on regression):
+    //   1. absolute ceilings for WER / RTF / RSS / cold-start (always)
+    //   2. relative baselines per set when committed in benchmark_baseline.json
+    // Populate relative fields with GIGASTT_BENCHMARK_UPDATE_BASELINE=1.
     let baseline_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/benchmark_baseline.json");
     let set_key = if using_bundled { "bundled" } else { "external" };
 
@@ -705,48 +1001,153 @@ fn main() {
         baseline["sets"][set_key] = serde_json::json!({
             "samples": manifest.len(),
             "wer": wer_rounded,
+            "rtf": rtf_rounded,
+            "rss_after_load_mb": rss_after_load_mb,
+            "rss_after_decode_mb": rss_after_decode_mb,
+            "cold_start_ms": cold_start_ms,
         });
+        // Keep ceilings/tolerances keys if already present; otherwise seed defaults.
+        if baseline.get("ceilings").is_none() {
+            let d = QualityCeilings::default();
+            baseline["ceilings"] = serde_json::json!({
+                "max_wer": d.max_wer,
+                "max_rtf": d.max_rtf,
+                "max_rss_after_load_mb": d.max_rss_after_load_mb,
+                "max_rss_after_decode_mb": d.max_rss_after_decode_mb,
+                "max_cold_start_ms": d.max_cold_start_ms,
+            });
+        }
+        if baseline.get("tolerances").is_none() {
+            let d = QualityCeilings::default();
+            baseline["tolerances"] = serde_json::json!({
+                "rtf_abs": d.rtf_tolerance_abs,
+                "rss_mb": d.rss_tolerance_mb,
+                "cold_start_ms": d.cold_start_tolerance_ms,
+            });
+        }
         std::fs::write(
             &baseline_path,
             serde_json::to_string_pretty(&baseline).unwrap() + "\n",
         )
         .expect("Failed to write benchmark baseline");
         eprintln!(
-            "  Baseline updated: set '{}' → WER {:.1}% ({})",
-            set_key,
-            wer_rounded,
+            "  Baseline updated: set '{set_key}' → WER {wer_rounded:.1}% RTF {rtf_rounded:.3} RSS {rss_after_load_mb} MB cold-start {cold_start_ms} ms ({})",
             baseline_path.display()
         );
     }
 
     let baseline = read_baseline(&baseline_path);
-    let tolerance = baseline["tolerance_pp"].as_f64().unwrap_or(0.5);
-    let baseline_wer = baseline["sets"][set_key]["wer"].as_f64();
+    let ceilings = ceilings_from_baseline(&baseline);
+    let metrics = QualityMetrics {
+        wer,
+        rtf,
+        rss_after_load_mb,
+        rss_after_decode_mb,
+        cold_start_ms,
+    };
 
-    // Presentation only: print the comparison table (or a no-baseline note).
-    // The pass/fail decision is the pure `gate_verdict` below (self-tested).
-    match baseline_wer {
-        Some(base) => {
-            let delta = wer - base;
-            let verdict = if delta > tolerance { "FAIL" } else { "ok" };
-            eprintln!("\n  Regression gate [{set_key}]:");
-            eprintln!("  | set | baseline | current | Δ pp | tol pp | verdict |");
-            eprintln!("  |-----|----------|---------|------|--------|---------|");
-            eprintln!(
-                "  | {set_key} | {base:.1}% | {wer:.1}% | {delta:+.1} | {tolerance:.1} | {verdict} |"
-            );
-        }
-        None => {
-            eprintln!(
-                "\n  Regression gate [{set_key}]: no committed baseline — relative gate skipped. \
-                 Run with GIGASTT_BENCHMARK_UPDATE_BASELINE=1 to populate {}.",
-                baseline_path.display()
-            );
-        }
+    // Presentation table (pass/fail decision is pure gate_verdict_quality).
+    eprintln!("\n  Quality gate [{set_key}]:");
+    eprintln!("  | metric            | baseline | current | tol / ceiling | verdict |");
+    eprintln!("  |-------------------|----------|---------|---------------|---------|");
+    {
+        let base = baseline["sets"][set_key]["wer"].as_f64();
+        let (base_s, delta_s, verdict) = match base {
+            Some(b) => {
+                let d = wer - b;
+                let v = if d > ceilings.wer_tolerance_pp {
+                    "FAIL"
+                } else {
+                    "ok"
+                };
+                (format!("{b:.1}%"), format!("{d:+.1}pp"), v)
+            }
+            None => ("—".into(), "—".into(), "skip"),
+        };
+        eprintln!(
+            "  | WER               | {base_s:>8} | {wer:5.1}% | ±{tol:.1}pp / <{max:.0}% | {verdict} |",
+            tol = ceilings.wer_tolerance_pp,
+            max = ceilings.max_wer
+        );
+        let _ = (delta_s,);
+    }
+    {
+        let base = baseline["sets"][set_key]["rtf"].as_f64();
+        let verdict = if rtf > ceilings.max_rtf {
+            "FAIL"
+        } else if let Some(b) = base {
+            if rtf - b > ceilings.rtf_tolerance_abs {
+                "FAIL"
+            } else {
+                "ok"
+            }
+        } else {
+            "ok"
+        };
+        let base_s = base
+            .map(|b| format!("{b:.3}"))
+            .unwrap_or_else(|| "—".into());
+        eprintln!(
+            "  | RTF               | {base_s:>8} | {rtf:7.3} | ±{tol:.2} / <{max:.1} | {verdict} |",
+            tol = ceilings.rtf_tolerance_abs,
+            max = ceilings.max_rtf
+        );
+    }
+    {
+        let base = baseline["sets"][set_key]["rss_after_load_mb"].as_u64();
+        let verdict = if rss_after_load_mb > ceilings.max_rss_after_load_mb {
+            "FAIL"
+        } else if let Some(b) = base {
+            if rss_after_load_mb as i64 - b as i64 > ceilings.rss_tolerance_mb as i64 {
+                "FAIL"
+            } else {
+                "ok"
+            }
+        } else {
+            "ok"
+        };
+        let base_s = base.map(|b| format!("{b}")).unwrap_or_else(|| "—".into());
+        eprintln!(
+            "  | RSS after load   | {base_s:>6} MB | {rss_after_load_mb:5} MB | ±{tol} / <{max} | {verdict} |",
+            tol = ceilings.rss_tolerance_mb,
+            max = ceilings.max_rss_after_load_mb
+        );
+    }
+    {
+        let verdict = if rss_after_decode_mb > ceilings.max_rss_after_decode_mb {
+            "FAIL"
+        } else {
+            "ok"
+        };
+        eprintln!(
+            "  | RSS after decode |        — | {rss_after_decode_mb:5} MB |     / <{max} | {verdict} |",
+            max = ceilings.max_rss_after_decode_mb
+        );
+    }
+    {
+        let base = baseline["sets"][set_key]["cold_start_ms"].as_u64();
+        let verdict = if cold_start_ms > ceilings.max_cold_start_ms {
+            "FAIL"
+        } else if let Some(b) = base {
+            if cold_start_ms as i64 - b as i64 > ceilings.cold_start_tolerance_ms as i64 {
+                "FAIL"
+            } else {
+                "ok"
+            }
+        } else {
+            "ok"
+        };
+        let base_s = base.map(|b| format!("{b}")).unwrap_or_else(|| "—".into());
+        eprintln!(
+            "  | cold-start        | {base_s:>6} ms | {cold_start_ms:5} ms | ±{tol} / <{max} | {verdict} |",
+            tol = ceilings.cold_start_tolerance_ms,
+            max = ceilings.max_cold_start_ms
+        );
     }
 
-    let failures = gate_verdict(wer, baseline_wer, tolerance, MAX_WER);
+    let failures = gate_verdict_quality(metrics, &baseline, set_key, ceilings);
     let passed = failures.is_empty();
+    let baseline_wer = baseline["sets"][set_key]["wer"].as_f64();
 
     let output = serde_json::json!({
         "pass": passed,
@@ -765,6 +1166,12 @@ fn main() {
         "samples": manifest.len(),
         "set": set_key,
         "baseline_wer": baseline_wer,
+        "rtf": rtf_rounded,
+        "audio_s": (total_audio_s * 100.0).round() / 100.0,
+        "wall_s": (decode_wall_s * 100.0).round() / 100.0,
+        "rss_after_load_mb": rss_after_load_mb,
+        "rss_after_decode_mb": rss_after_decode_mb,
+        "cold_start_ms": cold_start_ms,
         "details": details,
     });
 

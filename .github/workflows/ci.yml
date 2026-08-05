@@ -193,9 +193,9 @@ jobs:
         run: |
           cargo build -p gigastt-core --no-default-features
           cargo test -p gigastt-core --test lean_build
-      # Model-free self-test of the WER regression-gate decision logic. The full
-      # benchmark is model-gated (skipped in PR CI), so this exercises the
-      # gate's comparison / boundary / null-baseline handling on every PR.
+      # Model-free self-test of the multi-metric quality-gate decision logic
+      # (WER / RTF / RSS / cold-start ceilings + relative baselines). The full
+      # model-gated run is main-push only (quality-gate job).
       - run: cargo test --test benchmark -- --self-test
       - uses: taiki-e/install-action@v2
         with:
@@ -348,11 +348,13 @@ jobs:
         run: cargo test -p gigastt --test e2e_rest --test e2e_ws --test e2e_errors --test e2e_shutdown --test e2e_rate_limit -- --ignored --test-threads=1
         timeout-minutes: 30
 
-  benchmark:
+  quality-gate:
+    # Model-gated multi-metric gate (WER / RTF / RSS / cold-start). Runs on
+    # main push only — PRs get the model-free self-test in unit-tests.
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: [e2e-tests]
     runs-on: ubuntu-latest
-    name: WER Benchmark
+    name: Quality Gate (WER/RTF/RSS)
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -372,37 +374,67 @@ jobs:
 
       - name: Download model
         if: steps.cache-model.outputs.cache-hit != 'true'
-        run: cargo run -p gigastt -- download
+        run: cargo run -p gigastt --release -- download
 
-      - name: Run WER benchmark
-        run: cargo test -p gigastt --test benchmark -- --ignored 2>&1 | tee benchmark_output.txt
-
-      - name: Check WER threshold
+      # Release build: RTF ceilings are meaningless in debug (~10× slower).
+      - name: Run quality gate (bundled fixtures)
+        env:
+          # Hermetic: ignore any external Golos set on the runner so sample
+          # count / audio duration stay stable for RTF/RSS ceilings.
+          GIGASTT_BENCHMARK_FORCE_BUNDLED: "1"
         run: |
-          THRESHOLD=$(cat .github/wer-threshold.txt | tr -d '[:space:]')
-          # Anchor to the normalized-WER line only. benchmark.rs prints two
-          # `WER:`-bearing lines — `  WER: N%` (normalized, the gate target) and
-          # `  Verbatim (naive) WER: N%`. The old `.*WER:` matched both and relied
-          # on print order + `head -1`; `^  WER:` matches only the normalized line
-          # (the verbatim line starts with `  Verbatim`).
-          WER=$(sed -n 's/^  WER: \([0-9.]*\)%.*/\1/p' benchmark_output.txt | head -1)
-          if [ -z "$WER" ]; then
-            echo "ERROR: Could not extract WER from benchmark output"
-            exit 1
-          fi
-          echo "WER: ${WER}%, Threshold: ${THRESHOLD}%"
-          if awk "BEGIN {exit !($WER > $THRESHOLD)}"; then
-            echo "FAIL: WER ${WER}% exceeds threshold ${THRESHOLD}%"
-            exit 1
-          fi
-          echo "PASS: WER ${WER}% is within threshold ${THRESHOLD}%"
+          set -euo pipefail
+          cargo test -p gigastt --release --test benchmark -- --ignored 2>&1 | tee quality_gate_output.txt
 
-      - name: Upload benchmark results
+      - name: Assert multi-metric ceilings from JSON summary
+        run: |
+          set -euo pipefail
+          # Last JSON object line is the summary printed by benchmark.rs.
+          JSON=$(grep -E '^\{' quality_gate_output.txt | tail -1)
+          if [ -z "$JSON" ]; then
+            echo "ERROR: no JSON summary line from quality gate"
+            exit 1
+          fi
+          echo "summary: $JSON"
+          python3 - "$JSON" <<'PY'
+          import json, sys
+          data = json.loads(sys.argv[1])
+          assert data.get("pass") is True, f"gate reported pass=false: {data}"
+          # Dual-check against the legacy shell threshold file so the two
+          # sources of absolute WER ceilings cannot drift silently.
+          with open(".github/wer-threshold.txt") as f:
+              shell_threshold = float(f.read().strip())
+          wer = float(data["wer"])
+          if wer > shell_threshold:
+              raise SystemExit(
+                  f"WER {wer}% exceeds .github/wer-threshold.txt {shell_threshold}%"
+              )
+          required = [
+              "wer",
+              "rtf",
+              "rss_after_load_mb",
+              "rss_after_decode_mb",
+              "cold_start_ms",
+              "samples",
+          ]
+          missing = [k for k in required if k not in data]
+          if missing:
+              raise SystemExit(f"JSON summary missing keys: {missing}")
+          print(
+              f"PASS: WER={data['wer']}% RTF={data['rtf']} "
+              f"RSS_load={data['rss_after_load_mb']}MB "
+              f"RSS_decode={data['rss_after_decode_mb']}MB "
+              f"cold_start={data['cold_start_ms']}ms "
+              f"samples={data['samples']}"
+          )
+          PY
+
+      - name: Upload quality-gate results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: benchmark-results
-          path: benchmark_output.txt
+          name: quality-gate-results
+          path: quality_gate_output.txt
 
   semver:
     if: github.event_name == 'pull_request'
@@ -435,6 +467,12 @@ jobs:
           # implementation detail, not a semver contract — adding config fields
           # to it must not force a workspace-wide major bump.
           exclude: gigastt
+          # One-shot for the gigastt-quantize extract: public paths
+          # (`quantize::quantize_model`, `onnx_proto::*`) are preserved via
+          # re-export and still resolve for dependents, but cargo-semver-checks
+          # treats foreign-crate re-exports as removals. Self-baseline of the
+          # re-export tree is clean. Remove this after the extract is on main.
+          release-type: major
 
   coverage:
     runs-on: ubuntu-latest
@@ -633,18 +671,37 @@ jobs:
         with:
           shared-key: ci
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      # Both published crates: gigastt-core is the library, gigastt is the
-      # `cargo install gigastt` binary — packaging breakage in either fails CI.
+      # Published crates, in dependency order: gigastt-quantize (INT8), then
+      # gigastt-core (library), then gigastt (binary). Packaging breakage in
+      # any of them fails CI.
       #
-      # The gigastt leg runs with --no-verify: in the packaged crate the
-      # path-dependency on gigastt-core resolves to the version already on
-      # crates.io, so any PR that changes core's API *and* uses it from the
-      # server crate would fail to compile here even though the code is
-      # correct (at real release time core is published first). --no-verify
-      # still exercises `cargo package` (manifest, metadata, file inclusion);
-      # the compile itself is covered by the build/test jobs.
+      # The gigastt / gigastt-core legs that depend on a not-yet-published
+      # workspace path crate use --no-verify: in the packaged crate the path
+      # dependency resolves to crates.io, so a PR that changes the path crate
+      # would fail to compile here even though the workspace is correct
+      # (at real release time quantize then core are published first).
+      # --no-verify still exercises `cargo package` (manifest, metadata,
+      # file inclusion); the compile itself is covered by the build/test jobs.
       - run: |
-          cargo publish --dry-run -p gigastt-core --locked
+          set -euo pipefail
+          # New workspace crate: full dry-run (compile + package).
+          cargo publish --dry-run -p gigastt-quantize --locked
+          # core depends on gigastt-quantize via path. Until quantize is on
+          # crates.io (first release after this lands), `cargo publish` cannot
+          # resolve it from the registry. Accept that transitional error;
+          # anything else is a real packaging break.
+          set +e
+          out=$(cargo publish --dry-run -p gigastt-core --locked --no-verify 2>&1)
+          rc=$?
+          set -e
+          echo "$out"
+          if [ "$rc" -ne 0 ]; then
+            if echo "$out" | grep -q 'no matching package named `gigastt-quantize`'; then
+              echo "note: gigastt-quantize not yet on crates.io — core dry-run skipped until first release"
+            else
+              exit "$rc"
+            fi
+          fi
           cargo publish --dry-run -p gigastt --locked --no-verify
 
   msrv:
@@ -870,7 +927,7 @@ jobs:
               - 'Cargo.lock'
               - 'crates/**/Cargo.toml'
               - 'crates/**/build.rs'
-              - 'crates/gigastt-core/proto/**'
+              - 'crates/gigastt-quantize/proto/**'
               - 'rust-toolchain.toml'
 
   docker-build:

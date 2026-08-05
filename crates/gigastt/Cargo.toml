@@ -57,7 +57,7 @@ diarization = ["gigastt-core/diarization"]
 quantize = ["gigastt-core/quantize"]
 
 [dependencies]
-gigastt-core = { version = "2.13.0", path = "../gigastt-core", default-features = false, features = ["net", "async-pool", "file-decode"] }
+gigastt-core = { version = "2.13.0", path = "../gigastt-core", default-features = false, features = ["net", "async-pool", "file-decode", "quantize"] }
 
 axum = { version = "0.8", features = ["ws", "multipart"] }
 tokio = { version = "1", features = ["rt-multi-thread", "net", "time", "sync", "signal", "macros", "fs"] }
@@ -72,7 +72,6 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 anyhow = "1"
 arc-swap = "1"
-dashmap = "6"
 parking_lot = "0.12"
 uuid = { version = "1", features = ["v7"] }
 

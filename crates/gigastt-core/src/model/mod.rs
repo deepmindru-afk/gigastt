@@ -22,12 +22,12 @@ pub use cache::{
 pub use manifest::{MANIFEST_FILE, ManifestFiles, ModelManifest};
 
 #[cfg(feature = "net")]
+use crate::sha256::{Sha256, hex_lower};
+#[cfg(feature = "net")]
 use anyhow::Context;
 use anyhow::Result;
 #[cfg(feature = "net")]
 use futures_util::StreamExt;
-#[cfg(feature = "net")]
-use sha2::{Digest, Sha256};
 use std::path::Path;
 use std::sync::atomic::{AtomicU8, Ordering};
 #[cfg(feature = "net")]
@@ -1541,7 +1541,7 @@ fn sha256_file(path: &Path) -> Result<String> {
         .with_context(|| format!("Failed to read file for verification: {}", path.display()))?;
     let mut hasher = Sha256::new();
     hasher.update(&data);
-    Ok(hex::encode(hasher.finalize()))
+    Ok(hex_lower(&hasher.finalize()))
 }
 
 /// Verify a staged `.partial` file against `expected_sha256` (when provided)
@@ -2026,7 +2026,7 @@ mod tests {
     fn sha256_hex(bytes: &[u8]) -> String {
         let mut hasher = Sha256::new();
         hasher.update(bytes);
-        hex::encode(hasher.finalize())
+        hex_lower(&hasher.finalize())
     }
 
     /// Helper to stage a `.partial` file with arbitrary bytes, mimicking

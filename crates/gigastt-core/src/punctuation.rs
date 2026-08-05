@@ -31,13 +31,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::{Context, Result};
 use parking_lot::Mutex;
-use tokenizers::Tokenizer;
 
 use crate::runtime::{
     factory::RuntimeFactory,
     session::RuntimeSession,
     tensor::{Shape, Tensor, TensorData},
 };
+use crate::wordpiece::Tokenizer;
 
 /// Basename of the INT8 ONNX punctuation model inside the punct model dir.
 pub const PUNCT_MODEL_FILE: &str = "rupunct_small_int8.onnx";
@@ -317,9 +317,8 @@ impl Punctuator {
         let id2label = load_id2label(&config_path)
             .with_context(|| format!("Failed to load id2label from {}", config_path.display()))?;
 
-        let tokenizer = Tokenizer::from_file(&tokenizer_path).map_err(|e| {
-            anyhow::anyhow!("Failed to load tokenizer {}: {e}", tokenizer_path.display())
-        })?;
+        let tokenizer = Tokenizer::from_file(&tokenizer_path)
+            .with_context(|| format!("Failed to load tokenizer {}", tokenizer_path.display()))?;
 
         tracing::debug!("Loading punctuation model from {}", model_path.display());
         let runtime = factory
@@ -470,10 +469,7 @@ impl Punctuator {
         }
         let chunk = &text[spans[start].0..spans[end - 1].1];
 
-        let encoding = self
-            .tokenizer
-            .encode(chunk, true)
-            .map_err(|e| anyhow::anyhow!("tokenizer encode failed: {e}"))?;
+        let encoding = self.tokenizer.encode(chunk, true);
 
         let seq = encoding.get_ids().len();
         if seq > MAX_WINDOW_SUBTOKENS {
@@ -661,24 +657,27 @@ mod tests {
         assert_eq!(argmax(&[1.0, 1.0, 3.0]), 2);
     }
 
-    /// A minimal but valid HuggingFace tokenizer.json (WordLevel model). Used to
-    /// drive `Punctuator::load` past the tokenizer step so the ONNX-session
-    /// failure branch is exercised without the real model.
-    const MINIMAL_TOKENIZER_JSON: &str = r#"{
+    /// A minimal but valid HuggingFace tokenizer.json (WordPiece model, the only
+    /// scheme the in-tree tokenizer supports). Used to drive `Punctuator::load`
+    /// past the tokenizer step so the ONNX-session failure branch is exercised
+    /// without the real model.
+    const MINIMAL_TOKENIZER_JSON: &str = r###"{
         "version": "1.0",
         "truncation": null,
         "padding": null,
         "added_tokens": [],
         "normalizer": null,
-        "pre_tokenizer": {"type": "Whitespace"},
+        "pre_tokenizer": {"type": "BertPreTokenizer"},
         "post_processor": null,
         "decoder": null,
         "model": {
-            "type": "WordLevel",
-            "vocab": {"[UNK]": 0, "a": 1, "b": 2},
-            "unk_token": "[UNK]"
+            "type": "WordPiece",
+            "unk_token": "[UNK]",
+            "continuing_subword_prefix": "##",
+            "max_input_chars_per_word": 100,
+            "vocab": {"[UNK]": 0, "a": 1, "b": 2}
         }
-    }"#;
+    }"###;
 
     /// A valid config.json with an `id2label` map: lets `load` clear the
     /// id2label step so later failures (tokenizer / model) are reached.
@@ -908,7 +907,7 @@ mod tests {
         "padding": null,
         "added_tokens": [],
         "normalizer": null,
-        "pre_tokenizer": {"type": "Whitespace"},
+        "pre_tokenizer": {"type": "BertPreTokenizer"},
         "post_processor": null,
         "decoder": null,
         "model": {
