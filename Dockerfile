@@ -42,11 +42,12 @@ COPY vendor/ vendor/
 # `gigastt`, so they are never compiled here — their stubs only satisfy parsing.)
 RUN mkdir -p crates/gigastt-core/src crates/gigastt-quantize/src crates/gigastt-ffi/src crates/gigastt/src/server crates/gigastt-uniffi/src/bin crates/gigastt-node/src && \
     echo 'pub mod error; pub mod inference; pub mod model; pub mod protocol;' > crates/gigastt-core/src/lib.rs && \
-    echo '#[cfg(feature = "quantize")] pub use gigastt_quantize as quantize;' >> crates/gigastt-core/src/lib.rs && \
+    echo '#[cfg(feature = "quantize")] pub mod quantize { pub use gigastt_quantize::*; }' >> crates/gigastt-core/src/lib.rs && \
+    echo '#[cfg(feature = "quantize")] pub mod onnx_proto { pub use gigastt_quantize::onnx_proto::*; }' >> crates/gigastt-core/src/lib.rs && \
     mkdir -p crates/gigastt-core/src/inference crates/gigastt-core/src/model crates/gigastt-core/src/protocol && \
     touch crates/gigastt-core/src/error.rs && \
     touch crates/gigastt-core/src/inference/mod.rs crates/gigastt-core/src/model/mod.rs crates/gigastt-core/src/protocol/mod.rs && \
-    echo 'pub fn quantize_model(_: &std::path::Path, _: &std::path::Path) -> anyhow::Result<()> { Ok(()) }' > crates/gigastt-quantize/src/lib.rs && \
+    echo 'pub mod onnx_proto {} pub fn quantize_model(_: &std::path::Path, _: &std::path::Path) -> anyhow::Result<()> { Ok(()) }' > crates/gigastt-quantize/src/lib.rs && \
     echo 'pub use gigastt_core::*; pub mod server;' > crates/gigastt/src/lib.rs && \
     echo 'fn main() {}' > crates/gigastt/src/main.rs && \
     touch crates/gigastt/src/server/mod.rs && \
@@ -56,11 +57,13 @@ RUN mkdir -p crates/gigastt-core/src crates/gigastt-quantize/src crates/gigastt-
     echo 'fn main() {}' > crates/gigastt-uniffi/src/bin/uniffi-bindgen.rs && \
     echo '' > crates/gigastt-node/src/lib.rs && \
     echo 'fn main() {}' > crates/gigastt-node/build.rs && \
-    mkdir -p crates/gigastt-core/benches crates/gigastt/tests && \
+    mkdir -p crates/gigastt-core/benches crates/gigastt-core/examples crates/gigastt/tests && \
     echo 'fn main() {}' > crates/gigastt-core/benches/mel.rs && \
     echo 'fn main() {}' > crates/gigastt-core/benches/resample.rs && \
     echo 'fn main() {}' > crates/gigastt-core/benches/tokenizer.rs && \
+    echo 'fn main() {}' > crates/gigastt-core/examples/quantize_file.rs && \
     echo 'fn main() {}' > crates/gigastt/tests/benchmark.rs && \
+    echo '# stub' > crates/gigastt-quantize/README.md && \
     cargo build --release -p gigastt --locked && \
     rm -rf crates/*/src target/release/deps/gigastt* target/release/gigastt*
 

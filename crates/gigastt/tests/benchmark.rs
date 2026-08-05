@@ -587,9 +587,10 @@ fn current_rss_mb() -> u64 {
                 .nth(1)
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(0);
-            return kb / 1024;
+            kb / 1024
+        } else {
+            0
         }
-        return 0;
     }
     #[cfg(not(target_os = "linux"))]
     {
@@ -600,9 +601,10 @@ fn current_rss_mb() -> u64 {
                 .trim()
                 .parse::<u64>()
         {
-            return rss_kb / 1024;
+            rss_kb / 1024
+        } else {
+            0
         }
-        0
     }
 }
 

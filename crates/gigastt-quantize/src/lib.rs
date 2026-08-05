@@ -18,7 +18,7 @@
 //! 0.13, so we lean on the generated accessor methods (`data_type()`,
 //! `name()`, `op_type()`, …) for reads and wrap writes in `Some(_)`.
 
-mod onnx_proto;
+pub mod onnx_proto;
 
 use anyhow::{Context, Result};
 use prost::Message;
