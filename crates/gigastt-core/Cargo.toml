@@ -92,7 +92,6 @@ audio-codec = { version = "0.3", default-features = false, optional = true }
 # OGG/Opus containers but ships no Opus decoder, so packets are decoded with
 # this crate (decoder only — the encoder is not used).
 opus-rs = { version = "0.1", optional = true }
-tokenizers = { version = "0.23", default-features = false, features = ["fancy-regex"] }
 bytes = "1"
 prost = "0.14"
 polyvoice = { version = "0.12.0", features = ["onnx"], optional = true }
