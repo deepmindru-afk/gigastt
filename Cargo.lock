@@ -1679,6 +1679,7 @@ dependencies = [
  "candle-nn",
  "criterion",
  "futures-util",
+ "gigastt-quantize",
  "half",
  "hex",
  "libc",
@@ -1690,8 +1691,6 @@ dependencies = [
  "parking_lot",
  "polyvoice",
  "proptest",
- "prost",
- "prost-build",
  "reqwest",
  "rubato",
  "rustfft",
@@ -1727,6 +1726,17 @@ dependencies = [
  "napi",
  "napi-build",
  "napi-derive",
+]
+
+[[package]]
+name = "gigastt-quantize"
+version = "2.16.0"
+dependencies = [
+ "anyhow",
+ "prost",
+ "prost-build",
+ "tempfile",
+ "tracing",
 ]
 
 [[package]]

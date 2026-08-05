@@ -21,10 +21,15 @@ pub mod inference;
 pub mod itn;
 pub mod lexicon;
 pub mod model;
-pub mod onnx_proto;
 pub mod protocol;
 pub mod punctuation;
-pub mod quantize;
+
+/// INT8 quantizer, re-exported so `gigastt_core::quantize::quantize_model`
+/// keeps working. Behind the default-on `quantize` feature: lean embedders that
+/// side-load a pre-quantized model can turn it off and drop `prost` — and the
+/// `protoc` build requirement — entirely.
+#[cfg(feature = "quantize")]
+pub use gigastt_quantize as quantize;
 pub(crate) mod runtime;
 pub mod vad;
 mod wordpiece;
