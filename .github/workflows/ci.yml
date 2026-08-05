@@ -665,18 +665,37 @@ jobs:
         with:
           shared-key: ci
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      # Both published crates: gigastt-core is the library, gigastt is the
-      # `cargo install gigastt` binary — packaging breakage in either fails CI.
+      # Published crates, in dependency order: gigastt-quantize (INT8), then
+      # gigastt-core (library), then gigastt (binary). Packaging breakage in
+      # any of them fails CI.
       #
-      # The gigastt leg runs with --no-verify: in the packaged crate the
-      # path-dependency on gigastt-core resolves to the version already on
-      # crates.io, so any PR that changes core's API *and* uses it from the
-      # server crate would fail to compile here even though the code is
-      # correct (at real release time core is published first). --no-verify
-      # still exercises `cargo package` (manifest, metadata, file inclusion);
-      # the compile itself is covered by the build/test jobs.
+      # The gigastt / gigastt-core legs that depend on a not-yet-published
+      # workspace path crate use --no-verify: in the packaged crate the path
+      # dependency resolves to crates.io, so a PR that changes the path crate
+      # would fail to compile here even though the workspace is correct
+      # (at real release time quantize then core are published first).
+      # --no-verify still exercises `cargo package` (manifest, metadata,
+      # file inclusion); the compile itself is covered by the build/test jobs.
       - run: |
-          cargo publish --dry-run -p gigastt-core --locked
+          set -euo pipefail
+          # New workspace crate: full dry-run (compile + package).
+          cargo publish --dry-run -p gigastt-quantize --locked
+          # core depends on gigastt-quantize via path. Until quantize is on
+          # crates.io (first release after this lands), `cargo publish` cannot
+          # resolve it from the registry. Accept that transitional error;
+          # anything else is a real packaging break.
+          set +e
+          out=$(cargo publish --dry-run -p gigastt-core --locked --no-verify 2>&1)
+          rc=$?
+          set -e
+          echo "$out"
+          if [ "$rc" -ne 0 ]; then
+            if echo "$out" | grep -q 'no matching package named `gigastt-quantize`'; then
+              echo "note: gigastt-quantize not yet on crates.io — core dry-run skipped until first release"
+            else
+              exit "$rc"
+            fi
+          fi
           cargo publish --dry-run -p gigastt --locked --no-verify
 
   msrv:
@@ -902,7 +921,7 @@ jobs:
               - 'Cargo.lock'
               - 'crates/**/Cargo.toml'
               - 'crates/**/build.rs'
-              - 'crates/gigastt-core/proto/**'
+              - 'crates/gigastt-quantize/proto/**'
               - 'rust-toolchain.toml'
 
   docker-build:
