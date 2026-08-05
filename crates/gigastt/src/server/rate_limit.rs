@@ -21,7 +21,8 @@ use axum::extract::{ConnectInfo, Request};
 use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Json, Response};
-use dashmap::DashMap;
+use parking_lot::Mutex;
+use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -159,10 +160,10 @@ pub const MAX_RPM: u32 = 60_000;
 /// is evicted before the new one is inserted.
 const MAX_BUCKETS: usize = 100_000;
 
-/// Concurrent map of per-IP buckets. `DashMap` gives us lock-free reads on
-/// the common path; writes only lock a single shard.
+/// Per-IP buckets behind a single mutex. The critical section is a handful of
+/// float operations on one bucket, so sharding would buy nothing measurable.
 pub struct RateLimiter {
-    buckets: DashMap<IpAddr, TokenBucket>,
+    buckets: Mutex<HashMap<IpAddr, TokenBucket>>,
     capacity: Burst,
     refill_per_ms: f64,
     effective_rpm: Rpm,
@@ -190,7 +191,7 @@ impl RateLimiter {
         let effective_rpm = rpm.clamp(1, MAX_RPM);
         let refill_per_ms = effective_rpm as f64 / 60_000.0;
         Self {
-            buckets: DashMap::new(),
+            buckets: Mutex::new(HashMap::new()),
             capacity: Burst::from_raw(burst.max(1)),
             refill_per_ms,
             effective_rpm: Rpm::from_raw(effective_rpm),
@@ -223,34 +224,35 @@ impl RateLimiter {
         let now = Instant::now();
         let now_ms = unix_ms();
 
+        let mut buckets = self.buckets.lock();
+
         // Fast path: existing bucket.
-        if let Some(mut bucket) = self.buckets.get_mut(&ip) {
+        if let Some(bucket) = buckets.get_mut(&ip) {
             return bucket.try_consume(now, now_ms);
         }
 
-        // Slow path: new IP.  Evict a random entry if at capacity.
-        if self.buckets.len() >= self.max_entries {
-            self.evict_random();
+        // Slow path: new IP. Evict the stalest of a bounded sample if at capacity.
+        if buckets.len() >= self.max_entries {
+            Self::evict_one(&mut buckets);
         }
 
         let mut bucket = TokenBucket::new(self.capacity.0, self.refill_per_ms, now, now_ms);
         let allowed = bucket.try_consume(now, now_ms);
-        self.buckets.insert(ip, bucket);
+        buckets.insert(ip, bucket);
         allowed
     }
 
-    /// Evict the stalest bucket from a sample of 100 entries.  This replaces
-    /// the previous O(n) global scan with an O(100) bounded operation.
-    fn evict_random(&self) {
-        if let Some(oldest) = self
-            .buckets
+    /// Evict the stalest bucket from a bounded sample of 100 entries. Takes the
+    /// already-held map: `check` calls this while holding the lock, and
+    /// re-locking would deadlock.
+    fn evict_one(buckets: &mut HashMap<IpAddr, TokenBucket>) {
+        let oldest = buckets
             .iter()
             .take(100)
-            .min_by_key(|e| e.value().last_seen_ms)
-        {
-            let key = *oldest.key();
-            drop(oldest);
-            self.buckets.remove(&key);
+            .min_by_key(|(_, bucket)| bucket.last_seen_ms)
+            .map(|(ip, _)| *ip);
+        if let Some(key) = oldest {
+            buckets.remove(&key);
         }
     }
 
@@ -266,6 +268,7 @@ impl RateLimiter {
     pub fn evict_stale(&self, older_than: Duration) {
         let cutoff = unix_ms().saturating_sub(older_than.as_millis() as u64);
         self.buckets
+            .lock()
             .retain(|_, bucket| bucket.last_seen_ms >= cutoff);
     }
 
@@ -277,7 +280,7 @@ impl RateLimiter {
     /// { ret == self.buckets.len() }
     /// ```
     pub fn len(&self) -> usize {
-        self.buckets.len()
+        self.buckets.lock().len()
     }
 }
 
@@ -485,15 +488,17 @@ mod tests {
             // Advance the bucket's last_refill manually by draining, waiting,
             // and re-checking. Real tests use sleeps; here we inject the
             // refill via `try_consume` with a later instant.
-            let mut guard = limiter.buckets.get_mut(&ip).expect("bucket exists");
+            let mut buckets = limiter.buckets.lock();
+            let bucket = buckets.get_mut(&ip).expect("bucket exists");
             let interval_ms = (60_000u64 / rpm as u64).max(1);
-            let later = guard.last_refill + Duration::from_millis(interval_ms);
+            let later = bucket.last_refill + Duration::from_millis(interval_ms);
             // `later - last_refill = interval_ms`, so the refill should be
             // `elapsed_ms * refill_per_ms = interval_ms * (rpm / 60_000) >= 1`.
             assert!(
-                guard.try_consume(later, unix_ms()),
+                bucket.try_consume(later, unix_ms()),
                 "rpm={rpm}: 1 token must refill after {interval_ms} ms",
             );
+            drop(buckets);
         }
     }
 
@@ -599,13 +604,14 @@ mod tests {
         assert!(limiter.check(stale));
         // Hand-roll an "old" last_seen_ms on the stale bucket.
         {
-            let mut guard = limiter.buckets.get_mut(&stale).expect("stale bucket");
-            guard.last_seen_ms = unix_ms().saturating_sub(10 * 60_000); // 10 min old
+            let mut buckets = limiter.buckets.lock();
+            let bucket = buckets.get_mut(&stale).expect("stale bucket");
+            bucket.last_seen_ms = unix_ms().saturating_sub(10 * 60_000); // 10 min old
         }
         limiter.evict_stale(Duration::from_secs(60));
         assert_eq!(limiter.len(), 1, "stale bucket should be evicted");
         assert!(
-            limiter.buckets.contains_key(&fresh),
+            limiter.buckets.lock().contains_key(&fresh),
             "fresh bucket must survive eviction"
         );
     }
