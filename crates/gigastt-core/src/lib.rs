@@ -27,6 +27,7 @@ pub mod punctuation;
 pub mod quantize;
 pub(crate) mod runtime;
 pub mod vad;
+mod wordpiece;
 
 pub use runtime::cpu_factory;
 
