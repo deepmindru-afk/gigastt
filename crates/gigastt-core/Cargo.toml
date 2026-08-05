@@ -45,7 +45,7 @@ crate-type = ["rlib"]
 bench = false
 
 [features]
-default = ["diarization", "net", "async-pool", "file-decode"]
+default = ["diarization", "net", "async-pool", "file-decode", "quantize"]
 coreml = ["ort/coreml"]
 cuda = ["ort/cuda"]
 nnapi = ["ort/nnapi"]
@@ -56,7 +56,7 @@ net = ["dep:reqwest", "dep:tokio", "dep:futures-util"]  # HTTP model download
 async-pool = ["dep:tokio"]                              # async Pool::checkout; blocking path needs neither
 file-decode = ["dep:symphonia", "dep:audio-codec", "dep:opus-rs"] # file transcription; raw-PCM streaming does not need it
 ort-load-dynamic = ["ort/load-dynamic"]                 # system/vendored onnxruntime instead of download-binaries
-quantize = []
+quantize = ["dep:gigastt-quantize"]
 candle = ["dep:candle-core", "dep:candle-nn", "dep:safetensors"]
 ane = ["dep:tar", "dep:objc2", "dep:objc2-core-ml", "dep:objc2-foundation", "dep:half"]
 # Private/unstable: exposes internal items (tokenizer module + synthetic
@@ -93,7 +93,7 @@ audio-codec = { version = "0.3", default-features = false, optional = true }
 # this crate (decoder only — the encoder is not used).
 opus-rs = { version = "0.1", optional = true }
 bytes = "1"
-prost = "0.14"
+gigastt-quantize = { version = "2.16.0", path = "../gigastt-quantize", optional = true }
 polyvoice = { version = "0.12.0", features = ["onnx"], optional = true }
 parking_lot = "0.12"
 libc = "0.2"
@@ -132,14 +132,16 @@ objc2-foundation = { version = "0.3", optional = true, default-features = false,
     "NSValue",
 ] }
 
-[build-dependencies]
-prost-build = "0.14"
 
 [dev-dependencies]
 tempfile = "3"
 wiremock = "0.6"
 proptest = "1"
 criterion = "0.8"
+
+[[example]]
+name = "quantize_file"
+required-features = ["quantize"]
 
 [[bench]]
 name = "mel"

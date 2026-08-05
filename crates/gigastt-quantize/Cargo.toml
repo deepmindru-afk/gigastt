@@ -1,0 +1,25 @@
+[package]
+name = "gigastt-quantize"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+description = "Native Rust INT8 dynamic quantizer for ONNX encoder graphs (gigastt)"
+keywords = ["onnx", "quantization", "int8", "inference"]
+categories = ["multimedia::audio", "science"]
+
+[lib]
+bench = false
+
+[dependencies]
+anyhow = "1"
+prost = "0.14"
+tracing = "0.1"
+
+[build-dependencies]
+prost-build = "0.14"
+
+[dev-dependencies]
+tempfile = "3"
