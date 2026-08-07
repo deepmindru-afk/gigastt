@@ -59,8 +59,9 @@ Server surfaces (single process, one primary port unless metrics is enabled):
 [SberDevices](https://github.com/salute-developers/GigaAM) — RNN-T (Conformer encoder +
 LSTM decoder + joiner), 16-layer 768-dim encoder (240M params); the vocab depends on the
 head (`rnnt` 34-token char — the v2.3 default — or `e2e_rnnt` 1025-token BPE), 16 kHz
-mono input, MIT licensed. Download ~850 MB (encoder 844 MB, decoder 4.4 MB, joiner
-2.6 MB); INT8 encoder ~215 MB. Trained on 700K+ hours of Russian speech.
+mono input, MIT licensed. Default install is lean INT8 (~225 MB total: encoder
+~215 MB + decoder/joiner/vocab). FP32 (~844 MB encoder) is opt-in via
+`download --fp32`. Trained on 700K+ hours of Russian speech.
 
 Two opt-in heads (`--model-variant ml_ctc` / `ml_ctc_large`) use
 [**GigaAM Multilingual**](https://huggingface.co/istupakov/gigaam-multilingual-ctc-onnx)

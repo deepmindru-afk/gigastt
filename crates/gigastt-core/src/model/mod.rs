@@ -1657,7 +1657,7 @@ async fn stream_to_partial_then_finalize_with_sink(
     tracing::info!("Downloading {label}...");
 
     // Configured client: bound the connect/TLS handshake and per-read stalls, and
-    // cap redirects. NOT a whole-request timeout (a legitimate ~850 MB download can
+    // cap redirects. NOT a whole-request timeout (a legitimate ~225 MB INT8 download can
     // take minutes) and NO host pinning (HF LFS 302-redirects to a CloudFront host).
     let client = reqwest::Client::builder()
         .connect_timeout(std::time::Duration::from_secs(30))

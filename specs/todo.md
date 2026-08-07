@@ -205,7 +205,7 @@ All new findings from the 2026-04-18 review are catalogued in
   non-loopback addresses. Update Dockerfiles to set that env.
 
 ### 10. Docker image bakes no model, no runtime progress UX
-- First `docker run` blocks for ~850 MB download with only tracing
+- First `docker run` blocks for ~225 MB INT8 download with only tracing
   lines. For `compose up` this is a silent 2–5 min hang.
 - Fix: optional build arg `GIGASTT_BAKE_MODEL=1` that triggers
   `gigastt download` during image build (produces a ~1.1 GB image

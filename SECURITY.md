@@ -39,7 +39,7 @@ disclosure at their discretion after notifying the maintainer.
 The following are in scope:
 
 - Vulnerabilities in gigastt server code (`crates/gigastt/src/`, `crates/gigastt-core/src/`)
-- ONNX model loading and the quantization pipeline (`crates/gigastt-core/src/inference/`, `crates/gigastt-core/src/quantize.rs`)
+- ONNX model loading (`crates/gigastt-core/src/inference/`, `crates/gigastt-core/src/model/`) and the optional INT8 quantizer (`crates/gigastt-quantize/`)
 - WebSocket and REST request handlers (`crates/gigastt/src/server/`)
 - Authentication bypass, origin-check circumvention, or bind-guard bypass
 - Denial-of-service via crafted audio, WebSocket frames, or HTTP requests that

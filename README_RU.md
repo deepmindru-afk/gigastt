@@ -76,7 +76,7 @@ docker build -t gigastt . && docker run -p 9876:9876 gigastt
 
 Встраивание вместо сервера? `npm install gigastt` (Node.js) · `pip install gigastt` (Python на PyPI) · Swift / Kotlin биндинги в работе — все оборачивают тот же движок, модель подкладывается отдельно: [In-process quickstarts](docs/quickstarts.md).
 
-Модель GigaAM v3 (~850 МБ) скачивается автоматически при первом запуске и квантуется в INT8 до ~225 МБ.
+Модель GigaAM v3 INT8 (~225 МБ) скачивается при первом запуске (lean prequantized; без шага FP32).
 
 > Сборка также тянет prebuilt onnxruntime по сети (ort `download-binaries`); гарантия on-device / без облака покрывает **runtime-инференс**, а не сборку. Air-gapped-сборка — в [Architecture](docs/architecture.md).
 

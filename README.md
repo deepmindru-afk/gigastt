@@ -76,7 +76,7 @@ docker build -t gigastt . && docker run -p 9876:9876 gigastt
 
 Embedding instead of serving? `npm install gigastt` (Node.js) · `pip install gigastt` (Python on PyPI) · Swift / Kotlin bindings in progress — all wrap the same engine, model side-loaded: [In-process quickstarts](docs/quickstarts.md).
 
-The GigaAM v3 model (~850 MB) auto-downloads on first run and is INT8-quantized to ~225 MB.
+The GigaAM v3 INT8 model (~225 MB) downloads on first run (lean prequantized path; no FP32 step).
 
 > Building also fetches a prebuilt onnxruntime over the network (ort's default `download-binaries`); the on-device / no-cloud guarantee covers **runtime inference**, not the build. See [Architecture](docs/architecture.md) for air-gapped builds.
 

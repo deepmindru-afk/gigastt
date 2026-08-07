@@ -1,6 +1,6 @@
 //! Integration test: streaming transcription quality must match batch.
 //!
-//! Model-gated (`#[ignore]`, requires ~850MB GigaAM model at `~/.gigastt/models`).
+//! Model-gated (`#[ignore]`, requires ~225 MB INT8 GigaAM model at `~/.gigastt/models`).
 //! Run with: `cargo test -p gigastt-core --test streaming_quality -- --ignored --nocapture`.
 //!
 //! Regression guard for the streaming-recognition-quality bug:
@@ -31,7 +31,7 @@ fn norm_words(s: &str) -> HashSet<String> {
 }
 
 #[test]
-#[ignore = "requires the GigaAM model (~850MB) at ~/.gigastt/models"]
+#[ignore = "requires the GigaAM model (~225 MB INT8) at ~/.gigastt/models"]
 fn streaming_transcript_matches_batch() {
     let model_dir = default_model_dir();
     let fixture = concat!(
@@ -98,7 +98,7 @@ fn streaming_transcript_matches_batch() {
 /// window slide (left-context carry + dedup), not collapse or stall. Feeds three
 /// concatenated copies of the fixture (~12 s) so the window cap forces slides.
 #[test]
-#[ignore = "requires the GigaAM model (~850MB) at ~/.gigastt/models"]
+#[ignore = "requires the GigaAM model (~225 MB INT8) at ~/.gigastt/models"]
 fn streaming_long_audio_slides_window() {
     let model_dir = default_model_dir();
     let fixture = concat!(
@@ -157,7 +157,7 @@ fn streaming_long_audio_slides_window() {
 /// lands far beyond the audio's real duration. Fixed structurally (the offset
 /// is now derived from slid-off samples); this is the regression guard.
 #[test]
-#[ignore = "requires the GigaAM model (~850MB) at ~/.gigastt/models"]
+#[ignore = "requires the GigaAM model (~225 MB INT8) at ~/.gigastt/models"]
 fn streaming_word_timestamps_not_inflated() {
     let model_dir = default_model_dir();
     let fixture = concat!(

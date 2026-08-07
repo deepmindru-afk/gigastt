@@ -20,9 +20,10 @@ exposes:
 - **OpenAI-compatible** (`/v1/audio/transcriptions`) — multipart `file` + `model` → `{"text":"..."}`
 - **CLI** — `serve`, `download`, `transcribe`, `quantize` commands
 
-The model (~850 MB FP32, ~225 MB INT8) auto-downloads from HuggingFace on first
-run. INT8 quantization is native Rust (no Python), always compiled since v0.9.0,
-and auto-invoked on first `serve`/`download` unless `--skip-quantize` is passed.
+The default model path is **lean INT8** (~225 MB prequantized bundle from
+Releases): first `serve` / `download` fetches INT8 only — no FP32 step. On-device
+quantize (`gigastt quantize`, or `download --fp32`) is optional for debugging
+or regenerating INT8 from FP32. The quantizer lives in `crates/gigastt-quantize`.
 
 ### Key metrics
 
@@ -118,7 +119,7 @@ cargo fmt --check                    # Format check
 Unit tests live in `#[cfg(test)] mod tests` at the bottom of each source file.
 They use synthetic data. Test naming convention: `test_<what>_<expected_behavior>`.
 
-### E2E tests (require model ~850 MB, run in CI on main push only)
+### E2E tests (require model ~225 MB INT8, run in CI on main push only)
 
 ```sh
 # Download model first
@@ -164,11 +165,10 @@ Custom harness (`harness = false` in `Cargo.toml`).
 
 ```
 crates/
+  gigastt-quantize/       # Native Rust INT8 dynamic quantizer (optional; lean INT8 default skips it)
   gigastt-core/src/       # Core library (inference engine, no server deps)
     lib.rs                # Public module exports
     error.rs              # Typed error types (GigasttError)
-    quantize.rs           # Native Rust INT8 quantization pipeline
-    onnx_proto.rs         # prost-generated ONNX types (included from OUT_DIR)
     export.rs             # Transcript export: TXT / SRT / VTT / Markdown
     punctuation.rs        # Punctuation restoration (windowed)
     itn.rs · lexicon.rs   # Inverse text normalization, lexicon
@@ -231,15 +231,17 @@ Defined in `crates/gigastt-core/src/inference/mod.rs`:
 
 ## Model Files
 
-Downloaded to `~/.gigastt/models/` from `istupakov/gigaam-v3-onnx`:
+Default lean install under `~/.gigastt/models/` (prequantized INT8 from Releases):
 
 | File | Size | Purpose |
 |---|---|---|
-| `v3_rnnt_encoder.onnx` | 844 MB | Conformer encoder (FP32) |
-| `v3_rnnt_encoder_int8.onnx` | ~225 MB | Quantized encoder (auto-generated) |
+| `v3_rnnt_encoder_int8.onnx` | ~215 MB | Conformer encoder (INT8; default) |
 | `v3_rnnt_decoder.onnx` | ~3.3 MB | LSTM decoder |
 | `v3_rnnt_joint.onnx` | ~1.4 MB | RNN-T joiner |
 | `v3_vocab.txt` | small | char vocabulary (34 tokens) |
+
+Optional FP32 encoder (`download --fp32` from HuggingFace `istupakov/gigaam-v3-onnx`):
+`v3_rnnt_encoder.onnx` (~844 MB); on-device `quantize` can rebuild INT8 from it.
 
 The `e2e_rnnt` head (`--model-variant e2e_rnnt`) uses the parallel `v3_e2e_rnnt_*` filenames with a 1025-token BPE vocab. The multilingual heads `ml_ctc` / `ml_ctc_large` (`--model-variant ml_ctc` / `ml_ctc_large`) are encoder-only: they download the pre-quantized `multilingual_ctc.int8.onnx` (~225 MB) / `multilingual_large_ctc.int8.onnx` (~592 MB) plus `multilingual_vocab.txt` (71-class multilingual char vocab, ru/en/kk/ky/uz) from `istupakov/gigaam-multilingual-ctc-onnx` / `istupakov/gigaam-multilingual-large-ctc-onnx` — no decoder/joiner.
 
@@ -492,8 +494,8 @@ RUST_LOG=gigastt=debug cargo run -- serve
   `protocol/mod.rs` and add tests in `tests/e2e_ws.rs`.
 - When adding new CLI flags, add the corresponding env var and document it in
   both `main.rs` and this file.
-- The `quantize` Cargo feature is a no-op retained for backward compatibility;
-  do not gate new code behind it.
+- The `quantize` Cargo feature enables `crates/gigastt-quantize` (on by default
+  for the server binary). Lean embedders may disable it and side-load INT8 only.
 - Model download logic is in `crates/gigastt-core/src/model/mod.rs`. If you change HF repo or file
   names, update `MODEL_CHECKSUMS` and the cache key in `.github/workflows/ci.yml`.
 - The project uses English for all code comments, documentation, and commit

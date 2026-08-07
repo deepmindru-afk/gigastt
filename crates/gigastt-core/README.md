@@ -13,7 +13,7 @@ gigastt-core = "2.10"
 use gigastt_core::inference::Engine;
 use gigastt_core::model;
 
-// Download model on first run (~850 MB)
+// Download model on first run (~225 MB INT8)
 let model_dir = model::default_model_dir();
 model::ensure_model(&model_dir, false, |p| {
     println!("Downloading: {:.0}%", p.percent());

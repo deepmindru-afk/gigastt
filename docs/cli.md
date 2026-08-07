@@ -18,7 +18,7 @@ Options:
 
 Commands:
   serve        Start STT server
-  download     Download model (~850 MB) and auto-generate INT8 encoder
+  download     Download lean INT8 model (~225 MB; default)
   transcribe   Transcribe audio file (offline)
   transcribe-batch  Transcribe every audio file in a directory (offline)
   watch        Watch a directory and transcribe new/changed audio files

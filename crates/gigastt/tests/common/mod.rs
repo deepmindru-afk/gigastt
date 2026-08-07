@@ -510,7 +510,7 @@ pub fn assert_msg_type(
 /// Lets the "diarization requested but unavailable" path be exercised
 /// deterministically instead of depending on whether a speaker model happens to
 /// be installed on the machine. The returned `TempDir` must outlive the server.
-/// Unix only: it relies on symlinks to avoid copying ~850 MB.
+/// Unix only: it relies on symlinks to avoid copying ~225 MB INT8.
 #[cfg(unix)]
 #[allow(dead_code)]
 pub fn model_dir_without_speaker() -> (tempfile::TempDir, String) {

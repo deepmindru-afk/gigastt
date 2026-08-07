@@ -37,8 +37,8 @@ ONNX files, vocabulary, and decoding.
 
 | Head | Size on disk | Languages | Output text | Accuracy | Pick when |
 |---|---|---|---|---|---|
-| `rnnt` (default) | 844 MB FP32 encoder → ~215 MB INT8 (auto-quantized) + decoder/joiner/vocab (a few MB) | Russian | Bare lowercase; pair with `--punctuation` / `--itn` (on by default in `auto`) | Lowest Russian WER of the four — [table](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#accuracy-by-domain--wer--95-ci) | Russian-only workloads; the default for a reason |
-| `e2e_rnnt` | Same size class as `rnnt` (~850 MB FP32 → INT8 generated locally) | Russian | Punctuation / casing / ITN **baked in**, one pass | Higher WER than `rnnt`, but the best punctuation/casing F1 — [comparison](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#punctuation-quality--e2e_rnnt-vs-rnnt--rupunct-restore) | You want readable Russian in a single pass with no restore step |
+| `rnnt` (default) | ~225 MB lean INT8 (encoder ~215 MB + decoder/joiner/vocab); FP32 only with `download --fp32` | Russian | Bare lowercase; pair with `--punctuation` / `--itn` (on by default in `auto`) | Lowest Russian WER of the four — [table](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#accuracy-by-domain--wer--95-ci) | Russian-only workloads; the default for a reason |
+| `e2e_rnnt` | Same lean INT8 pack (~225 MB); FP32 only with `download --fp32` | Russian | Punctuation / casing / ITN **baked in**, one pass | Higher WER than `rnnt`, but the best punctuation/casing F1 — [comparison](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#punctuation-quality--e2e_rnnt-vs-rnnt--rupunct-restore) | You want readable Russian in a single pass with no restore step |
 | `ml_ctc` | ~225 MB pre-quantized INT8, encoder-only (no decoder/joiner) | ru/en/kk/ky/uz | Bare lowercase | [Multilingual tables](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#english--wer--librispeech-test-clean) | Multilingual audio or ~1.5× RTF vs `rnnt` (ready RSS ≈ `rnnt`, not a lean-RAM SKU) |
 | `ml_ctc_large` | ~592 MB pre-quantized INT8, encoder-only | ru/en/kk/ky/uz | Bare lowercase | Best multilingual accuracy; approaches `rnnt` on Russian clean read — [table](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#accuracy-by-domain--wer--95-ci) | Mixed-language audio, or English/Kazakh/Kyrgyz/Uzbek at all |
 
@@ -350,10 +350,11 @@ matter more than the stopwatch.
   (with a `variants are never mixed` warning), and a later flag-less start
   prefers `rnnt` again. Delete the unused head's files to keep the directory
   unambiguous and reclaim disk.
-- **First `serve` looks hung.** That is the one-time ~850 MB FP32 download +
-  ~2 min quantization; `/health` answers `200` with `model:"loading"` while
-  `/ready` stays `503 initializing`. Skip the window with `gigastt download
-  --prequantized`, and gate clients on `/ready`, never on `/health`.
+- **First `serve` looks hung.** That is the one-time lean INT8 download
+  (~225 MB) if the model dir is empty; `/health` answers `200` with
+  `model:"loading"` while `/ready` stays `503 initializing`. Pre-seed with
+  `gigastt download`, and gate clients on `/ready`, never on `/health`.
+  (FP32 + local quantize only happens with `download --fp32`.)
 - **OOM after switching to `ml_ctc_large`.** Each slot now costs ~1.2 GB.
   Lower `--pool-size`, keep `--pool-min-size 1` so a tight host boots
   degraded, and watch for the `Capping pool size` warning at startup.

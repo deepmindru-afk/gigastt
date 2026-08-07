@@ -83,7 +83,7 @@ cargo install gigastt
 ```
 
 Then fetch the model — the lean way, a ~225 MB pre-quantized INT8 bundle from
-the pinned GitHub Release (no ~850 MB FP32 download, no ~2-minute on-device
+the pinned GitHub Release (no ~844 MB FP32 download, no ~2-minute on-device
 quantization; also handy when HuggingFace is unreachable but GitHub is not):
 
 ```sh
@@ -251,7 +251,7 @@ two is blocked.
 
 Three levers change what you pay:
 
-- `gigastt download --fp32` — the old path: ~850 MB of FP32 ONNX files from
+- `gigastt download --fp32` — the old path: ~844 MB of FP32 ONNX files from
   HuggingFace, then a one-time ~2-minute INT8 quantization pass producing the
   same ~225 MB encoder the engine loads. Needs `protoc`. Use it when you want
   the FP32 encoder for debugging or an offline quantize workflow.

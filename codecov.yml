@@ -3,7 +3,7 @@
 # Coverage is uploaded from two CI jobs and merged by flag:
 #   * unit — `cargo llvm-cov --workspace --lib --bins` (every PR/push)
 #   * e2e  — model-gated lib/bin + integration + CLI subprocess coverage
-#            (main-push only; needs the ~850 MB model)
+#            (main-push only; needs the ~225 MB INT8 model)
 #
 # Both uploads MUST pass `flags: unit` / `flags: e2e` in codecov-action so
 # carryforward works. Without flags, a fresh main commit shows unit-only
