@@ -9,7 +9,7 @@
 //!
 //! Help / version / arg-validation tests need no model and run anywhere. The
 //! transcribe / serve / quantize tests are `#[ignore]` (require the GigaAM
-//! model ~850 MB at `~/.gigastt/models`). Run all with:
+//! model ~225 MB INT8 at `~/.gigastt/models`). Run all with:
 //! `cargo test --test e2e_cli -- --include-ignored --test-threads=1`.
 
 mod common;
@@ -117,7 +117,7 @@ fn cli_serve_non_loopback_without_bind_all_fails() {
 
 // ─── model-gated: transcribe ────────────────────────────────────────────────
 
-#[ignore = "requires the GigaAM model (~850MB)"]
+#[ignore = "requires the GigaAM model (~225 MB INT8)"]
 #[test]
 fn cli_transcribe_to_stdout_txt() {
     let md = common::model_dir();
@@ -145,7 +145,7 @@ fn cli_transcribe_to_stdout_txt() {
     );
 }
 
-#[ignore = "requires the GigaAM model (~850MB)"]
+#[ignore = "requires the GigaAM model (~225 MB INT8)"]
 #[test]
 fn cli_transcribe_json_stdout() {
     let md = common::model_dir();
@@ -183,7 +183,7 @@ fn cli_transcribe_json_stdout() {
     );
 }
 
-#[ignore = "requires the GigaAM model (~850MB)"]
+#[ignore = "requires the GigaAM model (~225 MB INT8)"]
 #[test]
 fn cli_transcribe_to_file_srt_with_hotwords() {
     let md = common::model_dir();
@@ -224,7 +224,7 @@ fn cli_transcribe_to_file_srt_with_hotwords() {
     assert!(!body.trim().is_empty(), "srt file should not be empty");
 }
 
-#[ignore = "requires the GigaAM model (~850MB)"]
+#[ignore = "requires the GigaAM model (~225 MB INT8)"]
 #[test]
 fn cli_transcribe_missing_file_fails() {
     let md = common::model_dir();
@@ -247,7 +247,7 @@ fn cli_transcribe_missing_file_fails() {
     );
 }
 
-#[ignore = "requires the GigaAM model (~850MB)"]
+#[ignore = "requires the GigaAM model (~225 MB INT8)"]
 #[test]
 fn cli_transcribe_bad_format_fails() {
     // The format string is validated after a successful decode, so the model
@@ -273,7 +273,7 @@ fn cli_transcribe_bad_format_fails() {
 
 // ─── model-gated: quantize ──────────────────────────────────────────────────
 
-#[ignore = "requires the GigaAM model (~850MB)"]
+#[ignore = "requires the GigaAM model (~225 MB INT8)"]
 #[test]
 fn cli_quantize_existing_is_noop() {
     let md = common::model_dir();
@@ -299,7 +299,7 @@ fn cli_quantize_existing_is_noop() {
 
 // ─── model-gated: serve boot + graceful shutdown ────────────────────────────
 
-#[ignore = "requires the GigaAM model (~850MB)"]
+#[ignore = "requires the GigaAM model (~225 MB INT8)"]
 #[test]
 fn cli_serve_boots_and_graceful_shutdown() {
     let md = common::model_dir();
@@ -403,7 +403,7 @@ fn cli_serve_boots_and_graceful_shutdown() {
 /// Symlink the named files from the real model dir into `dst`. Returns `false`
 /// (test must self-skip) when any of them is absent — e.g. a machine installed
 /// via `download --prequantized` has no FP32 encoder; running anyway would
-/// silently turn the test into a live ~850 MB network download.
+/// silently turn the test into a live ~225 MB INT8 network download.
 #[cfg(unix)]
 #[must_use]
 fn link_model_files(dst: &std::path::Path, names: &[&str]) -> bool {
@@ -435,7 +435,7 @@ impl Drop for KillOnDrop {
 /// `{"phase":"done",…}`. Human `\r`-progress and tracing logs must not leak
 /// into stdout.
 #[cfg(unix)]
-#[ignore = "requires the GigaAM model (~850MB)"]
+#[ignore = "requires the GigaAM model (~225 MB INT8)"]
 #[test]
 fn cli_download_json_happy_path_stdout_is_pure_ndjson() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -495,7 +495,7 @@ fn cli_download_json_happy_path_stdout_is_pure_ndjson() {
 /// INT8 encoder to force the pass; the subprocess is killed right after the
 /// event arrives — the test asserts the emission, not the quantization.
 #[cfg(unix)]
-#[ignore = "requires the GigaAM model (~850MB)"]
+#[ignore = "requires the GigaAM model (~225 MB INT8)"]
 #[test]
 fn cli_download_json_emits_quantize_phase() {
     use std::io::BufRead;
@@ -704,7 +704,7 @@ fn cli_transcribe_codec_without_sample_rate_fails() {
     );
 }
 
-#[ignore = "requires the GigaAM model (~850MB)"]
+#[ignore = "requires the GigaAM model (~225 MB INT8)"]
 #[test]
 fn cli_transcribe_g722_wav() {
     // G.722-in-WAV (format tag 0x0064/0x028F) is decoded by the fallback
@@ -737,7 +737,7 @@ fn cli_transcribe_g722_wav() {
     );
 }
 
-#[ignore = "requires the GigaAM model (~850MB)"]
+#[ignore = "requires the GigaAM model (~225 MB INT8)"]
 #[test]
 fn cli_transcribe_raw_ulaw_with_codec_flags() {
     // Headerless μ-law stream decoded via --codec/--sample-rate.
@@ -780,7 +780,7 @@ fn cli_transcribe_raw_ulaw_with_codec_flags() {
 /// scripts/generate_opus_fixtures.sh.
 const OPUS_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/opus");
 
-#[ignore = "requires the GigaAM model (~850MB)"]
+#[ignore = "requires the GigaAM model (~225 MB INT8)"]
 #[test]
 fn cli_transcribe_opus_files() {
     // OGG/Opus and .opus are decoded by the opus-rs fallback through the

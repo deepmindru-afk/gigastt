@@ -29,12 +29,13 @@ Note: `cargo build` requires `protoc` in `PATH` for the in-tree ONNX quantizatio
 
 Note (build-time network fetch): `ort`'s default `download-binaries` feature makes `ort-sys` download a prebuilt onnxruntime native library over the network at build time, outside `Cargo.lock` (the download is verified by an embedded checksum). The "no cloud / full privacy" guarantee covers **runtime** inference, not the build process. For air-gapped/offline builds, use `ort` with `default-features = false` + the `load-dynamic` feature (or a vendored onnxruntime) and pin the native library via `ORT_*` env vars / `.cargo/config.toml`. See `docs/embedding-packaging.md` (static-default vs `ort-load-dynamic`) and `docs/quickstarts.md` (in-process Python/Node/Swift/Kotlin examples).
 
-Model download (required for E2E testing and file transcription, ~850MB):
+Model download (required for E2E testing and file transcription, ~225 MB INT8):
 ```sh
-cargo run -- download                    # Downloads to ~/.gigastt/models/ and auto-generates INT8 encoder
-cargo run -- download --skip-quantize    # Skip auto-quantization (FP32 only)
-cargo run -- download --prequantized     # Lean path: fetch pre-quantized INT8 bundle from Releases (no FP32 download, no protoc, no on-device quantize)
-cargo run -- quantize                    # Regenerate INT8 encoder manually (~215MB)
+cargo run -- download                    # Lean INT8 bundle (~225 MB) from Releases (default)
+cargo run -- download --prequantized     # Same lean path (flag kept for older scripts)
+cargo run -- download --fp32             # Optional: full FP32 from HuggingFace + on-device quantize
+cargo run -- download --fp32 --skip-quantize  # FP32 only (debug; slower)
+cargo run -- quantize                    # Rebuild INT8 encoder from local FP32 (~215 MB out)
 ```
 
 ## Docker
@@ -80,9 +81,8 @@ crates/
       factory.rs          # cfg-gated coreml / cuda / nnapi / ane / candle / CPU
       ort/ · coreml/ · candle/ · mock/
     error.rs              # Typed error types (GigasttError)
-    quantize.rs           # Native Rust INT8 quantizer (always compiled since v0.9.0)
-    onnx_proto.rs         # prost-generated ONNX types from proto/onnx.proto
     protocol/mod.rs       # JSON message types (Ready, Partial, Final, Error + retry_after_ms)
+  gigastt-quantize/       # Native Rust INT8 dynamic quantizer (optional feature)
   gigastt-ffi/src/        # C-ABI FFI layer (cdylib for Android/mobile)
     lib.rs                # Exported C functions: engine_new, transcribe_file, stream_*, etc.
   gigastt-node/           # napi-rs Node binding
@@ -106,11 +106,9 @@ crates/
   - Caches compiled models in `~/.gigastt/models/coreml_cache/`
 - **CUDA execution provider** (`--features cuda`, Linux x86_64 CUDA 12+): GPU inference via ONNX Runtime CUDA EP
   - Features are compile-time and mutually exclusive; default build uses CPU EP on all platforms
-- **INT8 quantization** (always compiled, auto-invoked since v0.9.0): encoder_int8.onnx (~215MB vs 844MB)
-  - Rust-native quantization in `crates/gigastt-core/src/quantize.rs` (no Cargo feature required; `quantize` feature kept as no-op for backward compat)
-  - Auto-invoked by `gigastt download` and `gigastt serve` on first run (~2 min one-time)
-  - Opt out with `--skip-quantize` or `GIGASTT_SKIP_QUANTIZE=1`
-  - Auto-detection: Engine uses INT8 encoder if present, falls back to FP32
+- **INT8 first**: default `download` / first `serve` fetch lean prequantized INT8 (~225 MB), not FP32
+  - On-device quantizer in `crates/gigastt-quantize` (feature `quantize`; used by `download --fp32` / `quantize` CLI)
+  - Engine prefers INT8 encoder if present; FP32 only if that is all on disk
 - **Zero-copy REST upload path** (v0.9.0): `bytes::Bytes` flows end-to-end from axum into symphonia via a crate-private `BytesMediaSource`, eliminating the 4× upload copy that used to OOM small containers on concurrent 10-minute uploads.
 
 ### Key constants (defined in `crates/gigastt-core/src/inference/mod.rs`)
@@ -165,7 +163,7 @@ Three-tier test architecture:
 - Always pass `--lib --bins`. A bare `cargo test` (or `cargo test --workspace`) pulls in the
   ~2.5-hour WER benchmark: it is a `harness = false` target, so `--ignored` does not skip it.
 
-**E2E tests** (require model ~850MB, run in CI on main push only):
+**E2E tests** (require model ~225 MB INT8, run in CI on main push only):
 - `tests/e2e_rest.rs` — REST API tests (health, transcribe, SSE streaming, error paths)
 - `tests/e2e_ws.rs` — WebSocket protocol tests (ready, audio, stop, configure, errors, concurrent)
 - `tests/e2e_errors.rs` — error path tests (oversized body/frame, pool saturation, idle timeout)
@@ -197,7 +195,7 @@ OpenSLR download that does not fit the CI cache budget, so these never run in CI
 
 ### CI structure
 - **PR CI** (`.github/workflows/ci.yml`, fast): fmt, clippy, unit tests, feature compile checks (CoreML, CUDA, Diarization, Candle/Metal, ANE), `cargo audit`, `cargo deny`
-- **Main push CI**: all PR checks + e2e tests with cached model (~850MB, OS-independent cache key) + CoreML runtime smoke on macos-14 (transcribes `golos_00.wav`, fails on inference error or silent CPU fallback)
+- **Main push CI**: all PR checks + e2e tests with cached model (~225 MB INT8, OS-independent cache key) + CoreML runtime smoke on macos-14 (transcribes `golos_00.wav`, fails on inference error or silent CPU fallback)
 - **Nightly soak** (`.github/workflows/soak.yml`): `cargo test --test soak_test` at 03:17 UTC, reuses the main CI model cache
 - **Release** (`.github/workflows/release.yml`, tag-triggered): multi-arch tarballs, per-asset `.sha256` + `SHA256SUMS.txt`, CycloneDX SBOM, SLSA provenance, minisign signatures
 - Load tests are local-only, not in CI
@@ -239,15 +237,14 @@ GigaAM v3 from `istupakov/gigaam-v3-onnx` on HuggingFace. Four selectable heads 
 
 ### Quantization
 
-Rust-native quantization via `crates/gigastt-core/src/quantize.rs` (always compiled since v0.9.0):
+Default path never needs on-device quantize. Optional rebuild from FP32 via
+`crates/gigastt-quantize`:
 ```sh
 cargo run -- quantize --model-dir ~/.gigastt/models
-# Produces: v3_e2e_rnnt_encoder_int8.onnx (~215MB, ~3.9x smaller; dynamic INT8 with
-# MatMulInteger/ConvInteger integer compute → RTF well below 1.0 on CPU)
+# Produces: v3_rnnt_encoder_int8.onnx (~215MB; dynamic INT8 MatMulInteger/ConvInteger)
 ```
 
-Engine auto-detects and prefers INT8 if available; falls back to FP32.
-`gigastt serve` and `gigastt download` invoke the same pipeline automatically on first run unless `--skip-quantize` / `GIGASTT_SKIP_QUANTIZE=1` is set.
+Engine prefers INT8 if present; falls back to FP32 only when no INT8 file exists.
 
 ## Agent Skills
 

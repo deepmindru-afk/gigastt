@@ -1,6 +1,6 @@
 //! End-to-end WebSocket protocol tests.
 //!
-//! All tests require the GigaAM ONNX model to be downloaded (~850MB).
+//! All tests require the GigaAM ONNX model to be downloaded (~225 MB INT8).
 //! Run with: `cargo test --test e2e_ws -- --ignored`
 
 mod common;

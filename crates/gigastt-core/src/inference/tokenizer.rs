@@ -67,7 +67,7 @@ impl Tokenizer {
     }
 
     /// Build a tokenizer directly from an in-memory vocab list, without
-    /// touching the filesystem or the 850 MB model. Exposed under the private
+    /// touching the filesystem or the INT8 model. Exposed under the private
     /// `__internals` feature (fuzzing, benchmarking) and in unit tests; it is
     /// not part of the stable public API. The blank token is located the same
     /// way [`Tokenizer::load`] does (`<blk>` if present, else the last index).

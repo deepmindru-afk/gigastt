@@ -37,8 +37,8 @@ mel-фронтенд и контракт входа 16 кГц моно; разл
 
 | Голова | Размер на диске | Языки | Текст на выходе | Точность | Когда брать |
 |---|---|---|---|---|---|
-| `rnnt` (по умолчанию) | энкодер 844 МБ FP32 → ~215 МБ INT8 (авто-квантизация) + decoder/joiner/vocab (несколько МБ) | русский | «Голый» lowercase; дополняйте `--punctuation` / `--itn` (включены по умолчанию в режиме `auto`) | Лучший русский WER из четырёх — [таблица](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#accuracy-by-domain--wer--95-ci) | Русскоязычные нагрузки; дефолт не случаен |
-| `e2e_rnnt` | Тот же класс размера, что у `rnnt` (~850 МБ FP32 → INT8 генерируется локально) | русский | Пунктуация / регистр / ITN **встроены**, один проход | WER выше, чем у `rnnt`, но лучший F1 пунктуации/регистра — [сравнение](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#punctuation-quality--e2e_rnnt-vs-rnnt--rupunct-restore) | Нужен читаемый русский текст за один проход, без шага восстановления |
+| `rnnt` (по умолчанию) | ~225 МБ lean INT8 (энкодер ~215 МБ + decoder/joiner/vocab); FP32 только через `download --fp32` | русский | «Голый» lowercase; дополняйте `--punctuation` / `--itn` (включены по умолчанию в режиме `auto`) | Лучший русский WER из четырёх — [таблица](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#accuracy-by-domain--wer--95-ci) | Русскоязычные нагрузки; дефолт не случаен |
+| `e2e_rnnt` | Тот же lean INT8 (~225 МБ); FP32→INT8 только с `download --fp32` | русский | Пунктуация / регистр / ITN **встроены**, один проход | WER выше, чем у `rnnt`, но лучший F1 пунктуации/регистра — [сравнение](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#punctuation-quality--e2e_rnnt-vs-rnnt--rupunct-restore) | Нужен читаемый русский текст за один проход, без шага восстановления |
 | `ml_ctc` | ~225 МБ pre-quantized INT8, только энкодер (без decoder/joiner) | ru/en/kk/ky/uz | «Голый» lowercase | [Мультиязычные таблицы](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#english--wer--librispeech-test-clean) | Мультиязычное аудио или ~1,5× RTF vs `rnnt` (ready RSS ≈ `rnnt`, не lean-RAM SKU) |
 | `ml_ctc_large` | ~592 МБ pre-quantized INT8, только энкодер | ru/en/kk/ky/uz | «Голый» lowercase | Лучшая мультиязычная точность; на чистом русском чтении приближается к `rnnt` — [таблица](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#accuracy-by-domain--wer--95-ci) | Смешанные языки или английский/казахский/кыргызский/узбекский как таковые |
 
@@ -354,11 +354,11 @@ curl -s http://127.0.0.1:9876/ready    # ready, pool_available >= 1
   `variants are never mixed`), а следующий запуск без флага снова предпочтёт
   `rnnt`. Удалите файлы неиспользуемой головы, чтобы каталог был однозначным,
   и верните место на диске.
-- **Первый `serve` выглядит зависшим.** Это одноразовая загрузка ~850 МБ FP32
-  + ~2 мин квантизации; `/health` отвечает `200` с `model:"loading"`, пока
-  `/ready` остаётся `503 initializing`. Уберите это окно командой `gigastt
-  download --prequantized` и стробируйте клиентов по `/ready`, никогда по
-  `/health`.
+- **Первый `serve` выглядит зависшим.** Это одноразовая загрузка lean INT8
+  (~225 МБ), если каталог модели пуст; `/health` отвечает `200` с
+  `model:"loading"`, пока `/ready` остаётся `503 initializing`. Предзагрузите
+  `gigastt download` и стробируйте клиентов по `/ready`, никогда по `/health`.
+  (FP32 + локальная квантизация — только при `download --fp32`.)
 - **OOM после переключения на `ml_ctc_large`.** Каждый слот теперь стоит ~1,2
   ГБ. Снизьте `--pool-size`, держите `--pool-min-size 1`, чтобы тесный хост
   загружался деградированно, и следите за предупреждением `Capping pool size`

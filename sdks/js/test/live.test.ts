@@ -3,7 +3,7 @@ import { GigasttClient } from "../src/index.js";
 import type { Transcript } from "../src/index.js";
 
 // Live-server integration test. Skipped unless GIGASTT_TEST_WS_URL points at
-// a running gigastt server (which requires the model, ~850 MB):
+// a running gigastt server (which requires the INT8 model, ~225 MB):
 //
 //   cargo run --release -- serve   # in the repository root
 //   GIGASTT_TEST_WS_URL=ws://127.0.0.1:9876/v1/ws npx vitest run test/live.test.ts
