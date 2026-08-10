@@ -110,10 +110,17 @@ pub fn resolve_punctuation(mode: PunctuationMode, variant: ModelVariant) -> bool
 /// env unset. `requested == Some(v)` (an explicit flag/env value, including `1`)
 /// is honoured verbatim and only passes through the engine's oversubscription
 /// clamp downstream. `None` (unset) spreads the logical CPUs across the
-/// concurrently-running pool triplets: `max(1, logical_cpus / total_pool_slots)`,
-/// so a default install uses every core instead of one. `total_pool_slots` is the
-/// effective number of triplets that can run at once (serve: `pool_size +
-/// batch_pool_size`; offline transcribe: `1`).
+/// concurrently-running pool triplets: `max(1, budget / total_pool_slots)`,
+/// so a default install uses nearly every core instead of one.
+///
+/// When a **single** session owns the machine (`total_pool_slots == 1`) and the
+/// host has at least 4 logical CPUs, auto mode reserves one core for the OS /
+/// network stack (`budget = cpus - 1`). Measured on multi-user M1 hosts this
+/// lowers warm multi-run mean RTF variance without growing RSS (thread budget
+/// only). Multi-slot pools keep the full CPU budget so concurrent slots are not
+/// under-provisioned. `total_pool_slots` is the effective number of triplets
+/// that can run at once (serve: `pool_size + batch_pool_size`; offline
+/// transcribe: `1`).
 ///
 /// Pure and total so the budgeting math is unit-tested without touching ORT or
 /// the real CPU count.
@@ -127,7 +134,13 @@ pub fn resolve_encoder_intra_threads(
         None => {
             let slots = total_pool_slots.max(1);
             let cpus = logical_cpus.max(1);
-            (cpus / slots).max(1)
+            // Single-session auto: leave one core free on multi-core hosts.
+            let budget = if slots == 1 && cpus >= 4 {
+                cpus - 1
+            } else {
+                cpus
+            };
+            (budget / slots).max(1)
         }
     }
 }
@@ -641,13 +654,18 @@ mod tests {
     fn test_resolve_encoder_intra_threads_defaults_by_pool() {
         // Unset → logical CPUs spread across the concurrently-running triplets.
         assert_eq!(resolve_encoder_intra_threads(None, 2, 10), 5);
-        assert_eq!(resolve_encoder_intra_threads(None, 1, 10), 10);
-        // Never drop below one thread, even on a single-core box or a pool that
-        // is wider than the CPU count.
+        // Single-session auto on multi-core hosts reserves one core for OS/IO.
+        assert_eq!(resolve_encoder_intra_threads(None, 1, 10), 9);
+        assert_eq!(resolve_encoder_intra_threads(None, 1, 4), 3);
+        // Small hosts / wide pools: never drop below one thread; no reserve
+        // when cpus < 4.
         assert_eq!(resolve_encoder_intra_threads(None, 1, 1), 1);
+        assert_eq!(resolve_encoder_intra_threads(None, 1, 2), 2);
+        assert_eq!(resolve_encoder_intra_threads(None, 1, 3), 3);
         assert_eq!(resolve_encoder_intra_threads(None, 8, 4), 1);
-        // A zero slot count (defensive) still yields at least one thread.
-        assert_eq!(resolve_encoder_intra_threads(None, 0, 10), 10);
+        // A zero slot count (defensive) is treated as a single-session budget
+        // (same reserve rule when cpus >= 4).
+        assert_eq!(resolve_encoder_intra_threads(None, 0, 10), 9);
     }
 
     #[test]

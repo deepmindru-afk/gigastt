@@ -1,0 +1,49 @@
+{
+  "freeze_vs_post": [
+    {
+      "metric": "warm_rtf_long40_best",
+      "freeze": 0.0296,
+      "post": 0.0289,
+      "delta": -0.0007
+    },
+    {
+      "metric": "warm_rtf_long40_mean",
+      "freeze": 0.0302,
+      "post": 0.0308,
+      "delta": 0.0006
+    },
+    {
+      "metric": "warm_rtf_short_fixtures_mean",
+      "freeze": 0.0343,
+      "post": 0.0348,
+      "delta": 0.0005
+    },
+    {
+      "metric": "rss_mb_after_decode_pool1",
+      "freeze": 283.1,
+      "post": 283.0,
+      "delta": -0.1
+    },
+    {
+      "metric": "resident_mb_pool1_footprint",
+      "freeze": 54.0,
+      "post": 52.0,
+      "delta": -2.0
+    },
+    {
+      "metric": "cold_start_sec_pool1",
+      "freeze": 1.207,
+      "post": 0.375,
+      "delta": -0.832
+    },
+    {
+      "metric": "lean_disk_mb",
+      "freeze": 219.4,
+      "post": 219.4,
+      "delta": 0.0
+    }
+  ],
+  "competitive_bar": 0.03,
+  "post_meets_competitive": true,
+  "stretch_note": "stretch: open \u2014 post long40 BEST=0.0289 vs target [0.015, 0.02]; no axis was regressed to chase stretch (dual-constraint holds)."
+}

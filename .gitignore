@@ -44,3 +44,6 @@ Thumbs.db
 *~
 .idea/
 .vscode/
+
+# Dual-constraint harness regenerates this fixture locally
+benchmark/results_dual_constraint/*.wav
