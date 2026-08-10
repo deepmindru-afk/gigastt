@@ -1244,23 +1244,28 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Commands::Quantize { model_dir, force } => {
-            // Packaging tool: requires a local FP32 encoder as source. Does not
-            // download FP32 or run inference on FP32 — product runtime is INT8-only.
+            // Packaging tool: requires a local FP32 encoder as source when it
+            // actually has to produce INT8. Does not download FP32 or run
+            // inference on FP32 — product runtime is INT8-only.
+            //
+            // Order matters for lean INT8 installs: if INT8 is already present
+            // and `--force` is off, no-op without looking for FP32 (CI/e2e and
+            // operators who only have the prequantized bundle).
             let dir = std::path::Path::new(&model_dir);
             let resolved = model::ModelVariant::detect_in_dir(dir).unwrap_or_default();
             let input = dir.join(resolved.encoder_file());
             let output = dir.join(resolved.encoder_int8_file());
+            if output.exists() && !force {
+                tracing::info!("INT8 model already exists: {}", output.display());
+                tracing::info!("Use --force to re-quantize.");
+                return Ok(());
+            }
             if !input.is_file() {
                 anyhow::bail!(
                     "FP32 encoder not found at {} — `quantize` needs the FP32 ONNX as packaging source. \
                      For runtime, use `gigastt download` (lean INT8 only).",
                     input.display()
                 );
-            }
-            if output.exists() && !force {
-                tracing::info!("INT8 model already exists: {}", output.display());
-                tracing::info!("Use --force to re-quantize.");
-                return Ok(());
             }
             gigastt_core::quantize::quantize_model(&input, &output)?;
             tracing::info!("Quantized model saved to {}", output.display());
