@@ -374,13 +374,15 @@ enum Commands {
         /// Intra-op thread count for the encoder session on the CPU build. The
         /// encoder dominates the single-utterance cost, so more threads speed up
         /// weak CPUs / long single-file jobs. When unset, defaults to the logical
-        /// CPU count divided across the concurrently-running pool triplets
-        /// (`pool_size + batch_pool_size`), so a default install uses every core.
-        /// Do not set `1` on multi-core hosts unless debugging — it is ~3× slower
-        /// than auto. An explicit value (flag or env, including `1`) is still
-        /// honoured as-is for debug passthrough. The resolved value is auto-
-        /// clamped so `pool_size * threads` can't exceed the logical CPU count.
-        /// No effect on CoreML / CUDA builds.
+        /// CPU budget divided across the concurrently-running pool triplets
+        /// (`pool_size + batch_pool_size`). On a single-session multi-core host
+        /// (pool budget 1, ≥4 logical CPUs) auto reserves one core for OS/I/O;
+        /// multi-slot pools keep the full CPU budget. Do not set `1` on multi-core
+        /// hosts unless debugging — it is ~3× slower than auto. An explicit value
+        /// (flag or env, including `1`) is still honoured as-is for debug
+        /// passthrough. The resolved value is auto-clamped so
+        /// `pool_size * threads` can't exceed the logical CPU count. No effect on
+        /// CoreML / CUDA builds.
         #[arg(long, env = "GIGASTT_ENCODER_INTRA_THREADS")]
         encoder_intra_threads: Option<usize>,
 
