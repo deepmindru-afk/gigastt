@@ -282,7 +282,10 @@ const STREAM_DECODE_STRIDE_SAMPLES: usize = 16000 * 4 / 5;
 /// split into overlapping windows so the encoder's peak activation memory is
 /// bounded by the chunk size, not the file length. The Conformer encoder only
 /// carries ~20–30s of useful context, so chunking above this costs no accuracy
-/// in the common case.
+/// in the common case. (A higher single-pass ceiling for CTC was tried for
+/// stretch RTF on ~40s clips; measured wall time was worse than 24s windows —
+/// larger activation tensors thrash CPU caches — so both head families share
+/// this 30s ceiling.)
 const CHUNK_THRESHOLD_SAMPLES: usize = 16000 * 30;
 /// Long-form decode window on ort / CoreML-EP / CUDA (samples @16kHz, 24s).
 /// Bounds per-chunk encoder activation memory; the ANE path uses a longer
@@ -313,8 +316,9 @@ pub(crate) fn chunk_window_samples(ane_encoder: bool) -> usize {
 /// Long-form window geometry for the active encoder backend: the single-pass
 /// ceiling, the backend's window length, and the fixed inter-window overlap.
 /// Free-standing (like [`chunk_window_samples`]) so the geometry is unit-tested
-/// without a loaded model.
-pub(crate) fn window_spec(ane_encoder: bool) -> WindowSpec {
+/// without a loaded model. `ctc` is accepted for call-site uniformity (CTC and
+/// RNN-T share the same 30s ceiling after measurement).
+pub(crate) fn window_spec(ane_encoder: bool, _ctc: bool) -> WindowSpec {
     WindowSpec::new(
         CHUNK_THRESHOLD_SAMPLES,
         chunk_window_samples(ane_encoder),
@@ -1751,7 +1755,7 @@ impl Engine {
                 open(audio::VadWindows::pull_spec())?,
                 vad,
                 &self.vad_config,
-                window_spec(self.ane_encoder),
+                window_spec(self.ane_encoder, self.variant.is_ctc()),
                 ctl.abort,
             );
             let mut words = self.decode_words_streaming(&mut windows, triplet, biaser, ctl)?;
@@ -1788,7 +1792,7 @@ impl Engine {
             tracing::warn!("VAD produced no usable speech regions; decoding full audio");
         }
         self.transcribe_stream_mono(
-            open(window_spec(self.ane_encoder))?,
+            open(window_spec(self.ane_encoder, self.variant.is_ctc()))?,
             triplet,
             overrides,
             hotwords,
@@ -2106,7 +2110,7 @@ impl Engine {
             Some(_) => request_biaser.as_ref(),
         };
 
-        let spec = window_spec(self.ane_encoder);
+        let spec = window_spec(self.ane_encoder, self.variant.is_ctc());
         let mut per_channel = Vec::with_capacity(channels);
         for k in 0..channels {
             let mut windows =
@@ -2251,7 +2255,7 @@ impl Engine {
         biaser: Option<&bias::Biaser>,
         ctl: DecodeControls,
     ) -> Result<Vec<WordInfo>, GigasttError> {
-        let spec = window_spec(self.ane_encoder);
+        let spec = window_spec(self.ane_encoder, self.variant.is_ctc());
         if spec.is_single_pass(samples.len()) {
             // A single-pass decode is one encoder Run with no window loop to
             // check between, so honour cancellation before starting it. The
@@ -3330,12 +3334,22 @@ mod tests {
         for ane in [false, true] {
             let window = chunk_window_samples(ane);
             let legacy_stride = ((window - CHUNK_OVERLAP_SAMPLES) / frame_samples) * frame_samples;
-            let spec = window_spec(ane);
-            assert_eq!(spec.window(), window, "window (ane={ane})");
-            assert_eq!(spec.stride(), legacy_stride, "stride (ane={ane})");
-            assert_eq!(spec.overlap(), CHUNK_OVERLAP_SAMPLES, "overlap (ane={ane})");
-            assert!(spec.is_single_pass(CHUNK_THRESHOLD_SAMPLES));
-            assert!(!spec.is_single_pass(CHUNK_THRESHOLD_SAMPLES + 1));
+            for ctc in [false, true] {
+                let spec = window_spec(ane, ctc);
+                assert_eq!(spec.window(), window, "window (ane={ane}, ctc={ctc})");
+                assert_eq!(
+                    spec.stride(),
+                    legacy_stride,
+                    "stride (ane={ane}, ctc={ctc})"
+                );
+                assert_eq!(
+                    spec.overlap(),
+                    CHUNK_OVERLAP_SAMPLES,
+                    "overlap (ane={ane}, ctc={ctc})"
+                );
+                assert!(spec.is_single_pass(CHUNK_THRESHOLD_SAMPLES));
+                assert!(!spec.is_single_pass(CHUNK_THRESHOLD_SAMPLES + 1));
+            }
         }
     }
 

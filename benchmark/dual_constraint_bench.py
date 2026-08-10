@@ -148,7 +148,13 @@ def lean_disk_mb(model_dir: Path) -> float:
     return round(total / (1024 * 1024), 1)
 
 
-def start_server(binary: str, port: int, pool_size: int, model_dir: str | None) -> subprocess.Popen:
+def start_server(
+    binary: str,
+    port: int,
+    pool_size: int,
+    model_dir: str | None,
+    model_variant: str = "rnnt",
+) -> subprocess.Popen:
     cmd = [
         binary,
         "serve",
@@ -157,7 +163,7 @@ def start_server(binary: str, port: int, pool_size: int, model_dir: str | None) 
         "--pool-size",
         str(pool_size),
         "--model-variant",
-        "rnnt",
+        model_variant,
         "--punctuation",
         "off",
         "--itn",
@@ -179,9 +185,17 @@ def stop_server(proc: subprocess.Popen) -> None:
             proc.communicate()
 
 
-def measure(binary: str, model_dir: str | None, long_path: Path, batches: int) -> dict:
+def measure(
+    binary: str,
+    model_dir: str | None,
+    long_path: Path,
+    batches: int,
+    model_variant: str = "rnnt",
+) -> dict:
     port = free_port()
-    proc = start_server(binary, port, pool_size=1, model_dir=model_dir)
+    proc = start_server(
+        binary, port, pool_size=1, model_dir=model_dir, model_variant=model_variant
+    )
     try:
         cold = wait_ready(port)
         rss_ready = rss_mb(proc.pid)
@@ -266,7 +280,7 @@ def measure(binary: str, model_dir: str | None, long_path: Path, batches: int) -
             "protocol": {
                 "batches": batches,
                 "pool_size": 1,
-                "model_variant": "rnnt",
+                "model_variant": model_variant,
                 "punctuation": "off",
                 "itn": "off",
                 "rss_sample_point": "after_short_fixtures_before_long",
@@ -286,6 +300,11 @@ def main() -> int:
     ap.add_argument("--output", required=True)
     ap.add_argument("--batches", type=int, default=3, help="long-fixture multi-run count")
     ap.add_argument(
+        "--model-variant",
+        default="rnnt",
+        help="Model head (default rnnt; use ml_ctc for stretch speed SKU)",
+    )
+    ap.add_argument(
         "--long-wav",
         default=None,
         help="optional path for the long fixture; built under output dir if omitted",
@@ -299,7 +318,9 @@ def main() -> int:
         dur = build_long_wav(DEFAULT_WAVS, long_path, repeats=2)
         print(f"built long fixture {long_path} ({dur:.2f}s)", flush=True)
 
-    result = measure(args.binary, args.model_dir, long_path, args.batches)
+    result = measure(
+        args.binary, args.model_dir, long_path, args.batches, model_variant=args.model_variant
+    )
     out.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n")
     m = result["metrics"]
     print(
