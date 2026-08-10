@@ -1,6 +1,6 @@
 {
   "name": "gigastt",
-  "version": "2.11.3",
+  "version": "2.17.0",
   "description": "On-device Russian speech-to-text (GigaAM v3) — Node.js binding",
   "license": "MIT",
   "repository": {

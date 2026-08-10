@@ -130,7 +130,7 @@ $ gigastt serve
 
 ## Requirements
 
-Rust **1.88+**, `protoc` on `PATH` (build-time only — the quantizer crate regenerates ONNX types). macOS 14+ (Apple Silicon, CoreML) or Linux x86_64 (optional NVIDIA CUDA 12+). **~250–400 MB disk** for the lean INT8 install + binary (optional punct/VAD side models extra), ~66 MB resident RAM at the default `--pool-size 2` (~46 MB single-session; `ps` RSS reads ~510 / ~277 MB because it counts the shared memory-mapped model). The `gigastt-core` crate has no server dependencies — embed it directly: `gigastt-core = "2.16"`.
+Rust **1.88+**, `protoc` on `PATH` (build-time only — the quantizer crate regenerates ONNX types). macOS 14+ (Apple Silicon, CoreML) or Linux x86_64 (optional NVIDIA CUDA 12+). **~250–400 MB disk** for the lean INT8 install + binary (optional punct/VAD side models extra), ~66 MB resident RAM at the default `--pool-size 2` (~46 MB single-session; `ps` RSS reads ~510 / ~277 MB because it counts the shared memory-mapped model). The `gigastt-core` crate has no server dependencies — embed it directly: `gigastt-core = "2.17"`.
 
 ## License
 
