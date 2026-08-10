@@ -20,10 +20,18 @@ def _doc(metrics: dict) -> dict:
 
 
 def test_pass_when_strictly_better_rtf_and_ram_holds():
-    freeze = _doc(
-        {
+    freeze = {
+        "schema": "t",
+        "protocol": {
+            "batches": 3,
+            "rss_sample_point": "after_short_fixtures_before_long",
+            "pool_size": 1,
+            "model_variant": "rnnt",
+        },
+        "metrics": {
             "fixture_texts": ["a", "b"],
             "warm_rtf_long40_best": 0.0296,
+            "warm_rtf_long40_mean": 0.0310,
             "warm_rtf_short_fixtures_mean": 0.0343,
             "rss_mb_after_decode_pool1": 283.0,
             "rss_mb_after_ready_pool1": 266.0,
@@ -32,21 +40,52 @@ def test_pass_when_strictly_better_rtf_and_ram_holds():
             "competitive_bar_rtf": 0.030,
             "stretch_rtf_lo": 0.015,
             "stretch_rtf_hi": 0.020,
-        }
-    )
-    post = _doc(
-        {
+        },
+    }
+    post = {
+        "schema": "t",
+        "protocol": {
+            "batches": 3,
+            "rss_sample_point": "after_short_fixtures_before_long",
+            "pool_size": 1,
+            "model_variant": "rnnt",
+        },
+        "metrics": {
             "fixture_texts": ["a", "b"],
             "warm_rtf_long40_best": 0.0280,
+            "warm_rtf_long40_mean": 0.0305,
             "warm_rtf_short_fixtures_mean": 0.0330,
             "rss_mb_after_decode_pool1": 280.0,
             "rss_mb_after_ready_pool1": 265.0,
             "resident_mb_pool1_footprint": 53.0,
             "cold_start_sec_pool1": 1.1,
             "competitive_bar_rtf": 0.030,
+        },
+    }
+    assert gate.compare(freeze, post) == []
+
+
+def test_fail_when_long40_mean_regresses():
+    freeze = _doc(
+        {
+            "fixture_texts": ["x"],
+            "warm_rtf_long40_best": 0.0300,
+            "warm_rtf_long40_mean": 0.0310,
+            "rss_mb_after_decode_pool1": 280.0,
+            "competitive_bar_rtf": 0.030,
         }
     )
-    assert gate.compare(freeze, post) == []
+    post = _doc(
+        {
+            "fixture_texts": ["x"],
+            "warm_rtf_long40_best": 0.0280,
+            "warm_rtf_long40_mean": 0.0340,
+            "rss_mb_after_decode_pool1": 280.0,
+            "competitive_bar_rtf": 0.030,
+        }
+    )
+    fails = gate.compare(freeze, post)
+    assert any("MEAN regressed" in f for f in fails)
 
 
 def test_fail_on_quality_regression():
@@ -91,11 +130,13 @@ def test_fail_when_rtf_not_strictly_better():
     assert any("not strictly improved" in f for f in fails)
 
 
-def test_fail_when_competitive_bar_missed():
+def test_fail_when_competitive_bar_missed_and_freeze_was_competitive():
+    # Freeze already at/under the bar → post must also meet absolute competitive.
     freeze = _doc(
         {
             "fixture_texts": ["x"],
-            "warm_rtf_long40_best": 0.0400,
+            "warm_rtf_long40_best": 0.0290,
+            "warm_rtf_long40_mean": 0.0300,
             "rss_mb_after_decode_pool1": 280.0,
             "competitive_bar_rtf": 0.030,
         }
@@ -103,18 +144,56 @@ def test_fail_when_competitive_bar_missed():
     post = _doc(
         {
             "fixture_texts": ["x"],
-            "warm_rtf_long40_best": 0.0350,
+            "warm_rtf_long40_best": 0.0280,
+            "warm_rtf_long40_mean": 0.0295,
             "rss_mb_after_decode_pool1": 280.0,
             "competitive_bar_rtf": 0.030,
         }
     )
-    fails = gate.compare(freeze, post)
+    # This pair passes (relative + absolute).
+    assert gate.compare(freeze, post) == []
+
+    post_bad = _doc(
+        {
+            "fixture_texts": ["x"],
+            "warm_rtf_long40_best": 0.0350,
+            "warm_rtf_long40_mean": 0.0295,
+            "rss_mb_after_decode_pool1": 280.0,
+            "competitive_bar_rtf": 0.030,
+        }
+    )
+    fails = gate.compare(freeze, post_bad)
     assert any("competitive bar" in f for f in fails)
+
+
+def test_host_limited_competitive_when_freeze_also_misses_bar():
+    freeze = _doc(
+        {
+            "fixture_texts": ["x"],
+            "warm_rtf_long40_best": 0.0474,
+            "warm_rtf_long40_mean": 0.0490,
+            "rss_mb_after_decode_pool1": 285.0,
+            "competitive_bar_rtf": 0.030,
+        }
+    )
+    post = _doc(
+        {
+            "fixture_texts": ["x"],
+            "warm_rtf_long40_best": 0.0423,
+            "warm_rtf_long40_mean": 0.0468,
+            "rss_mb_after_decode_pool1": 285.0,
+            "competitive_bar_rtf": 0.030,
+        }
+    )
+    assert gate.compare(freeze, post) == []
+    assert gate.compare.host_limited_competitive is True
 
 
 if __name__ == "__main__":
     test_pass_when_strictly_better_rtf_and_ram_holds()
+    test_fail_when_long40_mean_regresses()
     test_fail_on_quality_regression()
     test_fail_when_rtf_not_strictly_better()
-    test_fail_when_competitive_bar_missed()
+    test_fail_when_competitive_bar_missed_and_freeze_was_competitive()
+    test_host_limited_competitive_when_freeze_also_misses_bar()
     print("ok")

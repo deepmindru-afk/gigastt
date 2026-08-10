@@ -1,61 +1,38 @@
 {
-  "schema": "gigastt.dual_constraint_freeze.v1",
-  "date_utc": "2026-08-10T09:42:10Z",
+  "schema": "gigastt.dual_constraint_measure.v1",
+  "date_utc": "2026-08-10T10:07:21Z",
   "product_path": "lean INT8 ORT rnnt (default; no permanent F32 pack)",
-  "host": {
-    "system": "Darwin",
-    "node": "MacBook-Pro.local",
-    "release": "25.1.0",
-    "machine": "arm64",
-    "processor": "arm",
-    "python": "3.14.4",
-    "storage_label": "unknown",
-    "cpu_count_logical": 10,
-    "mem_total_mb": 16384.0,
-    "gigastt_version": "gigastt 2.16.0",
-    "binary": "./target/release/gigastt"
-  },
-  "binary": "./target/release/gigastt",
+  "binary": "/Users/ekhodzitsky/Documents/personal/gigastt-worktrees/dual-constraint-freeze/target/release/gigastt",
   "protocol": {
-    "primary_rtf": "warm REST multi-run BEST on ~42s concat of golos_00..04 x2 (pool=1, punct/itn off)",
-    "secondary_rtf": "warm REST mean/best on 5 golos fixtures (pool=1) after 1 warmup via bench_edge.py",
-    "rss": "ps RSS MiB after ready and after warm decode (bench_edge.py)",
-    "resident": "macOS /usr/bin/footprint dirty+compressed after warm multi-run (pool=1)",
-    "cold_start": "process start → HTTP 200 /ready",
-    "ttfp": "WS real-time paced on golos_00 when websockets available; else null",
-    "disk": "lean file set: encoder_int8 + decoder + joint + vocab under ~/.gigastt/models",
-    "quality": "fixture text_preview from freeze samples must match post transcripts (normalized equality)",
-    "commands": [
-      "cargo build --release -p gigastt",
-      "python3 benchmark/bench_edge.py --binary ./target/release/gigastt --variants rnnt --pool-size 1 --storage-label unknown --output benchmark/results_dual_constraint/edge_pool1.json",
-      "python3 benchmark/bench_edge.py --binary ./target/release/gigastt --variants rnnt --pool-size 2 --storage-label unknown --skip-ttfp --output benchmark/results_dual_constraint/edge_pool2.json",
-      "python3 benchmark/dual_constraint_bench.py --binary ./target/release/gigastt --output benchmark/results_dual_constraint/measure.json",
-      "python3 benchmark/dual_constraint_gate.py --freeze benchmark/results_dual_constraint/freeze.json --post benchmark/results_dual_constraint/post.json"
-    ]
+    "batches": 3,
+    "pool_size": 1,
+    "model_variant": "rnnt",
+    "punctuation": "off",
+    "itn": "off",
+    "rss_sample_point": "after_short_fixtures_before_long",
+    "primary_rtf": "warm_rtf_long40_best (multi-run BEST); mean must not regress",
+    "long_fixture": "golos_00..04 concat x2 (~42s)"
   },
   "metrics": {
-    "warm_rtf_long40_best": 0.0296,
-    "warm_rtf_long40_mean": 0.0302,
+    "warm_rtf_long40_best": 0.0474,
+    "warm_rtf_long40_mean": 0.049,
     "warm_rtf_long40_runs": [
-      0.0307,
-      0.0296,
-      0.0303
+      0.0501,
+      0.0496,
+      0.0474
     ],
     "warm_rtf_long40_audio_s": 42.3,
-    "warm_rtf_short_fixtures_mean": 0.0343,
-    "warm_rtf_short_fixtures_best": 0.0322,
-    "warm_rtf_short_fixtures_max": 0.0372,
-    "warm_rtf_multirun_overall_best": 0.0317,
-    "warm_rtf_multirun_mean_of_means": 0.0396,
-    "rss_mb_after_ready_pool1": 265.8,
-    "rss_mb_after_decode_pool1": 283.1,
-    "rss_mb_after_ready_pool2": 494.6,
-    "rss_mb_after_decode_pool2": 510.7,
+    "warm_rtf_short_fixtures_mean": 0.0883,
+    "warm_rtf_short_fixtures_best": 0.0618,
+    "warm_rtf_short_fixtures_max": 0.1508,
+    "warm_rtf_multirun_overall_best": 0.0618,
+    "warm_rtf_multirun_mean_of_means": 0.0883,
+    "rss_mb_after_ready_pool1": 267.8,
+    "rss_mb_after_decode_pool1": 285.0,
+    "rss_mb_after_long_pool1": 406.6,
     "resident_mb_pool1_footprint": 54.0,
-    "cold_start_sec_pool1": 1.207,
-    "cold_start_sec_pool2": 0.659,
+    "cold_start_sec_pool1": 1.376,
     "ttfp_ms": null,
-    "ttfp_note": "websockets not installed at freeze time; not gating",
     "lean_disk_mb": 219.4,
     "fixture_texts": [
       "шестьдесят тысяч тенге сколько будет стоить",
@@ -66,11 +43,46 @@
     ],
     "competitive_bar_rtf": 0.03,
     "stretch_rtf_lo": 0.015,
-    "stretch_rtf_hi": 0.02
+    "stretch_rtf_hi": 0.02,
+    "short_samples": [
+      {
+        "file": "golos_00.wav",
+        "audio_duration_sec": 4.0,
+        "processing_sec": 0.2472,
+        "rtf": 0.0618,
+        "text": "шестьдесят тысяч тенге сколько будет стоить"
+      },
+      {
+        "file": "golos_01.wav",
+        "audio_duration_sec": 3.43,
+        "processing_sec": 0.2456,
+        "rtf": 0.0716,
+        "text": "покажи мне на смотрешке телеканал синергия тв"
+      },
+      {
+        "file": "golos_02.wav",
+        "audio_duration_sec": 3.06,
+        "processing_sec": 0.229,
+        "rtf": 0.0748,
+        "text": "заказать яблоки зеленые"
+      },
+      {
+        "file": "golos_03.wav",
+        "audio_duration_sec": 5.44,
+        "processing_sec": 0.8206,
+        "rtf": 0.1508,
+        "text": "алиса закажи килограммовый торт графские развалины"
+      },
+      {
+        "file": "golos_04.wav",
+        "audio_duration_sec": 5.22,
+        "processing_sec": 0.4309,
+        "rtf": 0.0826,
+        "text": "ищи телеканал про бизнес на тиви"
+      }
+    ],
+    "long_text_preview": "шестьдесят тысяч тенге сколько будет стоить покажи мне на смотрешке телеканал синергия тв заказать яблоки зеленые алиса "
   },
-  "notes": [
-    "Primary competitive metric is warm_rtf_long40_best (pro-aligned ~40s REST).",
-    "Freeze binary gigastt 2.16.0 release; host multi-user noise expected.",
-    "Resident from macOS footprint after multi-run; RSS from ps."
-  ]
+  "role": "freeze",
+  "binary_git": "2c09b7e parent pre-win"
 }
