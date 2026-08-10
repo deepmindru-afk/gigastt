@@ -211,41 +211,48 @@ struct ResolvedModelFiles {
 impl ResolvedModelFiles {
     fn resolve(dir: &Path, variant: ModelVariant) -> anyhow::Result<Self> {
         if let Some(m) = ModelManifest::load(dir)? {
-            let using_int8 = m.prefers_int8(dir);
+            anyhow::ensure!(
+                m.prefers_int8(dir),
+                "manifest resolves to a non-INT8 encoder — gigastt runs INT8 only. \
+                 Install the INT8 encoder (`gigastt download`) or fix encoder_int8 in manifest.toml."
+            );
             return Ok(Self {
                 encoder: m.preferred_encoder_path(dir),
                 decoder: m.decoder_path(dir),
                 joint: m.joint_path(dir),
                 vocab: m.vocab_path(dir),
-                using_int8,
+                using_int8: true,
             });
         }
-        Ok(Self::from_variant(dir, variant))
+        Self::from_variant(dir, variant)
     }
 
-    fn from_variant(dir: &Path, variant: ModelVariant) -> Self {
+    fn from_variant(dir: &Path, variant: ModelVariant) -> anyhow::Result<Self> {
+        // Product policy: only the INT8 encoder is supported. FP32 ONNX is not
+        // loaded (no silent fallback). Fix: `gigastt download` (lean INT8).
         let int8 = dir.join(variant.encoder_int8_file());
-        let (encoder, using_int8) = if int8.exists() {
-            (int8, true)
-        } else {
-            (dir.join(variant.encoder_file()), false)
-        };
+        anyhow::ensure!(
+            int8.is_file(),
+            "INT8 encoder not found at {} — gigastt runs INT8 only. \
+             Run `gigastt download` (lean INT8 bundle). FP32 encoders are not supported.",
+            int8.display()
+        );
         if variant.is_ctc() {
-            Self {
-                encoder,
+            Ok(Self {
+                encoder: int8,
                 decoder: None,
                 joint: None,
                 vocab: dir.join(variant.vocab_file()),
-                using_int8,
-            }
+                using_int8: true,
+            })
         } else {
-            Self {
-                encoder,
+            Ok(Self {
+                encoder: int8,
                 decoder: Some(dir.join(variant.decoder_file())),
                 joint: Some(dir.join(variant.joint_file())),
                 vocab: dir.join(variant.vocab_file()),
-                using_int8,
-            }
+                using_int8: true,
+            })
         }
     }
 }
@@ -817,18 +824,8 @@ impl Engine {
         // candle line instead. The default (ort) logging is unchanged.
         let is_int8 = !cfg!(feature = "candle") && files.using_int8;
         if !cfg!(feature = "candle") {
-            if is_int8 {
-                tracing::info!("Using INT8 quantized encoder");
-            } else if !cfg!(feature = "ane") {
-                // On the default ORT path the INT8 encoder is expected. Warn so
-                // the operator knows inference will be slower and larger than
-                // intended. Fix: run `gigastt quantize` or re-run `gigastt download`.
-                tracing::warn!(
-                    "INT8 encoder not found — loading FP32 encoder (4× larger, slower). \
-                     Run `gigastt download` or `gigastt quantize` to generate it."
-                );
-            }
-
+            // ORT product path is INT8-only (`ResolvedModelFiles` rejects FP32).
+            tracing::info!("Using INT8 quantized encoder");
             tracing::info!(
                 "Loading ONNX models from {} (pool_size={pool_size})...",
                 model_dir.display()
@@ -935,13 +932,11 @@ impl Engine {
     /// Path to the preferred encoder model for `variant`: INT8 quantized if
     /// present, FP32 otherwise. Honors `manifest.toml` file names when present.
     fn encoder_model_path(dir: &Path, variant: ModelVariant) -> std::path::PathBuf {
-        match ResolvedModelFiles::resolve(dir, variant) {
-            Ok(files) => files.encoder,
-            // Invalid manifests are rejected earlier at variant resolution; this
-            // fallback keeps the helper usable in unit tests with no / corrupt
-            // manifest by using the hardcoded ModelVariant basenames.
-            Err(_) => ResolvedModelFiles::from_variant(dir, variant).encoder,
-        }
+        ResolvedModelFiles::resolve(dir, variant)
+            .map(|files| files.encoder)
+            // Tests may call this helper without a full install; surface the
+            // expected INT8 basename when resolve fails (FP32 is never chosen).
+            .unwrap_or_else(|_| dir.join(variant.encoder_int8_file()))
     }
 
     /// Split loaded triplets into an interactive pool and an optional batch
@@ -4247,11 +4242,17 @@ vocab = "custom_vocab.txt"
     }
 
     #[test]
-    fn test_encoder_model_path_falls_back_to_fp32() {
+    fn test_encoder_model_path_fp32_only_is_rejected() {
         let dir = tempfile::tempdir().expect("tempdir");
         std::fs::write(dir.path().join("v3_e2e_rnnt_encoder.onnx"), b"fp32").unwrap();
+        // Without INT8, resolve fails; helper still reports the INT8 basename
+        // (never the FP32 file).
         let path = Engine::encoder_model_path(dir.path(), ModelVariant::E2eRnnt);
-        assert_eq!(path.file_name().unwrap(), "v3_e2e_rnnt_encoder.onnx");
+        assert_eq!(path.file_name().unwrap(), "v3_e2e_rnnt_encoder_int8.onnx");
+        assert!(
+            ResolvedModelFiles::from_variant(dir.path(), ModelVariant::E2eRnnt).is_err(),
+            "FP32-only install must not be loadable"
+        );
     }
 
     #[test]
@@ -4268,11 +4269,13 @@ vocab = "custom_vocab.txt"
     }
 
     #[test]
-    fn test_encoder_model_path_rnnt_falls_back_to_fp32() {
+    fn test_encoder_model_path_rnnt_fp32_only_is_rejected() {
         let dir = tempfile::tempdir().expect("tempdir");
         std::fs::write(dir.path().join("v3_rnnt_encoder.onnx"), b"fp32").unwrap();
-        let path = Engine::encoder_model_path(dir.path(), ModelVariant::Rnnt);
-        assert_eq!(path.file_name().unwrap(), "v3_rnnt_encoder.onnx");
+        assert!(
+            ResolvedModelFiles::from_variant(dir.path(), ModelVariant::Rnnt).is_err(),
+            "FP32-only install must not be loadable"
+        );
     }
 
     #[test]
@@ -5364,8 +5367,8 @@ vocab = "pack_vocab.txt"
 
             // Empty model files are enough for variant detection; the mock
             // runtime intercepts all session loading before the filesystem is
-            // read for ONNX data.
-            std::fs::write(dir.join("v3_rnnt_encoder.onnx"), b"").unwrap();
+            // read for ONNX data. Product path is INT8-only (stem keys the mock).
+            std::fs::write(dir.join("v3_rnnt_encoder_int8.onnx"), b"").unwrap();
             std::fs::write(dir.join("v3_rnnt_decoder.onnx"), b"").unwrap();
             std::fs::write(dir.join("v3_rnnt_joint.onnx"), b"").unwrap();
             // vocab: index 0 = "▁hi", index 1 = "<blk>" (blank wins on ties).
@@ -5373,7 +5376,7 @@ vocab = "pack_vocab.txt"
 
             let mut sessions: HashMap<String, Arc<MockSession>> = HashMap::new();
             sessions.insert(
-                "v3_rnnt_encoder".into(),
+                "v3_rnnt_encoder_int8".into(),
                 Arc::new(MockSession::new(
                     vec![Shape::new(vec![1, 64, 1]), Shape::new(vec![1])],
                     vec![
@@ -5777,7 +5780,7 @@ vocab = "pack_vocab.txt"
             let tmp = tempfile::tempdir().expect("tempdir");
             let dir = tmp.path();
 
-            std::fs::write(dir.join("v3_rnnt_encoder.onnx"), b"").unwrap();
+            std::fs::write(dir.join("v3_rnnt_encoder_int8.onnx"), b"").unwrap();
             std::fs::write(dir.join("v3_rnnt_decoder.onnx"), b"").unwrap();
             std::fs::write(dir.join("v3_rnnt_joint.onnx"), b"").unwrap();
             // vocab: index 0 = "▁hi", index 1 = "<blk>".
@@ -5792,7 +5795,7 @@ vocab = "pack_vocab.txt"
 
             let mut sessions: HashMap<String, Arc<MockSession>> = HashMap::new();
             sessions.insert(
-                "v3_rnnt_encoder".into(),
+                "v3_rnnt_encoder_int8".into(),
                 Arc::new(MockSession::new(
                     vec![Shape::new(vec![1, 64, MEL_FRAMES]), Shape::new(vec![1])],
                     vec![
@@ -5921,7 +5924,7 @@ vocab = "pack_vocab.txt"
         fn blank_run_engine_window_cap() -> (Engine, tempfile::TempDir) {
             let tmp = tempfile::tempdir().expect("tempdir");
             let dir = tmp.path();
-            std::fs::write(dir.join("v3_rnnt_encoder.onnx"), b"").unwrap();
+            std::fs::write(dir.join("v3_rnnt_encoder_int8.onnx"), b"").unwrap();
             std::fs::write(dir.join("v3_rnnt_decoder.onnx"), b"").unwrap();
             std::fs::write(dir.join("v3_rnnt_joint.onnx"), b"").unwrap();
             std::fs::write(dir.join("v3_vocab.txt"), "\u{2581}hi\n<blk>\n").unwrap();
@@ -5932,7 +5935,7 @@ vocab = "pack_vocab.txt"
 
             let mut sessions: HashMap<String, Arc<MockSession>> = HashMap::new();
             sessions.insert(
-                "v3_rnnt_encoder".into(),
+                "v3_rnnt_encoder_int8".into(),
                 Arc::new(MockSession::new(
                     vec![Shape::new(vec![1, 64, MEL_FRAMES]), Shape::new(vec![1])],
                     vec![

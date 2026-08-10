@@ -113,21 +113,19 @@ Gradle packages these automatically into the APK/AAB.
 
 ## Model Bundling
 
-The GigaAM v3 INT8 model set for the default `rnnt` head is ~225 MB on disk
-(FP32 is ~850 MB). A fresh `gigastt download` produces the `v3_rnnt_*` files
-below; the `e2e_rnnt` head uses the parallel `v3_e2e_rnnt_*` names (its BPE vocab
-is ~50 KB), and the multilingual heads ship a single
-`multilingual[_large]_ctc.int8.onnx` + `multilingual_vocab.txt`.
+The GigaAM v3 model set for the default `rnnt` head is **lean INT8 ~225 MB** on
+disk (`gigastt download`). The `e2e_rnnt` head uses the parallel `v3_e2e_rnnt_*`
+names; multilingual heads ship `multilingual[_large]_ctc.int8.onnx` +
+`multilingual_vocab.txt`.
 
 | File | Size (approx) |
 |------|---------------|
-| `v3_rnnt_encoder_int8.onnx` | ~215 MB |
-| `v3_rnnt_encoder.onnx` (FP32) | ~844 MB |
+| `v3_rnnt_encoder_int8.onnx` | ~215 MB (required on mobile) |
 | `v3_rnnt_decoder.onnx` | ~3.3 MB |
 | `v3_rnnt_joint.onnx` | ~1.4 MB |
 | `v3_vocab.txt` | ~200 B |
 
-> **Always use the INT8 encoder on mobile.** The FP32 encoder will OOM on most devices.
+> **Always ship INT8 on mobile.** Do not bundle FP32 (~844 MB encoder); it will OOM on most devices.
 
 You have two strategies for shipping models:
 
@@ -204,22 +202,22 @@ class MainActivity : AppCompatActivity() {
 
 ---
 
-## On-device Quantization
+## On-device Quantization (optional)
 
-Instead of bundling or downloading the ~215 MB INT8 encoder, you can ship the ~850 MB FP32 encoder and quantize it on the device after download. This is a one-time operation that takes about 2 minutes on a modern flagship phone and produces `v3_rnnt_encoder_int8.onnx` (or `v3_e2e_rnnt_encoder_int8.onnx` for the e2e head) in the same directory.
+**Prefer side-loading INT8** from `gigastt download` or your CDN. On-device
+quantize is only for the rare case where you already have FP32 on disk and must
+produce INT8 locally (~2 min on a flagship phone):
 
 ```kotlin
 val modelDir = File(context.filesDir, "gigastt_models")
 
-// Run once after the FP32 model is downloaded.
+// Only if FP32 encoder is already present; prefer shipping INT8 instead.
 val result = GigasttBridge.quantizeModel(modelDir.absolutePath, force = false)
 if (result != "ok") {
     Log.e("GigaSTT", "Quantization failed: $result")
 }
 GigasttBridge.stringFree(result)
 ```
-
-> **Why?** If your backend already stores the FP32 model, you can avoid maintaining a separate INT8 artifact. The quantization is deterministic, so every device produces the same INT8 weights.
 
 ## Size Considerations
 

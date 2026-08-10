@@ -403,13 +403,12 @@ Full measurements, other hardware, and WER numbers:
 Budget memory before raising `--pool-size`:
 
 - Each worker loads its own encoder copy: **~0.4 GB resident** with the
-  default INT8 encoder, **~1.7 GB** with FP32. Default pool of 2 ≈ 790 MB RSS.
+  INT8 encoder (the only runtime path). Default pool of 2 ≈ 790 MB RSS.
 - The engine refuses to let the pool eat more than half of total RAM: an
   oversized `--pool-size` is **clamped with a warning** at load, so check the
   log instead of assuming you got the parallelism you asked for.
-- Stay on INT8 (the default after the first-run auto-quantization): the
-  encoder shrinks 844 MB → 215 MB on disk with ~0% WER degradation, and FP32
-  quadruples the per-worker memory cost for no batch-speed win.
+- Runtime is **INT8 only** (~215 MB encoder on disk from `gigastt download`).
+  There is no FP32 inference path for batch workers.
 - On CPU builds, `--encoder-intra-threads` defaults to logical CPUs divided
   across the pool — the right value for a dedicated batch box; tune only for
   shared machines.
@@ -437,8 +436,8 @@ time gigastt transcribe-batch calls/ transcripts/ --pool-size 4 --move-to calls/
   `duplicate output ... inputs with equal file stems overwrite each other`
   for the transcripts). Keep source filenames unique.
 - **Expecting parallelism you did not get.** `--pool-size 16` on 8 GB RAM is
-  silently clamped at load (warning logged). Check the startup log, and
-  remember FP32 quadruples per-worker memory.
+  silently clamped at load (warning logged). Check the startup log and size
+  the pool against ~0.4 GB resident per worker.
 - **`invalid audio` / 422 on an unsupported container.** AMR, MP4 video,
   or a corrupt upload fails decoding. Convert first
   (`ffmpeg -i in.amr -ar 16000 -ac 1 out.wav`) or, for raw telephony streams,

@@ -400,7 +400,7 @@ async fn test_ws_idle_timeout() {
 /// follow-up request must then acquire the slot in far less time than the full
 /// file would take to decode, proving the timed-out run was actually cancelled
 /// rather than left wedged.
-#[ignore = "requires the GigaAM model (~850MB)"]
+#[ignore = "requires the GigaAM model (~225 MB INT8)"]
 #[tokio::test]
 async fn test_inference_watchdog_frees_pool_slot_within_one_window() {
     let model_dir = common::model_dir();
@@ -460,7 +460,7 @@ async fn test_inference_watchdog_frees_pool_slot_within_one_window() {
 /// with a single job worker, a queued follow-up job can only run once the
 /// cancelled one releases the slot. If cancellation reached the engine, the
 /// follow-up completes in far less time than the cancelled job's full decode.
-#[ignore = "requires the GigaAM model (~850MB)"]
+#[ignore = "requires the GigaAM model (~225 MB INT8)"]
 #[tokio::test]
 async fn test_delete_job_frees_triplet_in_bounded_time() {
     let model_dir = common::model_dir();

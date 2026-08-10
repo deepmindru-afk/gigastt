@@ -92,7 +92,7 @@
 //!
 //! # Running
 //!
-//! Both tests need the model (~850 MB) and the external RuLS benchmark corpus,
+//! Both tests need the model (~225 MB INT8) and the external RuLS benchmark corpus,
 //! and both are `#[ignore]`d:
 //!
 //! ```sh

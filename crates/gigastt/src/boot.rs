@@ -301,8 +301,12 @@ pub fn resolve_hotwords(
 // ---------------------------------------------------------------------------
 
 /// Ensure the INT8 encoder exists for `variant`, producing it via the native
-/// Rust quantization pipeline if missing. Honoured by `serve` and `download`.
-/// First-time quantization takes ~2 minutes on the FP32 encoder.
+/// Rust quantization pipeline from a local FP32 encoder when missing.
+///
+/// Runtime product path is **INT8-only** (`gigastt download`); this helper is
+/// for packaging (`gigastt quantize`) and tests that still exercise on-device
+/// quantization. `skip` no longer allows FP32 inference — missing INT8 is an
+/// error either way when `skip` is true.
 pub fn ensure_int8_encoder(
     variant: ModelVariant,
     model_dir: &str,
@@ -314,15 +318,17 @@ pub fn ensure_int8_encoder(
         return Ok(());
     }
     if skip {
-        tracing::info!(
-            "Skipping INT8 quantization (--skip-quantize). Engine will load the FP32 encoder."
+        anyhow::bail!(
+            "INT8 encoder not found at {} — gigastt runs INT8 only. \
+             Run `gigastt download` (lean INT8 bundle). FP32 encoders are not supported.",
+            int8_path.display()
         );
-        return Ok(());
     }
     let input = dir.join(variant.encoder_file());
     if !input.exists() {
         anyhow::bail!(
-            "Cannot quantize: FP32 encoder not found at {}",
+            "Cannot quantize: FP32 encoder not found at {} \
+             (packaging source). For runtime, use `gigastt download` for INT8.",
             input.display()
         );
     }
@@ -418,10 +424,11 @@ pub struct EngineRecipe {
     pub pool_min_size: usize,
     /// Triplets reserved for batch REST jobs (serve only; offline uses `0`).
     pub batch_pool_size: usize,
-    /// When true, run [`ensure_int8_encoder`] before load (serve / download).
-    /// Offline paths leave this false so they never quantize as a side effect.
+    /// When true, run [`ensure_int8_encoder`] before load (packaging / tests).
+    /// Product serve/download leave this false — they fetch lean INT8 only.
     pub quantize: bool,
-    /// Passed to [`ensure_int8_encoder`] when `quantize` is true.
+    /// When `quantize` is true and INT8 is missing: if true, error (no FP32
+    /// load); if false, attempt on-device quantize from a local FP32 encoder.
     pub skip_quantize: bool,
     /// Optional endpoint-mode token (`auto` / `assistant` / …). `None` leaves
     /// the engine default (offline paths). Serve always sets this.
@@ -744,9 +751,15 @@ mod tests {
     }
 
     #[test]
-    fn test_ensure_int8_encoder_skip_flag() {
+    fn test_ensure_int8_encoder_skip_flag_rejects_missing_int8() {
         let tmp = tempfile::tempdir().unwrap();
-        ensure_int8_encoder(ModelVariant::Rnnt, tmp.path().to_str().unwrap(), true).unwrap();
+        let err = ensure_int8_encoder(ModelVariant::Rnnt, tmp.path().to_str().unwrap(), true)
+            .unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("INT8") || msg.contains("int8"),
+            "skip without INT8 must error (no FP32 fallback): {msg}"
+        );
     }
 
     #[test]

@@ -29,13 +29,13 @@ Note: `cargo build` requires `protoc` in `PATH` for the in-tree ONNX quantizatio
 
 Note (build-time network fetch): `ort`'s default `download-binaries` feature makes `ort-sys` download a prebuilt onnxruntime native library over the network at build time, outside `Cargo.lock` (the download is verified by an embedded checksum). The "no cloud / full privacy" guarantee covers **runtime** inference, not the build process. For air-gapped/offline builds, use `ort` with `default-features = false` + the `load-dynamic` feature (or a vendored onnxruntime) and pin the native library via `ORT_*` env vars / `.cargo/config.toml`. See `docs/embedding-packaging.md` (static-default vs `ort-load-dynamic`) and `docs/quickstarts.md` (in-process Python/Node/Swift/Kotlin examples).
 
-Model download (required for E2E testing and file transcription, ~850MB):
+Model download (required for E2E testing and file transcription, ~225 MB INT8):
 ```sh
-cargo run -- download                    # Downloads to ~/.gigastt/models/ and auto-generates INT8 encoder
-cargo run -- download --skip-quantize    # Skip auto-quantization (FP32 only)
-cargo run -- download --prequantized     # Lean path: fetch pre-quantized INT8 bundle from Releases (no FP32 download, no protoc, no on-device quantize)
-cargo run -- quantize                    # Regenerate INT8 encoder manually (~215MB)
+cargo run -- download                    # Lean INT8 bundle (~225 MB) from Releases (only path)
+cargo run -- quantize                    # Packaging: rebuild INT8 from a local FP32 ONNX
 ```
+
+Runtime is **INT8 only** — no FP32 download flags, no FP32 engine load.
 
 ## Docker
 
@@ -80,9 +80,8 @@ crates/
       factory.rs          # cfg-gated coreml / cuda / nnapi / ane / candle / CPU
       ort/ · coreml/ · candle/ · mock/
     error.rs              # Typed error types (GigasttError)
-    quantize.rs           # Native Rust INT8 quantizer (always compiled since v0.9.0)
-    onnx_proto.rs         # prost-generated ONNX types from proto/onnx.proto
     protocol/mod.rs       # JSON message types (Ready, Partial, Final, Error + retry_after_ms)
+  gigastt-quantize/       # Native Rust INT8 dynamic quantizer (optional feature)
   gigastt-ffi/src/        # C-ABI FFI layer (cdylib for Android/mobile)
     lib.rs                # Exported C functions: engine_new, transcribe_file, stream_*, etc.
   gigastt-node/           # napi-rs Node binding
@@ -106,11 +105,9 @@ crates/
   - Caches compiled models in `~/.gigastt/models/coreml_cache/`
 - **CUDA execution provider** (`--features cuda`, Linux x86_64 CUDA 12+): GPU inference via ONNX Runtime CUDA EP
   - Features are compile-time and mutually exclusive; default build uses CPU EP on all platforms
-- **INT8 quantization** (always compiled, auto-invoked since v0.9.0): encoder_int8.onnx (~215MB vs 844MB)
-  - Rust-native quantization in `crates/gigastt-core/src/quantize.rs` (no Cargo feature required; `quantize` feature kept as no-op for backward compat)
-  - Auto-invoked by `gigastt download` and `gigastt serve` on first run (~2 min one-time)
-  - Opt out with `--skip-quantize` or `GIGASTT_SKIP_QUANTIZE=1`
-  - Auto-detection: Engine uses INT8 encoder if present, falls back to FP32
+- **INT8 only**: `download` / `serve` / engine load use lean prequantized INT8 (~225 MB)
+  - Engine rejects FP32-only installs (no fallback)
+  - `gigastt quantize` is packaging-only (needs local FP32 source)
 - **Zero-copy REST upload path** (v0.9.0): `bytes::Bytes` flows end-to-end from axum into symphonia via a crate-private `BytesMediaSource`, eliminating the 4× upload copy that used to OOM small containers on concurrent 10-minute uploads.
 
 ### Key constants (defined in `crates/gigastt-core/src/inference/mod.rs`)
@@ -165,7 +162,7 @@ Three-tier test architecture:
 - Always pass `--lib --bins`. A bare `cargo test` (or `cargo test --workspace`) pulls in the
   ~2.5-hour WER benchmark: it is a `harness = false` target, so `--ignored` does not skip it.
 
-**E2E tests** (require model ~850MB, run in CI on main push only):
+**E2E tests** (require model ~225 MB INT8, run in CI on main push only):
 - `tests/e2e_rest.rs` — REST API tests (health, transcribe, SSE streaming, error paths)
 - `tests/e2e_ws.rs` — WebSocket protocol tests (ready, audio, stop, configure, errors, concurrent)
 - `tests/e2e_errors.rs` — error path tests (oversized body/frame, pool saturation, idle timeout)
@@ -197,7 +194,7 @@ OpenSLR download that does not fit the CI cache budget, so these never run in CI
 
 ### CI structure
 - **PR CI** (`.github/workflows/ci.yml`, fast): fmt, clippy, unit tests, feature compile checks (CoreML, CUDA, Diarization, Candle/Metal, ANE), `cargo audit`, `cargo deny`
-- **Main push CI**: all PR checks + e2e tests with cached model (~850MB, OS-independent cache key) + CoreML runtime smoke on macos-14 (transcribes `golos_00.wav`, fails on inference error or silent CPU fallback)
+- **Main push CI**: all PR checks + e2e tests with cached model (~225 MB INT8, OS-independent cache key) + CoreML runtime smoke on macos-14 (transcribes `golos_00.wav`, fails on inference error or silent CPU fallback)
 - **Nightly soak** (`.github/workflows/soak.yml`): `cargo test --test soak_test` at 03:17 UTC, reuses the main CI model cache
 - **Release** (`.github/workflows/release.yml`, tag-triggered): multi-arch tarballs, per-asset `.sha256` + `SHA256SUMS.txt`, CycloneDX SBOM, SLSA provenance, minisign signatures
 - Load tests are local-only, not in CI
@@ -228,26 +225,47 @@ OpenSLR download that does not fit the CI cache budget, so these never run in CI
 
 ## Model
 
-GigaAM v3 from `istupakov/gigaam-v3-onnx` on HuggingFace. Four selectable heads via `--model-variant` — an explicit value is honored even when the model dir holds more than one head's files (fixed in 2.11.1); with no flag the head is auto-detected from the files on disk (`rnnt` precedence):
-- **`rnnt`** (default since v2.3): `v3_rnnt_{encoder,decoder,joint}.onnx` + `v3_vocab.txt` (34-token char vocab). Much lower WER than e2e (clean read 3.55% on `golos_crowd_1k` via the cross-engine harness vs e2e 8.60%; leads far-field/phone/YouTube — see `docs/benchmarks.md`); bare lowercase output, so pair with `--punctuation` / `--itn` for readable text.
-- **`e2e_rnnt`**: `v3_e2e_rnnt_{encoder,decoder,joint}.onnx` + `v3_e2e_rnnt_vocab.txt` (1025-token BPE). Punctuation/casing/ITN baked in.
-- **`ml_ctc`**: GigaAM Multilingual charwise-CTC head (220M) from `istupakov/gigaam-multilingual-ctc-onnx`. Encoder-only: `multilingual_ctc.int8.onnx` + `multilingual_vocab.txt` (71-class multilingual char vocab; blank id 70). Downloads the upstream pre-quantized INT8 encoder directly (~225MB; no FP32 download, no on-device quantize). Best-in-class WER on ru/kk/ky/uz (moderate on en); bare lowercase output. Shares the 64-mel frontend; file transcription (greedy CTC decode, no prediction network / joiner).
-- **`ml_ctc_large`**: the 600M GigaAM Multilingual head from `istupakov/gigaam-multilingual-large-ctc-onnx` (`multilingual_large_ctc.int8.onnx`, ~592MB; shares `multilingual_vocab.txt`). Same charwise-CTC architecture as `ml_ctc`, higher accuracy across all five languages (clean-read WER ru 4.44 / en 4.63 / kk 6.52 / ky 7.39 / uz 9.21% — see `docs/benchmarks.md`).
-- Encoder (rnnt/e2e_rnnt shared arch): 844MB (FP32) or 215MB (INT8 quantized, 3.9×); decoder/joiner a few MB each.
+Runtime is **INT8 only** — `download` / `serve` / engine load never use FP32.
+Four selectable heads via `--model-variant` — an explicit value is honored even when
+the model dir holds more than one head's files (fixed in 2.11.1); with no flag the
+head is auto-detected from the files on disk (`rnnt` precedence):
+- **`rnnt`** (default since v2.3): lean INT8 set from GitHub Releases —
+  `v3_rnnt_encoder_int8.onnx` + `v3_rnnt_{decoder,joint}.onnx` + `v3_vocab.txt`
+  (34-token char vocab). Much lower WER than e2e (clean read 3.55% on
+  `golos_crowd_1k` via the cross-engine harness vs e2e 8.60%; leads
+  far-field/phone/YouTube — see `docs/benchmarks.md`); bare lowercase output, so
+  pair with `--punctuation` / `--itn` for readable text.
+- **`e2e_rnnt`**: `v3_e2e_rnnt_encoder_int8.onnx` + `v3_e2e_rnnt_{decoder,joint}.onnx`
+  + `v3_e2e_rnnt_vocab.txt` (1025-token BPE). Punctuation/casing/ITN baked in.
+- **`ml_ctc`**: GigaAM Multilingual charwise-CTC head (220M) from
+  `istupakov/gigaam-multilingual-ctc-onnx`. Encoder-only:
+  `multilingual_ctc.int8.onnx` + `multilingual_vocab.txt` (71-class multilingual
+  char vocab; blank id 70). Downloads the upstream pre-quantized INT8 encoder
+  directly (~225MB). Best-in-class WER on ru/kk/ky/uz (moderate on en); bare
+  lowercase output. Shares the 64-mel frontend; file transcription (greedy CTC
+  decode, no prediction network / joiner).
+- **`ml_ctc_large`**: the 600M GigaAM Multilingual head from
+  `istupakov/gigaam-multilingual-large-ctc-onnx`
+  (`multilingual_large_ctc.int8.onnx`, ~592MB; shares `multilingual_vocab.txt`).
+  Same charwise-CTC architecture as `ml_ctc`, higher accuracy across all five
+  languages (clean-read WER ru 4.44 / en 4.63 / kk 6.52 / ky 7.39 / uz 9.21% —
+  see `docs/benchmarks.md`).
+- Encoder (rnnt/e2e_rnnt): ~215 MB INT8; decoder/joiner a few MB each. Total lean
+  install ~225 MB.
 - Sample rate: 16kHz, Features: 64 mel bins
 - ONNX tensors: encoder out `[1, 768, T]` (channels-first), decoder state `[1, 1, 320]`
 
 ### Quantization
 
-Rust-native quantization via `crates/gigastt-core/src/quantize.rs` (always compiled since v0.9.0):
+Product path never quantizes on device — INT8 is pre-shipped. `gigastt quantize`
+is packaging-only and needs a **local FP32** encoder ONNX as source
+(`crates/gigastt-quantize`):
 ```sh
 cargo run -- quantize --model-dir ~/.gigastt/models
-# Produces: v3_e2e_rnnt_encoder_int8.onnx (~215MB, ~3.9x smaller; dynamic INT8 with
-# MatMulInteger/ConvInteger integer compute → RTF well below 1.0 on CPU)
+# Requires v3_*_encoder.onnx on disk; writes v3_*_encoder_int8.onnx
 ```
 
-Engine auto-detects and prefers INT8 if available; falls back to FP32.
-`gigastt serve` and `gigastt download` invoke the same pipeline automatically on first run unless `--skip-quantize` / `GIGASTT_SKIP_QUANTIZE=1` is set.
+Engine **requires** the INT8 encoder; FP32-only installs are rejected.
 
 ## Agent Skills
 

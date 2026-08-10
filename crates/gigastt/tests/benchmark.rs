@@ -461,7 +461,7 @@ fn ceilings_from_baseline(baseline: &serde_json::Value) -> QualityCeilings {
 
 /// Pure multi-metric regression gate. Empty return = pass. Factored out of
 /// `main` so the comparison (sign, boundary, null-skip) can be self-tested
-/// model-free — the rest of the benchmark needs the ~850 MB model, this does
+/// model-free — the rest of the benchmark needs the ~225 MB INT8 model, this does
 /// not.
 fn gate_verdict_quality(
     m: QualityMetrics,

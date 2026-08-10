@@ -42,13 +42,11 @@ class Gigastt < Formula
 
   def caveats
     <<~EOS
-      The GigaAM v3 model (~850 MB) is downloaded on first run into
-      ~/.gigastt/models. An INT8-quantized encoder is produced automatically
-      (~2 min one-time). Disable with `--skip-quantize` or
-      `GIGASTT_SKIP_QUANTIZE=1`.
+      The GigaAM v3 INT8 model (~225 MB) is downloaded on first run into
+      ~/.gigastt/models (lean prequantized path; no FP32 step).
 
       Quick start:
-        gigastt download         # fetches model + quantizes
+        gigastt download         # lean INT8 bundle (~225 MB)
         gigastt serve            # starts STT server on 127.0.0.1:9876
 
       Homepage: https://github.com/ekhodzitsky/gigastt

@@ -17,7 +17,7 @@ const FIXTURE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/golos
 /// SSE streaming of a real speech clip must drive the per-chunk inference loop
 /// and emit `data:` events (covers the chunk-iterate / process_chunk / send-seg
 /// / finish_stream path in `transcribe_stream`).
-#[ignore = "requires the GigaAM model (~850MB)"]
+#[ignore = "requires the GigaAM model (~225 MB INT8)"]
 #[tokio::test]
 async fn test_sse_stream_real_speech_emits_segments() {
     let md = common::model_dir();
@@ -47,7 +47,7 @@ async fn test_sse_stream_real_speech_emits_segments() {
 /// With `inference_timeout_secs = 0` the REST transcribe path takes the
 /// timeout-disabled branch (`handle.await` directly) instead of wrapping the
 /// blocking run in a `tokio::time::timeout`.
-#[ignore = "requires the GigaAM model (~850MB)"]
+#[ignore = "requires the GigaAM model (~225 MB INT8)"]
 #[tokio::test]
 async fn test_transcribe_inference_timeout_disabled() {
     let md = common::model_dir();
@@ -77,7 +77,7 @@ async fn test_transcribe_inference_timeout_disabled() {
 /// Saturating the pool while metrics are enabled forces the REST transcribe
 /// checkout to time out and record the pool-timeout counter/histogram. Takes
 /// ~30 s (the default pool-checkout timeout).
-#[ignore = "requires the GigaAM model (~850MB); ~30s"]
+#[ignore = "requires the GigaAM model (~225 MB INT8); ~30s"]
 #[tokio::test]
 async fn test_transcribe_pool_timeout_records_metrics() {
     let md = common::model_dir();
@@ -131,7 +131,7 @@ async fn test_transcribe_pool_timeout_records_metrics() {
 
 /// Same pool-timeout path for the SSE handler: a saturated pool makes
 /// `transcribe_stream` time out at checkout and record the metric. ~30 s.
-#[ignore = "requires the GigaAM model (~850MB); ~30s"]
+#[ignore = "requires the GigaAM model (~225 MB INT8); ~30s"]
 #[tokio::test]
 async fn test_sse_pool_timeout_records_metrics() {
     let md = common::model_dir();

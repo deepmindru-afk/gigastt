@@ -1,7 +1,7 @@
 //! Minimal HTTP bootstrap responder used while the engine is still loading.
 //!
-//! On first run gigastt downloads ~850 MB of model files and generates the INT8
-//! encoder before it can serve real requests. Without this, the TCP port is
+//! On first run gigastt downloads the lean INT8 model pack (~225 MB)
+//! before it can serve real requests. Without this, the TCP port is
 //! unbound during that window, so `curl --fail /health` and Docker `HEALTHCHECK`
 //! probes see connection-refused — indistinguishable from a crashed container.
 //!

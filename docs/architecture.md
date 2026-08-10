@@ -30,12 +30,13 @@ Optional parallel paths (not on the ASR critical path by default):
 
 ## Crates
 
-gigastt is a **5-crate** Cargo workspace:
+gigastt is a **6-crate** Cargo workspace:
 
 | Crate | Type | Purpose |
 |---|---|---|
-| [`gigastt-core`](../crates/gigastt-core) | lib (rlib) | Inference engine, model download, quantization, protocol types — **no server deps** |
+| [`gigastt-core`](../crates/gigastt-core) | lib (rlib) | Inference engine, model download, protocol types — **no server deps** |
 | [`gigastt`](../crates/gigastt) | bin + lib | Server (axum HTTP/WS/SSE/jobs) + CLI |
+| [`gigastt-quantize`](../crates/gigastt-quantize) | lib | Native Rust INT8 quantizer (packaging; optional feature on core) |
 | [`gigastt-ffi`](../crates/gigastt-ffi) | lib (cdylib) | C-ABI FFI for Android / mobile embedding |
 | [`gigastt-uniffi`](../crates/gigastt-uniffi) | lib (cdylib) | UniFFI bindings (Python wheels / Swift / Kotlin path) |
 | [`gigastt-node`](../crates/gigastt-node) | lib (cdylib) | napi-rs Node.js / Electron binding |
@@ -59,8 +60,10 @@ Server surfaces (single process, one primary port unless metrics is enabled):
 [SberDevices](https://github.com/salute-developers/GigaAM) — RNN-T (Conformer encoder +
 LSTM decoder + joiner), 16-layer 768-dim encoder (240M params); the vocab depends on the
 head (`rnnt` 34-token char — the v2.3 default — or `e2e_rnnt` 1025-token BPE), 16 kHz
-mono input, MIT licensed. Download ~850 MB (encoder 844 MB, decoder 4.4 MB, joiner
-2.6 MB); INT8 encoder ~215 MB. Trained on 700K+ hours of Russian speech.
+mono input, MIT licensed. Default install is lean INT8 (~225 MB total: encoder
+~215 MB + decoder/joiner/vocab) via `gigastt download` / first `serve`. Runtime
+loads INT8 only — there is no FP32 download or inference path. Trained on 700K+
+hours of Russian speech.
 
 Two opt-in heads (`--model-variant ml_ctc` / `ml_ctc_large`) use
 [**GigaAM Multilingual**](https://huggingface.co/istupakov/gigaam-multilingual-ctc-onnx)
@@ -105,9 +108,10 @@ crashes.
 Native-Rust quantization (always compiled). The encoder shrinks ~3.9× and runs as true
 INT8 integer compute (`DynamicQuantizeLinear` + `MatMulInteger`/`ConvInteger`), so the CPU
 EP executes fast integer kernels instead of dequantizing the weights back to float — RTF
-well below 1.0 on CPU — with negligible WER change. Auto-detected and auto-invoked on
-first `download` / `serve`; opt out with `--skip-quantize` (or `GIGASTT_SKIP_QUANTIZE=1`).
-Re-quantize manually with `gigastt quantize [--force]`.
+well below 1.0 on CPU — with negligible WER change. Runtime always loads the lean
+prequantized INT8 bundle from `gigastt download` / first `serve` — there is no FP32
+inference path. `gigastt quantize [--force]` remains a packaging tool that needs a local
+FP32 ONNX as source.
 
 ## Air-gapped / offline builds
 
