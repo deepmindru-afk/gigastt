@@ -5,11 +5,25 @@ use rustfft::{Fft, FftPlanner};
 use std::f32::consts::PI;
 use std::sync::Arc;
 
+/// One HTK triangular mel band as a contiguous sparse slice of FFT bins.
+///
+/// Triangle filters are zero outside `[start, start + weights.len())`, so the
+/// dense `[n_mels × n_freqs]` multiply (mostly zeros) is replaced by a tight
+/// weighted sum over the non-zero support only — same math, fewer MACs.
+#[derive(Clone, Debug)]
+struct SparseMelBand {
+    /// First FFT bin with a non-zero weight for this band.
+    start: usize,
+    /// Contiguous non-zero weights starting at `start`.
+    weights: Vec<f32>,
+}
+
 pub struct MelSpectrogram {
     n_fft: usize,
     hop_length: usize,
     window: Vec<f32>,
-    mel_filterbank: Vec<f32>, // [n_mels * (n_fft/2 + 1)]
+    /// Sparse HTK mel filterbank (one band per mel bin).
+    mel_bands: Vec<SparseMelBand>,
     fft: Arc<dyn Fft<f32>>,
 }
 
@@ -33,8 +47,9 @@ impl MelSpectrogram {
             .map(|n| 0.5 * (1.0 - (2.0 * PI * n as f32 / (n_fft - 1) as f32).cos()))
             .collect();
 
-        // HTK mel filterbank
+        // HTK mel filterbank (dense build → sparse bands for apply)
         let mel_filterbank = Self::create_mel_filterbank(n_fft, n_mels, sample_rate, fmin, fmax);
+        let mel_bands = Self::sparsify_mel_filterbank(&mel_filterbank, n_mels, n_fft / 2 + 1);
 
         // Pre-plan FFT
         let mut planner = FftPlanner::<f32>::new();
@@ -44,7 +59,7 @@ impl MelSpectrogram {
             n_fft,
             hop_length,
             window,
-            mel_filterbank,
+            mel_bands,
             fft,
         }
     }
@@ -106,6 +121,34 @@ impl MelSpectrogram {
         filterbank
     }
 
+    /// Convert a dense `[n_mels × n_freqs]` HTK filterbank into per-band sparse
+    /// slices. Empty rows become a zero-weight single bin at index 0 so apply
+    /// still has a well-defined band object (energy stays at the log floor).
+    fn sparsify_mel_filterbank(
+        filterbank: &[f32],
+        n_mels: usize,
+        n_freqs: usize,
+    ) -> Vec<SparseMelBand> {
+        debug_assert_eq!(filterbank.len(), n_mels * n_freqs);
+        let mut bands = Vec::with_capacity(n_mels);
+        for m in 0..n_mels {
+            let row = &filterbank[m * n_freqs..(m + 1) * n_freqs];
+            let first = row.iter().position(|&w| w != 0.0);
+            let last = row.iter().rposition(|&w| w != 0.0);
+            match (first, last) {
+                (Some(start), Some(end)) => bands.push(SparseMelBand {
+                    start,
+                    weights: row[start..=end].to_vec(),
+                }),
+                _ => bands.push(SparseMelBand {
+                    start: 0,
+                    weights: vec![0.0],
+                }),
+            }
+        }
+        bands
+    }
+
     /// Compute log-mel spectrogram from f32 audio samples.
     /// Returns features in shape [n_mels, num_frames] as a flat Vec.
     pub fn compute(&self, samples: &[f32]) -> (Vec<f32>, usize) {
@@ -132,7 +175,7 @@ impl MelSpectrogram {
         let n_freqs = self.n_fft / 2 + 1;
 
         // Number of frames (center=false)
-        let n_mels = self.mel_filterbank.len() / n_freqs;
+        let n_mels = self.mel_bands.len();
         if samples.len() < self.n_fft {
             output.resize(n_mels, 0.0);
             return 1;
@@ -170,12 +213,14 @@ impl MelSpectrogram {
                 power[k] = fft_input[k].norm_sqr();
             }
 
-            // Apply mel filterbank + log
-            for m in 0..n_mels {
+            // Sparse mel filterbank + log (identical to dense row dot-products)
+            for (m, band) in self.mel_bands.iter().enumerate() {
                 let mut mel_energy: f32 = 0.0;
-                let row_start = m * n_freqs;
-                for (k, &p) in power.iter().enumerate().take(n_freqs) {
-                    mel_energy += self.mel_filterbank[row_start + k] * p;
+                let end = band.start + band.weights.len();
+                // Safety: sparsify only keeps bins in 0..n_freqs.
+                debug_assert!(end <= n_freqs);
+                for (i, &w) in band.weights.iter().enumerate() {
+                    mel_energy += w * power[band.start + i];
                 }
                 // Log with floor
                 output[m * num_frames + frame_idx] = (mel_energy.max(1e-10)).ln();
@@ -260,5 +305,99 @@ mod tests {
             non_floor > 0,
             "Expected some non-floor values for sine wave"
         );
+    }
+
+    #[test]
+    fn test_sparsify_mel_filterbank_matches_dense_dot() {
+        let n_fft = crate::inference::N_FFT;
+        let n_mels = crate::inference::N_MELS;
+        let n_freqs = n_fft / 2 + 1;
+        let dense = MelSpectrogram::create_mel_filterbank(n_fft, n_mels, 16000.0, 0.0, 8000.0);
+        let bands = MelSpectrogram::sparsify_mel_filterbank(&dense, n_mels, n_freqs);
+
+        // Synthetic power spectrum with energy across the band.
+        let power: Vec<f32> = (0..n_freqs)
+            .map(|k| ((k as f32) * 0.01).sin().abs() + 0.1)
+            .collect();
+
+        for m in 0..n_mels {
+            let mut dense_e = 0.0_f32;
+            let row = &dense[m * n_freqs..(m + 1) * n_freqs];
+            for (k, &p) in power.iter().enumerate() {
+                dense_e += row[k] * p;
+            }
+            let band = &bands[m];
+            let mut sparse_e = 0.0_f32;
+            for (i, &w) in band.weights.iter().enumerate() {
+                sparse_e += w * power[band.start + i];
+            }
+            assert!(
+                (dense_e - sparse_e).abs() <= 1e-5 * dense_e.max(1.0),
+                "band {m}: dense={dense_e} sparse={sparse_e}"
+            );
+        }
+
+        // Sparsity: mean non-zeros should be far below n_freqs (triangular HTK).
+        let mean_nz = bands.iter().map(|b| b.weights.len()).sum::<usize>() as f32 / n_mels as f32;
+        assert!(
+            mean_nz < (n_freqs as f32) * 0.25,
+            "expected sparse bands, mean nz={mean_nz} of {n_freqs}"
+        );
+    }
+
+    #[test]
+    fn test_sparse_compute_matches_dense_reference() {
+        // Reconstruct a dense-apply reference and compare against the product
+        // sparse path on a short sine — features must match within float noise.
+        let n_fft = crate::inference::N_FFT;
+        let n_mels = crate::inference::N_MELS;
+        let hop = crate::inference::HOP_LENGTH;
+        let n_freqs = n_fft / 2 + 1;
+        let dense = MelSpectrogram::create_mel_filterbank(n_fft, n_mels, 16000.0, 0.0, 8000.0);
+        let mel = MelSpectrogram::new();
+        let samples: Vec<f32> = (0..3200)
+            .map(|i| (2.0 * std::f32::consts::PI * 440.0 * i as f32 / 16000.0).sin())
+            .collect();
+        let (sparse_feats, n_frames) = mel.compute(&samples);
+
+        // Dense reference: same window + FFT plan, dense filterbank rows.
+        let mut planner = FftPlanner::<f32>::new();
+        let fft = planner.plan_fft_forward(n_fft);
+        let window: Vec<f32> = (0..n_fft)
+            .map(|n| {
+                0.5 * (1.0 - (2.0 * std::f32::consts::PI * n as f32 / (n_fft - 1) as f32).cos())
+            })
+            .collect();
+        let mut dense_feats = vec![0.0_f32; n_mels * n_frames];
+        let mut fft_input = vec![Complex::new(0.0_f32, 0.0); n_fft];
+        let mut power = vec![0.0_f32; n_freqs];
+        for frame_idx in 0..n_frames {
+            let start = frame_idx * hop;
+            for i in 0..n_fft {
+                let sample = samples.get(start + i).copied().unwrap_or(0.0);
+                fft_input[i] = Complex::new(sample * window[i], 0.0);
+            }
+            fft.process(&mut fft_input[..n_fft]);
+            for k in 0..n_freqs {
+                power[k] = fft_input[k].norm_sqr();
+            }
+            for m in 0..n_mels {
+                let mut e = 0.0_f32;
+                let row = &dense[m * n_freqs..(m + 1) * n_freqs];
+                for (k, &p) in power.iter().enumerate() {
+                    e += row[k] * p;
+                }
+                dense_feats[m * n_frames + frame_idx] = e.max(1e-10).ln();
+            }
+        }
+
+        assert_eq!(sparse_feats.len(), dense_feats.len());
+        for (i, (s, d)) in sparse_feats.iter().zip(dense_feats.iter()).enumerate() {
+            let tol = 1e-4_f32 * d.abs().max(1.0);
+            assert!(
+                (s - d).abs() <= tol,
+                "feat[{i}]: sparse={s} dense={d} tol={tol}"
+            );
+        }
     }
 }

@@ -1,0 +1,53 @@
+{
+  "freeze_vs_post": [
+    {
+      "metric": "warm_rtf_long40_best",
+      "freeze": 0.0292,
+      "post": 0.0288,
+      "delta": -0.0004
+    },
+    {
+      "metric": "warm_rtf_long40_mean",
+      "freeze": 0.0294,
+      "post": 0.0289,
+      "delta": -0.0005
+    },
+    {
+      "metric": "warm_rtf_short_fixtures_mean",
+      "freeze": 0.0342,
+      "post": 0.0357,
+      "delta": 0.0015
+    },
+    {
+      "metric": "rss_mb_after_decode_pool1",
+      "freeze": 283.7,
+      "post": 284.0,
+      "delta": 0.3
+    },
+    {
+      "metric": "resident_mb_pool1_footprint",
+      "freeze": 52.0,
+      "post": 53.0,
+      "delta": 1.0
+    },
+    {
+      "metric": "cold_start_sec_pool1",
+      "freeze": 0.825,
+      "post": 0.443,
+      "delta": -0.382
+    },
+    {
+      "metric": "lean_disk_mb",
+      "freeze": 219.4,
+      "post": 219.4,
+      "delta": 0.0
+    }
+  ],
+  "competitive_bar": 0.03,
+  "post_meets_competitive_absolute": true,
+  "host_limited_competitive": false,
+  "primary_definition": "long40 BEST strictly better; MEAN non-worse; batches=3; RSS after short",
+  "source_attempt": "quiet/abs8_*",
+  "load1_at_start": 7.07,
+  "stretch_note": "stretch: open \u2014 post long40 BEST=0.0288 vs target [0.015, 0.02]; no axis was regressed to chase stretch (dual-constraint holds). competitive: met (post BEST 0.0288 \u2264 0.03)"
+}
