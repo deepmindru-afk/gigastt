@@ -263,6 +263,16 @@ def measure(binary: str, model_dir: str | None, long_path: Path, batches: int) -
             "date_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "product_path": "lean INT8 ORT rnnt (default; no permanent F32 pack)",
             "binary": binary,
+            "protocol": {
+                "batches": batches,
+                "pool_size": 1,
+                "model_variant": "rnnt",
+                "punctuation": "off",
+                "itn": "off",
+                "rss_sample_point": "after_short_fixtures_before_long",
+                "primary_rtf": "warm_rtf_long40_best (multi-run BEST); mean must not regress",
+                "long_fixture": "golos_00..04 concat x2 (~42s)",
+            },
             "metrics": metrics,
         }
     finally:
