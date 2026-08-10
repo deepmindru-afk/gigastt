@@ -22,7 +22,7 @@ client must survive pool saturation and network drops without babysitting.
 ## Prerequisites
 
 - A running server with the model, per [Getting started](01-getting-started.md):
-  `gigastt serve` (first run downloads ~850 MB and quantizes — wait for
+  `gigastt serve` (first run downloads the lean INT8 model (~225 MB) — wait for
   readiness, don't kill it):
 
   ```sh

@@ -1,6 +1,6 @@
 //! Bit-identity probe for the file-decode path: prints one digest per input.
 //!
-//! Model-gated (`#[ignore]`, requires the GigaAM model (~850MB) at
+//! Model-gated (`#[ignore]`, requires the GigaAM model (~225 MB INT8) at
 //! `~/.gigastt/models`). It asserts nothing about the digest values — it is the
 //! instrument for an A/B between two revisions, so a change to the decode path
 //! can be shown to leave every transcript and every word timestamp untouched:
@@ -118,7 +118,7 @@ fn row(label: &str, samples: usize, res: &TranscribeResult) -> u64 {
 }
 
 #[test]
-#[ignore = "requires the GigaAM model (~850MB) at ~/.gigastt/models"]
+#[ignore = "requires the GigaAM model (~225 MB INT8) at ~/.gigastt/models"]
 fn longform_transcript_digests() {
     let model_dir = default_model_dir();
     let engine = Engine::load(&model_dir).expect("load engine");

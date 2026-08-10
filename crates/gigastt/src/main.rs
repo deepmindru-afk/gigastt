@@ -3,8 +3,7 @@ use clap::parser::ValueSource;
 use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 use gigastt::batch;
 use gigastt::boot::{
-    EngineRecipe, ItnMode, PunctuationMode, ensure_int8_encoder, parse_itn_mode,
-    parse_punctuation_mode,
+    EngineRecipe, ItnMode, PunctuationMode, parse_itn_mode, parse_punctuation_mode,
 };
 use gigastt::server;
 use gigastt::server::{OriginPolicy, RuntimeLimits, ServerConfig};
@@ -467,13 +466,6 @@ enum Commands {
         #[arg(long, env = "GIGASTT_MAX_AUDIO_SECS")]
         max_audio_secs: Option<u64>,
 
-        /// Skip the automatic INT8 quantization step on the `--fp32` path.
-        /// The default path downloads a pre-quantized ~225 MB INT8 bundle and
-        /// never quantizes on device, so this flag only matters together with
-        /// `--fp32`, where it keeps the 844 MB FP32 encoder for debugging.
-        #[arg(long, env = "GIGASTT_SKIP_QUANTIZE", default_value_t = false)]
-        skip_quantize: bool,
-
         /// Trust `X-Forwarded-For` and `X-Real-IP` headers for rate-limit IP
         /// extraction. When enabled, the direct peer must be loopback or an
         /// RFC1918 private address; otherwise headers are ignored.
@@ -508,24 +500,6 @@ enum Commands {
         #[arg(long, default_value_t = false)]
         skip_diarization: bool,
 
-        /// Skip the automatic INT8 quantization step after an **FP32** download
-        /// (`--fp32`). The default lean path already ships INT8 and ignores this.
-        /// Env: GIGASTT_SKIP_QUANTIZE.
-        #[arg(long, env = "GIGASTT_SKIP_QUANTIZE", default_value_t = false)]
-        skip_quantize: bool,
-
-        /// Lean pre-quantized INT8 bundle (default **true**). The default
-        /// `gigastt download` path; ignored when `--fp32` is set. Kept so
-        /// existing scripts that pass `--prequantized` keep working.
-        #[arg(long, default_value_t = true)]
-        prequantized: bool,
-
-        /// Download the full FP32 encoder set from HuggingFace and quantize
-        /// on-device (unless `--skip-quantize`). Overrides the default lean
-        /// pre-quantized INT8 path (~220 MB class from the pinned GitHub Release).
-        #[arg(long, default_value_t = false)]
-        fp32: bool,
-
         /// Progress reporting format: `human` (default — interactive `\r`
         /// progress on stderr) or `json` (NDJSON events on stdout, one object
         /// per line, for sidecar integrators; human progress and tracing logs
@@ -546,9 +520,10 @@ enum Commands {
         ane: bool,
     },
 
-    /// Quantize encoder model to INT8 (replaces scripts/quantize.py)
+    /// Packaging: quantize a local **FP32** encoder ONNX to INT8.
+    /// Runtime inference never uses FP32 — prefer `gigastt download` for INT8.
     Quantize {
-        /// Model directory
+        /// Model directory holding the FP32 encoder source
         #[arg(long, default_value_t = model::default_model_dir())]
         model_dir: String,
 
@@ -1062,7 +1037,6 @@ async fn main() -> anyhow::Result<()> {
             pool_checkout_timeout_secs,
             inference_timeout_secs,
             max_audio_secs,
-            skip_quantize,
             trust_proxy,
             config,
         } => {
@@ -1145,8 +1119,9 @@ async fn main() -> anyhow::Result<()> {
                 pool_size,
                 pool_min_size,
                 batch_pool_size,
-                quantize: true,
-                skip_quantize,
+                // INT8-only: never on-device-quantize from FP32 at serve time.
+                quantize: false,
+                skip_quantize: true,
                 endpoint_mode: Some(endpoint_mode),
             };
             let build_engine: server::EngineBuilder = {
@@ -1157,9 +1132,9 @@ async fn main() -> anyhow::Result<()> {
             // Build the engine in the background while a minimal bootstrap
             // responder serves /health (200) and /ready (503 initializing) on the
             // port, so probes / Docker HEALTHCHECK don't see connection-refused
-            // during the first-run model download + INT8 quantization. The heavy
-            // synchronous work (quantize, ONNX session load, post-processor loads)
-            // runs on a blocking thread so the bootstrap responder stays snappy.
+            // during the first-run lean INT8 download. The heavy synchronous
+            // work (ONNX session load, post-processor loads) runs on a blocking
+            // thread so the bootstrap responder stays snappy.
             let boot_builder = build_engine.clone();
             let load = async move {
                 let resolved =
@@ -1182,9 +1157,6 @@ async fn main() -> anyhow::Result<()> {
             model_variant,
             #[cfg(feature = "diarization")]
             skip_diarization,
-            skip_quantize,
-            prequantized: _prequantized,
-            fp32,
             progress,
             #[cfg(feature = "ane")]
             ane,
@@ -1192,29 +1164,21 @@ async fn main() -> anyhow::Result<()> {
             model::set_progress_mode(progress);
             // `download` is an explicit action: the requested variant maps to
             // the default (Rnnt) so a bare `gigastt download` fetches something
-            // useful. Default = lean pre-quantized INT8; `--fp32` = HF FP32 + quantize.
+            // useful. **INT8 only** — lean prequantized bundle (or CTC INT8 from HF).
             //
-            // The flow runs on its own task: the INT8 quantization pass and the
-            // large-file SHA-256 verify are synchronous, and polled inline they
-            // would starve the select's signal branch — Ctrl-C must interrupt
-            // immediately at any phase (a sidecar's cancel path relies on it).
+            // The flow runs on its own task: large-file SHA-256 verify is
+            // synchronous, and polled inline it would starve the select's signal
+            // branch — Ctrl-C must interrupt immediately (sidecar cancel path).
             let dl_model_dir = model_dir.clone();
             let mut download = tokio::spawn(async move {
                 let model_dir = dl_model_dir;
-                if !fp32 && !model_variant.is_ctc() {
-                    // Lean path (default): INT8 bundle from the pinned Release.
+                if model_variant.is_ctc() {
+                    // CTC heads: HF pre-quantized INT8 encoder (+ vocab) directly.
+                    model::ensure_model_variant(Some(model_variant), &model_dir).await?;
+                } else {
+                    // RNN-T: lean INT8 bundle from the pinned Release.
                     model::ensure_prequantized_model_variant(Some(model_variant), &model_dir)
                         .await?;
-                } else if fp32 && !model_variant.is_ctc() {
-                    // Explicit FP32 path for debugging / offline quantize workflows.
-                    let resolved =
-                        model::ensure_fp32_model_variant(Some(model_variant), &model_dir).await?;
-                    ensure_int8_encoder(resolved, &model_dir, skip_quantize)?;
-                } else {
-                    // CTC heads: HF pre-quantized INT8 encoder (+ vocab) directly.
-                    let resolved =
-                        model::ensure_model_variant(Some(model_variant), &model_dir).await?;
-                    ensure_int8_encoder(resolved, &model_dir, skip_quantize)?;
                 }
                 #[cfg(feature = "diarization")]
                 {
@@ -1280,12 +1244,19 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Commands::Quantize { model_dir, force } => {
-            // Quantize an existing model dir: detect the head already on disk
-            // (default rnnt when the dir is empty and `ensure_model` must fetch).
+            // Packaging tool: requires a local FP32 encoder as source. Does not
+            // download FP32 or run inference on FP32 — product runtime is INT8-only.
             let dir = std::path::Path::new(&model_dir);
-            let resolved = model::ensure_model_variant(None, &model_dir).await?;
+            let resolved = model::ModelVariant::detect_in_dir(dir).unwrap_or_default();
             let input = dir.join(resolved.encoder_file());
             let output = dir.join(resolved.encoder_int8_file());
+            if !input.is_file() {
+                anyhow::bail!(
+                    "FP32 encoder not found at {} — `quantize` needs the FP32 ONNX as packaging source. \
+                     For runtime, use `gigastt download` (lean INT8 only).",
+                    input.display()
+                );
+            }
             if output.exists() && !force {
                 tracing::info!("INT8 model already exists: {}", output.display());
                 tracing::info!("Use --force to re-quantize.");
@@ -2741,30 +2712,11 @@ mod tests {
     }
 
     #[test]
-    fn test_cli_serve_config_and_skip_quantize_flags() {
-        let _guard = ENV_LOCK.lock().unwrap();
-        let _restore = EnvRestore(
-            "GIGASTT_SKIP_QUANTIZE",
-            std::env::var("GIGASTT_SKIP_QUANTIZE").ok(),
-        );
-        unsafe {
-            std::env::remove_var("GIGASTT_SKIP_QUANTIZE");
-        }
-        let cli = Cli::parse_from([
-            "gigastt",
-            "serve",
-            "--config",
-            "/tmp/limits.toml",
-            "--skip-quantize",
-        ]);
+    fn test_cli_serve_config_flag() {
+        let cli = Cli::parse_from(["gigastt", "serve", "--config", "/tmp/limits.toml"]);
         match cli.command {
-            Commands::Serve {
-                config,
-                skip_quantize,
-                ..
-            } => {
+            Commands::Serve { config, .. } => {
                 assert_eq!(config, Some("/tmp/limits.toml".to_string()));
-                assert!(skip_quantize);
             }
             _ => panic!("expected Serve"),
         }
@@ -2796,43 +2748,27 @@ mod tests {
     }
 
     #[test]
-    fn test_cli_download_defaults_to_lean() {
+    fn test_cli_download_parses() {
         let cli = Cli::try_parse_from(["gigastt", "download"]).expect("parse");
         match cli.command {
-            Commands::Download {
-                fp32, prequantized, ..
-            } => {
-                assert!(!fp32, "default download is lean, not fp32");
-                assert!(prequantized, "legacy prequantized defaults true");
+            Commands::Download { model_variant, .. } => {
+                assert_eq!(model_variant, ModelVariant::Rnnt);
             }
             _ => panic!("expected Download"),
         }
     }
 
     #[test]
-    fn test_cli_download_fp32_flag() {
-        let cli = Cli::try_parse_from(["gigastt", "download", "--fp32"]).expect("parse");
-        match cli.command {
-            Commands::Download { fp32, .. } => assert!(fp32),
-            _ => panic!("expected Download"),
-        }
-    }
-
-    #[test]
-    fn test_cli_download_skip_quantize_flag() {
-        let _guard = ENV_LOCK.lock().unwrap();
-        let _restore = EnvRestore(
-            "GIGASTT_SKIP_QUANTIZE",
-            std::env::var("GIGASTT_SKIP_QUANTIZE").ok(),
+    fn test_cli_download_rejects_fp32_flag() {
+        let err = match Cli::try_parse_from(["gigastt", "download", "--fp32"]) {
+            Ok(_) => panic!("fp32 flag must be removed from download"),
+            Err(e) => e,
+        };
+        let msg = err.to_string();
+        assert!(
+            msg.contains("unexpected") || msg.contains("fp32") || msg.contains("unknown"),
+            "expected clap to reject --fp32, got: {msg}"
         );
-        unsafe {
-            std::env::remove_var("GIGASTT_SKIP_QUANTIZE");
-        }
-        let cli = Cli::parse_from(["gigastt", "download", "--skip-quantize"]);
-        match cli.command {
-            Commands::Download { skip_quantize, .. } => assert!(skip_quantize),
-            _ => panic!("expected Download"),
-        }
     }
 
     #[test]

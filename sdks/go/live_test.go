@@ -11,7 +11,7 @@ import (
 
 // TestLiveServer exercises the full wire protocol against a live gigastt
 // server. It is skipped unless GIGASTT_TEST_WS_URL points at a running server
-// (which requires the model, ~850 MB):
+// (which requires the INT8 model, ~225 MB):
 //
 //	cargo run --release -- serve   # in the repository root
 //	GIGASTT_TEST_WS_URL=ws://127.0.0.1:9876/v1/ws go test -run Live -v

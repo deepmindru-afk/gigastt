@@ -40,7 +40,7 @@ Rules of thumb:
   quantization):
 
   ```sh
-  gigastt download --prequantized          # -> ~/.gigastt/models
+  gigastt download          # -> ~/.gigastt/models
   ```
 
 - **Embedded**: the toolchain for your binding — Xcode 15+ (Swift), Node.js
@@ -133,15 +133,16 @@ gracefully.
    machine-readable progress for your UI:
 
    ```sh
-   gigastt download --prequantized --progress json
+   gigastt download --progress json
    ```
 
    stdout carries one NDJSON event per line
    (`{"phase":"download","file":...,"bytes_done":N,"bytes_total":M}`, then
    `verify`, then `done`) and exit codes distinguish network/disk/checksum
    failures — see [docs/cli.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/cli.md).
-   `--prequantized` skips the ~2-minute on-device INT8 pass, so the first
-   `serve` starts in seconds, not minutes.
+   Download is always the lean **INT8** bundle (~225 MB); there is no on-device
+   quantize step and no FP32 path, so the first `serve` starts after the
+   download finishes (seconds to a few minutes depending on network).
 3. **Pick a port.** Today: a fixed high port (e.g. `49876`). Ephemeral
    auto-selection (`--port 0` with a machine-readable `LISTENING` line),
    `--die-with-parent`, and `--log-file` are planned server additions — they
@@ -233,7 +234,7 @@ onnxruntime is statically linked, so the `.node` addon is self-contained.
    prebuilt binary (`gigastt.<platform>.node`, ~47 MB) for the install platform
    from the GitHub release. Prebuilt platforms: `darwin-arm64`,
    `linux-x64-gnu`, `linux-arm64-gnu`, `win32-x64-msvc` (no Intel macOS).
-2. **Side-load the model** — it is not bundled: `gigastt download --prequantized`
+2. **Side-load the model** — it is not bundled: `gigastt download`
    → `~/.gigastt/models`, or set `GIGASTT_MODEL_DIR`.
 3. **Use it:**
 
@@ -364,8 +365,8 @@ End-to-end checklist, whichever path you took:
 
 - **First transcript**: your app prints the expected text for a known WAV
   (any Russian speech file, e.g. a Golos sample).
-- **Model on disk**: `ls ~/.gigastt/models` shows `v3_rnnt_*` files (the
-  `--prequantized` bundle includes `v3_rnnt_encoder_int8.onnx`).
+- **Model on disk**: `ls ~/.gigastt/models` shows the lean INT8 set
+  (`v3_rnnt_encoder_int8.onnx` plus decoder/joiner/vocab).
 - **Memory**: RSS stays in the expected band — roughly 350–400 MB per pool
   session; a `poolSize`/`pool-size` of 1 is the right default on-device.
 - **Sidecar health**: `curl -s http://127.0.0.1:<port>/ready` returns
@@ -396,7 +397,7 @@ End-to-end checklist, whichever path you took:
   `gigastt download` leaves a ~2-minute on-device INT8 quantization pass to the
   first `serve`, and the punctuation model fetches lazily on first start — a
   client with a 10–30 s boot timeout gives up too early. Fix: pre-stage with
-  `gigastt download --prequantized`, keep the readiness timeout generous, and
+  `gigastt download`, keep the readiness timeout generous, and
   branch on the `/ready` `reason` instead of killing the process.
 - **Killing the server on 503.** During model load the port is bound by the
   bootstrap responder and every API answers 503 `initializing` — that is

@@ -6,8 +6,8 @@ gigastt уже работает с головой `rnnt` по умолчанию
 нужно осознанно что-то поменять: другую голову распознавания (пунктуация «из
 коробки» или языки помимо русского), более лёгкую загрузку модели, более
 быстрый execution provider под ваше железо или больший пул сессий. Эта глава
-отвечает на четыре вопроса проверяемыми рецептами: **какую голову**, **INT8
-или FP32**, **какой бэкенд** и **сколько RAM** нужно пулу.
+отвечает на четыре вопроса проверяемыми рецептами: **какую голову**, **INT8-
+установку**, **какой бэкенд** и **сколько RAM** нужно пулу.
 
 Цифры WER и RTF здесь **не дублируются** — канонические таблицы с доверительными
 интервалами живут в
@@ -20,8 +20,8 @@ gigastt уже работает с головой `rnnt` по умолчанию
 
 - Установленный gigastt (бинарь, пакет или образ) — см.
   [Начало работы](01-getting-started.md).
-- Диск: ~1,1 ГБ свободно для стандартного пути с FP32-загрузкой (FP32-набор
-  плюс сгенерированный INT8-энкодер) или ~250 МБ для лёгкого pre-quantized пути.
+- Диск: **~250–400 МБ** свободно для lean INT8-установки (единственный
+  runtime-путь; опциональные punct/VAD — отдельно).
 - Для сборки нестандартного бэкенда из исходников: Rust 1.88+ и `protoc` в
   `PATH` (требования сборки:
   [docs/architecture.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/architecture.md)).
@@ -37,8 +37,8 @@ mel-фронтенд и контракт входа 16 кГц моно; разл
 
 | Голова | Размер на диске | Языки | Текст на выходе | Точность | Когда брать |
 |---|---|---|---|---|---|
-| `rnnt` (по умолчанию) | энкодер 844 МБ FP32 → ~215 МБ INT8 (авто-квантизация) + decoder/joiner/vocab (несколько МБ) | русский | «Голый» lowercase; дополняйте `--punctuation` / `--itn` (включены по умолчанию в режиме `auto`) | Лучший русский WER из четырёх — [таблица](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#accuracy-by-domain--wer--95-ci) | Русскоязычные нагрузки; дефолт не случаен |
-| `e2e_rnnt` | Тот же класс размера, что у `rnnt` (~850 МБ FP32 → INT8 генерируется локально) | русский | Пунктуация / регистр / ITN **встроены**, один проход | WER выше, чем у `rnnt`, но лучший F1 пунктуации/регистра — [сравнение](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#punctuation-quality--e2e_rnnt-vs-rnnt--rupunct-restore) | Нужен читаемый русский текст за один проход, без шага восстановления |
+| `rnnt` (по умолчанию) | ~225 МБ lean INT8 (энкодер ~215 МБ + decoder/joiner/vocab) | русский | «Голый» lowercase; дополняйте `--punctuation` / `--itn` (включены по умолчанию в режиме `auto`) | Лучший русский WER из четырёх — [таблица](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#accuracy-by-domain--wer--95-ci) | Русскоязычные нагрузки; дефолт не случаен |
+| `e2e_rnnt` | Тот же lean INT8 (~225 МБ) | русский | Пунктуация / регистр / ITN **встроены**, один проход | WER выше, чем у `rnnt`, но лучший F1 пунктуации/регистра — [сравнение](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#punctuation-quality--e2e_rnnt-vs-rnnt--rupunct-restore) | Нужен читаемый русский текст за один проход, без шага восстановления |
 | `ml_ctc` | ~225 МБ pre-quantized INT8, только энкодер (без decoder/joiner) | ru/en/kk/ky/uz | «Голый» lowercase | [Мультиязычные таблицы](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#english--wer--librispeech-test-clean) | Мультиязычное аудио или ~1,5× RTF vs `rnnt` (ready RSS ≈ `rnnt`, не lean-RAM SKU) |
 | `ml_ctc_large` | ~592 МБ pre-quantized INT8, только энкодер | ru/en/kk/ky/uz | «Голый» lowercase | Лучшая мультиязычная точность; на чистом русском чтении приближается к `rnnt` — [таблица](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#accuracy-by-domain--wer--95-ci) | Смешанные языки или английский/казахский/кыргызский/узбекский как таковые |
 
@@ -120,34 +120,23 @@ gigastt serve --hotwords-file /tmp/hotwords.txt --hotwords-default \
 бренды из шума — начните с `5.0`. Флаги:
 [docs/cli.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/cli.md).
 
-### INT8 или FP32
+### INT8-установка (runtime)
 
-Короткий ответ: **всегда INT8, если только вы не отлаживаете саму модель.**
-INT8-энкодер работает как настоящие целочисленные вычисления (ядра
-`DynamicQuantizeLinear` + `MatMulInteger`/`ConvInteger`), сжимает энкодер
-844 МБ → 215 МБ (~3,9×) и даёт ~0% деградации WER — цифры и методология:
+Короткий ответ: **runtime — только INT8.** Поставляемый энкодер работает как
+настоящие целочисленные вычисления (ядра `DynamicQuantizeLinear` +
+`MatMulInteger`/`ConvInteger`), ~215 МБ на диске, ~0% деградации WER относительно
+FP32-исходника — цифры и методология:
 [docs/benchmarks.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#headline-single-engine-metrics).
 
-Что происходит на каждом пути (RNN-T-головы):
+Что происходит на каждом пути:
 
-- **По умолчанию** — `gigastt download` (или первый `serve` / `transcribe`)
-  скачивает FP32-набор с HuggingFace (`istupakov/gigaam-v3-onnx`), затем
-  однократно (~2 мин) выполняет квантизацию нативным Rust-кодом и пишет
-  `v3_rnnt_encoder_int8.onnx` рядом. Движок **предпочитает INT8-энкодер**,
-  когда файл присутствует.
-- **Лёгкий путь** — `gigastt download --prequantized` скачивает готовый
-  INT8-бандл (INT8-энкодер + decoder + joiner + vocab) из закреплённого
-  GitHub Release: ни ~844 МБ FP32-загрузки, ни ~2-минутной квантизации. Это
-  также запасной вариант, когда HuggingFace недоступен, а GitHub — нет.
+- **По умолчанию (RNN-T)** — `gigastt download` (или первый `serve` / `transcribe`)
+  скачивает pre-quantized INT8-бандл (INT8-энкодер + decoder + joiner + vocab)
+  из закреплённого GitHub Release. Runtime никогда не загружает FP32.
 - **Multilingual** — `ml_ctc` / `ml_ctc_large` скачивают pre-quantized
-  INT8-энкодер istupakov'а напрямую с HuggingFace; `--prequantized` для них —
-  холостое уточнение (отдельного бандла нет).
-- **Вручную** — `gigastt quantize [--force]` повторно запускает квантизацию
-  для головы, определённой в `--model-dir` (например, после подмены FP32-
-  энкодера своим файнтюном).
-- **Отказ** — `--skip-quantize` (env `GIGASTT_SKIP_QUANTIZE=1`) пропускает шаг
-  квантизации; движок тогда загружает FP32-энкодер с ~4× расходом RAM на слот
-  пула и более медленными CPU-ядрами. Оставьте это только для отладки.
+  INT8-энкодер istupakov'а напрямую с HuggingFace.
+- **Упаковка** — `gigastt quantize [--force]` нужен **локальный FP32** ONNX как
+  исходник (например, после своего файнтюна). Это не runtime-путь.
 
 **Проверка:**
 
@@ -236,7 +225,7 @@ to CPU execution provider` означает, что warmup-проверка пр
 
 ```sh
 # На машине с сетью:
-gigastt download --prequantized --model-dir /srv/gigastt-models
+gigastt download --model-dir /srv/gigastt-models
 
 # Любым способом скопируйте на целевой хост (rsync, USB, хранилище артефактов):
 rsync -a /srv/gigastt-models/ offline-host:/srv/gigastt-models/
@@ -253,17 +242,18 @@ gigastt --offline serve --model-dir /srv/gigastt-models
   удаляется, а не принимается. Несовпадение контрольной суммы завершает
   процесс с кодом `65` (сеть `69`, диск `74`, Ctrl-C `130`) — пригодно для
   скриптов.
-- **Полный набор модели = ноль сети.** При наличии полного комплекта головы
-  (энкодер — INT8 или FP32 — плюс decoder/joiner/vocab для RNN-T-голов или
-  INT8-энкодер + vocab для Multilingual) запуск не выполняет ни одного
-  сетевого запроса, даже без `--offline`. `--offline` / `GIGASTT_OFFLINE=1`
-  превращает любую *недостающую* опциональную модель (пунктуация, VAD,
-  диаризация) в немедленную ошибку с именем файла, который нужно предоставить.
+- **Полный INT8-набор модели = ноль сети.** При наличии полного **INT8**-комплекта
+  головы (INT8-энкодер + decoder/joiner/vocab для RNN-T или INT8-энкодер + vocab
+  для Multilingual) запуск не выполняет ни одного сетевого запроса, даже без
+  `--offline`. Только-FP32 деревья **не** usable. `--offline` /
+  `GIGASTT_OFFLINE=1` превращает любую *недостающую* опциональную модель
+  (пунктуация, VAD, диаризация) в немедленную ошибку с именем файла.
 - **Голова автоопределяется по файлам** — скопированному каталогу не нужен
   флаг `--model-variant` на целевом хосте.
-- При копировании включайте `*_int8.onnx`-энкодер (или скопируйте также FP32-
-  энкодер и выполните `gigastt quantize --model-dir …` на целевом хосте),
-  vocab и — для `rnnt`/`e2e_rnnt` — decoder и joiner.
+- При копировании включайте `*_int8.onnx` (или CTC `*.int8.onnx`) энкодер,
+  vocab и — для `rnnt`/`e2e_rnnt` — decoder и joiner. `gigastt quantize` —
+  только упаковка (нужен локальный FP32-исходник); на runtime на него не
+  рассчитывайте.
 
 Для полностью упакованной офлайн-установки (tarball с бинарём + INT8-моделью +
 моделью пунктуации + systemd-юнит или вариант из двух deb-пакетов) берите
@@ -288,7 +278,6 @@ gigastt --offline transcribe sample.wav --model-dir /srv/gigastt-models
 | Голова (как загружена) | Файл энкодера | ≈ RAM на слот пула | Дефолтный пул 2 |
 |---|---|---|---|
 | `rnnt` / `e2e_rnnt` INT8 | ~215 МБ | ~0,4 ГБ | ~790 МБ суммарного RSS |
-| `rnnt` / `e2e_rnnt` FP32 (`--skip-quantize`) | 844 МБ | ~1,6 ГБ | ~3,3 ГБ — никогда в проде |
 | `ml_ctc` INT8 | ~225 МБ | ~0,45 ГБ | ~0,9 ГБ |
 | `ml_ctc_large` INT8 | ~592 МБ | ~1,2 ГБ | ~2,4 ГБ |
 
@@ -354,11 +343,10 @@ curl -s http://127.0.0.1:9876/ready    # ready, pool_available >= 1
   `variants are never mixed`), а следующий запуск без флага снова предпочтёт
   `rnnt`. Удалите файлы неиспользуемой головы, чтобы каталог был однозначным,
   и верните место на диске.
-- **Первый `serve` выглядит зависшим.** Это одноразовая загрузка ~850 МБ FP32
-  + ~2 мин квантизации; `/health` отвечает `200` с `model:"loading"`, пока
-  `/ready` остаётся `503 initializing`. Уберите это окно командой `gigastt
-  download --prequantized` и стробируйте клиентов по `/ready`, никогда по
-  `/health`.
+- **Первый `serve` выглядит зависшим.** Это одноразовая загрузка lean INT8
+  (~225 МБ), если каталог модели пуст; `/health` отвечает `200` с
+  `model:"loading"`, пока `/ready` остаётся `503 initializing`. Предзагрузите
+  `gigastt download` и стробируйте клиентов по `/ready`, никогда по `/health`.
 - **OOM после переключения на `ml_ctc_large`.** Каждый слот теперь стоит ~1,2
   ГБ. Снизьте `--pool-size`, держите `--pool-min-size 1`, чтобы тесный хост
   загружался деградированно, и следите за предупреждением `Capping pool size`

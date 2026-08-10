@@ -4,7 +4,7 @@
 //! when the server receives a shutdown signal, rather than hanging forever, and
 //! that long-running WS sessions are capped by wall-clock duration.
 //!
-//! All tests require the GigaAM ONNX model to be downloaded (~850MB).
+//! All tests require the GigaAM ONNX model to be downloaded (~225 MB INT8).
 //! Run with: `cargo test --test e2e_shutdown -- --ignored --test-threads=1`
 
 mod common;

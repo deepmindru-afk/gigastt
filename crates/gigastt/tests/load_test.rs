@@ -1,6 +1,6 @@
 //! Load tests for the gigastt server.
 //!
-//! All tests require the GigaAM ONNX model to be downloaded (~850MB).
+//! All tests require the GigaAM ONNX model to be downloaded (~225 MB INT8).
 //! Run with: `cargo test --test load_test -- --ignored`
 
 mod common;

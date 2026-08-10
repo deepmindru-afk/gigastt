@@ -958,10 +958,11 @@ pub async fn ensure_model(model_dir: &str) -> Result<()> {
 /// present, downloading it if it isn't (or if the dir holds a different variant).
 ///
 /// When `requested` is `None`, the function respects whatever is already
-/// installed: if any variant's complete **FP32 download set or prequantized
-/// INT8 set** is in `model_dir`, it is used as-is and **no network request is
-/// made**. Only when the directory holds no usable model does it fall back to
-/// downloading the default (`Rnnt`) **pre-quantized INT8** set.
+/// installed: if any variant's complete **prequantized INT8 set** is in
+/// `model_dir`, it is used as-is and **no network request is made**. Only when
+/// the directory holds no usable INT8 model does it fall back to downloading
+/// the default (`Rnnt`) **pre-quantized INT8** set. FP32-only installs are
+/// ignored (not considered usable).
 ///
 /// Returns the variant that is now ready in `model_dir`.
 #[cfg(feature = "net")]
@@ -972,9 +973,8 @@ pub async fn ensure_model_variant(
     let dir = Path::new(model_dir);
 
     // Determine the variant that is fully usable on disk. `detect_in_dir` only
-    // checks for an encoder file, so we filter to variants whose complete set
-    // is present — either the HF FP32 download set or the lean prequantized
-    // INT8 set (engine prefers INT8 when loading).
+    // checks for an encoder file, so we filter to variants whose complete INT8
+    // set is present (FP32-only is not usable).
     let existing = ModelVariant::detect_in_dir(dir).filter(|&v| is_usable_present(v, dir));
 
     let variant = match resolve_variant(requested, existing) {
@@ -1002,7 +1002,7 @@ pub async fn ensure_model_variant(
     let _lock = acquire_download_lock(dir)?;
 
     // Double-check after acquiring the lock in case another process finished
-    // the download while we were waiting (FP32 or prequantized INT8 set).
+    // the download while we were waiting (prequantized INT8 set).
     if is_usable_present(variant, dir) {
         tracing::info!("Model ({variant:?}) found at {model_dir} after lock acquisition");
         return Ok(variant);
@@ -1038,8 +1038,11 @@ pub async fn ensure_model_variant(
 
 /// Ensure the **FP32 download set** for `requested` (or the variant already on
 /// disk, else default `Rnnt`) exists in `model_dir`, fetching from HuggingFace
-/// when missing. Used by `gigastt download --fp32` when the lean INT8 path is
-/// not wanted. Does not quantize — callers run [`crate::quantize`] separately.
+/// when missing.
+///
+/// **Packaging / quantize source only** — the product runtime never loads FP32.
+/// Prefer [`ensure_model_variant`] / [`ensure_prequantized_model_variant`] for
+/// inference. Does not quantize; callers run [`crate::quantize`] separately.
 #[cfg(feature = "net")]
 pub async fn ensure_fp32_model_variant(
     requested: Option<ModelVariant>,
@@ -1076,14 +1079,12 @@ pub async fn ensure_fp32_model_variant(
 /// variant already on disk, else the default `Rnnt`) exists in `model_dir`,
 /// downloading it from the pinned GitHub Release if missing.
 ///
-/// This is the lean integration path: it fetches the INT8 encoder + decoder +
-/// joiner + vocab directly, so integrators skip the ~844 MB FP32 encoder
-/// download AND the ~2-minute on-device quantization (and need no `protoc`).
-/// Each file is SHA-256-verified and atomically renamed, reusing the same
-/// download primitive as [`ensure_model_variant`].
+/// This is the product download path: INT8 encoder + decoder + joiner + vocab
+/// (no FP32, no on-device quantize). Each file is SHA-256-verified and atomically
+/// renamed, reusing the same download primitive as [`ensure_model_variant`].
 ///
-/// If a usable model (pre-quantized OR FP32 set) is already present, it is used
-/// as-is and no network request is made. Returns the ready variant.
+/// If the **pre-quantized INT8 set** is already present, it is used as-is.
+/// An FP32-only tree is **not** treated as ready (runtime is INT8-only).
 #[cfg(feature = "net")]
 pub async fn ensure_prequantized_model_variant(
     requested: Option<ModelVariant>,
@@ -1091,11 +1092,11 @@ pub async fn ensure_prequantized_model_variant(
 ) -> Result<ModelVariant> {
     let dir = Path::new(model_dir);
     let variant = requested
-        .or_else(|| ModelVariant::detect_in_dir(dir))
+        .or_else(|| ModelVariant::detect_in_dir(dir).filter(|&v| is_usable_present(v, dir)))
         .unwrap_or_default();
 
-    if is_prequantized_present(variant, dir) || is_model_present(variant, dir) {
-        tracing::info!("Using existing {variant:?} model at {model_dir}");
+    if is_prequantized_present(variant, dir) {
+        tracing::info!("Using existing {variant:?} INT8 model at {model_dir}");
         return Ok(variant);
     }
 
@@ -1472,11 +1473,17 @@ pub fn is_prequantized_present(variant: ModelVariant, dir: &Path) -> bool {
         .all(|f| dir.join(f).exists())
 }
 
-/// True when the engine can load `variant` from `dir` without a download:
-/// either the full HuggingFace FP32 set ([`is_model_present`]) or the lean
-/// pre-quantized INT8 bundle ([`is_prequantized_present`]).
+/// True when the engine can load `variant` from `dir` without a download.
+///
+/// **INT8 only:** the lean pre-quantized set ([`is_prequantized_present`]) or,
+/// for CTC heads, the same INT8-on-disk layout as [`is_model_present`] (CTC
+/// download files are already INT8). An FP32-only install is **not** usable.
 pub fn is_usable_present(variant: ModelVariant, dir: &Path) -> bool {
-    is_model_present(variant, dir) || is_prequantized_present(variant, dir)
+    if variant.is_ctc() {
+        // CTC download set is the INT8 encoder + vocab (no separate prequant list).
+        return is_model_present(variant, dir) || is_prequantized_present(variant, dir);
+    }
+    is_prequantized_present(variant, dir)
 }
 
 /// Append `.partial` to a path; retained for tests that assert the legacy
@@ -1657,7 +1664,7 @@ async fn stream_to_partial_then_finalize_with_sink(
     tracing::info!("Downloading {label}...");
 
     // Configured client: bound the connect/TLS handshake and per-read stalls, and
-    // cap redirects. NOT a whole-request timeout (a legitimate ~850 MB download can
+    // cap redirects. NOT a whole-request timeout (a legitimate ~225 MB INT8 download can
     // take minutes) and NO host pinning (HF LFS 302-redirects to a CloudFront host).
     let client = reqwest::Client::builder()
         .connect_timeout(std::time::Duration::from_secs(30))
@@ -2863,16 +2870,16 @@ mod tests {
         );
     }
 
-    /// Verify that `ensure_model(None, dir)` with a complete E2eRnnt install
-    /// does NOT create any `.partial` files (no download triggered).
+    /// Verify that `ensure_model(None, dir)` with a complete E2eRnnt **INT8**
+    /// install does NOT create any `.partial` files (no download triggered).
     #[tokio::test]
     #[cfg_attr(miri, ignore = "tokio runtime is unsupported under Miri")]
     async fn test_ensure_model_none_respects_existing_e2e_install() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let dir = tmp.path();
 
-        // Stage a full E2eRnnt download set (stub bytes, no real ONNX needed).
-        for f in ModelVariant::E2eRnnt.download_files() {
+        // Stage a full E2eRnnt prequantized INT8 set (stub bytes, no real ONNX).
+        for f in ModelVariant::E2eRnnt.prequantized_files() {
             std::fs::write(dir.join(f), b"stub").unwrap();
         }
 
@@ -2899,7 +2906,7 @@ mod tests {
         );
 
         // Files must be untouched (still stub bytes).
-        for f in ModelVariant::E2eRnnt.download_files() {
+        for f in ModelVariant::E2eRnnt.prequantized_files() {
             assert_eq!(
                 std::fs::read(dir.join(f)).unwrap(),
                 b"stub",
@@ -2908,17 +2915,39 @@ mod tests {
         }
     }
 
+    /// FP32-only E2eRnnt is not usable: ensure falls through to default Rnnt
+    /// download path would run if the network were hit — we only assert the
+    /// presence filter rejects FP32-only (no Use short-circuit).
+    #[test]
+    fn test_fp32_only_e2e_is_not_usable() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dir = tmp.path();
+        for f in ModelVariant::E2eRnnt.download_files() {
+            std::fs::write(dir.join(f), b"stub").unwrap();
+        }
+        assert!(
+            is_model_present(ModelVariant::E2eRnnt, dir),
+            "FP32 download set is complete"
+        );
+        assert!(
+            !is_usable_present(ModelVariant::E2eRnnt, dir),
+            "FP32-only must not count as a usable install"
+        );
+        let existing = ModelVariant::detect_in_dir(dir).filter(|&v| is_usable_present(v, dir));
+        assert_eq!(existing, None, "detect+usable filter must ignore FP32-only");
+    }
+
     /// The legacy public `ensure_model(dir)` wrapper delegates to
-    /// `ensure_model_variant(None, dir)`: with a complete install already on
-    /// disk it must succeed without touching the network (no `.partial` files).
+    /// `ensure_model_variant(None, dir)`: with a complete INT8 install already
+    /// on disk it must succeed without touching the network (no `.partial` files).
     #[tokio::test]
     #[cfg_attr(miri, ignore = "tokio runtime is unsupported under Miri")]
     async fn test_ensure_model_wrapper_uses_existing_install() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let dir = tmp.path();
 
-        // Stage a complete default (Rnnt) download set.
-        for f in ModelVariant::Rnnt.download_files() {
+        // Stage a complete default (Rnnt) prequantized INT8 set.
+        for f in ModelVariant::Rnnt.prequantized_files() {
             std::fs::write(dir.join(f), b"stub").unwrap();
         }
 
@@ -2937,15 +2966,15 @@ mod tests {
         );
     }
 
-    /// `ensure_model_variant(Some(Rnnt), dir)` against a matching install is the
-    /// `VariantAction::Use` branch: returns Rnnt with no download.
+    /// `ensure_model_variant(Some(Rnnt), dir)` against a matching INT8 install
+    /// is the `VariantAction::Use` branch: returns Rnnt with no download.
     #[tokio::test]
     #[cfg_attr(miri, ignore = "tokio runtime is unsupported under Miri")]
     async fn test_ensure_model_variant_explicit_match_uses_existing() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let dir = tmp.path();
 
-        for f in ModelVariant::Rnnt.download_files() {
+        for f in ModelVariant::Rnnt.prequantized_files() {
             std::fs::write(dir.join(f), b"stub").unwrap();
         }
 
@@ -3021,15 +3050,15 @@ mod tests {
     }
 
     /// `ensure_model_variant` tolerates a deep, freshly-created model directory:
-    /// a complete Rnnt set pre-staged under a nested path is detected and used
-    /// as-is (early `Use(...)` return) without any network access.
+    /// a complete Rnnt **INT8** set pre-staged under a nested path is detected
+    /// and used as-is (early `Use(...)` return) without any network access.
     #[tokio::test]
     #[cfg_attr(miri, ignore = "tokio runtime is unsupported under Miri")]
     async fn test_ensure_model_variant_uses_complete_set_in_nested_path() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let nested = tmp.path().join("a").join("b").join("models");
         std::fs::create_dir_all(&nested).unwrap();
-        for f in ModelVariant::Rnnt.download_files() {
+        for f in ModelVariant::Rnnt.prequantized_files() {
             std::fs::write(nested.join(f), b"stub").unwrap();
         }
 

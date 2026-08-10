@@ -352,7 +352,9 @@ vocab = "v.txt"
     }
 
     #[test]
-    fn test_preferred_encoder_path_falls_back_to_fp32() {
+    fn test_preferred_encoder_path_without_int8_file_is_not_int8() {
+        // preferred_encoder_path still names the FP32 basename when int8 is
+        // missing on disk; prefers_int8 is false so Engine load rejects it.
         let dir = tempfile::tempdir().expect("tempdir");
         fs::write(dir.path().join("enc.onnx"), b"fp32").unwrap();
         let m = ModelManifest {
@@ -365,11 +367,11 @@ vocab = "v.txt"
                 vocab: "v.txt".into(),
             },
         };
+        assert!(!m.prefers_int8(dir.path()));
         assert_eq!(
             m.preferred_encoder_path(dir.path()).file_name().unwrap(),
             "enc.onnx"
         );
-        assert!(!m.prefers_int8(dir.path()));
     }
 
     #[test]

@@ -128,27 +128,30 @@ within one window, so a hung run no longer wedges a slot until restart.
 
 ## Model download failures
 
-On first run `gigastt download` / `gigastt serve` fetches the model from
-HuggingFace into `~/.gigastt/models/`, streaming each file to a `.partial`
-path, verifying SHA-256, then atomically renaming. Concurrent processes
-coordinate via an advisory `flock`; downloads use connect/read timeouts and a
-bounded redirect policy.
+On first run `gigastt download` / `gigastt serve` fetches the **lean INT8**
+bundle into `~/.gigastt/models/`: default RNN-T heads from the pinned **GitHub
+Release**, CTC heads (`ml_ctc` / `ml_ctc_large`) from **HuggingFace**. Each
+file streams to a `.partial` path, is SHA-256-verified, then atomically
+renamed. Concurrent processes coordinate via an advisory `flock`; downloads use
+connect/read timeouts and a bounded redirect policy. Runtime never downloads or
+loads FP32.
 
 **Symptoms & recovery**
 - *SHA-256 mismatch* — a corrupt or tampered mirror. The `.partial` is deleted
   and nothing is promoted; just re-run. Persistent mismatches mean a bad mirror
   or a stale pinned checksum.
-- *Hang / timeout mid-download* — network or HuggingFace issue; re-run (the
-  `.partial` is re-fetched, not resumed).
-- *"Model not found" after a crash* — a crash before rename leaves only a
-  `.partial`; `model_files_exist()` ignores it, so re-running re-downloads.
+- *Hang / timeout mid-download* — network / GitHub Releases (or HuggingFace for
+  CTC) issue; re-run (the `.partial` is re-fetched, not resumed).
+- *"Model not found" / INT8 encoder missing after a crash* — a crash before
+  rename leaves only a `.partial`; presence checks ignore it, so re-running
+  re-downloads the INT8 set.
 - *Air-gapped / repeatable deploys* — bake the model into the image
   (`GIGASTT_BAKE_MODEL=1`, see `docs/deployment.md`) or pre-populate
   `~/.gigastt/models/` from a trusted copy.
 - *Lean INT8-only tree* — four files for default `rnnt` (~220 MB class):
   `v3_rnnt_encoder_int8.onnx`, `v3_rnnt_decoder.onnx`, `v3_rnnt_joint.onnx`,
-  `v3_vocab.txt`. Use `gigastt download --prequantized` or copy those files;
-  serve accepts this set offline without demanding the FP32 encoder. See
+  `v3_vocab.txt`. Use `gigastt download` or copy those files; serve **requires**
+  this INT8 set (FP32-only is rejected). See
   [Lean INT8-only install](deployment.md#lean-int8-only-install).
 
 To force a clean re-download, remove `~/.gigastt/models/` and re-run.
@@ -158,11 +161,10 @@ To force a clean re-download, remove `~/.gigastt/models/` and re-run.
 RSS scales with `--pool-size` (each triplet owns its ONNX sessions) plus ORT's
 per-request scratch (a few minutes of 16 kHz audio allocates ~90+ MiB in the
 encoder by itself). A default pool of 2 with the INT8 encoder sits around
-~790 MiB resident (single session ~400 MiB); the FP32 encoder is much larger.
+~790 MiB resident (single session ~400 MiB).
 
 **Reduce footprint**
-- Use the **INT8 encoder** (the default — auto-quantized on first run; don't
-  pass `--skip-quantize`). It is ~4× smaller than FP32.
+- Runtime is **INT8 only** (`gigastt download` / first `serve`).
 - Lower `--pool-size` (e.g. `1`–`2` on a 4 GB box). See also
   [Pool size tradeoffs](#pool-size-tradeoffs-ram-vs-concurrency-vs-rtf).
 - `--pool-min-size 1` lets the server **boot on a degraded pool** if some

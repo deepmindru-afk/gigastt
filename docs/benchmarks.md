@@ -337,7 +337,7 @@ cross-engine Python harness so they line up with the table above.
 | Verbatim → normalized WER | clean 9.73→3.55 · far-field 4.69→4.08 · phone 19.39→18.50 · YouTube 12.19→10.91. The gap is number/filler formatting, normalized **symmetrically for every engine** (so it neither helps nor hurts gigastt relative to competitors). |
 | RTF (`rnnt` INT8, M1 CPU) | ~0.10 |
 | RAM (default `--pool-size 2`) | ~66 MB resident / ~510 MB `ps` RSS (single session ~46 MB / ~277 MB — RSS counts the shared memory-mapped model; resident is the honest figure) |
-| INT8 encoder | 844 MB → 215 MB (**3.9×**), ~0% WER degradation |
+| INT8 encoder (only runtime path) | ~215 MB on disk |
 
 ## Held-out queue
 

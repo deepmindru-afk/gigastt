@@ -1,6 +1,6 @@
 //! Integration test: VAD file path must skip silence without dropping speech.
 //!
-//! Model-gated (`#[ignore]`): requires the GigaAM model (~850 MB) at
+//! Model-gated (`#[ignore]`): requires the GigaAM model (~225 MB INT8) at
 //! `~/.gigastt/models` AND the Silero VAD model at
 //! `~/.gigastt/models/vad/silero_vad.onnx`. Run with:
 //! `cargo test -p gigastt-core --test vad_file -- --ignored --nocapture`.
@@ -30,7 +30,7 @@ fn norm_words(s: &str) -> HashSet<String> {
 }
 
 #[test]
-#[ignore = "requires the GigaAM model (~850MB) + Silero VAD model"]
+#[ignore = "requires the GigaAM model (~225 MB INT8) + Silero VAD model"]
 fn vad_file_skips_silence_keeps_transcript() {
     let model_dir = default_model_dir();
     let fixture = concat!(

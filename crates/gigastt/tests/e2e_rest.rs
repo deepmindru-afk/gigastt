@@ -1,6 +1,6 @@
 //! End-to-end REST API tests for the gigastt HTTP server.
 //!
-//! All tests require the GigaAM model to be downloaded (~850MB).
+//! All tests require the GigaAM model to be downloaded (~225 MB INT8).
 //! Run with: `cargo test --test e2e_rest -- --ignored`
 
 mod common;

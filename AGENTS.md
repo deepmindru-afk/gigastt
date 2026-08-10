@@ -20,9 +20,9 @@ exposes:
 - **OpenAI-compatible** (`/v1/audio/transcriptions`) — multipart `file` + `model` → `{"text":"..."}`
 - **CLI** — `serve`, `download`, `transcribe`, `quantize` commands
 
-The model (~850 MB FP32, ~225 MB INT8) auto-downloads from HuggingFace on first
-run. INT8 quantization is native Rust (no Python), always compiled since v0.9.0,
-and auto-invoked on first `serve`/`download` unless `--skip-quantize` is passed.
+The product path is **INT8 only** (~225 MB prequantized bundle from Releases):
+`serve` / `download` / engine load never use FP32. `gigastt quantize` remains a
+packaging tool that needs a local FP32 ONNX as source (not a runtime path).
 
 ### Key metrics
 
@@ -118,7 +118,7 @@ cargo fmt --check                    # Format check
 Unit tests live in `#[cfg(test)] mod tests` at the bottom of each source file.
 They use synthetic data. Test naming convention: `test_<what>_<expected_behavior>`.
 
-### E2E tests (require model ~850 MB, run in CI on main push only)
+### E2E tests (require model ~225 MB INT8, run in CI on main push only)
 
 ```sh
 # Download model first
@@ -164,11 +164,10 @@ Custom harness (`harness = false` in `Cargo.toml`).
 
 ```
 crates/
+  gigastt-quantize/       # Native Rust INT8 dynamic quantizer (optional; lean INT8 default skips it)
   gigastt-core/src/       # Core library (inference engine, no server deps)
     lib.rs                # Public module exports
     error.rs              # Typed error types (GigasttError)
-    quantize.rs           # Native Rust INT8 quantization pipeline
-    onnx_proto.rs         # prost-generated ONNX types (included from OUT_DIR)
     export.rs             # Transcript export: TXT / SRT / VTT / Markdown
     punctuation.rs        # Punctuation restoration (windowed)
     itn.rs · lexicon.rs   # Inverse text normalization, lexicon
@@ -231,12 +230,11 @@ Defined in `crates/gigastt-core/src/inference/mod.rs`:
 
 ## Model Files
 
-Downloaded to `~/.gigastt/models/` from `istupakov/gigaam-v3-onnx`:
+Default lean install under `~/.gigastt/models/` (prequantized INT8 from Releases):
 
 | File | Size | Purpose |
 |---|---|---|
-| `v3_rnnt_encoder.onnx` | 844 MB | Conformer encoder (FP32) |
-| `v3_rnnt_encoder_int8.onnx` | ~225 MB | Quantized encoder (auto-generated) |
+| `v3_rnnt_encoder_int8.onnx` | ~215 MB | Conformer encoder (INT8; default) |
 | `v3_rnnt_decoder.onnx` | ~3.3 MB | LSTM decoder |
 | `v3_rnnt_joint.onnx` | ~1.4 MB | RNN-T joiner |
 | `v3_vocab.txt` | small | char vocabulary (34 tokens) |
@@ -409,8 +407,11 @@ reference: [`docs/cli.md`](docs/cli.md) (enforced by `scripts/check-docs-drift.p
 | `GIGASTT_ENABLE_JOBS` | `--enable-jobs` | false |
 | `GIGASTT_JOBS_TTL_SECS` | `--jobs-ttl-secs` | 3600 |
 | `GIGASTT_JOBS_MAX` | `--jobs-max` | 100 |
+| `GIGASTT_JOBS_MAX_BYTES` | `--jobs-max-bytes` | 536870912 (512 MiB) |
 | `GIGASTT_JOBS_RETRY` | `--jobs-retry` | 3 |
-| `GIGASTT_SKIP_QUANTIZE` | `--skip-quantize` | false |
+| `GIGASTT_MAX_AUDIO_SECS` | `--max-audio-secs` | 0 (unlimited) |
+| `GIGASTT_ENDPOINT_MODE` | `--endpoint-mode` | auto |
+| `GIGASTT_PROFILE` | `--profile` (`default` / `edge`) | default |
 | `GIGASTT_DOWNLOAD_PROGRESS` | `download --progress` | human |
 | `GIGASTT_METRICS` | `--metrics` | false |
 | `GIGASTT_METRICS_LISTEN` | `--metrics-listen` | 127.0.0.1:9090 |
@@ -492,8 +493,8 @@ RUST_LOG=gigastt=debug cargo run -- serve
   `protocol/mod.rs` and add tests in `tests/e2e_ws.rs`.
 - When adding new CLI flags, add the corresponding env var and document it in
   both `main.rs` and this file.
-- The `quantize` Cargo feature is a no-op retained for backward compatibility;
-  do not gate new code behind it.
+- The `quantize` Cargo feature enables `crates/gigastt-quantize` (on by default
+  for the server binary). Lean embedders may disable it and side-load INT8 only.
 - Model download logic is in `crates/gigastt-core/src/model/mod.rs`. If you change HF repo or file
   names, update `MODEL_CHECKSUMS` and the cache key in `.github/workflows/ci.yml`.
 - The project uses English for all code comments, documentation, and commit

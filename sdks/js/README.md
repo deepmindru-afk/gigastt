@@ -106,10 +106,10 @@ npm run build     # emit dist/ (ESM + .d.ts)
 
 ### Integration test against a live server
 
-Requires a running server with the model (~850 MB download):
+Requires a running server with the model (~225 MB INT8):
 
 ```sh
-# once: download the model (~850 MB), then start the server from the repository root
+# once: download the model (~225 MB INT8), then start the server from the repository root
 cargo run -- download
 cargo run --release -- serve
 

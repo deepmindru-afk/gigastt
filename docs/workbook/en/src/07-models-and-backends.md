@@ -7,7 +7,7 @@ now you need to make an informed change: a different recognition head
 (punctuation baked in, or languages beyond Russian), a leaner model download, a
 faster execution provider for your hardware, or a bigger session pool. This
 chapter answers four questions with checkable recipes: **which head**, **INT8
-or FP32**, **which backend**, and **how much RAM** the pool needs.
+install**, **which backend**, and **how much RAM** the pool needs.
 
 WER and RTF numbers are **not duplicated here** — the canonical, CI-annotated
 tables live in
@@ -20,8 +20,8 @@ this chapter links into them. Flags are checked against `gigastt <command>
 
 - gigastt installed (binary, package, or image) — see
   [Getting started](01-getting-started.md).
-- Disk: ~1.1 GB free for the default FP32-download path (FP32 set + the
-  generated INT8 encoder), or ~250 MB for the lean pre-quantized path.
+- Disk: **~250–400 MB** free for the lean INT8 install (the only runtime path;
+  optional punct/VAD side models extra).
 - For building a non-default backend from source: Rust 1.88+ and `protoc` on
   `PATH` (build requirements:
   [docs/architecture.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/architecture.md)).
@@ -37,8 +37,8 @@ ONNX files, vocabulary, and decoding.
 
 | Head | Size on disk | Languages | Output text | Accuracy | Pick when |
 |---|---|---|---|---|---|
-| `rnnt` (default) | 844 MB FP32 encoder → ~215 MB INT8 (auto-quantized) + decoder/joiner/vocab (a few MB) | Russian | Bare lowercase; pair with `--punctuation` / `--itn` (on by default in `auto`) | Lowest Russian WER of the four — [table](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#accuracy-by-domain--wer--95-ci) | Russian-only workloads; the default for a reason |
-| `e2e_rnnt` | Same size class as `rnnt` (~850 MB FP32 → INT8 generated locally) | Russian | Punctuation / casing / ITN **baked in**, one pass | Higher WER than `rnnt`, but the best punctuation/casing F1 — [comparison](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#punctuation-quality--e2e_rnnt-vs-rnnt--rupunct-restore) | You want readable Russian in a single pass with no restore step |
+| `rnnt` (default) | ~225 MB lean INT8 (encoder ~215 MB + decoder/joiner/vocab) | Russian | Bare lowercase; pair with `--punctuation` / `--itn` (on by default in `auto`) | Lowest Russian WER of the four — [table](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#accuracy-by-domain--wer--95-ci) | Russian-only workloads; the default for a reason |
+| `e2e_rnnt` | Same lean INT8 pack (~225 MB) | Russian | Punctuation / casing / ITN **baked in**, one pass | Higher WER than `rnnt`, but the best punctuation/casing F1 — [comparison](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#punctuation-quality--e2e_rnnt-vs-rnnt--rupunct-restore) | You want readable Russian in a single pass with no restore step |
 | `ml_ctc` | ~225 MB pre-quantized INT8, encoder-only (no decoder/joiner) | ru/en/kk/ky/uz | Bare lowercase | [Multilingual tables](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#english--wer--librispeech-test-clean) | Multilingual audio or ~1.5× RTF vs `rnnt` (ready RSS ≈ `rnnt`, not a lean-RAM SKU) |
 | `ml_ctc_large` | ~592 MB pre-quantized INT8, encoder-only | ru/en/kk/ky/uz | Bare lowercase | Best multilingual accuracy; approaches `rnnt` on Russian clean read — [table](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#accuracy-by-domain--wer--95-ci) | Mixed-language audio, or English/Kazakh/Kyrgyz/Uzbek at all |
 
@@ -121,34 +121,23 @@ list. Boost too high can invent brands from noise — start at the default
 `5.0` and only raise if needed. Flags:
 [docs/cli.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/cli.md).
 
-### INT8 or FP32
+### INT8 install (runtime)
 
-Short answer: **INT8, always, unless you are debugging the model itself.** The
-INT8 encoder runs as true integer compute (`DynamicQuantizeLinear` +
-`MatMulInteger`/`ConvInteger` kernels), shrinks the encoder 844 MB → 215 MB
-(~3.9×), and measures ~0% WER degradation — numbers and methodology:
+Short answer: **runtime is INT8 only.** The shipped encoder runs as true integer
+compute (`DynamicQuantizeLinear` + `MatMulInteger`/`ConvInteger` kernels),
+~215 MB on disk, ~0% WER degradation vs FP32 source weights — numbers and
+methodology:
 [docs/benchmarks.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#headline-single-engine-metrics).
 
-What happens on each path (RNN-T heads):
+What happens on each path:
 
-- **Default** — `gigastt download` (or the first `serve` / `transcribe`)
-  fetches the FP32 set from HuggingFace (`istupakov/gigaam-v3-onnx`), then
-  runs the native-Rust quantization pass once (~2 min) and writes
-  `v3_rnnt_encoder_int8.onnx` next to it. The engine **prefers the INT8
-  encoder** whenever the file is present.
-- **Lean** — `gigastt download --prequantized` fetches the pre-quantized INT8
-  bundle (INT8 encoder + decoder + joiner + vocab) from the pinned GitHub
-  Release instead: no ~844 MB FP32 download, no ~2-minute quantization. Also
-  the fallback when HuggingFace is unreachable but GitHub is not.
+- **Default (RNN-T)** — `gigastt download` (or the first `serve` / `transcribe`)
+  fetches the pre-quantized INT8 bundle (INT8 encoder + decoder + joiner + vocab)
+  from the pinned GitHub Release. Runtime never loads FP32.
 - **Multilingual** — `ml_ctc` / `ml_ctc_large` download istupakov's
-  pre-quantized INT8 encoder directly from HuggingFace; `--prequantized` is a
-  no-op refinement for them (there is no separate bundle).
-- **Manual** — `gigastt quantize [--force]` re-runs the quantization on the
-  head detected in `--model-dir` (e.g. after replacing the FP32 encoder with
-  your own fine-tune).
-- **Opt out** — `--skip-quantize` (env `GIGASTT_SKIP_QUANTIZE=1`) skips the
-  quantization step; the engine then loads the FP32 encoder at ~4× the RAM per
-  pool slot and slower CPU kernels. Keep this for debugging only.
+  pre-quantized INT8 encoder directly from HuggingFace.
+- **Packaging** — `gigastt quantize [--force]` needs a **local FP32** encoder ONNX
+  as source (e.g. after a custom fine-tune). Not a runtime path.
 
 **Verify:**
 
@@ -234,7 +223,7 @@ move around:
 
 ```sh
 # On a connected machine:
-gigastt download --prequantized --model-dir /srv/gigastt-models
+gigastt download --model-dir /srv/gigastt-models
 
 # Copy to the target host any way you like (rsync, USB, artifact store):
 rsync -a /srv/gigastt-models/ offline-host:/srv/gigastt-models/
@@ -250,17 +239,17 @@ Properties that make this safe:
   and atomically renamed into place; a corrupt file is removed, never
   promoted. A checksum failure exits with code `65` (network `69`, disk `74`,
   Ctrl-C `130`) — scriptable.
-- **A complete model set means zero network.** With a full head's files
-  present (encoder — INT8 or FP32 — plus decoder/joiner/vocab for the RNN-T
-  heads, or INT8 encoder + vocab for the Multilingual ones), startup performs
-  no network request, even without `--offline`. `--offline` /
+- **A complete INT8 model set means zero network.** With a full head's **INT8**
+  files present (INT8 encoder + decoder/joiner/vocab for the RNN-T heads, or
+  INT8 encoder + vocab for Multilingual), startup performs no network request,
+  even without `--offline`. FP32-only trees are **not** usable. `--offline` /
   `GIGASTT_OFFLINE=1` turns any *missing* optional model (punctuation, VAD,
   diarization) into an immediate error naming the file to provide.
 - **The head is auto-detected from the files** — a copied directory needs no
   `--model-variant` flag on the target host.
-- When copying, include the `*_int8.onnx` encoder (or copy the FP32 encoder
-  too and run `gigastt quantize --model-dir …` on the target), the vocab, and
-  — for `rnnt`/`e2e_rnnt` — the decoder and joiner.
+- When copying, include the `*_int8.onnx` (or CTC `*.int8.onnx`) encoder, the
+  vocab, and — for `rnnt`/`e2e_rnnt` — the decoder and joiner. `gigastt quantize`
+  is packaging-only (needs a local FP32 source); do not rely on it at runtime.
 
 For a fully packaged offline install (tarball with binary + INT8 model +
 punctuation model + systemd unit, or the two-deb variant), use the release
@@ -285,7 +274,6 @@ INT8 `rnnt` encoder, CPU provider, release build):
 | Head (as loaded) | Encoder file | ≈ RAM per pool slot | Default pool 2 |
 |---|---|---|---|
 | `rnnt` / `e2e_rnnt` INT8 | ~215 MB | ~0.4 GB | ~790 MB total RSS |
-| `rnnt` / `e2e_rnnt` FP32 (`--skip-quantize`) | 844 MB | ~1.6 GB | ~3.3 GB — never in production |
 | `ml_ctc` INT8 | ~225 MB | ~0.45 GB | ~0.9 GB |
 | `ml_ctc_large` INT8 | ~592 MB | ~1.2 GB | ~2.4 GB |
 
@@ -350,10 +338,10 @@ matter more than the stopwatch.
   (with a `variants are never mixed` warning), and a later flag-less start
   prefers `rnnt` again. Delete the unused head's files to keep the directory
   unambiguous and reclaim disk.
-- **First `serve` looks hung.** That is the one-time ~850 MB FP32 download +
-  ~2 min quantization; `/health` answers `200` with `model:"loading"` while
-  `/ready` stays `503 initializing`. Skip the window with `gigastt download
-  --prequantized`, and gate clients on `/ready`, never on `/health`.
+- **First `serve` looks hung.** That is the one-time lean INT8 download
+  (~225 MB) if the model dir is empty; `/health` answers `200` with
+  `model:"loading"` while `/ready` stays `503 initializing`. Pre-seed with
+  `gigastt download`, and gate clients on `/ready`, never on `/health`.
 - **OOM after switching to `ml_ctc_large`.** Each slot now costs ~1.2 GB.
   Lower `--pool-size`, keep `--pool-min-size 1` so a tight host boots
   degraded, and watch for the `Capping pool size` warning at startup.

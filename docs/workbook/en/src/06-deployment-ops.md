@@ -23,8 +23,8 @@ and is not repeated here.
   Astra Linux, RED OS, ALT) and root access.
 - For the Docker path: Docker 20.10+; the NVIDIA Container Toolkit only for
   the CUDA variant.
-- The model either downloadable once (~850 MB FP32, auto-quantized to INT8 on
-  first start) or pre-installed from the offline bundle / model deb.
+- The model either downloadable once (~225 MB lean INT8) or pre-installed from
+  the offline bundle / model deb.
 
 ## Recipe
 
@@ -40,7 +40,7 @@ docker pull ghcr.io/ekhodzitsky/gigastt:2.16.0-cuda   # CUDA, linux/amd64
 
 Pin a concrete tag for reproducible deploys; `:latest` / `:cuda` float.
 
-Run with a named volume so the ~850 MB model (and the auto-generated INT8
+Run with a named volume so the ~225 MB INT8 model (and any
 encoder) survives container replacement:
 
 ```sh
@@ -59,12 +59,12 @@ Notes:
 - The container runs as the unprivileged `gigastt` user; the model directory
   inside is `/home/gigastt/.gigastt/models` — that is the volume mount point.
 - The image carries a `HEALTHCHECK` on `/health`, so `docker ps` shows
-  `healthy` as soon as the port serves. During the first-run model download
-  and INT8 quantization (~2 min) `/health` answers `200` with
+  `healthy` as soon as the port serves. During the first-run lean INT8
+  download (~225 MB, if the volume is empty) `/health` answers `200` with
   `model:"loading"` while `/ready` answers
   `503 {"status":"not_ready","reason":"initializing"}` — gate traffic on
   `/ready`, not `/health`.
-- **Baked image** (zero cold start, +~850 MB): build locally with the model
+- **Baked image** (zero cold start, +~225 MB INT8): build locally with the model
   inside — `docker build --build-arg GIGASTT_BAKE_MODEL=1 -t gigastt:baked .`
 - **CUDA**: `docker run --gpus all -p 127.0.0.1:9876:9876
   ghcr.io/ekhodzitsky/gigastt:2.16.0-cuda` (requires the NVIDIA Container
@@ -83,7 +83,7 @@ curl -s http://127.0.0.1:9876/health
 
 Core ASR for the default `rnnt` head is a **lean INT8-only** set (~220 MB):
 `v3_rnnt_encoder_int8.onnx`, `v3_rnnt_decoder.onnx`, `v3_rnnt_joint.onnx`,
-`v3_vocab.txt`. Prefer `gigastt download --prequantized`. Full operator detail:
+`v3_vocab.txt`. Prefer `gigastt download`. Full operator detail:
 [deployment.md — Lean INT8-only install](../../../deployment.md#lean-int8-only-install)
 (canonical English).
 
@@ -439,9 +439,8 @@ recipes: [CLI and batch processing](02-cli-batch.md); CLI check:
 ## Common pitfalls
 
 - **OOM — container or service killed.** RSS scales with `--pool-size`: the
-  INT8 encoder is ~400 MiB per triplet, ~790 MiB at the default pool of 2;
-  the FP32 encoder is ~4× larger (never pass `--skip-quantize` in
-  production). On a 4 GB box keep `--pool-size` at 1–2; `--pool-min-size 1`
+  INT8 encoder is ~400 MiB per triplet, ~790 MiB at the default pool of 2.
+  On a 4 GB box keep `--pool-size` at 1–2; `--pool-min-size 1`
   lets the server boot on a degraded pool instead of crashing when memory is
   tight. If Kubernetes reports `OOMKilled`, lower the pool or raise the pod
   limit — details in
@@ -456,8 +455,8 @@ recipes: [CLI and batch processing](02-cli-batch.md); CLI check:
   host itself, or deliberately re-bind with `--metrics-listen` on a trusted
   interface — never a public one. A scraper still aimed at `:9876/metrics`
   gets 404: metrics moved off the API port.
-- **Readiness probes flapping on first start.** The first run downloads
-  ~850 MB and quantizes (~2 min). `/health` returns `200` with
+- **Readiness probes flapping on first start.** The first run may download
+  lean INT8 (~225 MB) if the model dir is empty. `/health` returns `200` with
   `model:"loading"` the whole time, but `/ready` returns `503 initializing`.
   If your load balancer routes on `/health`, early clients get 503s — probe
   `/ready`, or pre-install / bake the model so the window disappears.
