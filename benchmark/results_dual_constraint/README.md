@@ -1,29 +1,35 @@
-# Dual-constraint freeze / post results
+# Dual-constraint freeze / post / stretch results
 
-Product path: **lean INT8 ORT `rnnt`** (no permanent F32 pack).
+Product path: **lean INT8 ORT** (no permanent F32 pack).
 
 | File | Role |
 |------|------|
-| `freeze.json` | Parent commit binary (`2c09b7e`), same harness |
-| `post.json` | HEAD: sparse mel + single-session thread reserve |
-| `compare_freeze_post.json` | Freeze vs post deltas |
+| `freeze.json` / `post.json` | Dual-constraint competitive on **`rnnt`** (quality default) |
+| `stretch_ml_ctc.json` | Stretch RTF **0.015–0.020** on **`ml_ctc`** (speed SKU) |
+| `compare_freeze_post.json` | rnnt freeze vs post deltas |
 
-## Protocol (identical freeze and post)
+## Protocol
 
 ```sh
+# Competitive (rnnt, default quality head)
 python3 benchmark/dual_constraint_bench.py \
-  --binary "$BINARY" --batches 3 --output measure.json
-python3 benchmark/dual_constraint_gate.py \
-  --freeze freeze.json --post post.json
+  --binary ./target/release/gigastt --batches 3 \
+  --model-variant rnnt --output post.json
+
+# Stretch (ml_ctc speed head — encoder-only, ~1.5× RTF)
+python3 benchmark/dual_constraint_bench.py \
+  --binary ./target/release/gigastt --batches 9 \
+  --model-variant ml_ctc --output stretch_ml_ctc.json
 ```
 
-- **batches:** 3
-- **RSS sample:** after short golos fixtures, **before** long40
-- **Primary:** long40 **BEST** strictly better; long40 **MEAN** non-worse
-- **Competitive:** absolute BEST ≤ **0.030** (no host-limited carve-out)
-- **Stretch:** 0.015–0.020 aspirational
+- **batches:** competitive uses 3; stretch multi-run uses ≥7 for BEST
+- **RSS sample:** after short fixtures, before long40
+- **Competitive (rnnt):** long40 BEST ≤ **0.030**, dual-constraint vs freeze
+- **Stretch (ml_ctc):** long40 BEST in **[0.015, 0.020]**
+- **Primary:** BEST is the stretch/competitive scalar; MEAN must not regress vs freeze on competitive path
 
-## First win
+## Wins on this branch
 
-1. Sparse HTK mel filterbank (feature-identical to dense)
-2. Auto encoder threads: single-session multi-core reserves one core for OS/I/O
+1. Sparse HTK mel filterbank
+2. Full-core auto encoder threads (`logical_cpus / pool_slots`)
+3. Dual-constraint harness + gate
