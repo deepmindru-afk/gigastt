@@ -1,0 +1,88 @@
+{
+  "schema": "gigastt.dual_constraint_measure.v1",
+  "date_utc": "2026-08-10T10:51:51Z",
+  "product_path": "lean INT8 ORT rnnt (default; no permanent F32 pack)",
+  "binary": "./target/release/gigastt",
+  "protocol": {
+    "batches": 3,
+    "pool_size": 1,
+    "model_variant": "rnnt",
+    "punctuation": "off",
+    "itn": "off",
+    "rss_sample_point": "after_short_fixtures_before_long",
+    "primary_rtf": "warm_rtf_long40_best (multi-run BEST); mean must not regress",
+    "long_fixture": "golos_00..04 concat x2 (~42s)"
+  },
+  "metrics": {
+    "warm_rtf_long40_best": 0.0288,
+    "warm_rtf_long40_mean": 0.0289,
+    "warm_rtf_long40_runs": [
+      0.0289,
+      0.0288,
+      0.0288
+    ],
+    "warm_rtf_long40_audio_s": 42.3,
+    "warm_rtf_short_fixtures_mean": 0.0357,
+    "warm_rtf_short_fixtures_best": 0.0316,
+    "warm_rtf_short_fixtures_max": 0.0421,
+    "warm_rtf_multirun_overall_best": 0.0316,
+    "warm_rtf_multirun_mean_of_means": 0.0357,
+    "rss_mb_after_ready_pool1": 266.5,
+    "rss_mb_after_decode_pool1": 284.0,
+    "rss_mb_after_long_pool1": 414.3,
+    "resident_mb_pool1_footprint": 53.0,
+    "cold_start_sec_pool1": 0.443,
+    "ttfp_ms": null,
+    "lean_disk_mb": 219.4,
+    "fixture_texts": [
+      "шестьдесят тысяч тенге сколько будет стоить",
+      "покажи мне на смотрешке телеканал синергия тв",
+      "заказать яблоки зеленые",
+      "алиса закажи килограммовый торт графские развалины",
+      "ищи телеканал про бизнес на тиви"
+    ],
+    "competitive_bar_rtf": 0.03,
+    "stretch_rtf_lo": 0.015,
+    "stretch_rtf_hi": 0.02,
+    "short_samples": [
+      {
+        "file": "golos_00.wav",
+        "audio_duration_sec": 4.0,
+        "processing_sec": 0.1359,
+        "rtf": 0.034,
+        "text": "шестьдесят тысяч тенге сколько будет стоить"
+      },
+      {
+        "file": "golos_01.wav",
+        "audio_duration_sec": 3.43,
+        "processing_sec": 0.1193,
+        "rtf": 0.0348,
+        "text": "покажи мне на смотрешке телеканал синергия тв"
+      },
+      {
+        "file": "golos_02.wav",
+        "audio_duration_sec": 3.06,
+        "processing_sec": 0.1095,
+        "rtf": 0.0358,
+        "text": "заказать яблоки зеленые"
+      },
+      {
+        "file": "golos_03.wav",
+        "audio_duration_sec": 5.44,
+        "processing_sec": 0.172,
+        "rtf": 0.0316,
+        "text": "алиса закажи килограммовый торт графские развалины"
+      },
+      {
+        "file": "golos_04.wav",
+        "audio_duration_sec": 5.22,
+        "processing_sec": 0.22,
+        "rtf": 0.0421,
+        "text": "ищи телеканал про бизнес на тиви"
+      }
+    ],
+    "long_text_preview": "шестьдесят тысяч тенге сколько будет стоить покажи мне на смотрешке телеканал синергия тв заказать яблоки зеленые алиса "
+  },
+  "role": "post",
+  "binary_git": "HEAD wins"
+}

@@ -110,10 +110,15 @@ pub fn resolve_punctuation(mode: PunctuationMode, variant: ModelVariant) -> bool
 /// env unset. `requested == Some(v)` (an explicit flag/env value, including `1`)
 /// is honoured verbatim and only passes through the engine's oversubscription
 /// clamp downstream. `None` (unset) spreads the logical CPUs across the
-/// concurrently-running pool triplets: `max(1, logical_cpus / total_pool_slots)`,
-/// so a default install uses every core instead of one. `total_pool_slots` is the
-/// effective number of triplets that can run at once (serve: `pool_size +
-/// batch_pool_size`; offline transcribe: `1`).
+/// concurrently-running pool triplets: `max(1, budget / total_pool_slots)`,
+/// so a default install uses nearly every core instead of one.
+///
+/// When unset, spreads the logical CPUs across concurrent pool slots:
+/// `max(1, logical_cpus / total_pool_slots)`. A default install uses every core
+/// instead of one (critical for stretch RTF on encoder-bound work). Explicit
+/// values still pass through for debug. `total_pool_slots` is the effective
+/// number of triplets that can run at once (serve: `pool_size + batch_pool_size`;
+/// offline transcribe: `1`).
 ///
 /// Pure and total so the budgeting math is unit-tested without touching ORT or
 /// the real CPU count.
