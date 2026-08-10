@@ -880,7 +880,10 @@ paths:
                     example: rnnt
                   encoder:
                     type: string
-                    description: Encoder precision of the newly loaded engine
+                    description: >
+                      Encoder precision of the newly loaded engine. Product ORT
+                      path is always `int8`; `fp32` is reserved for experimental
+                      non-ORT backends (e.g. candle).
                     enum: [int8, fp32]
                     example: int8
               example:
@@ -1080,8 +1083,10 @@ components:
           example: "2.16.0"
         encoder:
           type: string
-          enum: [fp32, int8]
-          description: Encoder quantization type
+          enum: [int8, fp32]
+          description: >
+            Encoder quantization type. Product ORT path is always `int8`;
+            `fp32` is reserved for experimental non-ORT backends (e.g. candle).
         vocab_size:
           type: integer
           example: 34

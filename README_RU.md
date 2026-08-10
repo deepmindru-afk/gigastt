@@ -76,7 +76,7 @@ docker build -t gigastt . && docker run -p 9876:9876 gigastt
 
 Встраивание вместо сервера? `npm install gigastt` (Node.js) · `pip install gigastt` (Python на PyPI) · Swift / Kotlin биндинги в работе — все оборачивают тот же движок, модель подкладывается отдельно: [In-process quickstarts](docs/quickstarts.md).
 
-Модель GigaAM v3 INT8 (~225 МБ) скачивается при первом запуске (lean prequantized; без шага FP32).
+Модель GigaAM v3 INT8 (~225 МБ) скачивается при первом запуске (lean-бандл с GitHub Releases). Runtime — **только INT8**: нет загрузки и инференса FP32.
 
 > Сборка также тянет prebuilt onnxruntime по сети (ort `download-binaries`); гарантия on-device / без облака покрывает **runtime-инференс**, а не сборку. Air-gapped-сборка — в [Architecture](docs/architecture.md).
 
@@ -130,7 +130,7 @@ $ gigastt serve
 
 ## Требования
 
-Rust **1.88+**, `protoc` в `PATH`. macOS 14+ (Apple Silicon, CoreML) или Linux x86_64 (опц. NVIDIA CUDA 12+). ~1.5 ГБ диска, ~66 МБ resident RAM при дефолтном `--pool-size 2` (~46 МБ на одну сессию; `ps` RSS показывает ~510 / ~277 МБ из-за общего memory-mapped образа модели). Крейт `gigastt-core` без серверных зависимостей: `gigastt-core = "2.16"`.
+Rust **1.88+**, `protoc` в `PATH` (только на этапе сборки — крейт quantize регенерирует ONNX-типы). macOS 14+ (Apple Silicon, CoreML) или Linux x86_64 (опц. NVIDIA CUDA 12+). **~250–400 МБ диска** для lean INT8 + бинарника (опциональные punct/VAD — отдельно), ~66 МБ resident RAM при дефолтном `--pool-size 2` (~46 МБ на одну сессию; `ps` RSS показывает ~510 / ~277 МБ из-за общего memory-mapped образа модели). Крейт `gigastt-core` без серверных зависимостей: `gigastt-core = "2.16"`.
 
 ## Лицензия
 

@@ -88,7 +88,7 @@ first launch and cache it).
 Download the prequantized model with the gigastt CLI:
 
 ```sh
-gigastt download --prequantized
+gigastt download
 ```
 
 This writes the model directory to `~/.gigastt/models/`. Copy that directory

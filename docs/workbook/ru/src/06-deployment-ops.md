@@ -24,7 +24,7 @@
 - Для пути с Docker: Docker 20.10+; NVIDIA Container Toolkit — только для
   CUDA-варианта.
 - Модель либо скачивается один раз (~225 МБ lean INT8), либо предустановлена
-  из офлайн-бандла / deb. (FP32 — только `download --fp32`.)
+  из офлайн-бандла / deb.
 
 ## Рецепт
 
@@ -86,7 +86,7 @@ curl -s http://127.0.0.1:9876/health
 
 Для головы `rnnt` достаточно **lean INT8-набора** (~220 МБ):
 `v3_rnnt_encoder_int8.onnx`, `v3_rnnt_decoder.onnx`, `v3_rnnt_joint.onnx`,
-`v3_vocab.txt`. Рекомендуется `gigastt download --prequantized`. Подробности:
+`v3_vocab.txt`. Рекомендуется `gigastt download`. Подробности:
 [deployment.md — Lean INT8-only install](../../../deployment.md#lean-int8-only-install).
 
 
@@ -448,12 +448,11 @@ curl -s http://127.0.0.1:9090/metrics | grep '^gigastt_pool_available'
 ## Частые ошибки
 
 - **OOM — контейнер или сервис убит.** RSS растёт вместе с `--pool-size`:
-  INT8-энкодер — ~400 МиБ на триплет, ~790 МиБ при пуле 2 по умолчанию;
-  FP32-энкодер примерно в 4 раза больше (никогда не передавайте
-  `--skip-quantize` в production). На машине с 4 ГБ держите `--pool-size` в
-  пределах 1–2; `--pool-min-size 1` позволяет серверу подняться на
-  деградированном пуле вместо падения при нехватке памяти. Если Kubernetes
-  сообщает `OOMKilled`, уменьшите пул или поднимите лимит пода — подробности в
+  INT8-энкодер — ~400 МиБ на триплет, ~790 МиБ при пуле 2 по умолчанию.
+  На машине с 4 ГБ держите `--pool-size` в пределах 1–2; `--pool-min-size 1`
+  позволяет серверу подняться на деградированном пуле вместо падения при
+  нехватке памяти. Если Kubernetes сообщает `OOMKilled`, уменьшите пул или
+  поднимите лимит пода — подробности в
   [docs/runbook.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/runbook.md).
 - **503 `timeout` под нагрузкой.** Все триплеты заняты, и вызывающий дождался
   конца `--pool-checkout-timeout-secs` (30 с): REST получает `503` +

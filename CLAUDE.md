@@ -31,12 +31,11 @@ Note (build-time network fetch): `ort`'s default `download-binaries` feature mak
 
 Model download (required for E2E testing and file transcription, ~225 MB INT8):
 ```sh
-cargo run -- download                    # Lean INT8 bundle (~225 MB) from Releases (default)
-cargo run -- download --prequantized     # Same lean path (flag kept for older scripts)
-cargo run -- download --fp32             # Optional: full FP32 from HuggingFace + on-device quantize
-cargo run -- download --fp32 --skip-quantize  # FP32 only (debug; slower)
-cargo run -- quantize                    # Rebuild INT8 encoder from local FP32 (~215 MB out)
+cargo run -- download                    # Lean INT8 bundle (~225 MB) from Releases (only path)
+cargo run -- quantize                    # Packaging: rebuild INT8 from a local FP32 ONNX
 ```
+
+Runtime is **INT8 only** — no FP32 download flags, no FP32 engine load.
 
 ## Docker
 
@@ -106,9 +105,9 @@ crates/
   - Caches compiled models in `~/.gigastt/models/coreml_cache/`
 - **CUDA execution provider** (`--features cuda`, Linux x86_64 CUDA 12+): GPU inference via ONNX Runtime CUDA EP
   - Features are compile-time and mutually exclusive; default build uses CPU EP on all platforms
-- **INT8 first**: default `download` / first `serve` fetch lean prequantized INT8 (~225 MB), not FP32
-  - On-device quantizer in `crates/gigastt-quantize` (feature `quantize`; used by `download --fp32` / `quantize` CLI)
-  - Engine prefers INT8 encoder if present; FP32 only if that is all on disk
+- **INT8 only**: `download` / `serve` / engine load use lean prequantized INT8 (~225 MB)
+  - Engine rejects FP32-only installs (no fallback)
+  - `gigastt quantize` is packaging-only (needs local FP32 source)
 - **Zero-copy REST upload path** (v0.9.0): `bytes::Bytes` flows end-to-end from axum into symphonia via a crate-private `BytesMediaSource`, eliminating the 4× upload copy that used to OOM small containers on concurrent 10-minute uploads.
 
 ### Key constants (defined in `crates/gigastt-core/src/inference/mod.rs`)
@@ -226,25 +225,47 @@ OpenSLR download that does not fit the CI cache budget, so these never run in CI
 
 ## Model
 
-GigaAM v3 from `istupakov/gigaam-v3-onnx` on HuggingFace. Four selectable heads via `--model-variant` — an explicit value is honored even when the model dir holds more than one head's files (fixed in 2.11.1); with no flag the head is auto-detected from the files on disk (`rnnt` precedence):
-- **`rnnt`** (default since v2.3): `v3_rnnt_{encoder,decoder,joint}.onnx` + `v3_vocab.txt` (34-token char vocab). Much lower WER than e2e (clean read 3.55% on `golos_crowd_1k` via the cross-engine harness vs e2e 8.60%; leads far-field/phone/YouTube — see `docs/benchmarks.md`); bare lowercase output, so pair with `--punctuation` / `--itn` for readable text.
-- **`e2e_rnnt`**: `v3_e2e_rnnt_{encoder,decoder,joint}.onnx` + `v3_e2e_rnnt_vocab.txt` (1025-token BPE). Punctuation/casing/ITN baked in.
-- **`ml_ctc`**: GigaAM Multilingual charwise-CTC head (220M) from `istupakov/gigaam-multilingual-ctc-onnx`. Encoder-only: `multilingual_ctc.int8.onnx` + `multilingual_vocab.txt` (71-class multilingual char vocab; blank id 70). Downloads the upstream pre-quantized INT8 encoder directly (~225MB; no FP32 download, no on-device quantize). Best-in-class WER on ru/kk/ky/uz (moderate on en); bare lowercase output. Shares the 64-mel frontend; file transcription (greedy CTC decode, no prediction network / joiner).
-- **`ml_ctc_large`**: the 600M GigaAM Multilingual head from `istupakov/gigaam-multilingual-large-ctc-onnx` (`multilingual_large_ctc.int8.onnx`, ~592MB; shares `multilingual_vocab.txt`). Same charwise-CTC architecture as `ml_ctc`, higher accuracy across all five languages (clean-read WER ru 4.44 / en 4.63 / kk 6.52 / ky 7.39 / uz 9.21% — see `docs/benchmarks.md`).
-- Encoder (rnnt/e2e_rnnt shared arch): 844MB (FP32) or 215MB (INT8 quantized, 3.9×); decoder/joiner a few MB each.
+Runtime is **INT8 only** — `download` / `serve` / engine load never use FP32.
+Four selectable heads via `--model-variant` — an explicit value is honored even when
+the model dir holds more than one head's files (fixed in 2.11.1); with no flag the
+head is auto-detected from the files on disk (`rnnt` precedence):
+- **`rnnt`** (default since v2.3): lean INT8 set from GitHub Releases —
+  `v3_rnnt_encoder_int8.onnx` + `v3_rnnt_{decoder,joint}.onnx` + `v3_vocab.txt`
+  (34-token char vocab). Much lower WER than e2e (clean read 3.55% on
+  `golos_crowd_1k` via the cross-engine harness vs e2e 8.60%; leads
+  far-field/phone/YouTube — see `docs/benchmarks.md`); bare lowercase output, so
+  pair with `--punctuation` / `--itn` for readable text.
+- **`e2e_rnnt`**: `v3_e2e_rnnt_encoder_int8.onnx` + `v3_e2e_rnnt_{decoder,joint}.onnx`
+  + `v3_e2e_rnnt_vocab.txt` (1025-token BPE). Punctuation/casing/ITN baked in.
+- **`ml_ctc`**: GigaAM Multilingual charwise-CTC head (220M) from
+  `istupakov/gigaam-multilingual-ctc-onnx`. Encoder-only:
+  `multilingual_ctc.int8.onnx` + `multilingual_vocab.txt` (71-class multilingual
+  char vocab; blank id 70). Downloads the upstream pre-quantized INT8 encoder
+  directly (~225MB). Best-in-class WER on ru/kk/ky/uz (moderate on en); bare
+  lowercase output. Shares the 64-mel frontend; file transcription (greedy CTC
+  decode, no prediction network / joiner).
+- **`ml_ctc_large`**: the 600M GigaAM Multilingual head from
+  `istupakov/gigaam-multilingual-large-ctc-onnx`
+  (`multilingual_large_ctc.int8.onnx`, ~592MB; shares `multilingual_vocab.txt`).
+  Same charwise-CTC architecture as `ml_ctc`, higher accuracy across all five
+  languages (clean-read WER ru 4.44 / en 4.63 / kk 6.52 / ky 7.39 / uz 9.21% —
+  see `docs/benchmarks.md`).
+- Encoder (rnnt/e2e_rnnt): ~215 MB INT8; decoder/joiner a few MB each. Total lean
+  install ~225 MB.
 - Sample rate: 16kHz, Features: 64 mel bins
 - ONNX tensors: encoder out `[1, 768, T]` (channels-first), decoder state `[1, 1, 320]`
 
 ### Quantization
 
-Default path never needs on-device quantize. Optional rebuild from FP32 via
-`crates/gigastt-quantize`:
+Product path never quantizes on device — INT8 is pre-shipped. `gigastt quantize`
+is packaging-only and needs a **local FP32** encoder ONNX as source
+(`crates/gigastt-quantize`):
 ```sh
 cargo run -- quantize --model-dir ~/.gigastt/models
-# Produces: v3_rnnt_encoder_int8.onnx (~215MB; dynamic INT8 MatMulInteger/ConvInteger)
+# Requires v3_*_encoder.onnx on disk; writes v3_*_encoder_int8.onnx
 ```
 
-Engine prefers INT8 if present; falls back to FP32 only when no INT8 file exists.
+Engine **requires** the INT8 encoder; FP32-only installs are rejected.
 
 ## Agent Skills
 

@@ -76,7 +76,7 @@ docker build -t gigastt . && docker run -p 9876:9876 gigastt
 
 Embedding instead of serving? `npm install gigastt` (Node.js) · `pip install gigastt` (Python on PyPI) · Swift / Kotlin bindings in progress — all wrap the same engine, model side-loaded: [In-process quickstarts](docs/quickstarts.md).
 
-The GigaAM v3 INT8 model (~225 MB) downloads on first run (lean prequantized path; no FP32 step).
+The GigaAM v3 INT8 model (~225 MB) downloads on first run (lean bundle from GitHub Releases). Runtime is **INT8 only** — no FP32 download or inference path.
 
 > Building also fetches a prebuilt onnxruntime over the network (ort's default `download-binaries`); the on-device / no-cloud guarantee covers **runtime inference**, not the build. See [Architecture](docs/architecture.md) for air-gapped builds.
 
@@ -130,7 +130,7 @@ $ gigastt serve
 
 ## Requirements
 
-Rust **1.88+**, `protoc` on `PATH`. macOS 14+ (Apple Silicon, CoreML) or Linux x86_64 (optional NVIDIA CUDA 12+). ~1.5 GB disk, ~66 MB resident RAM at the default `--pool-size 2` (~46 MB single-session; `ps` RSS reads ~510 / ~277 MB because it counts the shared memory-mapped model). The `gigastt-core` crate has no server dependencies — embed it directly: `gigastt-core = "2.16"`.
+Rust **1.88+**, `protoc` on `PATH` (build-time only — the quantizer crate regenerates ONNX types). macOS 14+ (Apple Silicon, CoreML) or Linux x86_64 (optional NVIDIA CUDA 12+). **~250–400 MB disk** for the lean INT8 install + binary (optional punct/VAD side models extra), ~66 MB resident RAM at the default `--pool-size 2` (~46 MB single-session; `ps` RSS reads ~510 / ~277 MB because it counts the shared memory-mapped model). The `gigastt-core` crate has no server dependencies — embed it directly: `gigastt-core = "2.16"`.
 
 ## License
 

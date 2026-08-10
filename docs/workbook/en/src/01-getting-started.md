@@ -9,11 +9,10 @@ you should not need any other document to get here.
 
 ## Prerequisites
 
-- **Disk:** ~250 MB for the default lean INT8 install; ~1.5 GB if you take the
-  `--fp32` path (FP32 download plus on-device quantization).
+- **Disk:** ~250 MB for the lean INT8 install (the only runtime path).
 - **RAM:** ~800 MB free at the default `--pool-size 2` (~400 MB per session).
-- **Network** (unless you follow the air-gapped recipe): reach either
-  `huggingface.co` (full model) or `github.com` (pre-quantized bundle).
+- **Network** (unless you follow the air-gapped recipe): reach `github.com`
+  for the pre-quantized INT8 bundle (CTC heads use HuggingFace INT8).
 - **An audio file to transcribe** — WAV, M4A, MP3, OGG, or FLAC. Any short
   recording of Russian speech works.
 - Only for `cargo install` (build from source): Rust 1.88+ and `protoc` on
@@ -249,19 +248,12 @@ atomically renamed. No FP32 download, no on-device quantization, no `protoc`.
 Note it pulls from `github.com`, not `huggingface.co` — useful when one of the
 two is blocked.
 
-Three levers change what you pay:
+Runtime is **INT8 only** — there is no FP32 download or FP32 engine path.
 
-- `gigastt download --fp32` — the old path: ~844 MB of FP32 ONNX files from
-  HuggingFace, then a one-time ~2-minute INT8 quantization pass producing the
-  same ~225 MB encoder the engine loads. Needs `protoc`. Use it when you want
-  the FP32 encoder for debugging or an offline quantize workflow.
-- `--fp32 --skip-quantize` (or `GIGASTT_SKIP_QUANTIZE=1` on `serve`) — keep the
-  FP32 encoder and skip quantization. The engine then loads FP32: slower
-  inference and ~4× the model RAM. Only for debugging.
-- Nothing — just let the first `serve` do it. The port binds immediately;
-  `/health` answers `200` with `"model":"loading"` and `/ready` returns
-  `503 {"reason":"initializing"}` until the model is usable, so clients should
-  gate on `/ready`, never on the process being alive.
+If you skip a manual download, the first `serve` does it for you. The port binds
+immediately; `/health` answers `200` with `"model":"loading"` and `/ready`
+returns `503 {"reason":"initializing"}` until the model is usable, so clients
+should gate on `/ready`, never on the process being alive.
 
 ## Verifying the result
 
