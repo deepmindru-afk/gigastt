@@ -10,6 +10,34 @@ were released without a git tag, so their headings carry no compare link.
 
 ## [Unreleased]
 
+## [2.17.0] - 2026-08-10
+
+### Performance
+
+- **Dual-constraint RTF/RSS work on lean INT8 ORT (no CoreML stretch path).**
+  Sparse HTK mel, full-core auto encoder threads, and a shared long-form window
+  ceiling bring competitive long40 rnnt BEST under ≤0.030 and the stretch band
+  0.015–0.020 on the `ml_ctc` speed SKU (local quiet-host evidence). Quality
+  default remains `rnnt`. CI multi-metric quality gate covers WER / RTF / RSS /
+  cold-start on bundled fixtures.
+
+### Changed
+
+- **Runtime is INT8-only.** `download` / `serve` / engine load never use FP32;
+  lean prequantized INT8 (~225 MB) is the product path. `gigastt quantize`
+  remains packaging-only and needs a local FP32 ONNX as source.
+
+- **INT8 quantizer lives in `gigastt-quantize`.** Extracted from core so lean
+  embedders can depend without the quantizer graph stack; core re-exports stay
+  for compatibility.
+
+### Fixed
+
+- **`gigastt quantize` no-ops when INT8 already exists without FP32.** Lean CI
+  installs only ship `*_encoder_int8.onnx`; requiring FP32 before the existing-INT8
+  early return broke Coverage(E2E) `cli_quantize_existing_is_noop`. INT8 present
+  and no `--force` succeeds first; FP32 is required only to rebuild.
+
 ### Fixed
 
 - **A hotword glossary now depends on its contents.** It did not: on the `rnnt`
@@ -159,8 +187,8 @@ were released without a git tag, so their headings carry no compare link.
   as the first frame reached 128 bytes. Pinned by a fixture in the shape
   Chromium produces, checked against ffmpeg's own decode of it.
 
-  WebM is still not a supported container, so `audio/webm;codecs=opus` from a
-  browser needs remuxing to OGG before upload.
+  (WebM/Opus container support landed in the same release — see Added below —
+  so browser `MediaRecorder` output no longer needs a remux to OGG.)
 
 - **Hotword biasing no longer stutters a phrase inside one encoder frame.** At
   the shipped `--hotwords-boost 5.0`, a glossary made the `rnnt` head render the
@@ -2395,6 +2423,7 @@ _Release candidate for v0.9.0 — bundles five P0 fixes plus two supporting item
 - 39 unit tests (tokenizer, features, decode, inference, protocol).
 
 [Unreleased]: https://github.com/ekhodzitsky/gigastt/compare/v2.16.0...HEAD
+[2.17.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.16.0...v2.17.0
 [2.16.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.15.0...v2.16.0
 [2.0.9]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.8...v2.0.9
 [2.0.8]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.7...v2.0.8

@@ -6,7 +6,7 @@
 
 ## На машине с сетью
 
-- [ ] Тег релиза: `TAG=$(gh api repos/ekhodzitsky/gigastt/releases/latest -q .tag_name)` (или пин `v2.16.0`)
+- [ ] Тег релиза: `TAG=$(gh api repos/ekhodzitsky/gigastt/releases/latest -q .tag_name)` (или пин `v2.17.0`)
 - [ ] Скачать **offline bundle** под arch  
       (`gigastt-${VER}-offline-x86_64-unknown-linux-gnu.tar.gz` или aarch64)  
       **или** deb-пару: `gigastt_…_amd64.deb` + `gigastt-model-int8_…_all.deb`
