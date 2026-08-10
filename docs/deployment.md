@@ -306,9 +306,9 @@ If you observe clients hanging past the cap or not receiving `Final` on deploy, 
 ## Lean INT8-only install
 
 Production inference needs only the **pre-quantized INT8 set** for one head —
-about **~220 MB** on disk for default `rnnt` (no FP32 encoder). The engine prefers
-`*_encoder_int8.onnx` when present; serve / transcribe accept this tree without
-re-fetching the ~844 MB FP32 encoder.
+about **~220 MB** on disk for default `rnnt`. The engine **requires**
+`*_encoder_int8.onnx` (or the CTC INT8 basename); FP32-only trees are not
+loadable. There is no FP32 download path for runtime.
 
 **Minimum files for `rnnt` (default):**
 
@@ -327,9 +327,9 @@ re-fetching the ~844 MB FP32 encoder.
 `multilingual_vocab.txt`.
 
 ```sh
-# Recommended: lean bundle from the pinned GitHub Release
-gigastt download --prequantized
-# or copy the four rnnt files into --model-dir / a volume, then:
+# Lean INT8 bundle from the pinned GitHub Release (only runtime path)
+gigastt download
+# or copy the four rnnt INT8 files into --model-dir / a volume, then:
 GIGASTT_OFFLINE=1 gigastt serve --model-dir /path/to/models --pool-size 1
 ```
 
@@ -341,9 +341,8 @@ Optional side models (not required for core ASR):
 | `vad/silero_vad.onnx` | `--vad` |
 | `speaker_model.onnx` (name per build) | diarization feature |
 
-The FP32 encoder (`v3_rnnt_encoder.onnx`) is only needed to **produce** INT8 via
-`gigastt quantize` / the non-prequantized download path. After INT8 exists you can
-delete FP32 to reclaim ~844 MB; `gigastt cache-gc` drops stale ORT optimized graphs.
+Runtime never loads FP32. `gigastt quantize` is packaging-only (needs a local
+FP32 ONNX as source). `gigastt cache-gc` drops stale ORT optimized graphs.
 
 ## Air-gapped / offline installation
 

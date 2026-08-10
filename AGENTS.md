@@ -20,10 +20,9 @@ exposes:
 - **OpenAI-compatible** (`/v1/audio/transcriptions`) — multipart `file` + `model` → `{"text":"..."}`
 - **CLI** — `serve`, `download`, `transcribe`, `quantize` commands
 
-The default model path is **lean INT8** (~225 MB prequantized bundle from
-Releases): first `serve` / `download` fetches INT8 only — no FP32 step. On-device
-quantize (`gigastt quantize`, or `download --fp32`) is optional for debugging
-or regenerating INT8 from FP32. The quantizer lives in `crates/gigastt-quantize`.
+The product path is **INT8 only** (~225 MB prequantized bundle from Releases):
+`serve` / `download` / engine load never use FP32. `gigastt quantize` remains a
+packaging tool that needs a local FP32 ONNX as source (not a runtime path).
 
 ### Key metrics
 
@@ -240,9 +239,6 @@ Default lean install under `~/.gigastt/models/` (prequantized INT8 from Releases
 | `v3_rnnt_joint.onnx` | ~1.4 MB | RNN-T joiner |
 | `v3_vocab.txt` | small | char vocabulary (34 tokens) |
 
-Optional FP32 encoder (`download --fp32` from HuggingFace `istupakov/gigaam-v3-onnx`):
-`v3_rnnt_encoder.onnx` (~844 MB); on-device `quantize` can rebuild INT8 from it.
-
 The `e2e_rnnt` head (`--model-variant e2e_rnnt`) uses the parallel `v3_e2e_rnnt_*` filenames with a 1025-token BPE vocab. The multilingual heads `ml_ctc` / `ml_ctc_large` (`--model-variant ml_ctc` / `ml_ctc_large`) are encoder-only: they download the pre-quantized `multilingual_ctc.int8.onnx` (~225 MB) / `multilingual_large_ctc.int8.onnx` (~592 MB) plus `multilingual_vocab.txt` (71-class multilingual char vocab, ru/en/kk/ky/uz) from `istupakov/gigaam-multilingual-ctc-onnx` / `istupakov/gigaam-multilingual-large-ctc-onnx` — no decoder/joiner.
 
 ## Development Conventions
@@ -411,8 +407,11 @@ reference: [`docs/cli.md`](docs/cli.md) (enforced by `scripts/check-docs-drift.p
 | `GIGASTT_ENABLE_JOBS` | `--enable-jobs` | false |
 | `GIGASTT_JOBS_TTL_SECS` | `--jobs-ttl-secs` | 3600 |
 | `GIGASTT_JOBS_MAX` | `--jobs-max` | 100 |
+| `GIGASTT_JOBS_MAX_BYTES` | `--jobs-max-bytes` | 536870912 (512 MiB) |
 | `GIGASTT_JOBS_RETRY` | `--jobs-retry` | 3 |
-| `GIGASTT_SKIP_QUANTIZE` | `--skip-quantize` | false |
+| `GIGASTT_MAX_AUDIO_SECS` | `--max-audio-secs` | 0 (unlimited) |
+| `GIGASTT_ENDPOINT_MODE` | `--endpoint-mode` | auto |
+| `GIGASTT_PROFILE` | `--profile` (`default` / `edge`) | default |
 | `GIGASTT_DOWNLOAD_PROGRESS` | `download --progress` | human |
 | `GIGASTT_METRICS` | `--metrics` | false |
 | `GIGASTT_METRICS_LISTEN` | `--metrics-listen` | 127.0.0.1:9090 |

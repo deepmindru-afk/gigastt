@@ -149,30 +149,25 @@ gigastt serve [OPTIONS]
                                 Env: GIGASTT_SHUTDOWN_DRAIN_SECS.
   --config <FILE>               Path to a TOML config file for runtime limits
                                 (reloaded on SIGHUP).
-  --skip-quantize               Skip auto-quantization step on first run.
-                                Env: GIGASTT_SKIP_QUANTIZE.
 
 gigastt download [OPTIONS]
   --model-dir <DIR>      Model directory [default: ~/.gigastt/models]
   --model-variant <V>    Head to download: rnnt (default) | e2e_rnnt | ml_ctc | ml_ctc_large.
                          Env: GIGASTT_MODEL_VARIANT.
   --skip-diarization     Skip downloading the speaker diarization model
-  --skip-quantize        Skip auto-quantization after `--fp32` download
-  --prequantized         Lean INT8 bundle (default true; explicit flag kept for
-                         older scripts). Ignored when `--fp32` is set.
-  --fp32                 Download full FP32 set from HuggingFace + quantize
-                         (overrides lean default)
   --progress <FORMAT>    Progress output: human (default) | json.
                          Env: GIGASTT_DOWNLOAD_PROGRESS.
+
+  Always fetches the lean **INT8** bundle (~225 MB). There is no FP32 download
+  path and no on-device quantize step for runtime.
 
   Machine-readable progress (--progress=json)
     stdout carries one NDJSON event per line and nothing else (the human
     `\r`-progress renderer is disabled and tracing logs go to stderr), so a
     sidecar can drive an exact progress bar:
 
-      {"phase":"download","file":"v3_rnnt_encoder.onnx","bytes_done":N,"bytes_total":M}
-      {"phase":"verify","file":"v3_rnnt_encoder.onnx"}
-      {"phase":"quantize","file":"v3_rnnt_encoder.onnx"}
+      {"phase":"download","file":"v3_rnnt_encoder_int8.onnx","bytes_done":N,"bytes_total":M}
+      {"phase":"verify","file":"v3_rnnt_encoder_int8.onnx"}
       {"phase":"done","model_dir":"/home/u/.gigastt/models"}
       {"phase":"error","kind":"network|disk|checksum|interrupted|other","message":"..."}
 
@@ -313,8 +308,8 @@ gigastt watch [OPTIONS] <INPUT_DIR> <OUTPUT_DIR>
     gigastt watch inbox/ out/ --move-to inbox/done/
     gigastt watch inbox/ out/ --format txt --delete-source
 
-gigastt quantize [OPTIONS]          # always available since v0.9.0
-  --model-dir <DIR>      Model directory [default: ~/.gigastt/models]
+gigastt quantize [OPTIONS]          # packaging only (needs local FP32 source)
+  --model-dir <DIR>      Model directory holding the FP32 encoder
   --force                Re-quantize even if INT8 model exists
 
 gigastt cache-gc [OPTIONS]

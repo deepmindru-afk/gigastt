@@ -24,7 +24,7 @@ and is not repeated here.
 - For the Docker path: Docker 20.10+; the NVIDIA Container Toolkit only for
   the CUDA variant.
 - The model either downloadable once (~225 MB lean INT8) or pre-installed from
-  the offline bundle / model deb. (FP32 is only for `download --fp32`.)
+  the offline bundle / model deb.
 
 ## Recipe
 
@@ -83,7 +83,7 @@ curl -s http://127.0.0.1:9876/health
 
 Core ASR for the default `rnnt` head is a **lean INT8-only** set (~220 MB):
 `v3_rnnt_encoder_int8.onnx`, `v3_rnnt_decoder.onnx`, `v3_rnnt_joint.onnx`,
-`v3_vocab.txt`. Prefer `gigastt download --prequantized`. Full operator detail:
+`v3_vocab.txt`. Prefer `gigastt download`. Full operator detail:
 [deployment.md — Lean INT8-only install](../../../deployment.md#lean-int8-only-install)
 (canonical English).
 
@@ -439,9 +439,8 @@ recipes: [CLI and batch processing](02-cli-batch.md); CLI check:
 ## Common pitfalls
 
 - **OOM — container or service killed.** RSS scales with `--pool-size`: the
-  INT8 encoder is ~400 MiB per triplet, ~790 MiB at the default pool of 2;
-  the FP32 encoder is ~4× larger (never pass `--skip-quantize` in
-  production). On a 4 GB box keep `--pool-size` at 1–2; `--pool-min-size 1`
+  INT8 encoder is ~400 MiB per triplet, ~790 MiB at the default pool of 2.
+  On a 4 GB box keep `--pool-size` at 1–2; `--pool-min-size 1`
   lets the server boot on a degraded pool instead of crashing when memory is
   tight. If Kubernetes reports `OOMKilled`, lower the pool or raise the pod
   limit — details in

@@ -70,7 +70,7 @@ pub struct ModelInfo {
     pub variant: String,
     /// Server version from `CARGO_PKG_VERSION`.
     pub version: String,
-    /// Encoder precision in use: `"int8"` or `"fp32"`.
+    /// Encoder precision in use: `"int8"` (product ORT path) or `"fp32"` (experimental non-ORT backends).
     pub encoder: String,
     /// Number of tokens in the BPE vocabulary.
     pub vocab_size: usize,

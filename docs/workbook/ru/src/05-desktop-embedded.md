@@ -40,7 +40,7 @@
   квантизации на устройстве):
 
   ```sh
-  gigastt download --prequantized          # -> ~/.gigastt/models
+  gigastt download          # -> ~/.gigastt/models
   ```
 
 - **Embedded**: тулчейн вашего биндинга — Xcode 15+ (Swift), Node.js
@@ -134,15 +134,16 @@ Runtime — отдельный рантайм бандлить не нужно. 
    машиночитаемым прогрессом для UI:
 
    ```sh
-   gigastt download --prequantized --progress json
+   gigastt download --progress json
    ```
 
    stdout несёт по одному NDJSON-событию на строку
    (`{"phase":"download","file":...,"bytes_done":N,"bytes_total":M}`, затем
    `verify`, затем `done`), а коды выхода различают сетевые/дисковые/контрольные
    ошибки — см. [docs/cli.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/cli.md).
-   `--prequantized` пропускает ~2-минутный проход INT8-квантизации на
-   устройстве, поэтому первый `serve` стартует за секунды, а не минуты.
+   Download всегда — lean **INT8**-бандл (~225 МБ); нет on-device-квантизации
+   и нет FP32-пути, поэтому первый `serve` стартует после окончания
+   загрузки (секунды–минуты в зависимости от сети).
 3. **Выберите порт.** Сегодня: фиксированный высокий порт (например, `49876`).
    Автовыбор эфемерного порта (`--port 0` с машиночитаемой строкой
    `LISTENING`), а также `--die-with-parent` и `--log-file` — планируемые
@@ -237,7 +238,7 @@ onnxruntime слинкован статически, поэтому `.node`-ад
    готовый бинарь (`gigastt.<platform>.node`, ~47 МБ) под платформу установки
    из GitHub-релиза. Готовые платформы: `darwin-arm64`, `linux-x64-gnu`,
    `linux-arm64-gnu`, `win32-x64-msvc` (Intel macOS нет).
-2. **Загрузите модель** — она не забандлена: `gigastt download --prequantized`
+2. **Загрузите модель** — она не забандлена: `gigastt download`
    → `~/.gigastt/models`, либо задайте `GIGASTT_MODEL_DIR`.
 3. **Использование:**
 
@@ -371,8 +372,8 @@ cargo run -p gigastt-uniffi --bin uniffi-bindgen -- generate --library "$LIB" --
 
 - **Первый транскрипт**: приложение печатает ожидаемый текст для известного
   WAV (любой файл с русской речью, например сэмпл Golos).
-- **Модель на диске**: `ls ~/.gigastt/models` показывает файлы `v3_rnnt_*`
-  (бандл `--prequantized` включает `v3_rnnt_encoder_int8.onnx`).
+- **Модель на диске**: `ls ~/.gigastt/models` показывает lean INT8-набор
+  (`v3_rnnt_encoder_int8.onnx` плюс decoder/joiner/vocab).
 - **Память**: RSS в ожидаемых пределах — примерно 350–400 МБ на сессию пула;
   `poolSize`/`pool-size` 1 — правильный дефолт для устройства.
 - **Здоровье sidecar'я**: `curl -s http://127.0.0.1:<port>/ready` возвращает
@@ -404,7 +405,7 @@ cargo run -p gigastt-uniffi --bin uniffi-bindgen -- generate --library "$LIB" --
   `gigastt download` оставляет ~2-минутный проход INT8-квантизации на первый
   `serve`, а модель пунктуации подгружается лениво при первом старте — клиент
   с таймаутом загрузки 10–30 с сдаётся слишком рано. Исправление:
-  предустановка через `gigastt download --prequantized`, щедрый таймаут
+  предустановка через `gigastt download`, щедрый таймаут
   готовности и ветвление по `reason` из `/ready` вместо убийства процесса.
 - **Убийство сервера на 503.** Пока модель грузится, порт занят
   bootstrap-ответчиком и каждый API отвечает 503 `initializing` — это

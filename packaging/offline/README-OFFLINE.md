@@ -89,7 +89,7 @@ or a connect timeout:
   `Configure{diarization}` over WebSocket; needs the speaker model fetched by
   `gigastt download` on a connected machine and copied over),
 - the `e2e_rnnt` / `ml_ctc` / `ml_ctc_large` recognition heads
-  (fetch on a connected machine with `gigastt download --prequantized`,
+  (fetch on a connected machine with `gigastt download`,
   then copy `~/.gigastt/models/` over).
 
 Prefer the `.deb` packages on Debian-family systems: `gigastt_<ver>_amd64.deb`

@@ -402,7 +402,7 @@ fn cli_serve_boots_and_graceful_shutdown() {
 
 /// Symlink the named files from the real model dir into `dst`. Returns `false`
 /// (test must self-skip) when any of them is absent — e.g. a machine installed
-/// via `download --prequantized` has no FP32 encoder; running anyway would
+/// via `download` has no FP32 encoder; running anyway would
 /// silently turn the test into a live ~225 MB INT8 network download.
 #[cfg(unix)]
 #[must_use]

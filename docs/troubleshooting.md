@@ -3,8 +3,9 @@
 | Symptom | Cause | Fix |
 |---|---|---|
 | `protoc` not found during build | Missing Protocol Buffers compiler | `brew install protobuf` (macOS) or `apt install protobuf-compiler` (Debian/Ubuntu) |
-| Model download hangs or fails | Network / HuggingFace availability | Retry `gigastt download`; check `~/.gigastt/models/` permissions |
-| `Cannot quantize: FP32 encoder not found` | Partial download | Delete `~/.gigastt/models/` and re-run `gigastt download` |
+| Model download hangs or fails | Network / GitHub Releases (default RNN-T INT8) or HuggingFace (CTC heads) | Retry `gigastt download`; check `~/.gigastt/models/` permissions and outbound access to `github.com` (or `huggingface.co` for `ml_ctc*`) |
+| `Cannot quantize: FP32 encoder not found` | `gigastt quantize` is packaging-only and needs a **local FP32** encoder ONNX as source | Place the FP32 encoder next to the head files, or skip quantize — runtime uses `gigastt download` (lean INT8, no FP32) |
+| `INT8 encoder not found` / engine refuses to load | FP32-only or empty model dir | Run `gigastt download` (lean INT8). FP32-only installs are not loadable |
 | OOM on startup | Pool size too large for available RAM | Edge / low-RAM: `--pool-size 1` (~400 MB RSS). Default 2 is for multi-connection hosts (~790 MB); each session loads a full encoder copy |
 | Very slow single-file RTF on multi-core CPU | `--encoder-intra-threads 1`, or pool>1 splitting cores across idle slots | Leave threads unset (auto uses all cores ÷ pool). Prefer `--pool-size 1` on single-job edge hosts. Explicit `1` is for debugging only (~3× slower) |
 | CoreML not used on macOS | Built without `--features coreml` | Re-build: `cargo build --release --features coreml` |
@@ -15,9 +16,9 @@
 | `Address already in use` on startup, port 9876 | Another process holds the port — often an orphaned gigastt from a previous run | Find it: `lsof -nP -tiTCP:9876 -sTCP:LISTEN`; confirm it is ours before killing: `ps -p <pid> -o command=` should show `gigastt serve`. Then `kill <pid>` (SIGTERM drains sessions cleanly), or start on a different `--port` |
 | gigastt keeps running after the parent app was force-killed | SIGKILL gives the parent no chance to forward SIGTERM, so a managed sidecar is orphaned and keeps the port and ~800 MB of RAM | Same `lsof`/`ps` recipe as above to find and stop it. Long-term: supervise with launchd/systemd, or have the parent poll its own PID liveness and SIGTERM the child on exit paths that do run |
 | WS `final` text arrives bare lowercase, no punctuation | The punctuation model is not attached (check `GET /health` → `punctuation:false`), or policy is off for this server/session. `e2e_rnnt` punctuates by itself; the bare `rnnt` head needs the punct model | Enable server-wide with `--punctuation on` (model auto-downloads to `~/.gigastt/models/punct/`), per WS session with `{"type":"configure","punctuation":true}`, or per REST request with `?punctuation=true`. `words[]` always stay raw by design — only the joined `text` is rewritten |
-| First `serve` takes minutes before `/ready` turns green | One-time lean INT8 download (~225 MB) if the model dir is empty. `/health` answers 200 `{"model":"loading"}` meanwhile — the server is not hung | Pre-seed during install: `gigastt download` (default = INT8 bundle). Gate clients on `/ready`, never on the process being alive. FP32 + local quantize only with `download --fp32` |
+| First `serve` takes minutes before `/ready` turns green | One-time lean INT8 download (~225 MB) if the model dir is empty. `/health` answers 200 `{"model":"loading"}` meanwhile — the server is not hung | Pre-seed during install: `gigastt download`. Gate clients on `/ready`, never on the process being alive |
 | Every inference fails on a Homebrew install (CoreML) | Builds earlier than 2.0.14 shipped a broken CoreML runtime; the brew tarball is compiled `--features coreml` | Check the version without exec-ing the binary: `GET /health` → `version`. Upgrade: `brew update && brew upgrade gigastt`. Integrations should gate on **≥ 2.0.14** |
-| WS upgrade fails with HTTP 503 `{"code":"initializing"}` but the port is listening | The model is still loading (bootstrap responder) — this is the healthy first-run state, not a stuck server | Poll `GET /ready` until 200, then connect. Killing and restarting only restarts the download/quantization |
+| WS upgrade fails with HTTP 503 `{"code":"initializing"}` but the port is listening | The model is still loading (bootstrap responder) — this is the healthy first-run state, not a stuck server | Poll `GET /ready` until 200, then connect. Killing and restarting only restarts the INT8 download / session load |
 | 429 Too Many Requests | Rate limiter enabled and bucket exhausted | Wait for `Retry-After`, or disable with `--rate-limit-per-minute 0` |
 | Empty transcription for noisy audio | Input too quiet or wrong format | Ensure 16-bit PCM; normalize level; check supported formats |
 | Diarization returns no speaker labels; logs show `Got: 2 Expected: 3` | Pre-2.11.2 bug — the WeSpeaker encoder was fed rank-2 waveform instead of rank-3 fbank features | Upgrade to **2.11.2+** (fixed); ensure `wespeaker_resnet34.onnx` is present in `~/.gigastt/models/` |
@@ -30,7 +31,7 @@ order — each step isolates one:
 
 1. **STT startup** — is the server actually ready?
    `curl -s localhost:9876/ready` must return 200 with `"status":"ready"`.
-   A 503 `initializing` means the model is still downloading/quantizing (wait);
+   A 503 `initializing` means the model is still downloading or loading (wait);
    `pool_exhausted` means all inference slots are busy (retry with backoff —
    WS clients get `retry_after_ms`). A WS client that connected must have
    received the `ready` message before any audio counts.
