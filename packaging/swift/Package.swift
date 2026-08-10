@@ -18,8 +18,8 @@ let package = Package(
         // workflow on every release it runs for — do not edit them by hand.
         .binaryTarget(
             name: "GigasttFFI",
-            url: "https://github.com/ekhodzitsky/gigastt/releases/download/v2.14.0/GigasttFFI.xcframework.zip",
-            checksum: "3324086941349494d8c0a89e9cb2f81a5599d7cbced357cc0a5b13f866c981fd"
+            url: "https://github.com/ekhodzitsky/gigastt/releases/download/v2.17.0/GigasttFFI.xcframework.zip",
+            checksum: "97718a3dde9b1678539a7ec095de6d52da691c4340b093db5df20ba55542a185"
         ),
         // --- Local development -------------------------------------------------
         // To build against a locally produced xcframework instead of the
