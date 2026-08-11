@@ -282,19 +282,33 @@ fn test_decode_audio_bytes_invalid_data() {
 
 #[test]
 fn test_decode_audio_bytes_ape_overflow_crash_is_graceful() {
-    // Regression: a crafted 36-byte APEv2 tag header (APE tags can ride on
-    // MP3 uploads) sets an unbounded `size` field that made
-    // symphonia-metadata's `size + 32` overflow and panic with "attempt to
-    // add with overflow" (ape.rs). The vendored overflow-guard patch
-    // saturates instead, so decode must return a graceful `Err` — never
-    // panic. Fixture is the exact fuzz artifact that reddened the soak run.
-    let crash = include_bytes!("../../../tests/fixtures/ape_overflow_crash.bin");
-    assert_eq!(crash.len(), 36, "fixture must stay the 36-byte crash input");
-    let result = decode_audio_bytes(crash);
-    assert!(
-        result.is_err(),
-        "crafted APEv2 header must yield a decode error, not panic or Ok"
-    );
+    // Regression: a crafted APEv2 tag header (APE tags can ride on MP3
+    // uploads) sets an unbounded `size` field that made crates.io
+    // symphonia-metadata 0.6.0 panic with "attempt to add with overflow" on
+    // `size + 32` (ape.rs). The root workspace and the separate fuzz
+    // workspace both patch to the vendored saturating copy, so decode must
+    // return a graceful `Err` — never panic.
+    //
+    // Two fixtures exercise the same path: the original on-disk seed (36 B),
+    // and the exact Continuous Fuzz artifact that reddened Nightly Soak
+    // (crash-2cd57d8e…, 38 B, 2026-08-11).
+    let fixtures: &[&[u8]] = &[
+        include_bytes!("../../../tests/fixtures/ape_overflow_crash.bin"),
+        &[
+            0xff, 0xf0, 0xff, 0x41, 0x50, 0x45, 0x54, 0x41, 0x47, 0x45, 0x58, 0xd0, 0x07, 0x00,
+            0x00, 0xf8, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xf1, 0xff, 0xff, 0xff,
+            0xff, 0xff, 0xf8, 0xf0, 0xff, 0xff, 0xff, 0xff, 0xff, 0xf8,
+        ],
+    ];
+    assert_eq!(fixtures[0].len(), 36);
+    assert_eq!(fixtures[1].len(), 38);
+    for (i, crash) in fixtures.iter().enumerate() {
+        let result = decode_audio_bytes(crash);
+        assert!(
+            result.is_err(),
+            "fixture {i}: crafted APEv2 header must yield a decode error, not panic or Ok"
+        );
+    }
 }
 
 #[test]
