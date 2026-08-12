@@ -12,6 +12,7 @@ mod decode;
 mod diarization;
 mod engine;
 mod features;
+mod load_files;
 mod pool;
 mod sizing;
 mod state;

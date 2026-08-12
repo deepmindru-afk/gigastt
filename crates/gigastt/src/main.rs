@@ -1148,6 +1148,333 @@ fn run_cache_gc(model_dir: String, dry_run: bool, dedupe: bool) -> anyhow::Resul
     Ok(())
 }
 
+/// Download the lean INT8 model (and optional side assets). On failure or
+/// SIGINT exits the process with a progress-kind exit code (never returns `Err`
+/// for those paths).
+async fn run_download(
+    model_dir: String,
+    model_variant: ModelVariant,
+    #[cfg(feature = "diarization")] skip_diarization: bool,
+    progress: ProgressMode,
+    #[cfg(feature = "ane")] ane: bool,
+) -> anyhow::Result<()> {
+    model::set_progress_mode(progress);
+    // `download` is an explicit action: the requested variant maps to
+    // the default (Rnnt) so a bare `gigastt download` fetches something
+    // useful. **INT8 only** — lean prequantized bundle (or CTC INT8 from HF).
+    //
+    // The flow runs on its own task: large-file SHA-256 verify is
+    // synchronous, and polled inline it would starve the select's signal
+    // branch — Ctrl-C must interrupt immediately (sidecar cancel path).
+    let dl_model_dir = model_dir.clone();
+    let mut download = tokio::spawn(async move {
+        let model_dir = dl_model_dir;
+        if model_variant.is_ctc() {
+            // CTC heads: HF pre-quantized INT8 encoder (+ vocab) directly.
+            model::ensure_model_variant(Some(model_variant), &model_dir).await?;
+        } else {
+            // RNN-T: lean INT8 bundle from the pinned Release.
+            model::ensure_prequantized_model_variant(Some(model_variant), &model_dir).await?;
+        }
+        #[cfg(feature = "diarization")]
+        {
+            if !skip_diarization {
+                model::ensure_speaker_model(&model_dir).await?;
+            }
+        }
+        #[cfg(feature = "ane")]
+        if ane {
+            let ane_dir = model::default_ane_model_dir();
+            model::ensure_ane_packages(&ane_dir).await?;
+            tracing::info!("ANE encoder packages ready at {ane_dir}");
+        }
+        tracing::info!("Model ready at {model_dir}");
+        anyhow::Ok(())
+    });
+    // Resolves only on a *delivered* SIGINT. A failed handler
+    // registration is logged and parks forever — it must not fabricate
+    // an interrupt and abort a healthy download with exit 130.
+    let interrupted = async {
+        match tokio::signal::ctrl_c().await {
+            Ok(()) => (),
+            Err(e) => {
+                tracing::warn!("Failed to listen for Ctrl-C: {e}");
+                std::future::pending::<()>().await
+            }
+        }
+    };
+    tokio::select! {
+        joined = &mut download => {
+            // Flatten the JoinHandle: a panic inside the download task
+            // is reported through the same error contract.
+            let result = joined
+                .map_err(|e| anyhow::anyhow!("download task failed: {e}"))
+                .and_then(|r| r);
+            match result {
+                Ok(()) => {
+                    model::emit_progress_event(&model::ProgressEvent::Done {
+                        model_dir: model_dir.clone(),
+                    });
+                }
+                Err(e) => {
+                    let kind = model::classify_download_error(&e);
+                    model::emit_progress_event(&model::ProgressEvent::Error {
+                        kind,
+                        message: format!("{e:#}"),
+                    });
+                    // Same rendering anyhow's `Termination` would print,
+                    // then the documented per-kind exit code (all != 0).
+                    eprintln!("Error: {e:?}");
+                    std::process::exit(kind.exit_code());
+                }
+            }
+        }
+        _ = interrupted => {
+            model::emit_progress_event(&model::ProgressEvent::Error {
+                kind: model::ProgressErrorKind::Interrupted,
+                message: "interrupted by SIGINT".to_string(),
+            });
+            eprintln!("Interrupted by Ctrl-C");
+            std::process::exit(model::ProgressErrorKind::Interrupted.exit_code());
+        }
+    }
+    Ok(())
+}
+
+/// Offline single-file transcription (telephony / stereo / mono).
+#[allow(clippy::too_many_arguments)]
+async fn run_transcribe(
+    file: String,
+    model_dir: String,
+    model_variant: Option<ModelVariant>,
+    punctuation: PunctuationMode,
+    punct_model_dir: String,
+    itn: ItnMode,
+    hotwords_file: Option<String>,
+    hotwords_default: bool,
+    hotwords_boost: Option<f32>,
+    vad: bool,
+    vad_threshold: Option<f32>,
+    vad_min_silence_ms: Option<u32>,
+    vad_model_dir: String,
+    encoder_intra_threads: Option<usize>,
+    format: String,
+    output: Option<String>,
+    max_chars_per_line: Option<usize>,
+    max_words_per_line: Option<usize>,
+    word_timestamps: bool,
+    stereo_speakers: bool,
+    codec: Option<String>,
+    sample_rate: Option<u32>,
+) -> anyhow::Result<()> {
+    // Single-triplet pool for offline file transcription; when the
+    // thread count is unset it defaults to every logical CPU (one
+    // running triplet), else the explicit value is used as-is.
+    let engine = EngineRecipe::offline(
+        model_dir,
+        model_variant,
+        punctuation,
+        punct_model_dir,
+        itn,
+        hotwords_file,
+        hotwords_default,
+        hotwords_boost,
+        vad,
+        vad_threshold,
+        vad_min_silence_ms,
+        vad_model_dir,
+        encoder_intra_threads,
+        1,
+    )
+    .load_offline_engine()
+    .await?;
+    let mut guard = engine.pool.checkout().await?;
+    let result = if let Some(codec_name) = codec.as_deref() {
+        // Raw headerless telephony input: decode via the codec tables
+        // straight to mono 16 kHz f32 and hand the samples to the engine.
+        let telephony_codec =
+            inference::audio::TelephonyCodec::from_name(codec_name).ok_or_else(|| {
+                anyhow::anyhow!("unsupported codec '{codec_name}' (supported: pcmu, pcma, g722)")
+            })?;
+        // clap enforces `--sample-rate` when `--codec` is given; keep a
+        // graceful error instead of an unwrap in case that ever changes.
+        let rate =
+            sample_rate.ok_or_else(|| anyhow::anyhow!("--sample-rate is required with --codec"))?;
+        telephony_codec
+            .validate_sample_rate(rate)
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        let raw =
+            std::fs::read(&file).with_context(|| format!("Failed to open audio file: {file}"))?;
+        let mut samples = inference::audio::decode_telephony_raw(&raw, telephony_codec, rate)?;
+        // NOT a no-op: preserve transcript byte-identity. The former path
+        // encoded these samples into an in-memory WAV and let the engine
+        // decode it back, which snapped every value to 16-bit PCM. Passing
+        // the raw f32 straight through would change the transcript (measured:
+        // 153 token edits on a 9-minute call), so reproduce that quantization
+        // in place — clamp to [-1, 1], round via 32767, normalise via 32768,
+        // matching `encode_wav_pcm16` and the PCM decode path. Whether
+        // full-precision f32 is better is an open WER question tracked in
+        // roadmap/ (telephony precision); do not silently drop this snap.
+        for s in samples.iter_mut() {
+            let v = if s.is_finite() {
+                s.clamp(-1.0, 1.0)
+            } else {
+                0.0
+            };
+            *s = (v * 32767.0).round() as i16 as f32 / 32768.0;
+        }
+        engine.transcribe_request(
+            inference::TranscribeRequest::new(inference::TranscribeSource::Samples(&samples)),
+            &mut guard,
+        )
+    } else if stereo_speakers {
+        let channels = inference::audio::load_audio_channels(&file)?;
+        let fallback_reason = match channels.len() {
+            0 => Some("no channels"),
+            1 => Some("mono audio"),
+            2 if inference::audio::is_dual_mono(&channels) => Some("dual-mono audio"),
+            n if n > 2 => Some("more than two channels"),
+            _ => None,
+        };
+        if let Some(reason) = fallback_reason {
+            tracing::warn!(
+                "--stereo-speakers requested but {reason} detected; falling back to mono transcription"
+            );
+            engine.transcribe_file(&file, &mut guard)
+        } else {
+            engine.transcribe_channels(&channels, &mut guard)
+        }
+    } else {
+        engine.transcribe_file(&file, &mut guard)
+    };
+    drop(guard);
+    let result = result?;
+
+    let format = ExportFormat::from_str(&format).map_err(|e| anyhow::anyhow!("{e}"))?;
+    let opts = RenderOpts {
+        max_chars_per_line: max_chars_per_line.unwrap_or(80),
+        max_words_per_line: max_words_per_line.unwrap_or(14),
+        include_word_timestamps: word_timestamps,
+    };
+    let rendered = format.render(&result, &opts);
+
+    match output {
+        Some(path) => {
+            std::fs::write(&path, rendered).with_context(|| format!("failed to write {path}"))?;
+            tracing::info!("Wrote {} export to {path}", format);
+        }
+        None => println!("{rendered}"),
+    }
+    Ok(())
+}
+
+async fn run_transcribe_batch(
+    input_dir: String,
+    output_dir: String,
+    eng: OfflineEngineArgs,
+    out: BatchOutputArgs,
+) -> anyhow::Result<()> {
+    let engine = EngineRecipe::offline(
+        eng.model_dir,
+        eng.model_variant,
+        eng.punctuation,
+        eng.punct_model_dir,
+        eng.itn,
+        eng.hotwords_file,
+        eng.hotwords_default,
+        eng.hotwords_boost,
+        eng.vad,
+        eng.vad_threshold,
+        eng.vad_min_silence_ms,
+        eng.vad_model_dir,
+        eng.encoder_intra_threads,
+        eng.pool_size,
+    )
+    .load_offline_engine()
+    .await?;
+    let opts = build_batch_options(
+        &input_dir,
+        &output_dir,
+        eng.pool_size,
+        out.retries.unwrap_or(0),
+        &out,
+    )?;
+    let summary = batch::run_batch(
+        &opts,
+        make_transcribe_fn(std::sync::Arc::new(engine)),
+        ctrl_c_token(),
+    )
+    .await?;
+    tracing::info!(
+        processed = summary.processed,
+        failed = summary.failed,
+        skipped = summary.skipped,
+        "batch finished"
+    );
+    if summary.interrupted {
+        // Same contract as `download`: SIGINT exits 130.
+        std::process::exit(130);
+    }
+    if summary.failed > 0 {
+        std::process::exit(1);
+    }
+    Ok(())
+}
+
+async fn run_watch(
+    input_dir: String,
+    output_dir: String,
+    eng: OfflineEngineArgs,
+    out: BatchOutputArgs,
+    poll_interval_ms: u64,
+    settle_polls: u32,
+) -> anyhow::Result<()> {
+    let engine = EngineRecipe::offline(
+        eng.model_dir,
+        eng.model_variant,
+        eng.punctuation,
+        eng.punct_model_dir,
+        eng.itn,
+        eng.hotwords_file,
+        eng.hotwords_default,
+        eng.hotwords_boost,
+        eng.vad,
+        eng.vad_threshold,
+        eng.vad_min_silence_ms,
+        eng.vad_model_dir,
+        eng.encoder_intra_threads,
+        eng.pool_size,
+    )
+    .load_offline_engine()
+    .await?;
+    let opts = batch::WatchOptions {
+        batch: build_batch_options(
+            &input_dir,
+            &output_dir,
+            eng.pool_size,
+            out.retries.unwrap_or(2),
+            &out,
+        )?,
+        poll_interval: std::time::Duration::from_millis(poll_interval_ms),
+        settle_polls,
+    };
+    let summary = batch::run_watch(
+        &opts,
+        make_transcribe_fn(std::sync::Arc::new(engine)),
+        ctrl_c_token(),
+    )
+    .await?;
+    tracing::info!(
+        processed = summary.processed,
+        failed = summary.failed,
+        "watch stopped"
+    );
+    if summary.failed > 0 {
+        std::process::exit(1);
+    }
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let matches = Cli::command().get_matches();
@@ -1193,87 +1520,16 @@ async fn main() -> anyhow::Result<()> {
             #[cfg(feature = "ane")]
             ane,
         } => {
-            model::set_progress_mode(progress);
-            // `download` is an explicit action: the requested variant maps to
-            // the default (Rnnt) so a bare `gigastt download` fetches something
-            // useful. **INT8 only** — lean prequantized bundle (or CTC INT8 from HF).
-            //
-            // The flow runs on its own task: large-file SHA-256 verify is
-            // synchronous, and polled inline it would starve the select's signal
-            // branch — Ctrl-C must interrupt immediately (sidecar cancel path).
-            let dl_model_dir = model_dir.clone();
-            let mut download = tokio::spawn(async move {
-                let model_dir = dl_model_dir;
-                if model_variant.is_ctc() {
-                    // CTC heads: HF pre-quantized INT8 encoder (+ vocab) directly.
-                    model::ensure_model_variant(Some(model_variant), &model_dir).await?;
-                } else {
-                    // RNN-T: lean INT8 bundle from the pinned Release.
-                    model::ensure_prequantized_model_variant(Some(model_variant), &model_dir)
-                        .await?;
-                }
+            run_download(
+                model_dir,
+                model_variant,
                 #[cfg(feature = "diarization")]
-                {
-                    if !skip_diarization {
-                        model::ensure_speaker_model(&model_dir).await?;
-                    }
-                }
+                skip_diarization,
+                progress,
                 #[cfg(feature = "ane")]
-                if ane {
-                    let ane_dir = model::default_ane_model_dir();
-                    model::ensure_ane_packages(&ane_dir).await?;
-                    tracing::info!("ANE encoder packages ready at {ane_dir}");
-                }
-                tracing::info!("Model ready at {model_dir}");
-                anyhow::Ok(())
-            });
-            // Resolves only on a *delivered* SIGINT. A failed handler
-            // registration is logged and parks forever — it must not fabricate
-            // an interrupt and abort a healthy download with exit 130.
-            let interrupted = async {
-                match tokio::signal::ctrl_c().await {
-                    Ok(()) => (),
-                    Err(e) => {
-                        tracing::warn!("Failed to listen for Ctrl-C: {e}");
-                        std::future::pending::<()>().await
-                    }
-                }
-            };
-            tokio::select! {
-                joined = &mut download => {
-                    // Flatten the JoinHandle: a panic inside the download task
-                    // is reported through the same error contract.
-                    let result = joined
-                        .map_err(|e| anyhow::anyhow!("download task failed: {e}"))
-                        .and_then(|r| r);
-                    match result {
-                        Ok(()) => {
-                            model::emit_progress_event(&model::ProgressEvent::Done {
-                                model_dir: model_dir.clone(),
-                            });
-                        }
-                        Err(e) => {
-                            let kind = model::classify_download_error(&e);
-                            model::emit_progress_event(&model::ProgressEvent::Error {
-                                kind,
-                                message: format!("{e:#}"),
-                            });
-                            // Same rendering anyhow's `Termination` would print,
-                            // then the documented per-kind exit code (all != 0).
-                            eprintln!("Error: {e:?}");
-                            std::process::exit(kind.exit_code());
-                        }
-                    }
-                }
-                _ = interrupted => {
-                    model::emit_progress_event(&model::ProgressEvent::Error {
-                        kind: model::ProgressErrorKind::Interrupted,
-                        message: "interrupted by SIGINT".to_string(),
-                    });
-                    eprintln!("Interrupted by Ctrl-C");
-                    std::process::exit(model::ProgressErrorKind::Interrupted.exit_code());
-                }
-            }
+                ane,
+            )
+            .await?;
         }
         Commands::Quantize { model_dir, force } => {
             run_quantize(model_dir, force)?;
@@ -1309,10 +1565,8 @@ async fn main() -> anyhow::Result<()> {
             codec,
             sample_rate,
         } => {
-            // Single-triplet pool for offline file transcription; when the
-            // thread count is unset it defaults to every logical CPU (one
-            // running triplet), else the explicit value is used as-is.
-            let engine = EngineRecipe::offline(
+            run_transcribe(
+                file,
                 model_dir,
                 model_variant,
                 punctuation,
@@ -1326,93 +1580,16 @@ async fn main() -> anyhow::Result<()> {
                 vad_min_silence_ms,
                 vad_model_dir,
                 encoder_intra_threads,
-                1,
+                format,
+                output,
+                max_chars_per_line,
+                max_words_per_line,
+                word_timestamps,
+                stereo_speakers,
+                codec,
+                sample_rate,
             )
-            .load_offline_engine()
             .await?;
-            let mut guard = engine.pool.checkout().await?;
-            let result = if let Some(codec_name) = codec.as_deref() {
-                // Raw headerless telephony input: decode via the codec tables
-                // straight to mono 16 kHz f32 and hand the samples to the engine.
-                let telephony_codec = inference::audio::TelephonyCodec::from_name(codec_name)
-                    .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "unsupported codec '{codec_name}' (supported: pcmu, pcma, g722)"
-                        )
-                    })?;
-                // clap enforces `--sample-rate` when `--codec` is given; keep a
-                // graceful error instead of an unwrap in case that ever changes.
-                let rate = sample_rate
-                    .ok_or_else(|| anyhow::anyhow!("--sample-rate is required with --codec"))?;
-                telephony_codec
-                    .validate_sample_rate(rate)
-                    .map_err(|e| anyhow::anyhow!("{e}"))?;
-                let raw = std::fs::read(&file)
-                    .with_context(|| format!("Failed to open audio file: {file}"))?;
-                let mut samples =
-                    inference::audio::decode_telephony_raw(&raw, telephony_codec, rate)?;
-                // NOT a no-op: preserve transcript byte-identity. The former path
-                // encoded these samples into an in-memory WAV and let the engine
-                // decode it back, which snapped every value to 16-bit PCM. Passing
-                // the raw f32 straight through would change the transcript (measured:
-                // 153 token edits on a 9-minute call), so reproduce that quantization
-                // in place — clamp to [-1, 1], round via 32767, normalise via 32768,
-                // matching `encode_wav_pcm16` and the PCM decode path. Whether
-                // full-precision f32 is better is an open WER question tracked in
-                // roadmap/ (telephony precision); do not silently drop this snap.
-                for s in samples.iter_mut() {
-                    let v = if s.is_finite() {
-                        s.clamp(-1.0, 1.0)
-                    } else {
-                        0.0
-                    };
-                    *s = (v * 32767.0).round() as i16 as f32 / 32768.0;
-                }
-                engine.transcribe_request(
-                    inference::TranscribeRequest::new(inference::TranscribeSource::Samples(
-                        &samples,
-                    )),
-                    &mut guard,
-                )
-            } else if stereo_speakers {
-                let channels = inference::audio::load_audio_channels(&file)?;
-                let fallback_reason = match channels.len() {
-                    0 => Some("no channels"),
-                    1 => Some("mono audio"),
-                    2 if inference::audio::is_dual_mono(&channels) => Some("dual-mono audio"),
-                    n if n > 2 => Some("more than two channels"),
-                    _ => None,
-                };
-                if let Some(reason) = fallback_reason {
-                    tracing::warn!(
-                        "--stereo-speakers requested but {reason} detected; falling back to mono transcription"
-                    );
-                    engine.transcribe_file(&file, &mut guard)
-                } else {
-                    engine.transcribe_channels(&channels, &mut guard)
-                }
-            } else {
-                engine.transcribe_file(&file, &mut guard)
-            };
-            drop(guard);
-            let result = result?;
-
-            let format = ExportFormat::from_str(&format).map_err(|e| anyhow::anyhow!("{e}"))?;
-            let opts = RenderOpts {
-                max_chars_per_line: max_chars_per_line.unwrap_or(80),
-                max_words_per_line: max_words_per_line.unwrap_or(14),
-                include_word_timestamps: word_timestamps,
-            };
-            let rendered = format.render(&result, &opts);
-
-            match output {
-                Some(path) => {
-                    std::fs::write(&path, rendered)
-                        .with_context(|| format!("failed to write {path}"))?;
-                    tracing::info!("Wrote {} export to {path}", format);
-                }
-                None => println!("{rendered}"),
-            }
         }
         Commands::TranscribeBatch {
             input_dir,
@@ -1420,50 +1597,7 @@ async fn main() -> anyhow::Result<()> {
             engine: eng,
             output: out,
         } => {
-            let engine = EngineRecipe::offline(
-                eng.model_dir,
-                eng.model_variant,
-                eng.punctuation,
-                eng.punct_model_dir,
-                eng.itn,
-                eng.hotwords_file,
-                eng.hotwords_default,
-                eng.hotwords_boost,
-                eng.vad,
-                eng.vad_threshold,
-                eng.vad_min_silence_ms,
-                eng.vad_model_dir,
-                eng.encoder_intra_threads,
-                eng.pool_size,
-            )
-            .load_offline_engine()
-            .await?;
-            let opts = build_batch_options(
-                &input_dir,
-                &output_dir,
-                eng.pool_size,
-                out.retries.unwrap_or(0),
-                &out,
-            )?;
-            let summary = batch::run_batch(
-                &opts,
-                make_transcribe_fn(std::sync::Arc::new(engine)),
-                ctrl_c_token(),
-            )
-            .await?;
-            tracing::info!(
-                processed = summary.processed,
-                failed = summary.failed,
-                skipped = summary.skipped,
-                "batch finished"
-            );
-            if summary.interrupted {
-                // Same contract as `download`: SIGINT exits 130.
-                std::process::exit(130);
-            }
-            if summary.failed > 0 {
-                std::process::exit(1);
-            }
+            run_transcribe_batch(input_dir, output_dir, eng, out).await?;
         }
         Commands::Watch {
             input_dir,
@@ -1473,49 +1607,15 @@ async fn main() -> anyhow::Result<()> {
             poll_interval_ms,
             settle_polls,
         } => {
-            let engine = EngineRecipe::offline(
-                eng.model_dir,
-                eng.model_variant,
-                eng.punctuation,
-                eng.punct_model_dir,
-                eng.itn,
-                eng.hotwords_file,
-                eng.hotwords_default,
-                eng.hotwords_boost,
-                eng.vad,
-                eng.vad_threshold,
-                eng.vad_min_silence_ms,
-                eng.vad_model_dir,
-                eng.encoder_intra_threads,
-                eng.pool_size,
-            )
-            .load_offline_engine()
-            .await?;
-            let opts = batch::WatchOptions {
-                batch: build_batch_options(
-                    &input_dir,
-                    &output_dir,
-                    eng.pool_size,
-                    out.retries.unwrap_or(2),
-                    &out,
-                )?,
-                poll_interval: std::time::Duration::from_millis(poll_interval_ms),
+            run_watch(
+                input_dir,
+                output_dir,
+                eng,
+                out,
+                poll_interval_ms,
                 settle_polls,
-            };
-            let summary = batch::run_watch(
-                &opts,
-                make_transcribe_fn(std::sync::Arc::new(engine)),
-                ctrl_c_token(),
             )
             .await?;
-            tracing::info!(
-                processed = summary.processed,
-                failed = summary.failed,
-                "watch stopped"
-            );
-            if summary.failed > 0 {
-                std::process::exit(1);
-            }
         }
     }
 
