@@ -89,3 +89,103 @@ impl ResolvedModelFiles {
         }
     }
 }
+
+use crate::runtime::factory::Runtime;
+use crate::runtime::tensor::{Shape, Tensor, TensorData};
+
+use super::N_MELS;
+use super::pool::SessionTriplet;
+use super::sizing;
+
+/// Path to the preferred INT8 encoder for `variant`. Honors `manifest.toml`
+/// when present; falls back to the expected INT8 basename when resolve fails
+/// (tests may call this without a full install).
+pub(crate) fn encoder_model_path(dir: &Path, variant: ModelVariant) -> std::path::PathBuf {
+    ResolvedModelFiles::resolve(dir, variant)
+        .map(|files| files.encoder)
+        .unwrap_or_else(|_| dir.join(variant.encoder_int8_file()))
+}
+
+/// Load up to `pool_size` session triplets in parallel through the given
+/// [`Runtime`], tolerating a partial pool down to `min_size`.
+pub(crate) fn load_triplets_runtime(
+    runtime: &dyn Runtime,
+    files: &ResolvedModelFiles,
+    variant: ModelVariant,
+    pool_size: usize,
+    min_size: usize,
+) -> anyhow::Result<Vec<SessionTriplet>> {
+    let encoder_path = files.encoder.clone();
+    // CTC is encoder-only: no decoder/joiner ONNX exists on disk, and the CTC
+    // branch in `run_inference` returns right after the encoder run without
+    // touching them. Load them only for the RNN-T heads (leaving `None` for
+    // CTC avoids holding an unused, never-run session per pool triplet).
+    let is_ctc = variant.is_ctc();
+    let decoder_path = files.decoder.clone();
+    let joiner_path = files.joint.clone();
+
+    let results: Vec<anyhow::Result<SessionTriplet>> = std::thread::scope(|s| {
+        let handles: Vec<_> = (0..pool_size)
+            .map(|i| {
+                let encoder_path = &encoder_path;
+                let decoder_path = &decoder_path;
+                let joiner_path = &joiner_path;
+                s.spawn(move || {
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        tracing::info!(
+                            "Loading session triplet {}/{pool_size} (shared runtime)",
+                            i + 1
+                        );
+                        let encoder = runtime
+                            .load_session(encoder_path, true)
+                            .map_err(|e| anyhow::anyhow!(e))?;
+                        let (decoder, joiner) = if is_ctc {
+                            (None, None)
+                        } else {
+                            let decoder_path = decoder_path.as_ref().ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "decoder ONNX path missing for non-CTC architecture {}",
+                                    variant.as_str()
+                                )
+                            })?;
+                            let joiner_path = joiner_path.as_ref().ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "joint ONNX path missing for non-CTC architecture {}",
+                                    variant.as_str()
+                                )
+                            })?;
+                            let decoder = runtime
+                                .load_session(decoder_path, false)
+                                .map_err(|e| anyhow::anyhow!(e))?;
+                            let joiner = runtime
+                                .load_session(joiner_path, false)
+                                .map_err(|e| anyhow::anyhow!(e))?;
+                            (Some(decoder), Some(joiner))
+                        };
+                        Ok(SessionTriplet {
+                            encoder,
+                            decoder,
+                            joiner,
+                            encoder_inputs: vec![
+                                Tensor::new(
+                                    Shape::new(vec![1, N_MELS, 1]),
+                                    TensorData::F32(vec![0.0; N_MELS]),
+                                )?,
+                                Tensor::new(Shape::new(vec![1]), TensorData::I64(vec![0]))?,
+                            ],
+                        })
+                    }))
+                    .map_err(|_| anyhow::anyhow!("model loading thread panicked"))?
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|h| match h.join() {
+                Ok(r) => r,
+                Err(_) => Err(anyhow::anyhow!("model loading thread panicked")),
+            })
+            .collect()
+    });
+    sizing::finalize_pool_load(results, pool_size, min_size)
+}
