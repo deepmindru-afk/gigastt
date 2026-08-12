@@ -186,296 +186,303 @@ enum ServeProfile {
     Edge,
 }
 
-#[allow(clippy::large_enum_variant)]
-#[derive(Subcommand)]
-enum Commands {
-    /// Start WebSocket STT server (auto-downloads model if missing)
-    Serve {
-        /// Port to listen on
-        #[arg(short, long, default_value_t = 9876)]
-        port: u16,
+/// CLI arguments for `gigastt serve`.
+///
+/// Extracted so `run_serve` takes a typed flag bag and compile-time
+/// exhaustiveness catches forgotten mappings.
+#[derive(Args)]
+struct ServeArgs {
+    /// Port to listen on
+    #[arg(short, long, default_value_t = 9876)]
+    port: u16,
 
-        /// Bind address. Loopback by default; non-loopback requires `--bind-all`.
-        #[arg(long, default_value = "127.0.0.1")]
-        host: String,
+    /// Bind address. Loopback by default; non-loopback requires `--bind-all`.
+    #[arg(long, default_value = "127.0.0.1")]
+    host: String,
 
-        /// Model directory
-        #[arg(long, default_value_t = model::default_model_dir())]
-        model_dir: String,
+    /// Model directory
+    #[arg(long, default_value_t = model::default_model_dir())]
+    model_dir: String,
 
-        /// Deploy profile: `default` (stock) or `edge` (pool-size 1 + VAD when
-        /// those flags are left at defaults). Explicit `--pool-size` / `--vad`
-        /// always win. Env: GIGASTT_PROFILE.
-        #[arg(long, env = "GIGASTT_PROFILE", value_enum, default_value_t = ServeProfile::Default)]
-        profile: ServeProfile,
+    /// Deploy profile: `default` (stock) or `edge` (pool-size 1 + VAD when
+    /// those flags are left at defaults). Explicit `--pool-size` / `--vad`
+    /// always win. Env: GIGASTT_PROFILE.
+    #[arg(long, env = "GIGASTT_PROFILE", value_enum, default_value_t = ServeProfile::Default)]
+    profile: ServeProfile,
 
-        /// Recognition head to use. Omit to auto-detect from the model
-        /// directory: if a model is already installed its variant is used as-is
-        /// (no download). Only required when the directory is empty or you want
-        /// to switch variants. `rnnt` (lower WER, bare lowercase), `e2e_rnnt`
-        /// (punctuation / casing / ITN), or `ml_ctc` / `ml_ctc_large` (GigaAM
-        /// Multilingual charwise CTC, 220M / 600M — ru/en/kk/ky/uz, bare
-        /// lowercase). Env: GIGASTT_MODEL_VARIANT.
-        #[arg(
+    /// Recognition head to use. Omit to auto-detect from the model
+    /// directory: if a model is already installed its variant is used as-is
+    /// (no download). Only required when the directory is empty or you want
+    /// to switch variants. `rnnt` (lower WER, bare lowercase), `e2e_rnnt`
+    /// (punctuation / casing / ITN), or `ml_ctc` / `ml_ctc_large` (GigaAM
+    /// Multilingual charwise CTC, 220M / 600M — ru/en/kk/ky/uz, bare
+    /// lowercase). Env: GIGASTT_MODEL_VARIANT.
+    #[arg(
             long,
             env = "GIGASTT_MODEL_VARIANT",
             value_parser = parse_model_variant
         )]
-        model_variant: Option<ModelVariant>,
+    model_variant: Option<ModelVariant>,
 
-        /// Punctuation + capitalization restoration: `on`, `off`, or `auto`.
-        /// `auto` (default) enables it for the `rnnt` head (bare output) and
-        /// disables it for `e2e_rnnt` (already punctuated). Requires the punct
-        /// model in `--punct-model-dir`; missing model → bare text + a warning.
-        /// Env: GIGASTT_PUNCTUATION.
-        #[arg(
+    /// Punctuation + capitalization restoration: `on`, `off`, or `auto`.
+    /// `auto` (default) enables it for the `rnnt` head (bare output) and
+    /// disables it for `e2e_rnnt` (already punctuated). Requires the punct
+    /// model in `--punct-model-dir`; missing model → bare text + a warning.
+    /// Env: GIGASTT_PUNCTUATION.
+    #[arg(
             long,
             env = "GIGASTT_PUNCTUATION",
             default_value = "auto",
             value_parser = parse_punctuation_mode
         )]
-        punctuation: PunctuationMode,
+    punctuation: PunctuationMode,
 
-        /// Directory holding the optional punctuation model
-        /// (`rupunct_small_int8.onnx`, `tokenizer.json`, `config.json`).
-        /// Defaults to `~/.gigastt/models/punct/`. Auto-downloaded from
-        /// `ekhodzitsky/rupunct-small-onnx` when enabled and absent.
-        /// Env: GIGASTT_PUNCT_MODEL_DIR.
-        #[arg(
+    /// Directory holding the optional punctuation model
+    /// (`rupunct_small_int8.onnx`, `tokenizer.json`, `config.json`).
+    /// Defaults to `~/.gigastt/models/punct/`. Auto-downloaded from
+    /// `ekhodzitsky/rupunct-small-onnx` when enabled and absent.
+    /// Env: GIGASTT_PUNCT_MODEL_DIR.
+    #[arg(
             long,
             env = "GIGASTT_PUNCT_MODEL_DIR",
             default_value_t = model::default_punct_model_dir()
         )]
-        punct_model_dir: String,
+    punct_model_dir: String,
 
-        /// Inverse text normalization (Russian number-words → digits):
-        /// `on`, `off`, or `auto`. `auto` (default) enables it for the `rnnt`
-        /// head (spells numbers as words) and disables it for `e2e_rnnt`
-        /// (ITN already baked in). Runs before punctuation. Env: GIGASTT_ITN.
-        #[arg(
+    /// Inverse text normalization (Russian number-words → digits):
+    /// `on`, `off`, or `auto`. `auto` (default) enables it for the `rnnt`
+    /// head (spells numbers as words) and disables it for `e2e_rnnt`
+    /// (ITN already baked in). Runs before punctuation. Env: GIGASTT_ITN.
+    #[arg(
             long,
             env = "GIGASTT_ITN",
             default_value = "auto",
             value_parser = parse_itn_mode
         )]
-        itn: ItnMode,
+    itn: ItnMode,
 
-        /// Contextual hotword biasing: path to a file of phrases to boost during
-        /// recognition (one phrase per line, optional `\t<weight>` suffix; blank
-        /// lines and `#` comments ignored). Off when unset. Env:
-        /// GIGASTT_HOTWORDS_FILE.
-        #[arg(long, env = "GIGASTT_HOTWORDS_FILE")]
-        hotwords_file: Option<String>,
+    /// Contextual hotword biasing: path to a file of phrases to boost during
+    /// recognition (one phrase per line, optional `\t<weight>` suffix; blank
+    /// lines and `#` comments ignored). Off when unset. Env:
+    /// GIGASTT_HOTWORDS_FILE.
+    #[arg(long, env = "GIGASTT_HOTWORDS_FILE")]
+    hotwords_file: Option<String>,
 
-        /// Also bias the built-in Russian brand/acronym lexicon. Combined with
-        /// any `--hotwords-file` phrases. Env: GIGASTT_HOTWORDS_DEFAULT.
-        #[arg(long, env = "GIGASTT_HOTWORDS_DEFAULT", default_value_t = false)]
-        hotwords_default: bool,
+    /// Also bias the built-in Russian brand/acronym lexicon. Combined with
+    /// any `--hotwords-file` phrases. Env: GIGASTT_HOTWORDS_DEFAULT.
+    #[arg(long, env = "GIGASTT_HOTWORDS_DEFAULT", default_value_t = false)]
+    hotwords_default: bool,
 
-        /// Additive logit boost applied to hotword continuation tokens during
-        /// greedy decode [default: 5.0]. Higher = stronger bias. No effect
-        /// unless hotwords are configured. Env: GIGASTT_HOTWORDS_BOOST.
-        #[arg(long, env = "GIGASTT_HOTWORDS_BOOST")]
-        hotwords_boost: Option<f32>,
+    /// Additive logit boost applied to hotword continuation tokens during
+    /// greedy decode [default: 5.0]. Higher = stronger bias. No effect
+    /// unless hotwords are configured. Env: GIGASTT_HOTWORDS_BOOST.
+    #[arg(long, env = "GIGASTT_HOTWORDS_BOOST")]
+    hotwords_boost: Option<f32>,
 
-        /// Voice activity detection: skip silence in file transcription and
-        /// finalize streaming segments on detected trailing silence. Off by
-        /// default; downloads the Silero VAD model (MIT) on first use. Env:
-        /// GIGASTT_VAD.
-        #[arg(long, env = "GIGASTT_VAD", default_value_t = false)]
-        vad: bool,
+    /// Voice activity detection: skip silence in file transcription and
+    /// finalize streaming segments on detected trailing silence. Off by
+    /// default; downloads the Silero VAD model (MIT) on first use. Env:
+    /// GIGASTT_VAD.
+    #[arg(long, env = "GIGASTT_VAD", default_value_t = false)]
+    vad: bool,
 
-        /// VAD speech-probability threshold in [0,1] [default: 0.5]. Higher =
-        /// stricter. No effect unless `--vad`. Env: GIGASTT_VAD_THRESHOLD.
-        #[arg(long, env = "GIGASTT_VAD_THRESHOLD")]
-        vad_threshold: Option<f32>,
+    /// VAD speech-probability threshold in [0,1] [default: 0.5]. Higher =
+    /// stricter. No effect unless `--vad`. Env: GIGASTT_VAD_THRESHOLD.
+    #[arg(long, env = "GIGASTT_VAD_THRESHOLD")]
+    vad_threshold: Option<f32>,
 
-        /// Minimum trailing silence (ms) to close a speech region / finalize a
-        /// streaming segment [default: 500]. No effect unless `--vad`. Env:
-        /// GIGASTT_VAD_MIN_SILENCE_MS.
-        #[arg(long, env = "GIGASTT_VAD_MIN_SILENCE_MS")]
-        vad_min_silence_ms: Option<u32>,
+    /// Minimum trailing silence (ms) to close a speech region / finalize a
+    /// streaming segment [default: 500]. No effect unless `--vad`. Env:
+    /// GIGASTT_VAD_MIN_SILENCE_MS.
+    #[arg(long, env = "GIGASTT_VAD_MIN_SILENCE_MS")]
+    vad_min_silence_ms: Option<u32>,
 
-        /// Directory holding the Silero VAD model (`silero_vad.onnx`). Defaults
-        /// to `~/.gigastt/models/vad/`. Auto-downloaded when `--vad` is set and
-        /// the model is absent. Env: GIGASTT_VAD_MODEL_DIR.
-        #[arg(long, env = "GIGASTT_VAD_MODEL_DIR", default_value_t = model::default_vad_model_dir())]
-        vad_model_dir: String,
+    /// Directory holding the Silero VAD model (`silero_vad.onnx`). Defaults
+    /// to `~/.gigastt/models/vad/`. Auto-downloaded when `--vad` is set and
+    /// the model is absent. Env: GIGASTT_VAD_MODEL_DIR.
+    #[arg(long, env = "GIGASTT_VAD_MODEL_DIR", default_value_t = model::default_vad_model_dir())]
+    vad_model_dir: String,
 
-        /// Streaming utterance-end policy for WebSocket sessions.
-        /// `auto` (default): VAD silence if `--vad`, else decoder blank-run (~0.6 s).
-        /// `assistant`: only VAD silence ends utterances (use with `--vad`); blank-run
-        /// is ignored — preferred for voice-command clients like Irene.
-        /// `manual`: only client `stop` ends utterances.
-        /// The encoder window cap never emits `final` under any mode.
-        /// Env: GIGASTT_ENDPOINT_MODE. Overridable per session via WS configure.
-        #[arg(
+    /// Streaming utterance-end policy for WebSocket sessions.
+    /// `auto` (default): VAD silence if `--vad`, else decoder blank-run (~0.6 s).
+    /// `assistant`: only VAD silence ends utterances (use with `--vad`); blank-run
+    /// is ignored — preferred for voice-command clients like Irene.
+    /// `manual`: only client `stop` ends utterances.
+    /// The encoder window cap never emits `final` under any mode.
+    /// Env: GIGASTT_ENDPOINT_MODE. Overridable per session via WS configure.
+    #[arg(
             long,
             env = "GIGASTT_ENDPOINT_MODE",
             value_parser = ["auto", "assistant", "manual"],
             default_value = "auto"
         )]
-        endpoint_mode: String,
+    endpoint_mode: String,
 
-        /// Number of concurrent inference sessions. Each session deserializes
-        /// its own encoder copy (~0.4 GB resident for the INT8 encoder). Default
-        /// 2 suits multi-connection / multi-user hosts; raise when RAM allows.
-        /// Edge / low-RAM: use `--pool-size 1` (~400 MB RSS, full cores for one
-        /// job). Pool > 1 costs extra RAM and can cost ~10–20% single-job RTF
-        /// because encoder threads are split across slots. The server auto-caps
-        /// by available RAM at load and logs a warning if it clamps.
-        #[arg(long, default_value_t = 2)]
-        pool_size: usize,
+    /// Number of concurrent inference sessions. Each session deserializes
+    /// its own encoder copy (~0.4 GB resident for the INT8 encoder). Default
+    /// 2 suits multi-connection / multi-user hosts; raise when RAM allows.
+    /// Edge / low-RAM: use `--pool-size 1` (~400 MB RSS, full cores for one
+    /// job). Pool > 1 costs extra RAM and can cost ~10–20% single-job RTF
+    /// because encoder threads are split across slots. The server auto-caps
+    /// by available RAM at load and logs a warning if it clamps.
+    #[arg(long, default_value_t = 2)]
+    pool_size: usize,
 
-        /// Minimum session triplets that must load for the server to boot. When
-        /// `1 <= min < pool_size` and some triplets fail (e.g. low memory), the
-        /// server starts on a degraded pool with a warning instead of failing.
-        /// Clamped to `1..=pool_size` [default: 1].
-        #[arg(long, env = "GIGASTT_POOL_MIN_SIZE", default_value_t = 1)]
-        pool_min_size: usize,
+    /// Minimum session triplets that must load for the server to boot. When
+    /// `1 <= min < pool_size` and some triplets fail (e.g. low memory), the
+    /// server starts on a degraded pool with a warning instead of failing.
+    /// Clamped to `1..=pool_size` [default: 1].
+    #[arg(long, env = "GIGASTT_POOL_MIN_SIZE", default_value_t = 1)]
+    pool_min_size: usize,
 
-        /// Triplets reserved for batch REST file transcription, split off from
-        /// `--pool-size` so a long file job can't starve WebSocket / SSE
-        /// streaming. `0` disables the split (REST shares the interactive pool);
-        /// clamped to leave at least one interactive triplet [default: 0].
-        #[arg(long, env = "GIGASTT_BATCH_POOL_SIZE", default_value_t = 0)]
-        batch_pool_size: usize,
+    /// Triplets reserved for batch REST file transcription, split off from
+    /// `--pool-size` so a long file job can't starve WebSocket / SSE
+    /// streaming. `0` disables the split (REST shares the interactive pool);
+    /// clamped to leave at least one interactive triplet [default: 0].
+    #[arg(long, env = "GIGASTT_BATCH_POOL_SIZE", default_value_t = 0)]
+    batch_pool_size: usize,
 
-        /// Enable the asynchronous `/v1/jobs` API for long-file and batch
-        /// transcription. Off by default; when disabled the `/v1/jobs` routes
-        /// are not registered and return 404. Env: GIGASTT_ENABLE_JOBS.
-        #[arg(long, env = "GIGASTT_ENABLE_JOBS", default_value_t = false)]
-        enable_jobs: bool,
+    /// Enable the asynchronous `/v1/jobs` API for long-file and batch
+    /// transcription. Off by default; when disabled the `/v1/jobs` routes
+    /// are not registered and return 404. Env: GIGASTT_ENABLE_JOBS.
+    #[arg(long, env = "GIGASTT_ENABLE_JOBS", default_value_t = false)]
+    enable_jobs: bool,
 
-        /// TTL in seconds for finished/failed/cancelled jobs before eviction
-        /// from the in-memory store [default: 3600]. Env: GIGASTT_JOBS_TTL_SECS.
-        #[arg(long, env = "GIGASTT_JOBS_TTL_SECS")]
-        jobs_ttl_secs: Option<u64>,
+    /// TTL in seconds for finished/failed/cancelled jobs before eviction
+    /// from the in-memory store [default: 3600]. Env: GIGASTT_JOBS_TTL_SECS.
+    #[arg(long, env = "GIGASTT_JOBS_TTL_SECS")]
+    jobs_ttl_secs: Option<u64>,
 
-        /// Maximum number of jobs kept in memory (queued + finished). When full,
-        /// POST /v1/jobs returns 429 + Retry-After [default: 100].
-        /// Env: GIGASTT_JOBS_MAX.
-        #[arg(long, env = "GIGASTT_JOBS_MAX")]
-        jobs_max: Option<usize>,
+    /// Maximum number of jobs kept in memory (queued + finished). When full,
+    /// POST /v1/jobs returns 429 + Retry-After [default: 100].
+    /// Env: GIGASTT_JOBS_MAX.
+    #[arg(long, env = "GIGASTT_JOBS_MAX")]
+    jobs_max: Option<usize>,
 
-        /// Maximum total bytes of buffered job uploads kept in memory across the
-        /// queue (queued + processing). Bounds RAM independently of --jobs-max,
-        /// which counts jobs but not their size; a submission over budget gets
-        /// 429 + Retry-After [default: 536870912 = 512 MiB].
-        /// Env: GIGASTT_JOBS_MAX_BYTES.
-        #[arg(long, env = "GIGASTT_JOBS_MAX_BYTES")]
-        jobs_max_bytes: Option<usize>,
+    /// Maximum total bytes of buffered job uploads kept in memory across the
+    /// queue (queued + processing). Bounds RAM independently of --jobs-max,
+    /// which counts jobs but not their size; a submission over budget gets
+    /// 429 + Retry-After [default: 536870912 = 512 MiB].
+    /// Env: GIGASTT_JOBS_MAX_BYTES.
+    #[arg(long, env = "GIGASTT_JOBS_MAX_BYTES")]
+    jobs_max_bytes: Option<usize>,
 
-        /// Maximum retry attempts for a job that panics [default: 3].
-        /// Env: GIGASTT_JOBS_RETRY.
-        #[arg(long, env = "GIGASTT_JOBS_RETRY")]
-        jobs_retry: Option<u32>,
+    /// Maximum retry attempts for a job that panics [default: 3].
+    /// Env: GIGASTT_JOBS_RETRY.
+    #[arg(long, env = "GIGASTT_JOBS_RETRY")]
+    jobs_retry: Option<u32>,
 
-        /// Intra-op thread count for the encoder session on the CPU build. The
-        /// encoder dominates the single-utterance cost, so more threads speed up
-        /// weak CPUs / long single-file jobs. When unset, defaults to the logical
-        /// CPU count divided across the concurrently-running pool triplets
-        /// (`pool_size + batch_pool_size`), so a default install uses every core.
-        /// Do not set `1` on multi-core hosts unless debugging — it is ~3× slower
-        /// than auto. An explicit value (flag or env, including `1`) is still
-        /// honoured as-is for debug passthrough. The resolved value is auto-
-        /// clamped so `pool_size * threads` can't exceed the logical CPU count.
-        /// No effect on CoreML / CUDA builds.
-        #[arg(long, env = "GIGASTT_ENCODER_INTRA_THREADS")]
-        encoder_intra_threads: Option<usize>,
+    /// Intra-op thread count for the encoder session on the CPU build. The
+    /// encoder dominates the single-utterance cost, so more threads speed up
+    /// weak CPUs / long single-file jobs. When unset, defaults to the logical
+    /// CPU count divided across the concurrently-running pool triplets
+    /// (`pool_size + batch_pool_size`), so a default install uses every core.
+    /// Do not set `1` on multi-core hosts unless debugging — it is ~3× slower
+    /// than auto. An explicit value (flag or env, including `1`) is still
+    /// honoured as-is for debug passthrough. The resolved value is auto-
+    /// clamped so `pool_size * threads` can't exceed the logical CPU count.
+    /// No effect on CoreML / CUDA builds.
+    #[arg(long, env = "GIGASTT_ENCODER_INTRA_THREADS")]
+    encoder_intra_threads: Option<usize>,
 
-        /// Explicitly acknowledge binding to a non-loopback address.
-        /// Can also be enabled via `GIGASTT_ALLOW_BIND_ANY=1`.
-        /// Without this flag the server refuses to listen on anything other than
-        /// 127.0.0.1 / ::1 / localhost to prevent accidental public exposure.
-        #[arg(long, default_value_t = false)]
-        bind_all: bool,
+    /// Explicitly acknowledge binding to a non-loopback address.
+    /// Can also be enabled via `GIGASTT_ALLOW_BIND_ANY=1`.
+    /// Without this flag the server refuses to listen on anything other than
+    /// 127.0.0.1 / ::1 / localhost to prevent accidental public exposure.
+    #[arg(long, default_value_t = false)]
+    bind_all: bool,
 
-        /// Additional Origin allowed to call the REST / WebSocket API (repeatable).
-        /// Loopback origins (localhost, 127.0.0.1, ::1) are always allowed.
-        /// Match is exact and case-insensitive, e.g. `https://app.example.com`.
-        #[arg(long = "allow-origin", value_name = "URL")]
-        allow_origin: Vec<String>,
+    /// Additional Origin allowed to call the REST / WebSocket API (repeatable).
+    /// Loopback origins (localhost, 127.0.0.1, ::1) are always allowed.
+    /// Match is exact and case-insensitive, e.g. `https://app.example.com`.
+    #[arg(long = "allow-origin", value_name = "URL")]
+    allow_origin: Vec<String>,
 
-        /// Echo `Access-Control-Allow-Origin: *` and accept any cross-origin
-        /// caller. Disabled by default — every non-loopback Origin must be
-        /// listed explicitly via `--allow-origin` unless this flag is set.
-        #[arg(long, default_value_t = false)]
-        cors_allow_any: bool,
+    /// Echo `Access-Control-Allow-Origin: *` and accept any cross-origin
+    /// caller. Disabled by default — every non-loopback Origin must be
+    /// listed explicitly via `--allow-origin` unless this flag is set.
+    #[arg(long, default_value_t = false)]
+    cors_allow_any: bool,
 
-        /// WebSocket idle timeout in seconds [default: 300].
-        /// Server closes the connection when no frame arrives within this window.
-        #[arg(long, env = "GIGASTT_IDLE_TIMEOUT_SECS")]
-        idle_timeout_secs: Option<u64>,
+    /// WebSocket idle timeout in seconds [default: 300].
+    /// Server closes the connection when no frame arrives within this window.
+    #[arg(long, env = "GIGASTT_IDLE_TIMEOUT_SECS")]
+    idle_timeout_secs: Option<u64>,
 
-        /// Maximum WebSocket frame / message size in bytes [default: 524288].
-        #[arg(long, env = "GIGASTT_WS_FRAME_MAX_BYTES")]
-        ws_frame_max_bytes: Option<usize>,
+    /// Maximum WebSocket frame / message size in bytes [default: 524288].
+    #[arg(long, env = "GIGASTT_WS_FRAME_MAX_BYTES")]
+    ws_frame_max_bytes: Option<usize>,
 
-        /// Maximum REST request body size in bytes [default: 52428800].
-        #[arg(long, env = "GIGASTT_BODY_LIMIT_BYTES")]
-        body_limit_bytes: Option<usize>,
+    /// Maximum REST request body size in bytes [default: 52428800].
+    #[arg(long, env = "GIGASTT_BODY_LIMIT_BYTES")]
+    body_limit_bytes: Option<usize>,
 
-        /// Per-IP rate limit — requests per minute. 0 = off [default: 0].
-        #[arg(long, env = "GIGASTT_RATE_LIMIT_PER_MINUTE")]
-        rate_limit_per_minute: Option<u32>,
+    /// Per-IP rate limit — requests per minute. 0 = off [default: 0].
+    #[arg(long, env = "GIGASTT_RATE_LIMIT_PER_MINUTE")]
+    rate_limit_per_minute: Option<u32>,
 
-        /// Rate-limit burst size [default: 10].
-        #[arg(long, env = "GIGASTT_RATE_LIMIT_BURST")]
-        rate_limit_burst: Option<u32>,
+    /// Rate-limit burst size [default: 10].
+    #[arg(long, env = "GIGASTT_RATE_LIMIT_BURST")]
+    rate_limit_burst: Option<u32>,
 
-        /// Expose Prometheus metrics. Off by default — keeps the server quiet
-        /// for single-user installs. When on, `/metrics` is served on a
-        /// separate loopback listener (see `--metrics-listen`), never on the
-        /// primary port, so it is not gated by the CORS allowlist or limiter.
-        #[arg(long, env = "GIGASTT_METRICS", default_value_t = false)]
-        metrics: bool,
+    /// Expose Prometheus metrics. Off by default — keeps the server quiet
+    /// for single-user installs. When on, `/metrics` is served on a
+    /// separate loopback listener (see `--metrics-listen`), never on the
+    /// primary port, so it is not gated by the CORS allowlist or limiter.
+    #[arg(long, env = "GIGASTT_METRICS", default_value_t = false)]
+    metrics: bool,
 
-        /// Bind address for the separate Prometheus `/metrics` listener
-        /// [default: 127.0.0.1:9090]. Loopback by default; expose it
-        /// deliberately to a scraper. Only used when `--metrics` is set.
-        #[arg(long, env = "GIGASTT_METRICS_LISTEN")]
-        metrics_listen: Option<std::net::SocketAddr>,
+    /// Bind address for the separate Prometheus `/metrics` listener
+    /// [default: 127.0.0.1:9090]. Loopback by default; expose it
+    /// deliberately to a scraper. Only used when `--metrics` is set.
+    #[arg(long, env = "GIGASTT_METRICS_LISTEN")]
+    metrics_listen: Option<std::net::SocketAddr>,
 
-        /// Maximum wall-clock duration of a single WebSocket session in seconds.
-        /// 0 disables the cap (not recommended) [default: 3600].
-        #[arg(long, env = "GIGASTT_MAX_SESSION_SECS")]
-        max_session_secs: Option<u64>,
+    /// Maximum wall-clock duration of a single WebSocket session in seconds.
+    /// 0 disables the cap (not recommended) [default: 3600].
+    #[arg(long, env = "GIGASTT_MAX_SESSION_SECS")]
+    max_session_secs: Option<u64>,
 
-        /// Grace window in seconds after shutdown during which in-flight
-        /// sessions may emit Final frames. 0 is clamped to 1 [default: 10].
-        #[arg(long, env = "GIGASTT_SHUTDOWN_DRAIN_SECS")]
-        shutdown_drain_secs: Option<u64>,
+    /// Grace window in seconds after shutdown during which in-flight
+    /// sessions may emit Final frames. 0 is clamped to 1 [default: 10].
+    #[arg(long, env = "GIGASTT_SHUTDOWN_DRAIN_SECS")]
+    shutdown_drain_secs: Option<u64>,
 
-        /// Pool checkout timeout in seconds. Handlers wait this long for a
-        /// free session triplet before returning 503 [default: 30].
-        #[arg(long, env = "GIGASTT_POOL_CHECKOUT_TIMEOUT_SECS")]
-        pool_checkout_timeout_secs: Option<u64>,
+    /// Pool checkout timeout in seconds. Handlers wait this long for a
+    /// free session triplet before returning 503 [default: 30].
+    #[arg(long, env = "GIGASTT_POOL_CHECKOUT_TIMEOUT_SECS")]
+    pool_checkout_timeout_secs: Option<u64>,
 
-        /// Per-request inference timeout in seconds. A run exceeding this
-        /// returns `inference_timeout`; `0` disables [default: 600].
-        #[arg(long, env = "GIGASTT_INFERENCE_TIMEOUT_SECS")]
-        inference_timeout_secs: Option<u64>,
+    /// Per-request inference timeout in seconds. A run exceeding this
+    /// returns `inference_timeout`; `0` disables [default: 600].
+    #[arg(long, env = "GIGASTT_INFERENCE_TIMEOUT_SECS")]
+    inference_timeout_secs: Option<u64>,
 
-        /// Maximum decoded audio length in seconds for file transcription.
-        /// `0` (default) means no limit — a file of any length transcribes,
-        /// since the default path decodes in bounded windows. Audio longer than
-        /// a positive value is rejected with HTTP 413 `audio_too_long`. The
-        /// whole-buffer paths (diarization, `channels=split`, telephony)
-        /// keep a ~30-minute safety ceiling regardless [default: 0].
-        #[arg(long, env = "GIGASTT_MAX_AUDIO_SECS")]
-        max_audio_secs: Option<u64>,
+    /// Maximum decoded audio length in seconds for file transcription.
+    /// `0` (default) means no limit — a file of any length transcribes,
+    /// since the default path decodes in bounded windows. Audio longer than
+    /// a positive value is rejected with HTTP 413 `audio_too_long`. The
+    /// whole-buffer paths (diarization, `channels=split`, telephony)
+    /// keep a ~30-minute safety ceiling regardless [default: 0].
+    #[arg(long, env = "GIGASTT_MAX_AUDIO_SECS")]
+    max_audio_secs: Option<u64>,
 
-        /// Trust `X-Forwarded-For` and `X-Real-IP` headers for rate-limit IP
-        /// extraction. When enabled, the direct peer must be loopback or an
-        /// RFC1918 private address; otherwise headers are ignored.
-        #[arg(long, env = "GIGASTT_TRUST_PROXY", default_value_t = false)]
-        trust_proxy: bool,
+    /// Trust `X-Forwarded-For` and `X-Real-IP` headers for rate-limit IP
+    /// extraction. When enabled, the direct peer must be loopback or an
+    /// RFC1918 private address; otherwise headers are ignored.
+    #[arg(long, env = "GIGASTT_TRUST_PROXY", default_value_t = false)]
+    trust_proxy: bool,
 
-        /// Path to TOML config file for runtime limits (reloaded on SIGHUP)
-        #[arg(long)]
-        config: Option<String>,
-    },
+    /// Path to TOML config file for runtime limits (reloaded on SIGHUP)
+    #[arg(long)]
+    config: Option<String>,
+}
+
+#[allow(clippy::large_enum_variant)]
+#[derive(Subcommand)]
+enum Commands {
+    /// Start WebSocket STT server (auto-downloads model if missing)
+    Serve(ServeArgs),
 
     /// Download model without starting server
     Download {
@@ -963,6 +970,184 @@ fn build_batch_options(
     })
 }
 
+/// Apply edge-profile defaults and boot the STT server.
+async fn run_serve(matches: &clap::ArgMatches, mut args: ServeArgs) -> anyhow::Result<()> {
+    // Edge profile fills weak-host defaults only when the operator left
+    // the corresponding flags at clap defaults (explicit flags always win).
+    if args.profile == ServeProfile::Edge
+        && let Some(serve_m) = matches.subcommand_matches("serve")
+    {
+        if serve_m.value_source("pool_size") == Some(ValueSource::DefaultValue) {
+            args.pool_size = 1;
+        }
+        if serve_m.value_source("vad") == Some(ValueSource::DefaultValue) {
+            args.vad = true;
+        }
+        tracing::info!(
+            pool_size = args.pool_size,
+            vad = args.vad,
+            "serve profile=edge (pool/vad defaults applied when unset)"
+        );
+    }
+    ensure_bind_allowed(&args.host, args.bind_all)?;
+    let mut limits = build_limits(
+        args.config.as_deref(),
+        args.idle_timeout_secs,
+        args.ws_frame_max_bytes,
+        args.body_limit_bytes,
+        args.rate_limit_per_minute,
+        args.rate_limit_burst,
+        args.max_session_secs,
+        args.shutdown_drain_secs,
+        args.pool_checkout_timeout_secs,
+        args.inference_timeout_secs,
+        Some(args.enable_jobs),
+        args.jobs_ttl_secs,
+        args.jobs_max,
+        args.jobs_max_bytes,
+        args.jobs_retry,
+    )?;
+    // `--max-audio-secs` overrides the config-file value with the same
+    // precedence as every other runtime limit; `0` (default) = unlimited.
+    if let Some(v) = args.max_audio_secs {
+        limits.max_audio_secs = v;
+    }
+    let metrics_listen = args
+        .metrics_listen
+        .unwrap_or_else(server::config::default_metrics_listen);
+    ensure_metrics_bind_allowed(args.metrics, &metrics_listen, args.bind_all)?;
+    let server_config = build_server_config(
+        args.port,
+        args.host,
+        args.allow_origin,
+        args.cors_allow_any,
+        limits,
+        args.metrics,
+        metrics_listen,
+        args.trust_proxy,
+        args.config,
+        args.batch_pool_size,
+    );
+
+    // Shared recipe: first-run boot and `POST /v1/admin/reload` both
+    // build through `EngineRecipe::build_engine` so post-processors
+    // (punct / ITN / VAD / hotwords / endpoint mode) stay identical.
+    // Synchronous (ONNX session load, quantization) so it can run on a
+    // blocking thread; it re-detects the on-disk variant so a reload
+    // picks up a model swapped between boot and reload.
+    let recipe = EngineRecipe {
+        model_dir: args.model_dir,
+        model_variant: args.model_variant,
+        punctuation: args.punctuation,
+        punct_model_dir: args.punct_model_dir,
+        itn: args.itn,
+        hotwords_file: args.hotwords_file,
+        hotwords_default: args.hotwords_default,
+        hotwords_boost: args.hotwords_boost,
+        vad: args.vad,
+        vad_threshold: args.vad_threshold,
+        vad_min_silence_ms: args.vad_min_silence_ms,
+        vad_model_dir: args.vad_model_dir,
+        encoder_intra_threads: args.encoder_intra_threads,
+        pool_size: args.pool_size,
+        pool_min_size: args.pool_min_size,
+        batch_pool_size: args.batch_pool_size,
+        // INT8-only: never on-device-quantize from FP32 at serve time.
+        quantize: false,
+        skip_quantize: true,
+        endpoint_mode: Some(args.endpoint_mode),
+    };
+    let build_engine: server::EngineBuilder = {
+        let recipe = recipe.clone();
+        std::sync::Arc::new(move || recipe.build_engine())
+    };
+
+    // Build the engine in the background while a minimal bootstrap
+    // responder serves /health (200) and /ready (503 initializing) on the
+    // port, so probes / Docker HEALTHCHECK don't see connection-refused
+    // during the first-run lean INT8 download. The heavy synchronous
+    // work (ONNX session load, post-processor loads) runs on a blocking
+    // thread so the bootstrap responder stays snappy.
+    let boot_builder = build_engine.clone();
+    let load = async move {
+        let resolved = model::ensure_model_variant(recipe.model_variant, &recipe.model_dir).await?;
+        recipe.ensure_side_assets(resolved).await;
+        tokio::task::spawn_blocking(move || boot_builder())
+            .await
+            .context("engine load task panicked")?
+    };
+    server::run_with_config_loading_reloadable(server_config, None, load, Some(build_engine)).await
+}
+
+/// Packaging: rebuild INT8 encoder from a local FP32 ONNX (no download).
+fn run_quantize(model_dir: String, force: bool) -> anyhow::Result<()> {
+    // Order matters for lean INT8 installs: if INT8 is already present
+    // and `--force` is off, no-op without looking for FP32 (CI/e2e and
+    // operators who only have the prequantized bundle).
+    let dir = std::path::Path::new(&model_dir);
+    let resolved = model::ModelVariant::detect_in_dir(dir).unwrap_or_default();
+    let input = dir.join(resolved.encoder_file());
+    let output = dir.join(resolved.encoder_int8_file());
+    if output.exists() && !force {
+        tracing::info!("INT8 model already exists: {}", output.display());
+        tracing::info!("Use --force to re-quantize.");
+        return Ok(());
+    }
+    if !input.is_file() {
+        anyhow::bail!(
+            "FP32 encoder not found at {} — `quantize` needs the FP32 ONNX as packaging source. \
+             For runtime, use `gigastt download` (lean INT8 only).",
+            input.display()
+        );
+    }
+    gigastt_core::quantize::quantize_model(&input, &output)?;
+    tracing::info!("Quantized model saved to {}", output.display());
+    Ok(())
+}
+
+/// Prune optimized/CoreML caches and optionally content-hash-dedupe the model dir.
+fn run_cache_gc(model_dir: String, dry_run: bool, dedupe: bool) -> anyhow::Result<()> {
+    let dir = std::path::Path::new(&model_dir);
+    let prune = model::prune_optimized_cache(dir, dry_run)?;
+    let action = if dry_run { "would free" } else { "freed" };
+    println!(
+        "optimized_cache: kept {} graph(s), removed {} ({} {:.1} MiB)",
+        prune.kept.len(),
+        prune.removed.len(),
+        action,
+        prune.freed_bytes as f64 / (1024.0 * 1024.0),
+    );
+    for p in &prune.removed {
+        println!("  - {}", p.display());
+    }
+    let coreml = model::prune_coreml_cache(dir, dry_run)?;
+    println!(
+        "coreml_cache: kept {}, removed {} stale ({} {:.1} MiB)",
+        if coreml.kept.is_some() {
+            "current"
+        } else {
+            "none"
+        },
+        coreml.removed.len(),
+        action,
+        coreml.freed_bytes as f64 / (1024.0 * 1024.0),
+    );
+    for p in &coreml.removed {
+        println!("  - {}", p.display());
+    }
+    if dedupe {
+        let d = model::dedupe_model_dir(dir, dry_run)?;
+        println!(
+            "dedupe: {} group(s), {} hardlink(s), {} {:.1} MiB",
+            d.groups,
+            d.hardlinked,
+            action,
+            d.freed_bytes as f64 / (1024.0 * 1024.0),
+        );
+    }
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let matches = Cli::command().get_matches();
@@ -996,161 +1181,8 @@ async fn main() -> anyhow::Result<()> {
     }
 
     match cli.command {
-        Commands::Serve {
-            port,
-            host,
-            model_dir,
-            profile,
-            model_variant,
-            punctuation,
-            punct_model_dir,
-            itn,
-            hotwords_file,
-            hotwords_default,
-            hotwords_boost,
-            mut vad,
-            vad_threshold,
-            vad_min_silence_ms,
-            vad_model_dir,
-            endpoint_mode,
-            mut pool_size,
-            pool_min_size,
-            batch_pool_size,
-            enable_jobs,
-            jobs_ttl_secs,
-            jobs_max,
-            jobs_max_bytes,
-            jobs_retry,
-            encoder_intra_threads,
-            bind_all,
-            allow_origin,
-            cors_allow_any,
-            idle_timeout_secs,
-            ws_frame_max_bytes,
-            body_limit_bytes,
-            rate_limit_per_minute,
-            rate_limit_burst,
-            metrics,
-            metrics_listen,
-            max_session_secs,
-            shutdown_drain_secs,
-            pool_checkout_timeout_secs,
-            inference_timeout_secs,
-            max_audio_secs,
-            trust_proxy,
-            config,
-        } => {
-            // Edge profile fills weak-host defaults only when the operator left
-            // the corresponding flags at clap defaults (explicit flags always win).
-            if profile == ServeProfile::Edge
-                && let Some(serve_m) = matches.subcommand_matches("serve")
-            {
-                if serve_m.value_source("pool_size") == Some(ValueSource::DefaultValue) {
-                    pool_size = 1;
-                }
-                if serve_m.value_source("vad") == Some(ValueSource::DefaultValue) {
-                    vad = true;
-                }
-                tracing::info!(
-                    pool_size,
-                    vad,
-                    "serve profile=edge (pool/vad defaults applied when unset)"
-                );
-            }
-            ensure_bind_allowed(&host, bind_all)?;
-            let mut limits = build_limits(
-                config.as_deref(),
-                idle_timeout_secs,
-                ws_frame_max_bytes,
-                body_limit_bytes,
-                rate_limit_per_minute,
-                rate_limit_burst,
-                max_session_secs,
-                shutdown_drain_secs,
-                pool_checkout_timeout_secs,
-                inference_timeout_secs,
-                Some(enable_jobs),
-                jobs_ttl_secs,
-                jobs_max,
-                jobs_max_bytes,
-                jobs_retry,
-            )?;
-            // `--max-audio-secs` overrides the config-file value with the same
-            // precedence as every other runtime limit; `0` (default) = unlimited.
-            if let Some(v) = max_audio_secs {
-                limits.max_audio_secs = v;
-            }
-            let metrics_listen =
-                metrics_listen.unwrap_or_else(server::config::default_metrics_listen);
-            ensure_metrics_bind_allowed(metrics, &metrics_listen, bind_all)?;
-            let server_config = build_server_config(
-                port,
-                host,
-                allow_origin,
-                cors_allow_any,
-                limits,
-                metrics,
-                metrics_listen,
-                trust_proxy,
-                config,
-                batch_pool_size,
-            );
-
-            // Shared recipe: first-run boot and `POST /v1/admin/reload` both
-            // build through `EngineRecipe::build_engine` so post-processors
-            // (punct / ITN / VAD / hotwords / endpoint mode) stay identical.
-            // Synchronous (ONNX session load, quantization) so it can run on a
-            // blocking thread; it re-detects the on-disk variant so a reload
-            // picks up a model swapped between boot and reload.
-            let recipe = EngineRecipe {
-                model_dir,
-                model_variant,
-                punctuation,
-                punct_model_dir,
-                itn,
-                hotwords_file,
-                hotwords_default,
-                hotwords_boost,
-                vad,
-                vad_threshold,
-                vad_min_silence_ms,
-                vad_model_dir,
-                encoder_intra_threads,
-                pool_size,
-                pool_min_size,
-                batch_pool_size,
-                // INT8-only: never on-device-quantize from FP32 at serve time.
-                quantize: false,
-                skip_quantize: true,
-                endpoint_mode: Some(endpoint_mode),
-            };
-            let build_engine: server::EngineBuilder = {
-                let recipe = recipe.clone();
-                std::sync::Arc::new(move || recipe.build_engine())
-            };
-
-            // Build the engine in the background while a minimal bootstrap
-            // responder serves /health (200) and /ready (503 initializing) on the
-            // port, so probes / Docker HEALTHCHECK don't see connection-refused
-            // during the first-run lean INT8 download. The heavy synchronous
-            // work (ONNX session load, post-processor loads) runs on a blocking
-            // thread so the bootstrap responder stays snappy.
-            let boot_builder = build_engine.clone();
-            let load = async move {
-                let resolved =
-                    model::ensure_model_variant(recipe.model_variant, &recipe.model_dir).await?;
-                recipe.ensure_side_assets(resolved).await;
-                tokio::task::spawn_blocking(move || boot_builder())
-                    .await
-                    .context("engine load task panicked")?
-            };
-            server::run_with_config_loading_reloadable(
-                server_config,
-                None,
-                load,
-                Some(build_engine),
-            )
-            .await?;
+        Commands::Serve(args) => {
+            run_serve(&matches, args).await?;
         }
         Commands::Download {
             model_dir,
@@ -1244,75 +1276,14 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Commands::Quantize { model_dir, force } => {
-            // Packaging tool: requires a local FP32 encoder as source when it
-            // actually has to produce INT8. Does not download FP32 or run
-            // inference on FP32 — product runtime is INT8-only.
-            //
-            // Order matters for lean INT8 installs: if INT8 is already present
-            // and `--force` is off, no-op without looking for FP32 (CI/e2e and
-            // operators who only have the prequantized bundle).
-            let dir = std::path::Path::new(&model_dir);
-            let resolved = model::ModelVariant::detect_in_dir(dir).unwrap_or_default();
-            let input = dir.join(resolved.encoder_file());
-            let output = dir.join(resolved.encoder_int8_file());
-            if output.exists() && !force {
-                tracing::info!("INT8 model already exists: {}", output.display());
-                tracing::info!("Use --force to re-quantize.");
-                return Ok(());
-            }
-            if !input.is_file() {
-                anyhow::bail!(
-                    "FP32 encoder not found at {} — `quantize` needs the FP32 ONNX as packaging source. \
-                     For runtime, use `gigastt download` (lean INT8 only).",
-                    input.display()
-                );
-            }
-            gigastt_core::quantize::quantize_model(&input, &output)?;
-            tracing::info!("Quantized model saved to {}", output.display());
+            run_quantize(model_dir, force)?;
         }
         Commands::CacheGc {
             model_dir,
             dry_run,
             dedupe,
         } => {
-            let dir = std::path::Path::new(&model_dir);
-            let prune = model::prune_optimized_cache(dir, dry_run)?;
-            let action = if dry_run { "would free" } else { "freed" };
-            println!(
-                "optimized_cache: kept {} graph(s), removed {} ({} {:.1} MiB)",
-                prune.kept.len(),
-                prune.removed.len(),
-                action,
-                prune.freed_bytes as f64 / (1024.0 * 1024.0),
-            );
-            for p in &prune.removed {
-                println!("  - {}", p.display());
-            }
-            let coreml = model::prune_coreml_cache(dir, dry_run)?;
-            println!(
-                "coreml_cache: kept {}, removed {} stale ({} {:.1} MiB)",
-                if coreml.kept.is_some() {
-                    "current"
-                } else {
-                    "none"
-                },
-                coreml.removed.len(),
-                action,
-                coreml.freed_bytes as f64 / (1024.0 * 1024.0),
-            );
-            for p in &coreml.removed {
-                println!("  - {}", p.display());
-            }
-            if dedupe {
-                let d = model::dedupe_model_dir(dir, dry_run)?;
-                println!(
-                    "dedupe: {} group(s), {} hardlink(s), {} {:.1} MiB",
-                    d.groups,
-                    d.hardlinked,
-                    action,
-                    d.freed_bytes as f64 / (1024.0 * 1024.0),
-                );
-            }
+            run_cache_gc(model_dir, dry_run, dedupe)?;
         }
         Commands::Transcribe {
             file,
@@ -1650,13 +1621,13 @@ mod tests {
     fn test_cli_serve_parsing() {
         let cli = Cli::parse_from(["gigastt", "serve", "--port", "1234", "--bind-all"]);
         match cli.command {
-            Commands::Serve {
+            Commands::Serve(ServeArgs {
                 port,
                 bind_all,
                 metrics,
                 model_variant,
                 ..
-            } => {
+            }) => {
                 assert_eq!(port, 1234);
                 assert!(bind_all);
                 assert!(!metrics);
@@ -1685,12 +1656,12 @@ mod tests {
         // Parsing only: profile field is Edge; runtime applies pool/vad in main.
         let cli = Cli::try_parse_from(["gigastt", "serve", "--profile", "edge"]).expect("parse");
         match cli.command {
-            Commands::Serve {
+            Commands::Serve(ServeArgs {
                 profile,
                 pool_size,
                 vad,
                 ..
-            } => {
+            }) => {
                 assert_eq!(profile, ServeProfile::Edge);
                 // clap defaults before profile application:
                 assert_eq!(pool_size, 2);
@@ -1713,10 +1684,10 @@ mod tests {
         }
         let cli = Cli::parse_from(["gigastt", "serve"]);
         match cli.command {
-            Commands::Serve {
+            Commands::Serve(ServeArgs {
                 encoder_intra_threads,
                 ..
-            } => assert_eq!(encoder_intra_threads, None),
+            }) => assert_eq!(encoder_intra_threads, None),
             _ => panic!("expected Serve"),
         }
     }
@@ -1734,10 +1705,10 @@ mod tests {
         }
         let cli = Cli::parse_from(["gigastt", "serve", "--encoder-intra-threads", "4"]);
         match cli.command {
-            Commands::Serve {
+            Commands::Serve(ServeArgs {
                 encoder_intra_threads,
                 ..
-            } => assert_eq!(encoder_intra_threads, Some(4)),
+            }) => assert_eq!(encoder_intra_threads, Some(4)),
             _ => panic!("expected Serve"),
         }
     }
@@ -1756,10 +1727,10 @@ mod tests {
         }
         let cli = Cli::parse_from(["gigastt", "serve"]);
         match cli.command {
-            Commands::Serve {
+            Commands::Serve(ServeArgs {
                 encoder_intra_threads,
                 ..
-            } => assert_eq!(encoder_intra_threads, Some(6)),
+            }) => assert_eq!(encoder_intra_threads, Some(6)),
             _ => panic!("expected Serve"),
         }
     }
@@ -1794,7 +1765,7 @@ mod tests {
     fn test_cli_serve_model_variant_override() {
         let cli = Cli::parse_from(["gigastt", "serve", "--model-variant", "e2e_rnnt"]);
         match cli.command {
-            Commands::Serve { model_variant, .. } => {
+            Commands::Serve(ServeArgs { model_variant, .. }) => {
                 assert_eq!(model_variant, Some(ModelVariant::E2eRnnt));
             }
             _ => panic!("expected Serve"),
@@ -1805,7 +1776,7 @@ mod tests {
     fn test_cli_serve_model_variant_explicit_rnnt() {
         let cli = Cli::parse_from(["gigastt", "serve", "--model-variant", "rnnt"]);
         match cli.command {
-            Commands::Serve { model_variant, .. } => {
+            Commands::Serve(ServeArgs { model_variant, .. }) => {
                 assert_eq!(model_variant, Some(ModelVariant::Rnnt));
             }
             _ => panic!("expected Serve"),
@@ -2036,11 +2007,11 @@ mod tests {
     fn test_cli_serve_punctuation_defaults_auto() {
         let cli = Cli::parse_from(["gigastt", "serve"]);
         match cli.command {
-            Commands::Serve {
+            Commands::Serve(ServeArgs {
                 punctuation,
                 punct_model_dir,
                 ..
-            } => {
+            }) => {
                 assert_eq!(punctuation, PunctuationMode::Auto);
                 assert!(punct_model_dir.contains("punct"));
             }
@@ -2059,11 +2030,11 @@ mod tests {
             "/tmp/punct",
         ]);
         match cli.command {
-            Commands::Serve {
+            Commands::Serve(ServeArgs {
                 punctuation,
                 punct_model_dir,
                 ..
-            } => {
+            }) => {
                 assert_eq!(punctuation, PunctuationMode::On);
                 assert_eq!(punct_model_dir, "/tmp/punct");
             }
@@ -2086,7 +2057,7 @@ mod tests {
     fn test_cli_serve_itn_defaults_auto() {
         let cli = Cli::parse_from(["gigastt", "serve"]);
         match cli.command {
-            Commands::Serve { itn, .. } => assert_eq!(itn, ItnMode::Auto),
+            Commands::Serve(ServeArgs { itn, .. }) => assert_eq!(itn, ItnMode::Auto),
             _ => panic!("expected Serve"),
         }
     }
@@ -2112,12 +2083,12 @@ mod tests {
             "8.5",
         ]);
         match cli.command {
-            Commands::Serve {
+            Commands::Serve(ServeArgs {
                 hotwords_file,
                 hotwords_default,
                 hotwords_boost,
                 ..
-            } => {
+            }) => {
                 assert_eq!(hotwords_file, Some("/tmp/hw.txt".to_string()));
                 assert!(hotwords_default);
                 assert_eq!(hotwords_boost, Some(8.5));
@@ -2130,12 +2101,12 @@ mod tests {
     fn test_cli_serve_hotwords_default_off() {
         let cli = Cli::parse_from(["gigastt", "serve"]);
         match cli.command {
-            Commands::Serve {
+            Commands::Serve(ServeArgs {
                 hotwords_file,
                 hotwords_default,
                 hotwords_boost,
                 ..
-            } => {
+            }) => {
                 assert_eq!(hotwords_file, None);
                 assert!(!hotwords_default);
                 assert_eq!(hotwords_boost, None);
@@ -2170,11 +2141,11 @@ mod tests {
     fn test_cli_serve_with_metrics() {
         let cli = Cli::parse_from(["gigastt", "serve", "--metrics"]);
         match cli.command {
-            Commands::Serve {
+            Commands::Serve(ServeArgs {
                 metrics,
                 metrics_listen,
                 ..
-            } => {
+            }) => {
                 assert!(metrics);
                 // Unset → resolved to the loopback default downstream.
                 assert!(metrics_listen.is_none());
@@ -2193,7 +2164,7 @@ mod tests {
             "127.0.0.1:9123",
         ]);
         match cli.command {
-            Commands::Serve { metrics_listen, .. } => {
+            Commands::Serve(ServeArgs { metrics_listen, .. }) => {
                 let addr = metrics_listen.expect("--metrics-listen must parse");
                 assert_eq!(addr.port(), 9123);
                 assert!(addr.ip().is_loopback());
@@ -2284,14 +2255,14 @@ mod tests {
             "5",
         ]);
         match cli.command {
-            Commands::Serve {
+            Commands::Serve(ServeArgs {
                 enable_jobs,
                 jobs_ttl_secs,
                 jobs_max,
                 jobs_max_bytes,
                 jobs_retry,
                 ..
-            } => {
+            }) => {
                 assert!(enable_jobs);
                 assert_eq!(jobs_ttl_secs, Some(7200));
                 assert_eq!(jobs_max, Some(50));
@@ -2306,13 +2277,13 @@ mod tests {
     fn test_cli_serve_jobs_defaults_off() {
         let cli = Cli::parse_from(["gigastt", "serve"]);
         match cli.command {
-            Commands::Serve {
+            Commands::Serve(ServeArgs {
                 enable_jobs,
                 jobs_ttl_secs,
                 jobs_max,
                 jobs_retry,
                 ..
-            } => {
+            }) => {
                 assert!(!enable_jobs);
                 assert_eq!(jobs_ttl_secs, None);
                 assert_eq!(jobs_max, None);
@@ -2524,13 +2495,13 @@ mod tests {
             "/tmp/vad",
         ]);
         match cli.command {
-            Commands::Serve {
+            Commands::Serve(ServeArgs {
                 vad,
                 vad_threshold,
                 vad_min_silence_ms,
                 vad_model_dir,
                 ..
-            } => {
+            }) => {
                 assert!(vad);
                 assert_eq!(vad_threshold, Some(0.8));
                 assert_eq!(vad_min_silence_ms, Some(700));
@@ -2559,13 +2530,13 @@ mod tests {
         }
         let cli = Cli::parse_from(["gigastt", "serve"]);
         match cli.command {
-            Commands::Serve {
+            Commands::Serve(ServeArgs {
                 vad,
                 vad_threshold,
                 vad_min_silence_ms,
                 endpoint_mode,
                 ..
-            } => {
+            }) => {
                 assert!(!vad);
                 assert_eq!(vad_threshold, None);
                 assert_eq!(vad_min_silence_ms, None);
@@ -2587,7 +2558,7 @@ mod tests {
         }
         let cli = Cli::parse_from(["gigastt", "serve", "--endpoint-mode", "assistant"]);
         match cli.command {
-            Commands::Serve { endpoint_mode, .. } => {
+            Commands::Serve(ServeArgs { endpoint_mode, .. }) => {
                 assert_eq!(endpoint_mode, "assistant");
             }
             _ => panic!("expected Serve"),
@@ -2625,12 +2596,12 @@ mod tests {
             "2",
         ]);
         match cli.command {
-            Commands::Serve {
+            Commands::Serve(ServeArgs {
                 pool_size,
                 pool_min_size,
                 batch_pool_size,
                 ..
-            } => {
+            }) => {
                 assert_eq!(pool_size, 8);
                 assert_eq!(pool_min_size, 3);
                 assert_eq!(batch_pool_size, 2);
@@ -2687,7 +2658,7 @@ mod tests {
             "--trust-proxy",
         ]);
         match cli.command {
-            Commands::Serve {
+            Commands::Serve(ServeArgs {
                 idle_timeout_secs,
                 ws_frame_max_bytes,
                 body_limit_bytes,
@@ -2699,7 +2670,7 @@ mod tests {
                 inference_timeout_secs,
                 trust_proxy,
                 ..
-            } => {
+            }) => {
                 assert_eq!(idle_timeout_secs, Some(120));
                 assert_eq!(ws_frame_max_bytes, Some(4096));
                 assert_eq!(body_limit_bytes, Some(8192));
@@ -2720,7 +2691,7 @@ mod tests {
     fn test_cli_serve_config_flag() {
         let cli = Cli::parse_from(["gigastt", "serve", "--config", "/tmp/limits.toml"]);
         match cli.command {
-            Commands::Serve { config, .. } => {
+            Commands::Serve(ServeArgs { config, .. }) => {
                 assert_eq!(config, Some("/tmp/limits.toml".to_string()));
             }
             _ => panic!("expected Serve"),
@@ -2739,11 +2710,11 @@ mod tests {
             "--cors-allow-any",
         ]);
         match cli.command {
-            Commands::Serve {
+            Commands::Serve(ServeArgs {
                 allow_origin,
                 cors_allow_any,
                 ..
-            } => {
+            }) => {
                 assert_eq!(allow_origin.len(), 2);
                 assert_eq!(allow_origin[0], "https://a.example.com");
                 assert!(cors_allow_any);
