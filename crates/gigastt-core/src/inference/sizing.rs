@@ -3,6 +3,8 @@
 //! Free of ONNX sessions so unit tests can drive the math with plain inputs.
 //! Called from [`super::engine::Engine`] load cascade.
 
+use anyhow::Context;
+
 /// Approximate resident bytes a single pooled encoder triplet costs, as a
 /// multiple of the encoder file size on disk. Measured at ~1.9x the INT8
 /// encoder file (225 MB file → ~0.4 GB resident per extra pooled slot, dynamic
@@ -183,6 +185,47 @@ pub(crate) fn clamp_encoder_intra_threads(
         max_per_encoder
     } else {
         requested
+    }
+}
+
+/// Partition `items` into an interactive pool and an optional batch pool of
+/// `batch_pool_size` items, always leaving at least one item interactive.
+/// `batch_pool_size == 0` (or too few items to split) yields no batch pool.
+pub(crate) fn split_pool_items<T: Send>(
+    mut items: Vec<T>,
+    batch_pool_size: usize,
+) -> (Vec<T>, Option<Vec<T>>) {
+    let n = items.len();
+    let batch = batch_split_count(n, batch_pool_size);
+    if batch == 0 {
+        return (items, None);
+    }
+    let batch_items = items.split_off(n - batch);
+    (items, Some(batch_items))
+}
+
+/// Probe a freshly-built state; on failure, rebuild it once and re-probe.
+///
+/// `probe` is a runtime self-check, `rebuild` converts the failed state into
+/// a replacement (receiving the probe error so it can log the cause). A
+/// rebuilt state that still fails the probe is a hard error — there is no
+/// second fallback level.
+///
+/// Production call site is CoreML runtime-fallback; unit tests exercise the
+/// pure decision logic without a session.
+#[cfg_attr(not(any(test, feature = "coreml")), allow(dead_code))]
+pub(crate) fn probe_or_rebuild<S>(
+    state: S,
+    probe: impl Fn(&S) -> anyhow::Result<()>,
+    rebuild: impl FnOnce(S, anyhow::Error) -> anyhow::Result<S>,
+) -> anyhow::Result<S> {
+    match probe(&state) {
+        Ok(()) => Ok(state),
+        Err(probe_err) => {
+            let rebuilt = rebuild(state, probe_err)?;
+            probe(&rebuilt).context("state failed probe even after rebuild")?;
+            Ok(rebuilt)
+        }
     }
 }
 
