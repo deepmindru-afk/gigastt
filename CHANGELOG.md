@@ -17,8 +17,9 @@ were released without a git tag, so their headings carry no compare link.
   auto-detected head's `.ort` and deleted the rest — including the graph a
   running server had memory-mapped, forcing a multi-GiB rebuild on next boot.
   The prune now keeps `{stem}_optimized.ort` for every head whose encoder
-  weights are present; it still drops legacy `*_optimized.onnx` graphs and
-  `.ort` graphs whose encoder is not installed.
+  weights are present (including a custom encoder named by `manifest.toml`);
+  it still drops legacy `*_optimized.onnx` graphs and `.ort` graphs whose
+  encoder is not installed.
 
 ## [2.17.0] - 2026-08-10
 
