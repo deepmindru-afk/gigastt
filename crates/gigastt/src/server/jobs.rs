@@ -377,9 +377,11 @@ impl JobQueue {
         })
     }
 
-    /// Spawn worker tasks. Each worker owns a clone of `executor`. Call once
-    /// after constructing the queue.
-    pub fn spawn<E>(&self, executor: E)
+    /// Spawn worker tasks onto the server drain [`TaskTracker`] so graceful
+    /// shutdown waits for in-flight jobs (same lane as WS / SSE / REST).
+    /// Each worker owns a clone of `executor`. Call once after constructing
+    /// the queue.
+    pub fn spawn<E>(&self, executor: E, tracker: &tokio_util::task::TaskTracker)
     where
         E: JobExecution + Clone + Send + Sync + 'static,
     {
@@ -392,7 +394,7 @@ impl JobQueue {
                 shutdown: self.shutdown.clone(),
                 executor: executor.clone(),
             };
-            tokio::spawn(worker.run());
+            tracker.spawn(worker.run());
         }
     }
 
@@ -1180,7 +1182,8 @@ mod tests {
             0,
             tokio_util::sync::CancellationToken::new(),
         );
-        queue.spawn(executor);
+        let tracker = tokio_util::task::TaskTracker::new();
+        queue.spawn(executor, &tracker);
 
         let id1 = store
             .create(Job::queued(
@@ -1240,7 +1243,8 @@ mod tests {
             2,
             tokio_util::sync::CancellationToken::new(),
         );
-        queue.spawn(executor);
+        let tracker = tokio_util::task::TaskTracker::new();
+        queue.spawn(executor, &tracker);
 
         let id = store
             .create(Job::queued(
@@ -1276,7 +1280,8 @@ mod tests {
             0,
             tokio_util::sync::CancellationToken::new(),
         );
-        queue.spawn(executor);
+        let tracker = tokio_util::task::TaskTracker::new();
+        queue.spawn(executor, &tracker);
 
         let id = store
             .create(Job::queued(
@@ -1438,7 +1443,8 @@ mod tests {
             0,
             tokio_util::sync::CancellationToken::new(),
         );
-        queue.spawn(executor);
+        let tracker = tokio_util::task::TaskTracker::new();
+        queue.spawn(executor, &tracker);
 
         let id = store
             .create(Job::queued(
@@ -1477,7 +1483,8 @@ mod tests {
             3,
             tokio_util::sync::CancellationToken::new(),
         );
-        queue.spawn(executor);
+        let tracker = tokio_util::task::TaskTracker::new();
+        queue.spawn(executor, &tracker);
 
         let id = store
             .create(Job::queued(
@@ -1521,7 +1528,8 @@ mod tests {
             3,
             tokio_util::sync::CancellationToken::new(),
         );
-        queue.spawn(executor);
+        let tracker = tokio_util::task::TaskTracker::new();
+        queue.spawn(executor, &tracker);
 
         let id = store
             .create(Job::queued(
@@ -1570,7 +1578,8 @@ mod tests {
             1,
             tokio_util::sync::CancellationToken::new(),
         );
-        queue.spawn(executor);
+        let tracker = tokio_util::task::TaskTracker::new();
+        queue.spawn(executor, &tracker);
 
         let id = store
             .create(Job::queued(
@@ -1618,7 +1627,8 @@ mod tests {
             0,
             tokio_util::sync::CancellationToken::new(),
         );
-        queue.spawn(executor);
+        let tracker = tokio_util::task::TaskTracker::new();
+        queue.spawn(executor, &tracker);
 
         let id = store
             .create(Job::queued(
@@ -1679,7 +1689,8 @@ mod tests {
             1,
             tokio_util::sync::CancellationToken::new(),
         );
-        queue.spawn(executor);
+        let tracker = tokio_util::task::TaskTracker::new();
+        queue.spawn(executor, &tracker);
 
         let id = store
             .create(Job::queued(

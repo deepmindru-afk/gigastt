@@ -408,7 +408,9 @@ pub async fn run_with_config_listener_reloadable(
             limits_swap.clone(),
             shutdown_root.clone(),
         );
-        queue.spawn(executor);
+        // Spawn onto the same TaskTracker as WS / SSE so `--shutdown-drain-secs`
+        // waits for in-flight jobs (not only interactive sessions).
+        queue.spawn(executor, &tracker);
         tracing::info!(
             concurrency,
             max_retries,
@@ -761,10 +763,10 @@ pub async fn run_with_config_listener_reloadable(
     .with_graceful_shutdown(shutdown_fut)
     .await?;
 
-    // Drain window: give WS / SSE tasks `shutdown_drain_secs` to emit their
-    // Final frames and close cleanly. TaskTracker::wait() returns when every
-    // tracked future completes; we close() first so no new futures can be
-    // added after shutdown.
+    // Drain window: give WS / SSE / REST / job-worker tasks
+    // `shutdown_drain_secs` to finish cleanly. TaskTracker::wait() returns
+    // when every tracked future completes; we close() first so no new
+    // futures can be added after shutdown.
     tracker.close();
     match tokio::time::timeout(
         std::time::Duration::from_secs(shutdown_drain_secs),
@@ -772,7 +774,7 @@ pub async fn run_with_config_listener_reloadable(
     )
     .await
     {
-        Ok(()) => tracing::info!("Drain complete: all tracked WS/SSE tasks finished"),
+        Ok(()) => tracing::info!("Drain complete: all tracked WS/SSE/job tasks finished"),
         Err(_) => tracing::warn!(
             drain_secs = shutdown_drain_secs,
             pending = tracker.len(),

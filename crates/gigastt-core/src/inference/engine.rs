@@ -21,7 +21,8 @@ use super::state::{
     DecoderState, EndpointMode, EndpointReason, FeatureExtractor, StreamingState,
     TranscriptAssembler, TranscriptSegment, WordInfo, aggregate_confidence,
 };
-use super::tokenizer::{self, Tokenizer};
+use super::token_format::{TokenFormatter, stitch_chunk_words};
+use super::tokenizer::Tokenizer;
 use super::types::{
     DEFAULT_HOTWORDS_BOOST, DiarizationOutcome, HotwordError, HotwordOverride,
     MAX_HOTWORD_PHRASE_CHARS, MAX_HOTWORDS_PER_REQUEST, OverrideError, TranscribeOverrides,
@@ -539,6 +540,40 @@ impl Engine {
         let boost = hw.boost.unwrap_or(DEFAULT_HOTWORDS_BOOST);
         let pairs: Vec<(String, f32)> = hw.phrases.iter().cloned().map(|p| (p, 1.0)).collect();
         bias::Biaser::from_phrases(&self.tokenizer, &pairs, boost)
+    }
+
+    /// Effective hotword biaser for one decode call.
+    ///
+    /// - `hotwords == None` → engine boot biaser (may itself be `None`)
+    /// - `hotwords == Some(_)` → temporary request biaser (may be `None` when
+    ///   phrases are empty / unrepresentable — deliberately *not* the boot biaser)
+    ///
+    /// `request_biaser` must be the result of [`build_request_biaser`] (or
+    /// `None` when `hotwords` is absent); it is only borrowed, never moved.
+    fn select_biaser<'a>(
+        &'a self,
+        hotwords: Option<&HotwordOverride>,
+        request_biaser: &'a Option<bias::Biaser>,
+    ) -> Option<&'a bias::Biaser> {
+        match hotwords {
+            None => self.biaser.as_ref(),
+            Some(_) => request_biaser.as_ref(),
+        }
+    }
+
+    /// Apply ITN then punctuation to joined text. Shared by the streaming
+    /// finalizer and the file-transcription result builder so the order and
+    /// guards stay identical.
+    fn apply_text_postprocess(&self, text: String, itn: bool, punctuation: bool) -> String {
+        let text = if itn {
+            crate::itn::apply_itn(&text)
+        } else {
+            text
+        };
+        match &self.punctuator {
+            Some(p) if punctuation => p.restore(&text),
+            _ => text,
+        }
     }
 
     /// Enable or disable inverse text normalization (Russian number-words →
@@ -1569,15 +1604,11 @@ impl Engine {
     /// regardless of segment length.
     fn enrich_final_segment(&self, seg: &mut TranscriptSegment, state: &StreamingState) {
         let text = std::mem::take(&mut seg.text);
-        let text = if state.itn.unwrap_or(self.itn) {
-            crate::itn::apply_itn(&text)
-        } else {
-            text
-        };
-        seg.text = match &self.punctuator {
-            Some(p) if state.punctuation.unwrap_or(true) => p.restore(&text),
-            _ => text,
-        };
+        seg.text = self.apply_text_postprocess(
+            text,
+            state.itn.unwrap_or(self.itn),
+            state.punctuation.unwrap_or(true),
+        );
     }
 
     /// Transcribe an audio file to text (supports WAV, MP3, M4A/AAC, OGG, FLAC).
@@ -1747,10 +1778,7 @@ impl Engine {
         if let (true, Some(vad)) = (use_vad, &self.vad) {
             let wall_start = std::time::Instant::now();
             let request_biaser = hotwords.and_then(|hw| self.build_request_biaser(hw));
-            let biaser: Option<&bias::Biaser> = match hotwords {
-                None => self.biaser.as_ref(),
-                Some(_) => request_biaser.as_ref(),
-            };
+            let biaser = self.select_biaser(hotwords, &request_biaser);
             let mut windows = audio::VadWindows::new(
                 open(audio::VadWindows::pull_spec())?,
                 vad,
@@ -1821,16 +1849,9 @@ impl Engine {
     ) -> Result<TranscribeResult, GigasttError> {
         let wall_start = std::time::Instant::now();
 
-        // Hotword biaser selection, mirroring `decode_words_for_samples`:
-        // engine boot biaser, a temporary per-request biaser, or off.
-        let request_biaser = match hotwords {
-            Some(hw) => self.build_request_biaser(hw),
-            None => None,
-        };
-        let biaser: Option<&bias::Biaser> = match hotwords {
-            None => self.biaser.as_ref(),
-            Some(_) => request_biaser.as_ref(),
-        };
+        // Hotword biaser: engine boot biaser, temporary per-request, or off.
+        let request_biaser = hotwords.and_then(|hw| self.build_request_biaser(hw));
+        let biaser = self.select_biaser(hotwords, &request_biaser);
 
         let words = self.decode_words_streaming(&mut windows, triplet, biaser, ctl)?;
         // Exact once every window is consumed (the loop above drains to EOF).
@@ -2105,10 +2126,7 @@ impl Engine {
         ctl: DecodeControls,
     ) -> Result<TranscribeResult, GigasttError> {
         let request_biaser = hotwords.and_then(|hw| self.build_request_biaser(hw));
-        let biaser: Option<&bias::Biaser> = match hotwords {
-            None => self.biaser.as_ref(),
-            Some(_) => request_biaser.as_ref(),
-        };
+        let biaser = self.select_biaser(hotwords, &request_biaser);
 
         let spec = window_spec(self.ane_encoder, self.variant.is_ctc());
         let mut per_channel = Vec::with_capacity(channels);
@@ -2414,17 +2432,11 @@ impl Engine {
         hotwords: Option<&HotwordOverride>,
         ctl: DecodeControls,
     ) -> Result<Vec<WordInfo>, GigasttError> {
-        // Build a temporary biaser only when the request supplies hotwords.
-        // Owned here so the `Option<&Biaser>` passed into decode stays valid
-        // for the whole call without cloning the engine's boot biaser.
-        let request_biaser = match hotwords {
-            Some(hw) => self.build_request_biaser(hw),
-            None => None,
-        };
-        let biaser: Option<&bias::Biaser> = match hotwords {
-            None => self.biaser.as_ref(),
-            Some(_) => request_biaser.as_ref(),
-        };
+        // Temporary biaser only when the request supplies hotwords. Owned
+        // here so the `Option<&Biaser>` passed into decode stays valid for
+        // the whole call without cloning the engine's boot biaser.
+        let request_biaser = hotwords.and_then(|hw| self.build_request_biaser(hw));
+        let biaser = self.select_biaser(hotwords, &request_biaser);
 
         let use_vad = self.vad.is_some() && overrides.vad.unwrap_or(true);
         match (use_vad, &self.vad) {
@@ -2474,28 +2486,14 @@ impl Engine {
             .collect::<Vec<_>>()
             .join(" ");
 
-        // Optional inverse text normalization (number-words → digits) for the
-        // plain `rnnt` head. Runs BEFORE punctuation so the restorer cases the
-        // already-digitized text. No-op when disabled; word-level timing is
-        // left untouched — only the joined `text` is rewritten. The per-request
-        // override wins over the engine default; `None` keeps the boot policy.
-        let text = if overrides.itn.unwrap_or(self.itn) {
-            crate::itn::apply_itn(&text)
-        } else {
-            text
-        };
-
-        // Optional punctuation / casing restoration (plain `rnnt` head). The
-        // engine default is "on iff a punctuator is attached"; a per-request
-        // override can force it off (`Some(false)`) or on (`Some(true)`, only
-        // reachable when a punctuator is loaded — the handler 409s otherwise).
-        // The `self.punctuator` guard keeps this a no-op when none is attached;
-        // `restore` itself never fails (returns the input unchanged on error).
-        // Word-level timing is left untouched — only the joined `text` changes.
-        let text = match &self.punctuator {
-            Some(p) if overrides.punctuation.unwrap_or(true) => p.restore(&text),
-            _ => text,
-        };
+        // Optional ITN then punctuation. Per-request override wins over the
+        // engine default; `None` keeps the boot policy. Word-level timing is
+        // left untouched — only the joined `text` is rewritten.
+        let text = self.apply_text_postprocess(
+            text,
+            overrides.itn.unwrap_or(self.itn),
+            overrides.punctuation.unwrap_or(true),
+        );
 
         TranscribeResult {
             text,
@@ -2628,126 +2626,6 @@ impl Engine {
     /// Convert decoded tokens into words with timestamps and confidence.
     fn tokens_to_words(&self, tokens: &[decode::TokenInfo], frame_offset: usize) -> Vec<WordInfo> {
         TokenFormatter::tokens_to_words(&self.tokenizer, tokens, frame_offset)
-    }
-}
-
-/// Merge a later chunk's words into the running `merged` list, de-duplicating
-/// the overlap region around `seam_s` (absolute seconds).
-///
-/// Both lists carry absolute timestamps (each chunk's words were already offset
-/// by the chunk start). The heuristic keeps `merged` words whose start is at or
-/// before the seam and `next` words whose start is strictly after the seam, so
-/// the ~2s overlap is attributed to exactly one chunk: the earlier chunk owns
-/// the front half of the overlap, the later chunk owns the back half. A word
-/// straddling the seam is decoded with full context in at least one chunk, so
-/// no unique word is dropped and no overlap word is emitted twice in the common
-/// case. The merged list is monotonic in `start` by construction (the earlier
-/// chunk's kept words all start ≤ seam < the later chunk's kept words).
-///
-/// Pure and free-standing so the stitch policy is unit-testable without a
-/// loaded model.
-pub(crate) fn stitch_chunk_words(
-    mut merged: Vec<WordInfo>,
-    next: Vec<WordInfo>,
-    seam_s: f64,
-) -> Vec<WordInfo> {
-    if merged.is_empty() {
-        return next;
-    }
-    // Drop the earlier chunk's tail that reaches past the seam — those words are
-    // re-decoded by `next` with more right context, so prefer the later chunk
-    // for the back half of the overlap. `merged` is monotonic in `start`, so the
-    // words to drop are exactly a suffix: binary-search the seam and truncate.
-    // (`retain` would rescan every word merged so far on every chunk — O(chunks
-    // × words) — for a policy that only ever trims the tail.)
-    merged.truncate(merged.partition_point(|w| w.start <= seam_s));
-    merged.extend(next.into_iter().filter(|w| w.start > seam_s));
-    merged
-}
-
-/// Groups RNN-T decoded tokens into words at BPE word boundaries (`▁`).
-///
-/// Split out of `Engine` so the formatting logic is unit-testable without a
-/// loaded model — it depends only on the [`Tokenizer`], not on any ONNX
-/// session.
-pub(crate) struct TokenFormatter;
-
-impl TokenFormatter {
-    /// Group `tokens` into words. `frame_offset` shifts per-token frame indices
-    /// into absolute stream time; word confidence is the mean over the word's
-    /// constituent BPE tokens.
-    pub(crate) fn tokens_to_words(
-        tokenizer: &Tokenizer,
-        tokens: &[decode::TokenInfo],
-        frame_offset: usize,
-    ) -> Vec<WordInfo> {
-        if tokens.is_empty() {
-            return Vec::new();
-        }
-
-        // Group tokens by words (BPE ▁ marks word boundaries)
-        let mut words = Vec::new();
-        let mut current_word = String::new();
-        let mut word_start_frame: Option<usize> = None;
-        let mut word_end_frame: usize = 0;
-        let mut word_confidences: Vec<f32> = Vec::new();
-
-        for token in tokens {
-            let token_text = tokenizer.token_text(token.token_id);
-            let is_word_boundary = token_text.starts_with(tokenizer::WORD_BOUNDARY);
-
-            if is_word_boundary && !current_word.is_empty() {
-                // Emit previous word
-                let avg_conf: f32 = if word_confidences.is_empty() {
-                    1.0
-                } else {
-                    word_confidences.iter().sum::<f32>() / word_confidences.len() as f32
-                };
-                words.push(WordInfo {
-                    word: std::mem::take(&mut current_word),
-                    start: (word_start_frame.unwrap_or(0) + frame_offset) as f64
-                        * SECONDS_PER_FRAME,
-                    end: (word_end_frame + frame_offset) as f64 * SECONDS_PER_FRAME,
-                    confidence: avg_conf,
-                    speaker: None,
-                });
-                current_word.clear();
-                word_confidences.clear();
-                word_start_frame = None;
-            }
-
-            let clean = if let Some(stripped) = token_text.strip_prefix(tokenizer::WORD_BOUNDARY) {
-                stripped
-            } else {
-                token_text
-            };
-            if !clean.is_empty() {
-                current_word.push_str(clean);
-                if word_start_frame.is_none() {
-                    word_start_frame = Some(token.frame_index);
-                }
-                word_end_frame = token.frame_index;
-                word_confidences.push(token.confidence);
-            }
-        }
-
-        // Emit last word
-        if !current_word.is_empty() {
-            let avg_conf: f32 = if word_confidences.is_empty() {
-                1.0
-            } else {
-                word_confidences.iter().sum::<f32>() / word_confidences.len() as f32
-            };
-            words.push(WordInfo {
-                word: current_word,
-                start: (word_start_frame.unwrap_or(0) + frame_offset) as f64 * SECONDS_PER_FRAME,
-                end: (word_end_frame + frame_offset) as f64 * SECONDS_PER_FRAME,
-                confidence: avg_conf,
-                speaker: None,
-            });
-        }
-
-        words
     }
 }
 
