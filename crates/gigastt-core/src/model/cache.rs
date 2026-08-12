@@ -108,8 +108,9 @@ pub struct DedupeReport {
 /// `model_dir/optimized_cache/`.
 ///
 /// Keeps `{preferred_encoder_stem}_optimized.ort` for **every** head whose
-/// encoder weights are present in `model_dir` (INT8 preferred): each installed
-/// head is one a `serve --model-variant` can start, so its graph must survive
+/// encoder weights are present in `model_dir` (INT8 preferred), plus the
+/// encoder named by a `manifest.toml` when one is installed: every installed
+/// head can be started with `serve --model-variant`, so its graph must survive
 /// a GC run — even while a running server has it memory-mapped. Legacy
 /// `*_optimized.onnx` graphs (written by versions before the switch to the ORT
 /// flatbuffer format) and `.ort` graphs whose encoder is not installed count
@@ -127,11 +128,19 @@ pub fn prune_optimized_cache(model_dir: &Path, dry_run: bool) -> Result<Optimize
         return Ok(report);
     }
 
-    let keep_names: std::collections::HashSet<String> = ModelVariant::ALL
+    let mut keep_names: std::collections::HashSet<String> = ModelVariant::ALL
         .into_iter()
         .filter_map(|v| preferred_encoder_path(v, model_dir))
         .filter_map(|p| optimized_cache_basename(&p))
         .collect();
+
+    // A manifest install may rename the encoder away from the hardcoded
+    // variant basenames; the engine loads that name, so keep its graph too.
+    if let Some(manifest) = super::manifest::ModelManifest::load(model_dir)?
+        && let Some(name) = optimized_cache_basename(&manifest.preferred_encoder_path(model_dir))
+    {
+        keep_names.insert(name);
+    }
 
     if keep_names.is_empty() {
         tracing::info!(
@@ -494,6 +503,85 @@ mod tests {
         assert!(!ml.exists());
         assert!(!legacy.exists());
         assert_eq!(report.freed_bytes, 300 + 400);
+    }
+
+    #[test]
+    fn test_prune_optimized_cache_keeps_ctc_head_dotted_stem() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        // ml_ctc-only install: dotted stem (`multilingual_ctc.int8`) must
+        // survive `file_stem` handling on the keep path.
+        for f in ModelVariant::MlCtc.prequantized_files() {
+            write_file(&dir.join(f), b"stub");
+        }
+        let cache = dir.join("optimized_cache");
+        let keep = cache.join("multilingual_ctc.int8_optimized.ort");
+        let zombie = cache.join("v3_rnnt_encoder_int8_optimized.ort");
+        write_file(&keep, &[1u8; 100]);
+        write_file(&zombie, &[2u8; 200]);
+
+        let report = prune_optimized_cache(dir, false).unwrap();
+        assert_eq!(report.kept, vec![keep.clone()]);
+        assert_eq!(report.removed, vec![zombie.clone()]);
+        assert!(keep.exists());
+        assert!(!zombie.exists());
+        assert_eq!(report.freed_bytes, 200);
+    }
+
+    #[test]
+    fn test_prune_optimized_cache_keeps_fp32_only_head() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        // FP32-only install (no INT8): the FP32 stem's graph is the one a
+        // cache-miss rebuild would write, so keep it.
+        write_file(&dir.join(ModelVariant::Rnnt.encoder_file()), b"stub");
+        let cache = dir.join("optimized_cache");
+        let keep = cache.join("v3_rnnt_encoder_optimized.ort");
+        let zombie = cache.join("v3_rnnt_encoder_int8_optimized.ort");
+        write_file(&keep, &[1u8; 100]);
+        write_file(&zombie, &[2u8; 200]);
+
+        let report = prune_optimized_cache(dir, false).unwrap();
+        assert_eq!(report.kept, vec![keep.clone()]);
+        assert!(keep.exists());
+        assert!(!zombie.exists(), "no INT8 encoder installed: zombie");
+    }
+
+    #[test]
+    fn test_prune_optimized_cache_keeps_manifest_named_encoder() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        // Manifest install with a custom encoder basename; the engine loads
+        // that name, so its graph must survive alongside a hardcoded head.
+        write_file(
+            &dir.join("manifest.toml"),
+            br#"architecture = "ml_ctc"
+[files]
+encoder = "custom_enc.onnx"
+encoder_int8 = "custom_enc_int8.onnx"
+vocab = "custom_vocab.txt"
+"#,
+        );
+        write_file(&dir.join("custom_enc_int8.onnx"), b"stub");
+        for f in ModelVariant::Rnnt.prequantized_files() {
+            write_file(&dir.join(f), b"stub");
+        }
+        let cache = dir.join("optimized_cache");
+        let custom = cache.join("custom_enc_int8_optimized.ort");
+        let rnnt = cache.join("v3_rnnt_encoder_int8_optimized.ort");
+        write_file(&custom, &[1u8; 100]);
+        write_file(&rnnt, &[2u8; 200]);
+
+        let report = prune_optimized_cache(dir, false).unwrap();
+        assert_eq!(report.kept.len(), 2);
+        assert!(report.kept.contains(&custom));
+        assert!(report.kept.contains(&rnnt));
+        assert!(
+            custom.exists(),
+            "manifest-named graph must survive cache-gc"
+        );
+        assert!(rnnt.exists());
+        assert!(report.removed.is_empty());
     }
 
     #[test]
