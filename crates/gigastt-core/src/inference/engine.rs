@@ -161,31 +161,6 @@ const DEFAULT_POOL_SIZE: usize = 1;
 #[cfg(not(target_os = "android"))]
 const DEFAULT_POOL_SIZE: usize = 2;
 
-/// Probe a freshly-built state; on failure, rebuild it once and re-probe.
-///
-/// `probe` is a runtime self-check, `rebuild` converts the failed state into
-/// a replacement (receiving the probe error so it can log the cause). A
-/// rebuilt state that still fails the probe is a hard error — there is no
-/// second fallback level.
-///
-/// Extracted from the CoreML runtime-fallback path (issue #42) so the
-/// decision logic stays unit-testable without ONNX sessions.
-#[cfg_attr(not(feature = "coreml"), allow(dead_code))]
-fn probe_or_rebuild<S>(
-    state: S,
-    probe: impl Fn(&S) -> anyhow::Result<()>,
-    rebuild: impl FnOnce(S, anyhow::Error) -> anyhow::Result<S>,
-) -> anyhow::Result<S> {
-    match probe(&state) {
-        Ok(()) => Ok(state),
-        Err(probe_err) => {
-            let rebuilt = rebuild(state, probe_err)?;
-            probe(&rebuilt).context("state failed probe even after rebuild")?;
-            Ok(rebuilt)
-        }
-    }
-}
-
 /// ONNX Runtime inference engine for GigaAM v3 e2e_rnnt.
 ///
 /// Thread-safe: inference sessions live in a [`SessionPool`] so `Engine` can be
@@ -749,7 +724,7 @@ impl Engine {
         // fine can still fail at the first `Run()`. Probe one triplet now; if the
         // probe fails, rebuild the pool on the CPU EP.
         #[cfg(feature = "coreml")]
-        let engine = probe_or_rebuild(
+        let engine = sizing::probe_or_rebuild(
             engine,
             |e: &Self| e.warmup_one().map_err(anyhow::Error::from),
             |mut e, probe_err| {
@@ -800,22 +775,9 @@ impl Engine {
     /// `batch_pool_size == 0` (or too few items to split) yields no batch pool.
     /// Generic over the item type so the routing can be unit-tested with a
     /// synthetic `Pool<u32>` instead of model-backed `SessionTriplet`s.
-    fn split_pool<T: Send>(
-        mut items: Vec<T>,
-        batch_pool_size: usize,
-    ) -> (Pool<T>, Option<Pool<T>>) {
-        let n = items.len();
-        let batch = Self::batch_split_count(n, batch_pool_size);
-        if batch == 0 {
-            return (Pool::new(items), None);
-        }
-        let batch_items = items.split_off(n - batch);
-        (Pool::new(items), Some(Pool::new(batch_items)))
-    }
-
-    /// See [`sizing::batch_split_count`].
-    fn batch_split_count(n: usize, batch_pool_size: usize) -> usize {
-        sizing::batch_split_count(n, batch_pool_size)
+    fn split_pool<T: Send>(items: Vec<T>, batch_pool_size: usize) -> (Pool<T>, Option<Pool<T>>) {
+        let (interactive, batch) = sizing::split_pool_items(items, batch_pool_size);
+        (Pool::new(interactive), batch.map(Pool::new))
     }
 
     /// See [`sizing::cap_pool_size_for_ram`].
@@ -2492,12 +2454,13 @@ mod tests {
 
     #[test]
     fn test_batch_split_count_clamps() {
-        assert_eq!(Engine::batch_split_count(4, 1), 1); // typical: 1 batch, 3 stream
-        assert_eq!(Engine::batch_split_count(4, 0), 0); // split disabled
-        assert_eq!(Engine::batch_split_count(4, 10), 3); // clamped: leave 1 interactive
-        assert_eq!(Engine::batch_split_count(1, 1), 0); // can't split a single triplet
-        assert_eq!(Engine::batch_split_count(0, 1), 0); // empty pool
-        assert_eq!(Engine::batch_split_count(2, 1), 1);
+        use super::sizing::batch_split_count;
+        assert_eq!(batch_split_count(4, 1), 1); // typical: 1 batch, 3 stream
+        assert_eq!(batch_split_count(4, 0), 0); // split disabled
+        assert_eq!(batch_split_count(4, 10), 3); // clamped: leave 1 interactive
+        assert_eq!(batch_split_count(1, 1), 0); // can't split a single triplet
+        assert_eq!(batch_split_count(0, 1), 0); // empty pool
+        assert_eq!(batch_split_count(2, 1), 1);
     }
 
     #[test]
@@ -3771,7 +3734,7 @@ vocab = "custom_vocab.txt"
     #[test]
     fn test_probe_or_rebuild_keeps_state_when_probe_passes() {
         let rebuilt = std::cell::Cell::new(false);
-        let result = probe_or_rebuild(
+        let result = sizing::probe_or_rebuild(
             7u32,
             |v| {
                 assert_eq!(*v, 7);
@@ -3789,7 +3752,7 @@ vocab = "custom_vocab.txt"
 
     #[test]
     fn test_probe_or_rebuild_rebuilds_when_probe_fails() {
-        let result = probe_or_rebuild(
+        let result = sizing::probe_or_rebuild(
             1u32,
             |v| {
                 if *v == 1 {
@@ -3813,7 +3776,7 @@ vocab = "custom_vocab.txt"
 
     #[test]
     fn test_probe_or_rebuild_propagates_rebuild_error() {
-        let result = probe_or_rebuild(
+        let result = sizing::probe_or_rebuild(
             1u32,
             |_| Err(anyhow::anyhow!("probe failed")),
             |_, _| Err(anyhow::anyhow!("rebuild failed")),
@@ -3824,7 +3787,7 @@ vocab = "custom_vocab.txt"
 
     #[test]
     fn test_probe_or_rebuild_fails_when_rebuilt_state_fails_probe() {
-        let result = probe_or_rebuild(
+        let result = sizing::probe_or_rebuild(
             1u32,
             |_| Err(anyhow::anyhow!("always fails")),
             |_, _| Ok(2u32),
