@@ -1,0 +1,91 @@
+//! Model-file resolution for engine load (variant override + manifest + INT8 paths).
+//!
+//! Free of ONNX sessions so override / manifest / disk precedence is unit-testable
+//! without model weights.
+
+use std::path::Path;
+
+use crate::model::{ModelManifest, ModelVariant};
+
+/// Resolve which recognition head the engine should load.
+///
+/// Precedence:
+/// 1. Explicit `override_` (from `--model-variant`) always wins.
+/// 2. Else `manifest.toml` architecture, when that file is present.
+/// 3. Else auto-detect from on-disk encoder filenames (`rnnt` precedence).
+///
+/// A present-but-invalid `manifest.toml` is a hard error (not silently ignored).
+pub(crate) fn resolve_load_variant(
+    override_: Option<ModelVariant>,
+    model_dir: &Path,
+) -> anyhow::Result<Option<ModelVariant>> {
+    // Always validate a present manifest so a corrupt pack fails clearly, even
+    // when the CLI override selects the architecture.
+    let manifest = ModelManifest::load(model_dir)?;
+    if let Some(v) = override_ {
+        return Ok(Some(v));
+    }
+    if let Some(m) = manifest {
+        return Ok(Some(m.architecture));
+    }
+    Ok(ModelVariant::detect_in_dir(model_dir))
+}
+
+/// On-disk model file paths for a load: either from `manifest.toml` or from the
+/// hardcoded [`ModelVariant`] basenames when no manifest is present.
+pub(crate) struct ResolvedModelFiles {
+    pub encoder: std::path::PathBuf,
+    pub decoder: Option<std::path::PathBuf>,
+    pub joint: Option<std::path::PathBuf>,
+    pub vocab: std::path::PathBuf,
+    pub using_int8: bool,
+}
+
+impl ResolvedModelFiles {
+    pub(crate) fn resolve(dir: &Path, variant: ModelVariant) -> anyhow::Result<Self> {
+        if let Some(m) = ModelManifest::load(dir)? {
+            anyhow::ensure!(
+                m.prefers_int8(dir),
+                "manifest resolves to a non-INT8 encoder — gigastt runs INT8 only. \
+                 Install the INT8 encoder (`gigastt download`) or fix encoder_int8 in manifest.toml."
+            );
+            return Ok(Self {
+                encoder: m.preferred_encoder_path(dir),
+                decoder: m.decoder_path(dir),
+                joint: m.joint_path(dir),
+                vocab: m.vocab_path(dir),
+                using_int8: true,
+            });
+        }
+        Self::from_variant(dir, variant)
+    }
+
+    pub(crate) fn from_variant(dir: &Path, variant: ModelVariant) -> anyhow::Result<Self> {
+        // Product policy: only the INT8 encoder is supported. FP32 ONNX is not
+        // loaded (no silent fallback). Fix: `gigastt download` (lean INT8).
+        let int8 = dir.join(variant.encoder_int8_file());
+        anyhow::ensure!(
+            int8.is_file(),
+            "INT8 encoder not found at {} — gigastt runs INT8 only. \
+             Run `gigastt download` (lean INT8 bundle). FP32 encoders are not supported.",
+            int8.display()
+        );
+        if variant.is_ctc() {
+            Ok(Self {
+                encoder: int8,
+                decoder: None,
+                joint: None,
+                vocab: dir.join(variant.vocab_file()),
+                using_int8: true,
+            })
+        } else {
+            Ok(Self {
+                encoder: int8,
+                decoder: Some(dir.join(variant.decoder_file())),
+                joint: Some(dir.join(variant.joint_file())),
+                vocab: dir.join(variant.vocab_file()),
+                using_int8: true,
+            })
+        }
+    }
+}
