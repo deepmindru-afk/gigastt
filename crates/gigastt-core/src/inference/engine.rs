@@ -5,18 +5,19 @@ use std::path::Path;
 
 use crate::error::GigasttError;
 use crate::model::ModelVariant;
-use crate::runtime::factory::Runtime;
 #[allow(unused_imports)]
 use crate::runtime::factory::RuntimeFactory;
 use crate::runtime::production_factory_variant;
-use crate::runtime::tensor::{Shape, Tensor, TensorData, TensorDataView};
+use crate::runtime::tensor::{Shape, TensorDataView};
 
 use super::audio;
 use super::audio::{PcmWindows, SliceWindows, WindowSpec};
 use super::bias;
 use super::ctc;
 use super::decode;
-use super::load_files::{ResolvedModelFiles, resolve_load_variant};
+use super::load_files::{
+    ResolvedModelFiles, encoder_model_path, load_triplets_runtime, resolve_load_variant,
+};
 use super::pool::{Pool, SessionPool, SessionTriplet};
 use super::sizing;
 use super::state::{
@@ -568,7 +569,7 @@ impl Engine {
         // encoder copy, so a large `--pool-size` on a small host can OOM at
         // load. Clamp by available RAM (logs when it clamps); a no-op on hosts
         // with ample memory.
-        let encoder_bytes = std::fs::metadata(Self::encoder_model_path(dir, variant))
+        let encoder_bytes = std::fs::metadata(encoder_model_path(dir, variant))
             .map(|m| m.len())
             .unwrap_or(0);
         let pool_size =
@@ -665,10 +666,8 @@ impl Engine {
 
         // CoreML can reject a model at load time; fall back to CPU if that happens.
         #[cfg(feature = "coreml")]
-        let triplets = match Self::load_triplets_runtime(
-            &*runtime, &files, variant, pool_size, min_size,
-        )
-        .map_err(model_load)
+        let triplets = match load_triplets_runtime(&*runtime, &files, variant, pool_size, min_size)
+            .map_err(model_load)
         {
             Ok(triplets) => triplets,
             Err(load_err) => {
@@ -677,12 +676,12 @@ impl Engine {
                 );
                 let cpu_factory = factory.cpu_fallback();
                 let runtime = cpu_factory.create(encoder_intra_threads)?;
-                Self::load_triplets_runtime(&*runtime, &files, variant, pool_size, min_size)
+                load_triplets_runtime(&*runtime, &files, variant, pool_size, min_size)
                     .map_err(model_load)?
             }
         };
         #[cfg(not(feature = "coreml"))]
-        let triplets = Self::load_triplets_runtime(&*runtime, &files, variant, pool_size, min_size)
+        let triplets = load_triplets_runtime(&*runtime, &files, variant, pool_size, min_size)
             .map_err(model_load)?;
 
         let tokenizer = Tokenizer::load(&files.vocab).map_err(model_load)?;
@@ -736,7 +735,7 @@ impl Engine {
                     .create(encoder_intra_threads)
                     .map_err(|e| anyhow::anyhow!(e))?;
                 let triplets =
-                    Self::load_triplets_runtime(&*runtime, &files, variant, pool_size, min_size)?;
+                    load_triplets_runtime(&*runtime, &files, variant, pool_size, min_size)?;
                 let (pool, batch_pool) = Self::split_triplets(triplets, batch_pool_size);
                 e.pool = pool;
                 e.batch_pool = batch_pool;
@@ -746,16 +745,6 @@ impl Engine {
         .map_err(model_load)?;
 
         Ok(engine)
-    }
-
-    /// Path to the preferred encoder model for `variant`: INT8 quantized if
-    /// present, FP32 otherwise. Honors `manifest.toml` file names when present.
-    fn encoder_model_path(dir: &Path, variant: ModelVariant) -> std::path::PathBuf {
-        ResolvedModelFiles::resolve(dir, variant)
-            .map(|files| files.encoder)
-            // Tests may call this helper without a full install; surface the
-            // expected INT8 basename when resolve fails (FP32 is never chosen).
-            .unwrap_or_else(|_| dir.join(variant.encoder_int8_file()))
     }
 
     /// Split loaded triplets into an interactive pool and an optional batch
@@ -792,99 +781,6 @@ impl Engine {
         logical_cpus: usize,
     ) -> usize {
         sizing::clamp_encoder_intra_threads(pool_size, requested, logical_cpus)
-    }
-
-    /// See [`sizing::finalize_pool_load`].
-    fn finalize_pool_load<T>(
-        results: Vec<anyhow::Result<T>>,
-        pool_size: usize,
-        min_size: usize,
-    ) -> anyhow::Result<Vec<T>> {
-        sizing::finalize_pool_load(results, pool_size, min_size)
-    }
-
-    /// Load up to `pool_size` session triplets in parallel through the given
-    /// [`Runtime`], tolerating a partial pool down to `min_size`.
-    fn load_triplets_runtime(
-        runtime: &dyn Runtime,
-        files: &ResolvedModelFiles,
-        variant: ModelVariant,
-        pool_size: usize,
-        min_size: usize,
-    ) -> anyhow::Result<Vec<SessionTriplet>> {
-        let encoder_path = files.encoder.clone();
-        // CTC is encoder-only: no decoder/joiner ONNX exists on disk, and the CTC
-        // branch in `run_inference` returns right after the encoder run without
-        // touching them. Load them only for the RNN-T heads (leaving `None` for
-        // CTC avoids holding an unused, never-run session per pool triplet).
-        let is_ctc = variant.is_ctc();
-        let decoder_path = files.decoder.clone();
-        let joiner_path = files.joint.clone();
-
-        let results: Vec<anyhow::Result<SessionTriplet>> = std::thread::scope(|s| {
-            let handles: Vec<_> = (0..pool_size)
-                .map(|i| {
-                    let encoder_path = &encoder_path;
-                    let decoder_path = &decoder_path;
-                    let joiner_path = &joiner_path;
-                    s.spawn(move || {
-                        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                            tracing::info!(
-                                "Loading session triplet {}/{pool_size} (shared runtime)",
-                                i + 1
-                            );
-                            let encoder = runtime
-                                .load_session(encoder_path, true)
-                                .map_err(|e| anyhow::anyhow!(e))?;
-                            let (decoder, joiner) = if is_ctc {
-                                (None, None)
-                            } else {
-                                let decoder_path = decoder_path.as_ref().ok_or_else(|| {
-                                    anyhow::anyhow!(
-                                        "decoder ONNX path missing for non-CTC architecture {}",
-                                        variant.as_str()
-                                    )
-                                })?;
-                                let joiner_path = joiner_path.as_ref().ok_or_else(|| {
-                                    anyhow::anyhow!(
-                                        "joint ONNX path missing for non-CTC architecture {}",
-                                        variant.as_str()
-                                    )
-                                })?;
-                                let decoder = runtime
-                                    .load_session(decoder_path, false)
-                                    .map_err(|e| anyhow::anyhow!(e))?;
-                                let joiner = runtime
-                                    .load_session(joiner_path, false)
-                                    .map_err(|e| anyhow::anyhow!(e))?;
-                                (Some(decoder), Some(joiner))
-                            };
-                            Ok(SessionTriplet {
-                                encoder,
-                                decoder,
-                                joiner,
-                                encoder_inputs: vec![
-                                    Tensor::new(
-                                        Shape::new(vec![1, N_MELS, 1]),
-                                        TensorData::F32(vec![0.0; N_MELS]),
-                                    )?,
-                                    Tensor::new(Shape::new(vec![1]), TensorData::I64(vec![0]))?,
-                                ],
-                            })
-                        }))
-                        .map_err(|_| anyhow::anyhow!("model loading thread panicked"))?
-                    })
-                })
-                .collect();
-            handles
-                .into_iter()
-                .map(|h| match h.join() {
-                    Ok(r) => r,
-                    Err(_) => Err(anyhow::anyhow!("model loading thread panicked")),
-                })
-                .collect()
-        });
-        Self::finalize_pool_load(results, pool_size, min_size)
     }
 
     /// Run one ~1 s silent inference on a single pooled session triplet.
@@ -2921,7 +2817,7 @@ mod tests {
     #[test]
     fn test_finalize_pool_load_full() {
         let r: Vec<anyhow::Result<u32>> = vec![Ok(1), Ok(2), Ok(3)];
-        assert_eq!(Engine::finalize_pool_load(r, 3, 3).unwrap(), vec![1, 2, 3]);
+        assert_eq!(sizing::finalize_pool_load(r, 3, 3).unwrap(), vec![1, 2, 3]);
     }
 
     #[test]
@@ -2933,7 +2829,7 @@ mod tests {
             Ok(3),
             Err(anyhow::anyhow!("boom2")),
         ];
-        assert_eq!(Engine::finalize_pool_load(r, 4, 1).unwrap(), vec![1, 3]);
+        assert_eq!(sizing::finalize_pool_load(r, 4, 1).unwrap(), vec![1, 3]);
     }
 
     #[test]
@@ -2944,7 +2840,7 @@ mod tests {
             Err(anyhow::anyhow!("boom")),
             Err(anyhow::anyhow!("boom2")),
         ];
-        let err = Engine::finalize_pool_load(r, 3, 2).unwrap_err().to_string();
+        let err = sizing::finalize_pool_load(r, 3, 2).unwrap_err().to_string();
         assert!(err.contains("loaded only 1/3"), "got: {err}");
         assert!(err.contains("need at least 2"), "got: {err}");
     }
@@ -2953,14 +2849,14 @@ mod tests {
     fn test_finalize_pool_load_all_fail_errors() {
         let r: Vec<anyhow::Result<u32>> =
             vec![Err(anyhow::anyhow!("a")), Err(anyhow::anyhow!("b"))];
-        assert!(Engine::finalize_pool_load(r, 2, 1).is_err());
+        assert!(sizing::finalize_pool_load(r, 2, 1).is_err());
     }
 
     #[test]
     fn test_finalize_pool_load_min_clamped_to_pool() {
         // min_size > pool_size is clamped down; a full load still succeeds.
         let r: Vec<anyhow::Result<u32>> = vec![Ok(1), Ok(2)];
-        assert_eq!(Engine::finalize_pool_load(r, 2, 99).unwrap(), vec![1, 2]);
+        assert_eq!(sizing::finalize_pool_load(r, 2, 99).unwrap(), vec![1, 2]);
     }
 
     #[test]
@@ -3803,7 +3699,7 @@ vocab = "custom_vocab.txt"
         let dir = tempfile::tempdir().expect("tempdir");
         std::fs::write(dir.path().join("v3_e2e_rnnt_encoder.onnx"), b"fp32").unwrap();
         std::fs::write(dir.path().join("v3_e2e_rnnt_encoder_int8.onnx"), b"int8").unwrap();
-        let path = Engine::encoder_model_path(dir.path(), ModelVariant::E2eRnnt);
+        let path = encoder_model_path(dir.path(), ModelVariant::E2eRnnt);
         assert_eq!(
             path.file_name().unwrap(),
             "v3_e2e_rnnt_encoder_int8.onnx",
@@ -3817,7 +3713,7 @@ vocab = "custom_vocab.txt"
         std::fs::write(dir.path().join("v3_e2e_rnnt_encoder.onnx"), b"fp32").unwrap();
         // Without INT8, resolve fails; helper still reports the INT8 basename
         // (never the FP32 file).
-        let path = Engine::encoder_model_path(dir.path(), ModelVariant::E2eRnnt);
+        let path = encoder_model_path(dir.path(), ModelVariant::E2eRnnt);
         assert_eq!(path.file_name().unwrap(), "v3_e2e_rnnt_encoder_int8.onnx");
         assert!(
             ResolvedModelFiles::from_variant(dir.path(), ModelVariant::E2eRnnt).is_err(),
@@ -3830,7 +3726,7 @@ vocab = "custom_vocab.txt"
         let dir = tempfile::tempdir().expect("tempdir");
         std::fs::write(dir.path().join("v3_rnnt_encoder.onnx"), b"fp32").unwrap();
         std::fs::write(dir.path().join("v3_rnnt_encoder_int8.onnx"), b"int8").unwrap();
-        let path = Engine::encoder_model_path(dir.path(), ModelVariant::Rnnt);
+        let path = encoder_model_path(dir.path(), ModelVariant::Rnnt);
         assert_eq!(
             path.file_name().unwrap(),
             "v3_rnnt_encoder_int8.onnx",
@@ -3866,7 +3762,7 @@ vocab = "pack_vocab.txt"
 "#,
         )
         .unwrap();
-        let path = Engine::encoder_model_path(dir.path(), ModelVariant::Rnnt);
+        let path = encoder_model_path(dir.path(), ModelVariant::Rnnt);
         assert_eq!(path.file_name().unwrap(), "pack_enc_int8.onnx");
     }
 
@@ -3907,7 +3803,7 @@ vocab = "pack_vocab.txt"
         // The degraded-pool branch logs the first error; exercise the
         // `first_err` formatting path (the loaded triplets are still returned).
         let r: Vec<anyhow::Result<u32>> = vec![Ok(1), Err(anyhow::anyhow!("first failure cause"))];
-        assert_eq!(Engine::finalize_pool_load(r, 2, 1).unwrap(), vec![1]);
+        assert_eq!(sizing::finalize_pool_load(r, 2, 1).unwrap(), vec![1]);
     }
 
     #[test]
@@ -3915,7 +3811,7 @@ vocab = "pack_vocab.txt"
         // No Err entries, but fewer results than pool_size with min above the
         // loaded count → still errors (loaded count is what matters).
         let r: Vec<anyhow::Result<u32>> = vec![Ok(1)];
-        let err = Engine::finalize_pool_load(r, 3, 2).unwrap_err().to_string();
+        let err = sizing::finalize_pool_load(r, 3, 2).unwrap_err().to_string();
         assert!(err.contains("loaded only 1/3"), "got: {err}");
     }
 
