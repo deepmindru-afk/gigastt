@@ -17,6 +17,7 @@ use super::bias;
 use super::ctc;
 use super::decode;
 use super::pool::{Pool, SessionPool, SessionTriplet};
+use super::sizing;
 use super::state::{
     DecoderState, EndpointMode, EndpointReason, FeatureExtractor, StreamingState,
     TranscriptAssembler, TranscriptSegment, WordInfo, aggregate_confidence,
@@ -72,104 +73,6 @@ impl DecodeControls<'_> {
             abort: self.abort,
             on_progress: None,
         }
-    }
-}
-
-/// Parse a cgroup memory limit file body (`memory.max` v2 or
-/// `memory.limit_in_bytes` v1). Returns `None` for missing/unbounded/`max`.
-/// Pure so unit tests can feed strings without a real cgroup mount.
-#[cfg(any(test, target_os = "linux"))]
-fn parse_cgroup_memory_limit(raw: &str) -> Option<u64> {
-    let s = raw.trim();
-    if s.is_empty() || s.eq_ignore_ascii_case("max") {
-        return None;
-    }
-    let bytes: u64 = s.parse().ok()?;
-    // Kernel v1 often reports a huge sentinel (~2^63-1) when unlimited.
-    if bytes == 0 || bytes >= (1u64 << 62) {
-        return None;
-    }
-    Some(bytes)
-}
-
-/// Read Linux cgroup memory limit (v2 then v1). `None` on non-Linux or when
-/// unlimited / unreadable. Does not panic on missing files.
-fn cgroup_memory_limit_bytes() -> Option<u64> {
-    #[cfg(target_os = "linux")]
-    {
-        const CANDIDATES: &[&str] = &[
-            "/sys/fs/cgroup/memory.max",                   // cgroup v2 unified
-            "/sys/fs/cgroup/memory/memory.limit_in_bytes", // cgroup v1
-        ];
-        for path in CANDIDATES {
-            if let Ok(raw) = std::fs::read_to_string(path)
-                && let Some(bytes) = parse_cgroup_memory_limit(&raw)
-            {
-                return Some(bytes);
-            }
-        }
-        None
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        None
-    }
-}
-
-/// Total physical RAM in bytes, or `0` if it can't be determined (in which case
-/// the pool RAM cap is a no-op). macOS: `sysctl HW_MEMSIZE`; Linux/other unix:
-/// `sysconf(_SC_PHYS_PAGES) * _SC_PAGESIZE`.
-fn total_ram_bytes() -> u64 {
-    #[cfg(target_os = "macos")]
-    {
-        let mut mem: u64 = 0;
-        let mut len = std::mem::size_of::<u64>();
-        let mib = [libc::CTL_HW, libc::HW_MEMSIZE];
-        // SAFETY: `mib`/`mem`/`len` are valid for the duration of the call;
-        // sysctl writes at most `len` bytes into `mem`.
-        let rc = unsafe {
-            libc::sysctl(
-                mib.as_ptr() as *mut libc::c_int,
-                mib.len() as libc::c_uint,
-                &mut mem as *mut u64 as *mut libc::c_void,
-                &mut len,
-                std::ptr::null_mut(),
-                0,
-            )
-        };
-        if rc == 0 { mem } else { 0 }
-    }
-    #[cfg(all(unix, not(target_os = "macos")))]
-    {
-        // SAFETY: sysconf has no side effects and returns -1 on error.
-        let pages = unsafe { libc::sysconf(libc::_SC_PHYS_PAGES) };
-        let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
-        if pages > 0 && page_size > 0 {
-            (pages as u64).saturating_mul(page_size as u64)
-        } else {
-            0
-        }
-    }
-    #[cfg(not(unix))]
-    {
-        0
-    }
-}
-
-/// Effective RAM budget for pool sizing: **min(host RAM, cgroup memory.max)**
-/// when a cgroup limit is present (Docker/k8s). Falls back to host-only when
-/// cgroup files are missing (macOS, bare metal without limits).
-fn effective_ram_bytes() -> u64 {
-    let host = total_ram_bytes();
-    match cgroup_memory_limit_bytes() {
-        Some(limit) if limit > 0 => {
-            if host == 0 {
-                limit
-            } else {
-                host.min(limit)
-            }
-        }
-        _ => host,
     }
 }
 
@@ -341,20 +244,6 @@ pub(crate) fn window_spec(ane_encoder: bool, _ctc: bool) -> WindowSpec {
 const DEFAULT_POOL_SIZE: usize = 1;
 #[cfg(not(target_os = "android"))]
 const DEFAULT_POOL_SIZE: usize = 2;
-
-/// Approximate resident bytes a single pooled encoder triplet costs, as a
-/// multiple of the encoder file size on disk. Measured at ~1.9x the INT8
-/// encoder file (225 MB file → ~0.4 GB resident per extra pooled slot, dynamic
-/// INT8 graph, CPU EP, release). Used by [`Engine::cap_pool_size_for_ram`] to
-/// keep `pool_size * encoder_file_bytes * this` under a fraction of total RAM.
-const ENCODER_RESIDENT_MULTIPLIER: u64 = 2;
-
-/// Fraction (denominator) of total system RAM the pooled encoder sessions are
-/// allowed to occupy before [`Engine::cap_pool_size_for_ram`] clamps the pool.
-/// `2` = at most half of total RAM budgeted to encoder slots, leaving headroom
-/// for the decoder/joiner sessions, audio buffers, inference arenas, and the
-/// rest of the system.
-const POOL_RAM_FRACTION_DENOM: u64 = 2;
 
 /// Probe a freshly-built state; on failure, rebuild it once and re-probe.
 ///
@@ -792,7 +681,7 @@ impl Engine {
             .map(|m| m.len())
             .unwrap_or(0);
         let pool_size =
-            Self::cap_pool_size_for_ram(pool_size, encoder_bytes, effective_ram_bytes());
+            Self::cap_pool_size_for_ram(pool_size, encoder_bytes, sizing::effective_ram_bytes());
         // Don't let `pool_size * encoder_intra_threads` oversubscribe the CPU
         // (no-op when the default `1` is requested).
         let logical_cpus = std::thread::available_parallelism()
@@ -1008,123 +897,32 @@ impl Engine {
         (Pool::new(items), Some(Pool::new(batch_items)))
     }
 
-    /// Number of triplets to reserve for the batch pool given `n` loaded and a
-    /// requested `batch_pool_size`, always leaving at least one for the
-    /// interactive pool (so `n <= 1` or `batch_pool_size == 0` yields 0).
+    /// See [`sizing::batch_split_count`].
     fn batch_split_count(n: usize, batch_pool_size: usize) -> usize {
-        batch_pool_size.min(n.saturating_sub(1))
+        sizing::batch_split_count(n, batch_pool_size)
     }
 
-    /// Clamp the requested `pool_size` so the pooled encoder sessions can't
-    /// exceed [`POOL_RAM_FRACTION_DENOM`]⁻¹ of total RAM. Each triplet costs
-    /// about `encoder_bytes * ENCODER_RESIDENT_MULTIPLIER` resident (the encoder
-    /// dominates; decoder/joiner are small), so the max safe pool is
-    /// `(total_ram / denom) / per_triplet`, never below 1. Logs a warning when
-    /// it clamps. A no-op (returns `requested`) when RAM or encoder size is
-    /// unknown (`0`) — we never *raise* the requested size, only lower it.
-    ///
-    /// Pure and total so the budgeting math is unit-tested without a model or a
-    /// real `sysctl`/`sysconf` probe.
+    /// See [`sizing::cap_pool_size_for_ram`].
     fn cap_pool_size_for_ram(requested: usize, encoder_bytes: u64, total_ram: u64) -> usize {
-        if requested <= 1 || encoder_bytes == 0 || total_ram == 0 {
-            return requested.max(1);
-        }
-        let per_triplet = encoder_bytes.saturating_mul(ENCODER_RESIDENT_MULTIPLIER);
-        let budget = total_ram / POOL_RAM_FRACTION_DENOM;
-        // At least one slot always allowed even if a single triplet exceeds the
-        // budget — the pool can't be empty, and partial-load tolerance
-        // (`min_size`) handles a genuine OOM at load time.
-        let max_slots = (budget / per_triplet.max(1)).max(1) as usize;
-        if max_slots < requested {
-            tracing::warn!(
-                "Capping pool size {requested} -> {max_slots}: \
-                 {requested} encoder slots (~{} MiB each) would exceed half of \
-                 {} MiB total RAM. Concurrency is reduced; add RAM or lower \
-                 --pool-size to silence this.",
-                per_triplet / (1024 * 1024),
-                total_ram / (1024 * 1024),
-            );
-            max_slots
-        } else {
-            requested
-        }
+        sizing::cap_pool_size_for_ram(requested, encoder_bytes, total_ram)
     }
 
-    /// Clamp the requested encoder intra-op thread count so the pooled encoder
-    /// sessions can't oversubscribe the CPU. Each of `pool_size` triplets can
-    /// run concurrently, so the total intra-op parallelism is
-    /// `pool_size * threads`; capping that at `logical_cpus` keeps the machine
-    /// from thrashing on context switches. The effective per-encoder count is
-    /// therefore `clamp(requested, 1, logical_cpus / pool_size)`, never below 1.
-    /// Logs a warning when it lowers the request. The default `requested == 1`
-    /// always returns `1`, so the built sessions are unchanged.
-    ///
-    /// Pure and total so the budgeting math is unit-tested without spawning ORT
-    /// sessions or probing the real CPU count.
+    /// See [`sizing::clamp_encoder_intra_threads`].
     fn clamp_encoder_intra_threads(
         pool_size: usize,
         requested: usize,
         logical_cpus: usize,
     ) -> usize {
-        let requested = requested.max(1);
-        let pool_size = pool_size.max(1);
-        let logical_cpus = logical_cpus.max(1);
-        // Leave at least one thread per encoder even on a machine with fewer
-        // logical CPUs than pooled triplets.
-        let max_per_encoder = (logical_cpus / pool_size).max(1);
-        if requested > max_per_encoder {
-            tracing::warn!(
-                "Capping encoder intra-op threads {requested} -> {max_per_encoder}: \
-                 {pool_size} pooled encoder(s) x {requested} threads would exceed \
-                 the {logical_cpus} logical CPU(s) available. Lower --pool-size or \
-                 --encoder-intra-threads to silence this."
-            );
-            max_per_encoder
-        } else {
-            requested
-        }
+        sizing::clamp_encoder_intra_threads(pool_size, requested, logical_cpus)
     }
 
-    /// Decide the final pool from per-triplet load results: returns the
-    /// successfully loaded triplets when at least `min_size` loaded (warning
-    /// when the pool is degraded below `pool_size`), or an error describing the
-    /// shortfall. `min_size` is clamped to `1..=pool_size`.
+    /// See [`sizing::finalize_pool_load`].
     fn finalize_pool_load<T>(
         results: Vec<anyhow::Result<T>>,
         pool_size: usize,
         min_size: usize,
     ) -> anyhow::Result<Vec<T>> {
-        let min_size = min_size.clamp(1, pool_size.max(1));
-        let mut loaded = Vec::with_capacity(results.len());
-        let mut first_err: Option<anyhow::Error> = None;
-        for r in results {
-            match r {
-                Ok(t) => loaded.push(t),
-                Err(e) => {
-                    if first_err.is_none() {
-                        first_err = Some(e);
-                    }
-                }
-            }
-        }
-        let n = loaded.len();
-        if n >= min_size {
-            if n < pool_size {
-                let detail = first_err
-                    .map(|e| format!("; first error: {e:#}"))
-                    .unwrap_or_default();
-                tracing::warn!(
-                    "degraded pool: loaded {n}/{pool_size} session triplets ({} failed){detail}",
-                    pool_size - n
-                );
-            }
-            Ok(loaded)
-        } else {
-            let detail = first_err.map(|e| format!(": {e:#}")).unwrap_or_default();
-            Err(anyhow::anyhow!(
-                "loaded only {n}/{pool_size} session triplets, need at least {min_size}{detail}"
-            ))
-        }
+        sizing::finalize_pool_load(results, pool_size, min_size)
     }
 
     /// Load up to `pool_size` session triplets in parallel through the given
@@ -2692,6 +2490,7 @@ mod tests {
 
     #[test]
     fn test_parse_cgroup_memory_limit_max_and_sentinel() {
+        use super::sizing::parse_cgroup_memory_limit;
         assert_eq!(parse_cgroup_memory_limit("max"), None);
         assert_eq!(parse_cgroup_memory_limit("MAX\n"), None);
         assert_eq!(parse_cgroup_memory_limit(""), None);
