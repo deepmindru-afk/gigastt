@@ -504,6 +504,15 @@ pub enum ModelVariant {
 }
 
 impl ModelVariant {
+    /// All known recognition heads, in auto-detection precedence order
+    /// (`Rnnt` first, mirroring the engine's default).
+    pub const ALL: [ModelVariant; 4] = [
+        ModelVariant::Rnnt,
+        ModelVariant::E2eRnnt,
+        ModelVariant::MlCtc,
+        ModelVariant::MlCtcLarge,
+    ];
+
     /// Basename of the FP32 encoder ONNX file for this variant.
     pub fn encoder_file(self) -> &'static str {
         match self {
@@ -665,17 +674,10 @@ impl ModelVariant {
 
     /// Detect which variant's files are present in `dir` by probing for the
     /// encoder file (FP32 or generated INT8). Returns `None` when neither
-    /// variant's encoder is present. `Rnnt` takes precedence when (anomalously)
-    /// both encoders coexist, mirroring the engine's default.
+    /// variant's encoder is present. `Rnnt` takes precedence when several
+    /// heads' encoders coexist, mirroring the engine's default.
     pub fn detect_in_dir(dir: &Path) -> Option<Self> {
-        [
-            ModelVariant::Rnnt,
-            ModelVariant::E2eRnnt,
-            ModelVariant::MlCtc,
-            ModelVariant::MlCtcLarge,
-        ]
-        .into_iter()
-        .find(|&variant| {
+        Self::ALL.into_iter().find(|&variant| {
             dir.join(variant.encoder_file()).exists()
                 || dir.join(variant.encoder_int8_file()).exists()
         })
@@ -2544,6 +2546,24 @@ mod tests {
     #[test]
     fn test_model_variant_default_is_rnnt() {
         assert_eq!(ModelVariant::default(), ModelVariant::Rnnt);
+    }
+
+    #[test]
+    fn test_model_variant_all_covers_every_variant() {
+        // Compile-time guard: the match is exhaustive within this crate
+        // (`#[non_exhaustive]` only binds downstream), so adding a head
+        // without extending `ModelVariant::ALL` fails the build here —
+        // the keep-set in `cache-gc` and `detect_in_dir` both derive from it.
+        let mut count = 0;
+        for v in ModelVariant::ALL {
+            match v {
+                ModelVariant::Rnnt
+                | ModelVariant::E2eRnnt
+                | ModelVariant::MlCtc
+                | ModelVariant::MlCtcLarge => count += 1,
+            }
+        }
+        assert_eq!(count, 4);
     }
 
     #[test]

@@ -317,7 +317,8 @@ gigastt cache-gc [OPTIONS]
   --dry-run              Report reclaimable files without deleting / hardlinking
   --dedupe               Also hardlink content-identical files (SHA-256 groups)
 
-  Removes non-active optimized_cache/*_optimized.{ort,onnx} graphs, keeping only
-  the graph for the preferred encoder of the detected head (INT8 when present).
+  Removes optimized_cache/*_optimized.{ort,onnx} graphs that no installed head
+  can load, keeping the graph for the preferred encoder of every head whose
+  weights are present in the directory (INT8 preferred).
   Safe on accuracy: leftovers are pure disk waste from FP32 runs or head switches.
 ```
