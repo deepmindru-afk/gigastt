@@ -538,6 +538,9 @@ async fn handle_configure_message(
 
 /// Handle `{"type":"stop"}`. Flushes the streaming state, sends a final
 /// segment (empty if there was nothing pending), and signals clean break.
+///
+/// The final ONNX decode runs in `spawn_blocking` + `catch_unwind`, matching
+/// the binary-frame path — never on the async reactor worker.
 async fn handle_stop_message(
     sink: &mut WsSink,
     engine: &Arc<Engine>,
@@ -546,17 +549,52 @@ async fn handle_stop_message(
     peer: SocketAddr,
 ) -> Result<FrameOutcome> {
     tracing::info!("Stop received from {peer}, finalizing");
-    let Some(mut state) = state_opt.take() else {
+    let Some(state) = state_opt.take() else {
         return Ok(FrameOutcome::Break);
     };
-    // Final decode of audio buffered since the last strided decode so trailing
-    // words aren't lost. Runs inline (the session is ending); falls back to a
-    // plain flush if the triplet was already returned to the pool.
-    let flush_seg = match reservation.as_mut() {
-        Some(res) => engine.finish_stream(&mut state, res),
-        None => engine.flush_state(&mut state),
+    // Move ownership into the blocking task so the triplet returns to the
+    // pool even if `finish_stream` panics (mirrors `handle_binary_frame`).
+    let eng = engine.clone();
+    let reservation_owned = reservation.take();
+    let span = tracing::Span::current();
+    let handle = tokio::task::spawn_blocking(move || {
+        let _enter = span.enter();
+        let mut state = state;
+        let mut reservation = reservation_owned;
+        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            match reservation.as_mut() {
+                // Final decode of audio buffered since the last strided decode
+                // so trailing words aren't lost. Falls back to a plain flush
+                // if the triplet was already returned to the pool.
+                Some(res) => eng.finish_stream(&mut state, res),
+                None => eng.flush_state(&mut state),
+            }
+        }));
+        (r, reservation)
+    });
+
+    let flush_seg = match handle.await {
+        Ok((Ok(seg), reservation_back)) => {
+            // Drop after the join so the pool slot is held for the duration of
+            // the final decode (same lifetime as the pre-offload path).
+            drop(reservation_back);
+            seg
+        }
+        Ok((Err(_panic), reservation_back)) => {
+            drop(reservation_back);
+            tracing::error!(
+                "Panic in WS finish_stream for {peer} — triplet recovered, emitting empty Final"
+            );
+            None
+        }
+        Err(e) => {
+            // spawn_blocking failed (runtime shutdown). Reservation was moved
+            // into the task and dropped with it → pool recovers automatically.
+            tracing::error!("spawn_blocking join error on WS stop for {peer}: {e}");
+            return Err(anyhow::anyhow!("Blocking task join failed"));
+        }
     };
-    drop(state);
+
     let final_msg = if let Some(seg) = flush_seg {
         ServerMessage::Final(seg)
     } else {
