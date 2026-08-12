@@ -13,6 +13,7 @@ mod diarization;
 mod engine;
 mod features;
 mod pool;
+mod sizing;
 mod state;
 mod token_format;
 mod types;
