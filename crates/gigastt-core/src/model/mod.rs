@@ -504,6 +504,15 @@ pub enum ModelVariant {
 }
 
 impl ModelVariant {
+    /// All known recognition heads, in auto-detection precedence order
+    /// (`Rnnt` first, mirroring the engine's default).
+    pub const ALL: [ModelVariant; 4] = [
+        ModelVariant::Rnnt,
+        ModelVariant::E2eRnnt,
+        ModelVariant::MlCtc,
+        ModelVariant::MlCtcLarge,
+    ];
+
     /// Basename of the FP32 encoder ONNX file for this variant.
     pub fn encoder_file(self) -> &'static str {
         match self {
@@ -668,14 +677,7 @@ impl ModelVariant {
     /// variant's encoder is present. `Rnnt` takes precedence when (anomalously)
     /// both encoders coexist, mirroring the engine's default.
     pub fn detect_in_dir(dir: &Path) -> Option<Self> {
-        [
-            ModelVariant::Rnnt,
-            ModelVariant::E2eRnnt,
-            ModelVariant::MlCtc,
-            ModelVariant::MlCtcLarge,
-        ]
-        .into_iter()
-        .find(|&variant| {
+        Self::ALL.into_iter().find(|&variant| {
             dir.join(variant.encoder_file()).exists()
                 || dir.join(variant.encoder_int8_file()).exists()
         })
