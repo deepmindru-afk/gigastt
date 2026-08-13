@@ -70,7 +70,7 @@ crates/
       state.rs            # StreamingState / DecoderState
       features.rs         # Mel spectrogram (64 bins, FFT=320, hop=160, HTK)
       tokenizer.rs        # Vocabulary per head: char (rnnt) / BPE (e2e_rnnt) / multilingual char (ml_ctc)
-      decode.rs           # RNN-T greedy decode loop
+      decode/             # RNN-T greedy decode loop
       ctc.rs              # Greedy CTC decode (ml_ctc heads)
       bias.rs             # Hotword biasing
       diarization.rs      # polyvoice glue (Embedder adapter, offline + streaming)

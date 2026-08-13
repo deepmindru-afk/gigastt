@@ -168,10 +168,10 @@ crates/
   gigastt-core/src/       # Core library (inference engine, no server deps)
     lib.rs                # Public module exports
     error.rs              # Typed error types (GigasttError)
-    export.rs             # Transcript export: TXT / SRT / VTT / Markdown
-    punctuation.rs        # Punctuation restoration (windowed)
+    export/               # Transcript export: TXT / SRT / VTT / Markdown
+    punctuation/          # Punctuation restoration (windowed)
     itn.rs · lexicon.rs   # Inverse text normalization, lexicon
-    vad.rs                # Voice activity detection
+    vad/                  # Voice activity detection
     inference/
       mod.rs              # Module wiring + shared constants (N_MELS, N_FFT, HOP_LENGTH, PRED_HIDDEN)
       engine/             # Engine: load, warmup, transcribe, streaming decode loop
@@ -180,7 +180,7 @@ crates/
       state.rs            # StreamingState / DecoderState
       features.rs         # Mel spectrogram (64 bins, FFT=320, hop=160, HTK)
       tokenizer.rs        # Vocabulary: char (rnnt, 34) / BPE (e2e_rnnt, 1025) / multilingual char (ml_ctc, 71)
-      decode.rs           # RNN-T greedy decode loop
+      decode/             # RNN-T greedy decode loop
       ctc.rs              # Greedy CTC decode (ml_ctc heads — no decoder / joiner)
       bias.rs             # Hotword biasing
       diarization.rs      # polyvoice glue: Embedder adapter, offline + streaming pipelines
