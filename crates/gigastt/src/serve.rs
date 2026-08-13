@@ -10,11 +10,10 @@ use gigastt::boot::{
     EngineRecipe, ItnMode, PunctuationMode, parse_itn_mode, parse_punctuation_mode,
 };
 use gigastt::server;
+use gigastt::server::{OriginPolicy, RuntimeLimits, ServerConfig};
 use gigastt_core::model;
 use gigastt_core::model::ModelVariant;
 use std::net::IpAddr;
-
-use crate::{build_limits, build_server_config};
 
 // `Serve` carries many optional CLI flags, so it is much larger than the other
 // variants. The enum is parsed once at startup and never stored in bulk, so
@@ -490,4 +489,104 @@ pub(crate) async fn run_serve(
             .context("engine load task panicked")?
     };
     server::run_with_config_loading_reloadable(server_config, None, load, Some(build_engine)).await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn build_limits(
+    config_path: Option<&str>,
+    idle_timeout_secs: Option<u64>,
+    ws_frame_max_bytes: Option<usize>,
+    body_limit_bytes: Option<usize>,
+    rate_limit_per_minute: Option<u32>,
+    rate_limit_burst: Option<u32>,
+    max_session_secs: Option<u64>,
+    shutdown_drain_secs: Option<u64>,
+    pool_checkout_timeout_secs: Option<u64>,
+    inference_timeout_secs: Option<u64>,
+    jobs_enabled: Option<bool>,
+    jobs_ttl_secs: Option<u64>,
+    jobs_max: Option<usize>,
+    jobs_max_bytes: Option<usize>,
+    jobs_retry: Option<u32>,
+) -> anyhow::Result<RuntimeLimits> {
+    let mut limits = if let Some(path) = config_path {
+        server::config::load_config_file(std::path::Path::new(path))?
+    } else {
+        RuntimeLimits::default()
+    };
+    if let Some(v) = idle_timeout_secs {
+        limits.idle_timeout_secs = v;
+    }
+    if let Some(v) = ws_frame_max_bytes {
+        limits.ws_frame_max_bytes = v;
+    }
+    if let Some(v) = body_limit_bytes {
+        limits.body_limit_bytes = v;
+    }
+    if let Some(v) = rate_limit_per_minute {
+        limits.rate_limit_per_minute = v;
+    }
+    if let Some(v) = rate_limit_burst {
+        limits.rate_limit_burst = v;
+    }
+    if limits.rate_limit_per_minute > 0 && limits.rate_limit_burst == 0 {
+        anyhow::bail!("--rate-limit-burst must be > 0 when --rate-limit-per-minute is enabled");
+    }
+    if let Some(v) = max_session_secs {
+        limits.max_session_secs = v;
+    }
+    if let Some(v) = shutdown_drain_secs {
+        limits.shutdown_drain_secs = v;
+    }
+    if let Some(v) = pool_checkout_timeout_secs {
+        limits.pool_checkout_timeout_secs = v;
+    }
+    if let Some(v) = inference_timeout_secs {
+        limits.inference_timeout_secs = v;
+    }
+    if let Some(v) = jobs_enabled {
+        limits.jobs_enabled = v;
+    }
+    if let Some(v) = jobs_ttl_secs {
+        limits.jobs_ttl_secs = v;
+    }
+    if let Some(v) = jobs_max {
+        limits.jobs_max = v;
+    }
+    if let Some(v) = jobs_max_bytes {
+        limits.jobs_max_bytes = v;
+    }
+    if let Some(v) = jobs_retry {
+        limits.jobs_retry = v;
+    }
+    Ok(limits)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn build_server_config(
+    port: u16,
+    host: String,
+    allow_origin: Vec<String>,
+    cors_allow_any: bool,
+    limits: RuntimeLimits,
+    metrics: bool,
+    metrics_listen: std::net::SocketAddr,
+    trust_proxy: bool,
+    config: Option<String>,
+    batch_pool_size: usize,
+) -> ServerConfig {
+    ServerConfig {
+        port,
+        host,
+        origin_policy: OriginPolicy {
+            allow_any: cors_allow_any,
+            allowed_origins: allow_origin,
+        },
+        limits,
+        metrics_enabled: metrics,
+        metrics_listen,
+        trust_proxy,
+        config_path: config.map(std::path::PathBuf::from),
+        batch_pool_size,
+    }
 }
