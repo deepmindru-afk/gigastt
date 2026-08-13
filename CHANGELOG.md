@@ -28,7 +28,9 @@ were released without a git tag, so their headings carry no compare link.
 - `Engine` impl split into `engine/{config,load,stream,transcribe,infer}.rs`.
   Public API is unchanged.
 - `model` download/identity split into `model/{progress,variant,download}.rs`;
-  the streaming SHA-256 fetch lives in `download/fetch.rs`.
+  the streaming SHA-256 fetch lives in `download/fetch.rs`, ANE
+  packages in `download/ane.rs`, and sidecar ensure (speaker / punct /
+  VAD) in `download/sidecars.rs`.
   Public `gigastt_core::model::*` paths are unchanged. CLI parse tests live
   next to `main.rs` split by command (`cli_tests/{serve,download,transcribe,
   batch,parse}.rs`); bind-gate tests live next to `serve.rs`.
