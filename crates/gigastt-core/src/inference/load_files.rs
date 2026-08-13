@@ -108,6 +108,31 @@ impl ResolvedModelFiles {
             })
         }
     }
+
+    /// Check every resolved file that has a pinned digest. Custom
+    /// `manifest.toml` names with no table entry are skipped.
+    pub(crate) fn verify_pinned_checksums(
+        &self,
+        variant: ModelVariant,
+    ) -> Result<(), GigasttError> {
+        let mut files: Vec<&std::path::Path> = vec![&self.encoder, &self.vocab];
+        if let Some(d) = self.decoder.as_deref() {
+            files.push(d);
+        }
+        if let Some(j) = self.joint.as_deref() {
+            files.push(j);
+        }
+        for path in files {
+            let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+                continue;
+            };
+            let Some(expected) = variant.checksum(name) else {
+                continue;
+            };
+            crate::model::verify_pinned_checksum(path, expected)?;
+        }
+        Ok(())
+    }
 }
 
 use crate::runtime::factory::Runtime;
@@ -427,5 +452,23 @@ vocab = "pack_vocab.txt"
         .unwrap();
         let path = encoder_model_path(dir.path(), ModelVariant::Rnnt);
         assert_eq!(path.file_name().unwrap(), "pack_enc_int8.onnx");
+    }
+
+    #[test]
+    fn test_verify_pinned_checksums_rejects_placeholder_encoder() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("v3_rnnt_encoder_int8.onnx"), b"int8").unwrap();
+        std::fs::write(dir.path().join("v3_rnnt_decoder.onnx"), b"dec").unwrap();
+        std::fs::write(dir.path().join("v3_rnnt_joint.onnx"), b"joint").unwrap();
+        std::fs::write(dir.path().join("v3_vocab.txt"), b"a\n").unwrap();
+        let files = ResolvedModelFiles::resolve(dir.path(), ModelVariant::Rnnt).unwrap();
+        let err = files
+            .verify_pinned_checksums(ModelVariant::Rnnt)
+            .expect_err("placeholder bytes must not match the pinned digest");
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("SHA-256 mismatch") || msg.contains("model load error"),
+            "unexpected error: {msg}"
+        );
     }
 }
