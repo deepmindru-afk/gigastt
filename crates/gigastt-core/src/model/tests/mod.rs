@@ -1,5 +1,7 @@
 //! Unit tests for model download / variant / progress.
 
+#[cfg(feature = "net")]
+use super::download::fetch::*;
 use super::download::*;
 use super::progress::*;
 use super::variant::*;
