@@ -62,7 +62,7 @@ The Dockerfile passes `--bind-all` so the server listens on `0.0.0.0` inside the
 crates/
   gigastt-core/src/       # Core library (inference engine, no server deps)
     lib.rs                # Public module exports
-    model/mod.rs          # HuggingFace model download (streaming + SHA256 + atomic rename)
+    model/                # HuggingFace model download (streaming + SHA256 + atomic rename)
     inference/
       mod.rs              # Module wiring + shared constants
       engine/             # Engine: load, warmup, transcribe, streaming (split impl)

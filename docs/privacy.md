@@ -34,7 +34,7 @@ model download (ASR heads, and optionally punctuation / VAD / speaker models):
 - Each file is SHA-256 verified before use and written atomically to disk.
 - After the initial download, gigastt operates fully offline.
 - Audited: the HTTP client (`reqwest`) is referenced from exactly one module —
-  the model downloader (`gigastt-core/src/model/mod.rs`) — and every fetch in
+  the model downloader (`gigastt-core/src/model/`) — and every fetch in
   that module funnels through a single download function. No other runtime
   code path opens outbound connections. `GIGASTT_OFFLINE=1` (or `--offline`)
   turns even that path into a fast, instructive error for air-gapped hosts.
