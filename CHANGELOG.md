@@ -40,7 +40,7 @@ were released without a git tag, so their headings carry no compare link.
   features, metrics, and the rest). Jobs tests are split by store / queue
   / events. WordPiece Unicode category tables live in `wordpiece/unicode.rs`.
   `FileWindows` lives in `audio/stream/file.rs`; window geometry stays in
-  `stream.rs`.
+  `stream.rs`. Dual-mono detection lives in `audio/decode/dual_mono.rs`.
 
 ### Fixed
 
