@@ -39,7 +39,7 @@ fn keepalive_should_close(unanswered_pings: u32) -> bool {
     unanswered_pings >= WS_MAX_MISSED_PONGS
 }
 
-pub(super) async fn ws_handler(
+pub(crate) async fn ws_handler(
     ws: WebSocketUpgrade,
     axum::extract::ConnectInfo(peer): axum::extract::ConnectInfo<SocketAddr>,
     State(state): State<Arc<http::AppState>>,
