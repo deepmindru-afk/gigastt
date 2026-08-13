@@ -4,28 +4,36 @@ use anyhow::Context;
 use std::path::Path;
 
 use crate::error::GigasttError;
-use crate::model::{ModelManifest, ModelVariant};
-use crate::runtime::factory::Runtime;
+use crate::model::ModelVariant;
 #[allow(unused_imports)]
 use crate::runtime::factory::RuntimeFactory;
 use crate::runtime::production_factory_variant;
-use crate::runtime::tensor::{Shape, Tensor, TensorData, TensorDataView};
+use crate::runtime::tensor::{Shape, TensorDataView};
 
 use super::audio;
 use super::audio::{PcmWindows, SliceWindows, WindowSpec};
 use super::bias;
 use super::ctc;
 use super::decode;
+use super::load_files::{
+    ResolvedModelFiles, encoder_model_path, load_triplets_runtime, resolve_variant_required,
+};
 use super::pool::{Pool, SessionPool, SessionTriplet};
+use super::sizing;
 use super::state::{
     DecoderState, EndpointMode, EndpointReason, FeatureExtractor, StreamingState,
     TranscriptAssembler, TranscriptSegment, WordInfo, aggregate_confidence,
 };
-use super::tokenizer::{self, Tokenizer};
+use super::token_format::{TokenFormatter, stitch_chunk_words};
+use super::tokenizer::Tokenizer;
 use super::types::{
     DEFAULT_HOTWORDS_BOOST, DiarizationOutcome, HotwordError, HotwordOverride,
     MAX_HOTWORD_PHRASE_CHARS, MAX_HOTWORDS_PER_REQUEST, OverrideError, TranscribeOverrides,
     TranscribeRequest, TranscribeResult, TranscribeSource, merge_channel_results,
+};
+use super::windows::{
+    STREAM_DECODE_STRIDE_SAMPLES, STREAM_LEFT_CONTEXT_SAMPLES, STREAM_MAX_WINDOW_SAMPLES,
+    window_spec,
 };
 use super::{ENCODER_SUBSAMPLING, HOP_LENGTH, N_FFT, N_MELS, SECONDS_PER_FRAME, now_timestamp};
 
@@ -74,258 +82,6 @@ impl DecodeControls<'_> {
     }
 }
 
-/// Parse a cgroup memory limit file body (`memory.max` v2 or
-/// `memory.limit_in_bytes` v1). Returns `None` for missing/unbounded/`max`.
-/// Pure so unit tests can feed strings without a real cgroup mount.
-#[cfg(any(test, target_os = "linux"))]
-fn parse_cgroup_memory_limit(raw: &str) -> Option<u64> {
-    let s = raw.trim();
-    if s.is_empty() || s.eq_ignore_ascii_case("max") {
-        return None;
-    }
-    let bytes: u64 = s.parse().ok()?;
-    // Kernel v1 often reports a huge sentinel (~2^63-1) when unlimited.
-    if bytes == 0 || bytes >= (1u64 << 62) {
-        return None;
-    }
-    Some(bytes)
-}
-
-/// Read Linux cgroup memory limit (v2 then v1). `None` on non-Linux or when
-/// unlimited / unreadable. Does not panic on missing files.
-fn cgroup_memory_limit_bytes() -> Option<u64> {
-    #[cfg(target_os = "linux")]
-    {
-        const CANDIDATES: &[&str] = &[
-            "/sys/fs/cgroup/memory.max",                   // cgroup v2 unified
-            "/sys/fs/cgroup/memory/memory.limit_in_bytes", // cgroup v1
-        ];
-        for path in CANDIDATES {
-            if let Ok(raw) = std::fs::read_to_string(path)
-                && let Some(bytes) = parse_cgroup_memory_limit(&raw)
-            {
-                return Some(bytes);
-            }
-        }
-        None
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        None
-    }
-}
-
-/// Total physical RAM in bytes, or `0` if it can't be determined (in which case
-/// the pool RAM cap is a no-op). macOS: `sysctl HW_MEMSIZE`; Linux/other unix:
-/// `sysconf(_SC_PHYS_PAGES) * _SC_PAGESIZE`.
-fn total_ram_bytes() -> u64 {
-    #[cfg(target_os = "macos")]
-    {
-        let mut mem: u64 = 0;
-        let mut len = std::mem::size_of::<u64>();
-        let mib = [libc::CTL_HW, libc::HW_MEMSIZE];
-        // SAFETY: `mib`/`mem`/`len` are valid for the duration of the call;
-        // sysctl writes at most `len` bytes into `mem`.
-        let rc = unsafe {
-            libc::sysctl(
-                mib.as_ptr() as *mut libc::c_int,
-                mib.len() as libc::c_uint,
-                &mut mem as *mut u64 as *mut libc::c_void,
-                &mut len,
-                std::ptr::null_mut(),
-                0,
-            )
-        };
-        if rc == 0 { mem } else { 0 }
-    }
-    #[cfg(all(unix, not(target_os = "macos")))]
-    {
-        // SAFETY: sysconf has no side effects and returns -1 on error.
-        let pages = unsafe { libc::sysconf(libc::_SC_PHYS_PAGES) };
-        let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
-        if pages > 0 && page_size > 0 {
-            (pages as u64).saturating_mul(page_size as u64)
-        } else {
-            0
-        }
-    }
-    #[cfg(not(unix))]
-    {
-        0
-    }
-}
-
-/// Effective RAM budget for pool sizing: **min(host RAM, cgroup memory.max)**
-/// when a cgroup limit is present (Docker/k8s). Falls back to host-only when
-/// cgroup files are missing (macOS, bare metal without limits).
-fn effective_ram_bytes() -> u64 {
-    let host = total_ram_bytes();
-    match cgroup_memory_limit_bytes() {
-        Some(limit) if limit > 0 => {
-            if host == 0 {
-                limit
-            } else {
-                host.min(limit)
-            }
-        }
-        _ => host,
-    }
-}
-
-/// Resolve which recognition head the engine should load.
-///
-/// Precedence:
-/// 1. Explicit `override_` (from `--model-variant`) always wins.
-/// 2. Else `manifest.toml` architecture, when that file is present.
-/// 3. Else auto-detect from on-disk encoder filenames (`rnnt` precedence).
-///
-/// A present-but-invalid `manifest.toml` is a hard error (not silently ignored).
-/// Extracted so the override / manifest / disk precedence is unit-testable
-/// without model weights.
-fn resolve_load_variant(
-    override_: Option<ModelVariant>,
-    model_dir: &Path,
-) -> anyhow::Result<Option<ModelVariant>> {
-    // Always validate a present manifest so a corrupt pack fails clearly, even
-    // when the CLI override selects the architecture.
-    let manifest = ModelManifest::load(model_dir)?;
-    if let Some(v) = override_ {
-        return Ok(Some(v));
-    }
-    if let Some(m) = manifest {
-        return Ok(Some(m.architecture));
-    }
-    Ok(ModelVariant::detect_in_dir(model_dir))
-}
-
-/// On-disk model file paths for a load: either from `manifest.toml` or from the
-/// hardcoded [`ModelVariant`] basenames when no manifest is present.
-struct ResolvedModelFiles {
-    encoder: std::path::PathBuf,
-    decoder: Option<std::path::PathBuf>,
-    joint: Option<std::path::PathBuf>,
-    vocab: std::path::PathBuf,
-    using_int8: bool,
-}
-
-impl ResolvedModelFiles {
-    fn resolve(dir: &Path, variant: ModelVariant) -> anyhow::Result<Self> {
-        if let Some(m) = ModelManifest::load(dir)? {
-            anyhow::ensure!(
-                m.prefers_int8(dir),
-                "manifest resolves to a non-INT8 encoder — gigastt runs INT8 only. \
-                 Install the INT8 encoder (`gigastt download`) or fix encoder_int8 in manifest.toml."
-            );
-            return Ok(Self {
-                encoder: m.preferred_encoder_path(dir),
-                decoder: m.decoder_path(dir),
-                joint: m.joint_path(dir),
-                vocab: m.vocab_path(dir),
-                using_int8: true,
-            });
-        }
-        Self::from_variant(dir, variant)
-    }
-
-    fn from_variant(dir: &Path, variant: ModelVariant) -> anyhow::Result<Self> {
-        // Product policy: only the INT8 encoder is supported. FP32 ONNX is not
-        // loaded (no silent fallback). Fix: `gigastt download` (lean INT8).
-        let int8 = dir.join(variant.encoder_int8_file());
-        anyhow::ensure!(
-            int8.is_file(),
-            "INT8 encoder not found at {} — gigastt runs INT8 only. \
-             Run `gigastt download` (lean INT8 bundle). FP32 encoders are not supported.",
-            int8.display()
-        );
-        if variant.is_ctc() {
-            Ok(Self {
-                encoder: int8,
-                decoder: None,
-                joint: None,
-                vocab: dir.join(variant.vocab_file()),
-                using_int8: true,
-            })
-        } else {
-            Ok(Self {
-                encoder: int8,
-                decoder: Some(dir.join(variant.decoder_file())),
-                joint: Some(dir.join(variant.joint_file())),
-                vocab: dir.join(variant.vocab_file()),
-                using_int8: true,
-            })
-        }
-    }
-}
-
-/// Max streaming encoder window before sliding (samples @16kHz, 2.5s).
-/// Re-decoding the whole window each stride gives the offline Conformer left
-/// context; this cap bounds the per-stride encoder cost. With the 1.5s retained
-/// left context and the 0.8s stride, a 2.5s window keeps the steady-state
-/// re-encode overlap near ~3x (vs ~6.25x at a 5s window) — roughly half the
-/// streaming encoder work — while retaining enough left context that streaming
-/// quality stays on par with batch (covered by the `streaming_quality` tests).
-///
-/// Hitting the cap **commits a stable prefix** and slides; it does **not** emit
-/// a speech-final `final` (that would mean "utterance complete" to assistants).
-const STREAM_MAX_WINDOW_SAMPLES: usize = 16000 * 5 / 2;
-/// Left-context audio retained across a streaming finalize/slide (samples @16kHz,
-/// ~1.5s) so the next window keeps acoustic context instead of restarting cold.
-const STREAM_LEFT_CONTEXT_SAMPLES: usize = 16000 * 3 / 2;
-/// Decode stride: re-run the encoder only after this much NEW audio has
-/// accumulated (samples @16kHz, 0.8s) instead of on every ~100ms chunk.
-/// Re-decoding the window is the dominant streaming cost, so the stride keeps
-/// the engine real-time; `finish_stream` decodes the sub-stride remainder at EOF.
-const STREAM_DECODE_STRIDE_SAMPLES: usize = 16000 * 4 / 5;
-
-/// File-transcription chunking threshold (samples @16kHz, 30s). Inputs at or
-/// below this length take the single-pass path unchanged; longer inputs are
-/// split into overlapping windows so the encoder's peak activation memory is
-/// bounded by the chunk size, not the file length. The Conformer encoder only
-/// carries ~20–30s of useful context, so chunking above this costs no accuracy
-/// in the common case. (A higher single-pass ceiling for CTC was tried for
-/// stretch RTF on ~40s clips; measured wall time was worse than 24s windows —
-/// larger activation tensors thrash CPU caches — so both head families share
-/// this 30s ceiling.)
-const CHUNK_THRESHOLD_SAMPLES: usize = 16000 * 30;
-/// Long-form decode window on ort / CoreML-EP / CUDA (samples @16kHz, 24s).
-/// Bounds per-chunk encoder activation memory; the ANE path uses a longer
-/// window via [`chunk_window_samples`].
-const CHUNK_WINDOW_SAMPLES_ORT: usize = 16000 * 24;
-/// Long-form decode window on the ANE encoder (samples @16kHz, 30s). Full chunks
-/// fill ANE bucket 3000 at ~99.97% (vs ~80% fill at 24s), recovering pad-up
-/// waste. Peak activation is free on-device; ort keeps the shorter window.
-const CHUNK_WINDOW_SAMPLES_ANE: usize = 16000 * 30;
-/// Overlap retained between consecutive long-form windows (samples @16kHz, 2s),
-/// so a word straddling a seam is decoded fully in at least one chunk. The
-/// stitch step de-dups words in the overlap region (see [`stitch_chunk_words`]).
-const CHUNK_OVERLAP_SAMPLES: usize = 16000 * 2;
-
-/// Select the long-form chunk window length for the active encoder backend.
-///
-/// ANE uses 30s so each full chunk nearly fills bucket 3000; every other
-/// backend keeps 24s to bound peak encoder activation memory on CPU/EP paths.
-/// Pure so the selection is unit-tested without a loaded model.
-pub(crate) fn chunk_window_samples(ane_encoder: bool) -> usize {
-    if ane_encoder {
-        CHUNK_WINDOW_SAMPLES_ANE
-    } else {
-        CHUNK_WINDOW_SAMPLES_ORT
-    }
-}
-
-/// Long-form window geometry for the active encoder backend: the single-pass
-/// ceiling, the backend's window length, and the fixed inter-window overlap.
-/// Free-standing (like [`chunk_window_samples`]) so the geometry is unit-tested
-/// without a loaded model. `ctc` is accepted for call-site uniformity (CTC and
-/// RNN-T share the same 30s ceiling after measurement).
-pub(crate) fn window_spec(ane_encoder: bool, _ctc: bool) -> WindowSpec {
-    WindowSpec::new(
-        CHUNK_THRESHOLD_SAMPLES,
-        chunk_window_samples(ane_encoder),
-        CHUNK_OVERLAP_SAMPLES,
-    )
-}
-
 /// Default number of session triplets in the pool.
 ///
 /// Each pooled triplet still materializes encoder weights; ORT's shared
@@ -340,45 +96,6 @@ pub(crate) fn window_spec(ane_encoder: bool, _ctc: bool) -> WindowSpec {
 const DEFAULT_POOL_SIZE: usize = 1;
 #[cfg(not(target_os = "android"))]
 const DEFAULT_POOL_SIZE: usize = 2;
-
-/// Approximate resident bytes a single pooled encoder triplet costs, as a
-/// multiple of the encoder file size on disk. Measured at ~1.9x the INT8
-/// encoder file (225 MB file → ~0.4 GB resident per extra pooled slot, dynamic
-/// INT8 graph, CPU EP, release). Used by [`Engine::cap_pool_size_for_ram`] to
-/// keep `pool_size * encoder_file_bytes * this` under a fraction of total RAM.
-const ENCODER_RESIDENT_MULTIPLIER: u64 = 2;
-
-/// Fraction (denominator) of total system RAM the pooled encoder sessions are
-/// allowed to occupy before [`Engine::cap_pool_size_for_ram`] clamps the pool.
-/// `2` = at most half of total RAM budgeted to encoder slots, leaving headroom
-/// for the decoder/joiner sessions, audio buffers, inference arenas, and the
-/// rest of the system.
-const POOL_RAM_FRACTION_DENOM: u64 = 2;
-
-/// Probe a freshly-built state; on failure, rebuild it once and re-probe.
-///
-/// `probe` is a runtime self-check, `rebuild` converts the failed state into
-/// a replacement (receiving the probe error so it can log the cause). A
-/// rebuilt state that still fails the probe is a hard error — there is no
-/// second fallback level.
-///
-/// Extracted from the CoreML runtime-fallback path (issue #42) so the
-/// decision logic stays unit-testable without ONNX sessions.
-#[cfg_attr(not(feature = "coreml"), allow(dead_code))]
-fn probe_or_rebuild<S>(
-    state: S,
-    probe: impl Fn(&S) -> anyhow::Result<()>,
-    rebuild: impl FnOnce(S, anyhow::Error) -> anyhow::Result<S>,
-) -> anyhow::Result<S> {
-    match probe(&state) {
-        Ok(()) => Ok(state),
-        Err(probe_err) => {
-            let rebuilt = rebuild(state, probe_err)?;
-            probe(&rebuilt).context("state failed probe even after rebuild")?;
-            Ok(rebuilt)
-        }
-    }
-}
 
 /// ONNX Runtime inference engine for GigaAM v3 e2e_rnnt.
 ///
@@ -539,6 +256,40 @@ impl Engine {
         let boost = hw.boost.unwrap_or(DEFAULT_HOTWORDS_BOOST);
         let pairs: Vec<(String, f32)> = hw.phrases.iter().cloned().map(|p| (p, 1.0)).collect();
         bias::Biaser::from_phrases(&self.tokenizer, &pairs, boost)
+    }
+
+    /// Effective hotword biaser for one decode call.
+    ///
+    /// - `hotwords == None` → engine boot biaser (may itself be `None`)
+    /// - `hotwords == Some(_)` → temporary request biaser (may be `None` when
+    ///   phrases are empty / unrepresentable — deliberately *not* the boot biaser)
+    ///
+    /// `request_biaser` must be the result of [`build_request_biaser`] (or
+    /// `None` when `hotwords` is absent); it is only borrowed, never moved.
+    fn select_biaser<'a>(
+        &'a self,
+        hotwords: Option<&HotwordOverride>,
+        request_biaser: &'a Option<bias::Biaser>,
+    ) -> Option<&'a bias::Biaser> {
+        match hotwords {
+            None => self.biaser.as_ref(),
+            Some(_) => request_biaser.as_ref(),
+        }
+    }
+
+    /// Apply ITN then punctuation to joined text. Shared by the streaming
+    /// finalizer and the file-transcription result builder so the order and
+    /// guards stay identical.
+    fn apply_text_postprocess(&self, text: String, itn: bool, punctuation: bool) -> String {
+        let text = if itn {
+            crate::itn::apply_itn(&text)
+        } else {
+            text
+        };
+        match &self.punctuator {
+            Some(p) if punctuation => p.restore(&text),
+            _ => text,
+        }
     }
 
     /// Enable or disable inverse text normalization (Russian number-words →
@@ -734,30 +485,16 @@ impl Engine {
         // manifest.toml architecture, else detect from disk (rnnt precedence).
         // Resolving here (not just inside `load_with_factory`) keeps the RAM cap
         // sized to the head that will actually load.
-        let variant = match resolve_load_variant(variant, dir) {
-            Ok(Some(v)) => v,
-            Ok(None) => {
-                return Err(GigasttError::ModelLoad {
-                    path: dir.display().to_string(),
-                    source: None,
-                });
-            }
-            Err(e) => {
-                return Err(GigasttError::ModelLoad {
-                    path: dir.display().to_string(),
-                    source: Some(e.into()),
-                });
-            }
-        };
+        let variant = resolve_variant_required(variant, dir)?;
         // Bound the idle footprint: each pooled triplet deserializes its own
         // encoder copy, so a large `--pool-size` on a small host can OOM at
         // load. Clamp by available RAM (logs when it clamps); a no-op on hosts
         // with ample memory.
-        let encoder_bytes = std::fs::metadata(Self::encoder_model_path(dir, variant))
+        let encoder_bytes = std::fs::metadata(encoder_model_path(dir, variant))
             .map(|m| m.len())
             .unwrap_or(0);
         let pool_size =
-            Self::cap_pool_size_for_ram(pool_size, encoder_bytes, effective_ram_bytes());
+            Self::cap_pool_size_for_ram(pool_size, encoder_bytes, sizing::effective_ram_bytes());
         // Don't let `pool_size * encoder_intra_threads` oversubscribe the CPU
         // (no-op when the default `1` is requested).
         let logical_cpus = std::thread::available_parallelism()
@@ -778,6 +515,38 @@ impl Engine {
         )
     }
 
+    /// Assemble an engine from already-loaded sessions, tokenizer, and variant.
+    ///
+    /// Optional attachments (punctuator, ITN, biaser, VAD) stay off — callers
+    /// chain [`Engine::with_punctuator`] / [`Engine::with_itn`] / etc.
+    fn from_loaded_parts(
+        pool: SessionPool,
+        batch_pool: Option<SessionPool>,
+        tokenizer: Tokenizer,
+        variant: ModelVariant,
+        int8: bool,
+        ane_encoder: bool,
+        #[cfg(feature = "diarization")] speaker_encoder: Option<LazySpeakerEncoder>,
+    ) -> Self {
+        Self {
+            pool,
+            batch_pool,
+            tokenizer,
+            features: FeatureExtractor::new(),
+            variant,
+            punctuator: None,
+            itn: false,
+            biaser: None,
+            vad: None,
+            vad_config: crate::vad::VadConfig::default(),
+            endpoint_mode: EndpointMode::Auto,
+            int8,
+            ane_encoder,
+            #[cfg(feature = "diarization")]
+            speaker_encoder,
+        }
+    }
+
     /// Package-private factory-based loader. Used by production code paths and
     /// by tests that inject a [`crate::runtime::factory::RuntimeFactory`].
     pub(crate) fn load_with_factory(
@@ -795,21 +564,7 @@ impl Engine {
         // what makes `--model-variant` effective when a directory holds more than
         // one head — without it the engine always re-detects and silently loads
         // the highest-precedence head.
-        let variant = match resolve_load_variant(variant_override, model_dir) {
-            Ok(Some(v)) => v,
-            Ok(None) => {
-                return Err(GigasttError::ModelLoad {
-                    path: model_dir.display().to_string(),
-                    source: None,
-                });
-            }
-            Err(e) => {
-                return Err(GigasttError::ModelLoad {
-                    path: model_dir.display().to_string(),
-                    source: Some(e.into()),
-                });
-            }
-        };
+        let variant = resolve_variant_required(variant_override, model_dir)?;
         let pool_size = pool_size.max(1);
         let min_size = min_size.clamp(1, pool_size);
 
@@ -850,10 +605,8 @@ impl Engine {
 
         // CoreML can reject a model at load time; fall back to CPU if that happens.
         #[cfg(feature = "coreml")]
-        let triplets = match Self::load_triplets_runtime(
-            &*runtime, &files, variant, pool_size, min_size,
-        )
-        .map_err(model_load)
+        let triplets = match load_triplets_runtime(&*runtime, &files, variant, pool_size, min_size)
+            .map_err(model_load)
         {
             Ok(triplets) => triplets,
             Err(load_err) => {
@@ -862,16 +615,15 @@ impl Engine {
                 );
                 let cpu_factory = factory.cpu_fallback();
                 let runtime = cpu_factory.create(encoder_intra_threads)?;
-                Self::load_triplets_runtime(&*runtime, &files, variant, pool_size, min_size)
+                load_triplets_runtime(&*runtime, &files, variant, pool_size, min_size)
                     .map_err(model_load)?
             }
         };
         #[cfg(not(feature = "coreml"))]
-        let triplets = Self::load_triplets_runtime(&*runtime, &files, variant, pool_size, min_size)
+        let triplets = load_triplets_runtime(&*runtime, &files, variant, pool_size, min_size)
             .map_err(model_load)?;
 
         let tokenizer = Tokenizer::load(&files.vocab).map_err(model_load)?;
-        let features = FeatureExtractor::new();
 
         tracing::info!(
             "Models loaded (vocab_size={}, pool_size={pool_size})",
@@ -887,29 +639,22 @@ impl Engine {
         // non-rnnt heads / injected factories keep the ort chunk window.
         let ane_encoder = triplets.first().is_some_and(|t| t.encoder.is_ane_encoder());
         let (pool, batch_pool) = Self::split_triplets(triplets, batch_pool_size);
-        let engine = Self {
+        let engine = Self::from_loaded_parts(
             pool,
             batch_pool,
             tokenizer,
-            features,
             variant,
-            punctuator: None,
-            itn: false,
-            biaser: None,
-            vad: None,
-            vad_config: crate::vad::VadConfig::default(),
-            endpoint_mode: EndpointMode::Auto,
-            int8: is_int8,
+            is_int8,
             ane_encoder,
             #[cfg(feature = "diarization")]
             speaker_encoder,
-        };
+        );
 
         // CoreML compiles its graph partitions lazily, so sessions that loaded
         // fine can still fail at the first `Run()`. Probe one triplet now; if the
         // probe fails, rebuild the pool on the CPU EP.
         #[cfg(feature = "coreml")]
-        let engine = probe_or_rebuild(
+        let engine = sizing::probe_or_rebuild(
             engine,
             |e: &Self| e.warmup_one().map_err(anyhow::Error::from),
             |mut e, probe_err| {
@@ -921,7 +666,7 @@ impl Engine {
                     .create(encoder_intra_threads)
                     .map_err(|e| anyhow::anyhow!(e))?;
                 let triplets =
-                    Self::load_triplets_runtime(&*runtime, &files, variant, pool_size, min_size)?;
+                    load_triplets_runtime(&*runtime, &files, variant, pool_size, min_size)?;
                 let (pool, batch_pool) = Self::split_triplets(triplets, batch_pool_size);
                 e.pool = pool;
                 e.batch_pool = batch_pool;
@@ -931,16 +676,6 @@ impl Engine {
         .map_err(model_load)?;
 
         Ok(engine)
-    }
-
-    /// Path to the preferred encoder model for `variant`: INT8 quantized if
-    /// present, FP32 otherwise. Honors `manifest.toml` file names when present.
-    fn encoder_model_path(dir: &Path, variant: ModelVariant) -> std::path::PathBuf {
-        ResolvedModelFiles::resolve(dir, variant)
-            .map(|files| files.encoder)
-            // Tests may call this helper without a full install; surface the
-            // expected INT8 basename when resolve fails (FP32 is never chosen).
-            .unwrap_or_else(|_| dir.join(variant.encoder_int8_file()))
     }
 
     /// Split loaded triplets into an interactive pool and an optional batch
@@ -960,220 +695,23 @@ impl Engine {
     /// `batch_pool_size == 0` (or too few items to split) yields no batch pool.
     /// Generic over the item type so the routing can be unit-tested with a
     /// synthetic `Pool<u32>` instead of model-backed `SessionTriplet`s.
-    fn split_pool<T: Send>(
-        mut items: Vec<T>,
-        batch_pool_size: usize,
-    ) -> (Pool<T>, Option<Pool<T>>) {
-        let n = items.len();
-        let batch = Self::batch_split_count(n, batch_pool_size);
-        if batch == 0 {
-            return (Pool::new(items), None);
-        }
-        let batch_items = items.split_off(n - batch);
-        (Pool::new(items), Some(Pool::new(batch_items)))
+    fn split_pool<T: Send>(items: Vec<T>, batch_pool_size: usize) -> (Pool<T>, Option<Pool<T>>) {
+        let (interactive, batch) = sizing::split_pool_items(items, batch_pool_size);
+        (Pool::new(interactive), batch.map(Pool::new))
     }
 
-    /// Number of triplets to reserve for the batch pool given `n` loaded and a
-    /// requested `batch_pool_size`, always leaving at least one for the
-    /// interactive pool (so `n <= 1` or `batch_pool_size == 0` yields 0).
-    fn batch_split_count(n: usize, batch_pool_size: usize) -> usize {
-        batch_pool_size.min(n.saturating_sub(1))
-    }
-
-    /// Clamp the requested `pool_size` so the pooled encoder sessions can't
-    /// exceed [`POOL_RAM_FRACTION_DENOM`]⁻¹ of total RAM. Each triplet costs
-    /// about `encoder_bytes * ENCODER_RESIDENT_MULTIPLIER` resident (the encoder
-    /// dominates; decoder/joiner are small), so the max safe pool is
-    /// `(total_ram / denom) / per_triplet`, never below 1. Logs a warning when
-    /// it clamps. A no-op (returns `requested`) when RAM or encoder size is
-    /// unknown (`0`) — we never *raise* the requested size, only lower it.
-    ///
-    /// Pure and total so the budgeting math is unit-tested without a model or a
-    /// real `sysctl`/`sysconf` probe.
+    /// See [`sizing::cap_pool_size_for_ram`].
     fn cap_pool_size_for_ram(requested: usize, encoder_bytes: u64, total_ram: u64) -> usize {
-        if requested <= 1 || encoder_bytes == 0 || total_ram == 0 {
-            return requested.max(1);
-        }
-        let per_triplet = encoder_bytes.saturating_mul(ENCODER_RESIDENT_MULTIPLIER);
-        let budget = total_ram / POOL_RAM_FRACTION_DENOM;
-        // At least one slot always allowed even if a single triplet exceeds the
-        // budget — the pool can't be empty, and partial-load tolerance
-        // (`min_size`) handles a genuine OOM at load time.
-        let max_slots = (budget / per_triplet.max(1)).max(1) as usize;
-        if max_slots < requested {
-            tracing::warn!(
-                "Capping pool size {requested} -> {max_slots}: \
-                 {requested} encoder slots (~{} MiB each) would exceed half of \
-                 {} MiB total RAM. Concurrency is reduced; add RAM or lower \
-                 --pool-size to silence this.",
-                per_triplet / (1024 * 1024),
-                total_ram / (1024 * 1024),
-            );
-            max_slots
-        } else {
-            requested
-        }
+        sizing::cap_pool_size_for_ram(requested, encoder_bytes, total_ram)
     }
 
-    /// Clamp the requested encoder intra-op thread count so the pooled encoder
-    /// sessions can't oversubscribe the CPU. Each of `pool_size` triplets can
-    /// run concurrently, so the total intra-op parallelism is
-    /// `pool_size * threads`; capping that at `logical_cpus` keeps the machine
-    /// from thrashing on context switches. The effective per-encoder count is
-    /// therefore `clamp(requested, 1, logical_cpus / pool_size)`, never below 1.
-    /// Logs a warning when it lowers the request. The default `requested == 1`
-    /// always returns `1`, so the built sessions are unchanged.
-    ///
-    /// Pure and total so the budgeting math is unit-tested without spawning ORT
-    /// sessions or probing the real CPU count.
+    /// See [`sizing::clamp_encoder_intra_threads`].
     fn clamp_encoder_intra_threads(
         pool_size: usize,
         requested: usize,
         logical_cpus: usize,
     ) -> usize {
-        let requested = requested.max(1);
-        let pool_size = pool_size.max(1);
-        let logical_cpus = logical_cpus.max(1);
-        // Leave at least one thread per encoder even on a machine with fewer
-        // logical CPUs than pooled triplets.
-        let max_per_encoder = (logical_cpus / pool_size).max(1);
-        if requested > max_per_encoder {
-            tracing::warn!(
-                "Capping encoder intra-op threads {requested} -> {max_per_encoder}: \
-                 {pool_size} pooled encoder(s) x {requested} threads would exceed \
-                 the {logical_cpus} logical CPU(s) available. Lower --pool-size or \
-                 --encoder-intra-threads to silence this."
-            );
-            max_per_encoder
-        } else {
-            requested
-        }
-    }
-
-    /// Decide the final pool from per-triplet load results: returns the
-    /// successfully loaded triplets when at least `min_size` loaded (warning
-    /// when the pool is degraded below `pool_size`), or an error describing the
-    /// shortfall. `min_size` is clamped to `1..=pool_size`.
-    fn finalize_pool_load<T>(
-        results: Vec<anyhow::Result<T>>,
-        pool_size: usize,
-        min_size: usize,
-    ) -> anyhow::Result<Vec<T>> {
-        let min_size = min_size.clamp(1, pool_size.max(1));
-        let mut loaded = Vec::with_capacity(results.len());
-        let mut first_err: Option<anyhow::Error> = None;
-        for r in results {
-            match r {
-                Ok(t) => loaded.push(t),
-                Err(e) => {
-                    if first_err.is_none() {
-                        first_err = Some(e);
-                    }
-                }
-            }
-        }
-        let n = loaded.len();
-        if n >= min_size {
-            if n < pool_size {
-                let detail = first_err
-                    .map(|e| format!("; first error: {e:#}"))
-                    .unwrap_or_default();
-                tracing::warn!(
-                    "degraded pool: loaded {n}/{pool_size} session triplets ({} failed){detail}",
-                    pool_size - n
-                );
-            }
-            Ok(loaded)
-        } else {
-            let detail = first_err.map(|e| format!(": {e:#}")).unwrap_or_default();
-            Err(anyhow::anyhow!(
-                "loaded only {n}/{pool_size} session triplets, need at least {min_size}{detail}"
-            ))
-        }
-    }
-
-    /// Load up to `pool_size` session triplets in parallel through the given
-    /// [`Runtime`], tolerating a partial pool down to `min_size`.
-    fn load_triplets_runtime(
-        runtime: &dyn Runtime,
-        files: &ResolvedModelFiles,
-        variant: ModelVariant,
-        pool_size: usize,
-        min_size: usize,
-    ) -> anyhow::Result<Vec<SessionTriplet>> {
-        let encoder_path = files.encoder.clone();
-        // CTC is encoder-only: no decoder/joiner ONNX exists on disk, and the CTC
-        // branch in `run_inference` returns right after the encoder run without
-        // touching them. Load them only for the RNN-T heads (leaving `None` for
-        // CTC avoids holding an unused, never-run session per pool triplet).
-        let is_ctc = variant.is_ctc();
-        let decoder_path = files.decoder.clone();
-        let joiner_path = files.joint.clone();
-
-        let results: Vec<anyhow::Result<SessionTriplet>> = std::thread::scope(|s| {
-            let handles: Vec<_> = (0..pool_size)
-                .map(|i| {
-                    let encoder_path = &encoder_path;
-                    let decoder_path = &decoder_path;
-                    let joiner_path = &joiner_path;
-                    s.spawn(move || {
-                        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                            tracing::info!(
-                                "Loading session triplet {}/{pool_size} (shared runtime)",
-                                i + 1
-                            );
-                            let encoder = runtime
-                                .load_session(encoder_path, true)
-                                .map_err(|e| anyhow::anyhow!(e))?;
-                            let (decoder, joiner) = if is_ctc {
-                                (None, None)
-                            } else {
-                                let decoder_path = decoder_path.as_ref().ok_or_else(|| {
-                                    anyhow::anyhow!(
-                                        "decoder ONNX path missing for non-CTC architecture {}",
-                                        variant.as_str()
-                                    )
-                                })?;
-                                let joiner_path = joiner_path.as_ref().ok_or_else(|| {
-                                    anyhow::anyhow!(
-                                        "joint ONNX path missing for non-CTC architecture {}",
-                                        variant.as_str()
-                                    )
-                                })?;
-                                let decoder = runtime
-                                    .load_session(decoder_path, false)
-                                    .map_err(|e| anyhow::anyhow!(e))?;
-                                let joiner = runtime
-                                    .load_session(joiner_path, false)
-                                    .map_err(|e| anyhow::anyhow!(e))?;
-                                (Some(decoder), Some(joiner))
-                            };
-                            Ok(SessionTriplet {
-                                encoder,
-                                decoder,
-                                joiner,
-                                encoder_inputs: vec![
-                                    Tensor::new(
-                                        Shape::new(vec![1, N_MELS, 1]),
-                                        TensorData::F32(vec![0.0; N_MELS]),
-                                    )?,
-                                    Tensor::new(Shape::new(vec![1]), TensorData::I64(vec![0]))?,
-                                ],
-                            })
-                        }))
-                        .map_err(|_| anyhow::anyhow!("model loading thread panicked"))?
-                    })
-                })
-                .collect();
-            handles
-                .into_iter()
-                .map(|h| match h.join() {
-                    Ok(r) => r,
-                    Err(_) => Err(anyhow::anyhow!("model loading thread panicked")),
-                })
-                .collect()
-        });
-        Self::finalize_pool_load(results, pool_size, min_size)
+        sizing::clamp_encoder_intra_threads(pool_size, requested, logical_cpus)
     }
 
     /// Run one ~1 s silent inference on a single pooled session triplet.
@@ -1569,15 +1107,11 @@ impl Engine {
     /// regardless of segment length.
     fn enrich_final_segment(&self, seg: &mut TranscriptSegment, state: &StreamingState) {
         let text = std::mem::take(&mut seg.text);
-        let text = if state.itn.unwrap_or(self.itn) {
-            crate::itn::apply_itn(&text)
-        } else {
-            text
-        };
-        seg.text = match &self.punctuator {
-            Some(p) if state.punctuation.unwrap_or(true) => p.restore(&text),
-            _ => text,
-        };
+        seg.text = self.apply_text_postprocess(
+            text,
+            state.itn.unwrap_or(self.itn),
+            state.punctuation.unwrap_or(true),
+        );
     }
 
     /// Transcribe an audio file to text (supports WAV, MP3, M4A/AAC, OGG, FLAC).
@@ -1747,10 +1281,7 @@ impl Engine {
         if let (true, Some(vad)) = (use_vad, &self.vad) {
             let wall_start = std::time::Instant::now();
             let request_biaser = hotwords.and_then(|hw| self.build_request_biaser(hw));
-            let biaser: Option<&bias::Biaser> = match hotwords {
-                None => self.biaser.as_ref(),
-                Some(_) => request_biaser.as_ref(),
-            };
+            let biaser = self.select_biaser(hotwords, &request_biaser);
             let mut windows = audio::VadWindows::new(
                 open(audio::VadWindows::pull_spec())?,
                 vad,
@@ -1821,16 +1352,9 @@ impl Engine {
     ) -> Result<TranscribeResult, GigasttError> {
         let wall_start = std::time::Instant::now();
 
-        // Hotword biaser selection, mirroring `decode_words_for_samples`:
-        // engine boot biaser, a temporary per-request biaser, or off.
-        let request_biaser = match hotwords {
-            Some(hw) => self.build_request_biaser(hw),
-            None => None,
-        };
-        let biaser: Option<&bias::Biaser> = match hotwords {
-            None => self.biaser.as_ref(),
-            Some(_) => request_biaser.as_ref(),
-        };
+        // Hotword biaser: engine boot biaser, temporary per-request, or off.
+        let request_biaser = hotwords.and_then(|hw| self.build_request_biaser(hw));
+        let biaser = self.select_biaser(hotwords, &request_biaser);
 
         let words = self.decode_words_streaming(&mut windows, triplet, biaser, ctl)?;
         // Exact once every window is consumed (the loop above drains to EOF).
@@ -2105,10 +1629,7 @@ impl Engine {
         ctl: DecodeControls,
     ) -> Result<TranscribeResult, GigasttError> {
         let request_biaser = hotwords.and_then(|hw| self.build_request_biaser(hw));
-        let biaser: Option<&bias::Biaser> = match hotwords {
-            None => self.biaser.as_ref(),
-            Some(_) => request_biaser.as_ref(),
-        };
+        let biaser = self.select_biaser(hotwords, &request_biaser);
 
         let spec = window_spec(self.ane_encoder, self.variant.is_ctc());
         let mut per_channel = Vec::with_capacity(channels);
@@ -2334,7 +1855,7 @@ impl Engine {
     /// per-chunk word lists with overlap de-dup via [`stitch_chunk_words`].
     ///
     /// Peak encoder activation memory is bounded by the source's window length
-    /// (24s ort / 30s ANE, see [`chunk_window_samples`]) rather than the full
+    /// (24s ort / 30s ANE, see [`super::windows::chunk_window_samples`]) rather than the full
     /// file length. Window starts are aligned to encoder frame boundaries
     /// (multiples of `HOP_LENGTH * ENCODER_SUBSAMPLING`) so the per-chunk frame
     /// offset is exact, matching the streaming path's math.
@@ -2414,17 +1935,11 @@ impl Engine {
         hotwords: Option<&HotwordOverride>,
         ctl: DecodeControls,
     ) -> Result<Vec<WordInfo>, GigasttError> {
-        // Build a temporary biaser only when the request supplies hotwords.
-        // Owned here so the `Option<&Biaser>` passed into decode stays valid
-        // for the whole call without cloning the engine's boot biaser.
-        let request_biaser = match hotwords {
-            Some(hw) => self.build_request_biaser(hw),
-            None => None,
-        };
-        let biaser: Option<&bias::Biaser> = match hotwords {
-            None => self.biaser.as_ref(),
-            Some(_) => request_biaser.as_ref(),
-        };
+        // Temporary biaser only when the request supplies hotwords. Owned
+        // here so the `Option<&Biaser>` passed into decode stays valid for
+        // the whole call without cloning the engine's boot biaser.
+        let request_biaser = hotwords.and_then(|hw| self.build_request_biaser(hw));
+        let biaser = self.select_biaser(hotwords, &request_biaser);
 
         let use_vad = self.vad.is_some() && overrides.vad.unwrap_or(true);
         match (use_vad, &self.vad) {
@@ -2474,28 +1989,14 @@ impl Engine {
             .collect::<Vec<_>>()
             .join(" ");
 
-        // Optional inverse text normalization (number-words → digits) for the
-        // plain `rnnt` head. Runs BEFORE punctuation so the restorer cases the
-        // already-digitized text. No-op when disabled; word-level timing is
-        // left untouched — only the joined `text` is rewritten. The per-request
-        // override wins over the engine default; `None` keeps the boot policy.
-        let text = if overrides.itn.unwrap_or(self.itn) {
-            crate::itn::apply_itn(&text)
-        } else {
-            text
-        };
-
-        // Optional punctuation / casing restoration (plain `rnnt` head). The
-        // engine default is "on iff a punctuator is attached"; a per-request
-        // override can force it off (`Some(false)`) or on (`Some(true)`, only
-        // reachable when a punctuator is loaded — the handler 409s otherwise).
-        // The `self.punctuator` guard keeps this a no-op when none is attached;
-        // `restore` itself never fails (returns the input unchanged on error).
-        // Word-level timing is left untouched — only the joined `text` changes.
-        let text = match &self.punctuator {
-            Some(p) if overrides.punctuation.unwrap_or(true) => p.restore(&text),
-            _ => text,
-        };
+        // Optional ITN then punctuation. Per-request override wins over the
+        // engine default; `None` keeps the boot policy. Word-level timing is
+        // left untouched — only the joined `text` is rewritten.
+        let text = self.apply_text_postprocess(
+            text,
+            overrides.itn.unwrap_or(self.itn),
+            overrides.punctuation.unwrap_or(true),
+        );
 
         TranscribeResult {
             text,
@@ -2631,280 +2132,19 @@ impl Engine {
     }
 }
 
-/// Merge a later chunk's words into the running `merged` list, de-duplicating
-/// the overlap region around `seam_s` (absolute seconds).
-///
-/// Both lists carry absolute timestamps (each chunk's words were already offset
-/// by the chunk start). The heuristic keeps `merged` words whose start is at or
-/// before the seam and `next` words whose start is strictly after the seam, so
-/// the ~2s overlap is attributed to exactly one chunk: the earlier chunk owns
-/// the front half of the overlap, the later chunk owns the back half. A word
-/// straddling the seam is decoded with full context in at least one chunk, so
-/// no unique word is dropped and no overlap word is emitted twice in the common
-/// case. The merged list is monotonic in `start` by construction (the earlier
-/// chunk's kept words all start ≤ seam < the later chunk's kept words).
-///
-/// Pure and free-standing so the stitch policy is unit-testable without a
-/// loaded model.
-pub(crate) fn stitch_chunk_words(
-    mut merged: Vec<WordInfo>,
-    next: Vec<WordInfo>,
-    seam_s: f64,
-) -> Vec<WordInfo> {
-    if merged.is_empty() {
-        return next;
-    }
-    // Drop the earlier chunk's tail that reaches past the seam — those words are
-    // re-decoded by `next` with more right context, so prefer the later chunk
-    // for the back half of the overlap. `merged` is monotonic in `start`, so the
-    // words to drop are exactly a suffix: binary-search the seam and truncate.
-    // (`retain` would rescan every word merged so far on every chunk — O(chunks
-    // × words) — for a policy that only ever trims the tail.)
-    merged.truncate(merged.partition_point(|w| w.start <= seam_s));
-    merged.extend(next.into_iter().filter(|w| w.start > seam_s));
-    merged
-}
-
-/// Groups RNN-T decoded tokens into words at BPE word boundaries (`▁`).
-///
-/// Split out of `Engine` so the formatting logic is unit-testable without a
-/// loaded model — it depends only on the [`Tokenizer`], not on any ONNX
-/// session.
-pub(crate) struct TokenFormatter;
-
-impl TokenFormatter {
-    /// Group `tokens` into words. `frame_offset` shifts per-token frame indices
-    /// into absolute stream time; word confidence is the mean over the word's
-    /// constituent BPE tokens.
-    pub(crate) fn tokens_to_words(
-        tokenizer: &Tokenizer,
-        tokens: &[decode::TokenInfo],
-        frame_offset: usize,
-    ) -> Vec<WordInfo> {
-        if tokens.is_empty() {
-            return Vec::new();
-        }
-
-        // Group tokens by words (BPE ▁ marks word boundaries)
-        let mut words = Vec::new();
-        let mut current_word = String::new();
-        let mut word_start_frame: Option<usize> = None;
-        let mut word_end_frame: usize = 0;
-        let mut word_confidences: Vec<f32> = Vec::new();
-
-        for token in tokens {
-            let token_text = tokenizer.token_text(token.token_id);
-            let is_word_boundary = token_text.starts_with(tokenizer::WORD_BOUNDARY);
-
-            if is_word_boundary && !current_word.is_empty() {
-                // Emit previous word
-                let avg_conf: f32 = if word_confidences.is_empty() {
-                    1.0
-                } else {
-                    word_confidences.iter().sum::<f32>() / word_confidences.len() as f32
-                };
-                words.push(WordInfo {
-                    word: std::mem::take(&mut current_word),
-                    start: (word_start_frame.unwrap_or(0) + frame_offset) as f64
-                        * SECONDS_PER_FRAME,
-                    end: (word_end_frame + frame_offset) as f64 * SECONDS_PER_FRAME,
-                    confidence: avg_conf,
-                    speaker: None,
-                });
-                current_word.clear();
-                word_confidences.clear();
-                word_start_frame = None;
-            }
-
-            let clean = if let Some(stripped) = token_text.strip_prefix(tokenizer::WORD_BOUNDARY) {
-                stripped
-            } else {
-                token_text
-            };
-            if !clean.is_empty() {
-                current_word.push_str(clean);
-                if word_start_frame.is_none() {
-                    word_start_frame = Some(token.frame_index);
-                }
-                word_end_frame = token.frame_index;
-                word_confidences.push(token.confidence);
-            }
-        }
-
-        // Emit last word
-        if !current_word.is_empty() {
-            let avg_conf: f32 = if word_confidences.is_empty() {
-                1.0
-            } else {
-                word_confidences.iter().sum::<f32>() / word_confidences.len() as f32
-            };
-            words.push(WordInfo {
-                word: current_word,
-                start: (word_start_frame.unwrap_or(0) + frame_offset) as f64 * SECONDS_PER_FRAME,
-                end: (word_end_frame + frame_offset) as f64 * SECONDS_PER_FRAME,
-                confidence: avg_conf,
-                speaker: None,
-            });
-        }
-
-        words
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     #[cfg(feature = "diarization")]
     #[cfg(feature = "diarization")]
     use crate::inference::diarization::SPEAKER_EMBEDDING_DIM;
-    use crate::inference::state::aggregate_confidence;
-    use crate::inference::{
-        DEFAULT_HOTWORDS_BOOST, DecoderState, EndpointMode, EndpointReason, FeatureExtractor,
-        MAX_HOTWORD_PHRASE_CHARS, MAX_HOTWORDS_PER_REQUEST, OwnedReservation, PRED_HIDDEN, Pool,
-        PoolError, TranscribeOverrides, TranscribeResult, TranscriptAssembler, TranscriptSegment,
-        WordInfo, merge_channel_results, now_timestamp,
-    };
+    use crate::inference::windows::CHUNK_THRESHOLD_SAMPLES;
+    use crate::inference::{EndpointMode, WordInfo};
     #[cfg(feature = "diarization")]
     use polyvoice::Embedder;
 
-    #[test]
-    fn test_transcribe_overrides_default_all_none() {
-        // The default overrides must be all-`None` so a request with no knobs
-        // reproduces the engine's boot behaviour byte-for-byte.
-        let o = TranscribeOverrides::default();
-        assert_eq!(o.punctuation, None);
-        assert_eq!(o.itn, None);
-        assert_eq!(o.vad, None);
-    }
-
-    #[test]
-    fn test_hotword_override_limits_constants() {
-        // Documented DoS caps used by validate_overrides and the REST 400 path.
-        assert_eq!(MAX_HOTWORDS_PER_REQUEST, 64);
-        assert_eq!(MAX_HOTWORD_PHRASE_CHARS, 64);
-        assert_eq!(DEFAULT_HOTWORDS_BOOST, 5.0);
-    }
-
-    #[test]
-    fn test_override_error_codes_stable() {
-        use crate::inference::{HotwordError, OverrideError};
-        // Stable machine-readable codes surfaced as the REST error `code`.
-        assert_eq!(OverrideError::VadNotLoaded.code(), "vad_not_loaded");
-        assert_eq!(
-            OverrideError::PunctuationNotAvailable.code(),
-            "punctuation_not_available"
-        );
-        assert_eq!(HotwordError::TooManyHotwords.code(), "too_many_hotwords");
-        assert_eq!(
-            HotwordError::PhraseTooLong.code(),
-            "hotword_phrase_too_long"
-        );
-        // Messages are non-empty and don't leak internals.
-        assert!(!OverrideError::VadNotLoaded.message().is_empty());
-        assert!(!OverrideError::PunctuationNotAvailable.message().is_empty());
-        assert!(!HotwordError::TooManyHotwords.message().is_empty());
-        assert!(!HotwordError::PhraseTooLong.message().is_empty());
-        // Display matches message().
-        assert_eq!(
-            OverrideError::VadNotLoaded.to_string(),
-            OverrideError::VadNotLoaded.message()
-        );
-        // Limit violations are client errors (400); missing models are 409.
-    }
-
-    #[test]
-    fn test_parse_cgroup_memory_limit_max_and_sentinel() {
-        assert_eq!(parse_cgroup_memory_limit("max"), None);
-        assert_eq!(parse_cgroup_memory_limit("MAX\n"), None);
-        assert_eq!(parse_cgroup_memory_limit(""), None);
-        assert_eq!(parse_cgroup_memory_limit("0"), None);
-        // v1 unlimited sentinel
-        assert_eq!(parse_cgroup_memory_limit("9223372036854771712"), None);
-        assert_eq!(
-            parse_cgroup_memory_limit("1073741824"),
-            Some(1024 * 1024 * 1024)
-        );
-        assert_eq!(
-            parse_cgroup_memory_limit("  536870912\n"),
-            Some(512 * 1024 * 1024)
-        );
-    }
-
-    #[test]
-    fn test_effective_ram_prefers_tighter_cgroup() {
-        // Pure composition: min(host, cgroup) — exercised via cap_pool_size with
-        // a 1 GiB "cgroup" budget vs larger host-class numbers.
-        let enc = 225 * 1024 * 1024;
-        let one_gib = 1024u64 * 1024 * 1024;
-        // Half of 1 GiB = 512 MiB budget; ~450 MiB/triplet → max 1 slot.
-        assert_eq!(Engine::cap_pool_size_for_ram(2, enc, one_gib), 1);
-    }
-
-    #[test]
-    fn test_cap_pool_size_for_ram_clamps_on_low_memory() {
-        // 225 MiB encoder, 2x resident => ~450 MiB/triplet. Half of 2 GiB =
-        // 1 GiB budget => floor(1024/450) = 2 slots; a request for 4 clamps.
-        let enc = 225 * 1024 * 1024;
-        let two_gib = 2 * 1024 * 1024 * 1024;
-        assert_eq!(Engine::cap_pool_size_for_ram(4, enc, two_gib), 2);
-    }
-
-    #[test]
-    fn test_cap_pool_size_for_ram_no_clamp_with_ample_ram() {
-        // 64 GiB host easily fits a pool of 4 of the same encoder.
-        let enc = 225 * 1024 * 1024;
-        let sixty_four_gib = 64u64 * 1024 * 1024 * 1024;
-        assert_eq!(Engine::cap_pool_size_for_ram(4, enc, sixty_four_gib), 4);
-    }
-
-    #[test]
-    fn test_cap_pool_size_for_ram_never_below_one() {
-        // Even a single triplet larger than the whole budget still yields 1 —
-        // the pool can't be empty; partial-load tolerance handles real OOM.
-        let huge_enc = 8 * 1024 * 1024 * 1024;
-        let small_ram = 1024 * 1024 * 1024;
-        assert_eq!(Engine::cap_pool_size_for_ram(4, huge_enc, small_ram), 1);
-    }
-
-    #[test]
-    fn test_cap_pool_size_for_ram_noop_on_unknown_inputs() {
-        // Unknown RAM or encoder size (0) => never lower the request.
-        assert_eq!(Engine::cap_pool_size_for_ram(4, 0, 8 << 30), 4);
-        assert_eq!(Engine::cap_pool_size_for_ram(4, 200 << 20, 0), 4);
-        // pool_size <= 1 is returned as-is (min 1).
-        assert_eq!(Engine::cap_pool_size_for_ram(1, 200 << 20, 1 << 30), 1);
-        assert_eq!(Engine::cap_pool_size_for_ram(0, 200 << 20, 1 << 30), 1);
-    }
-
-    #[test]
-    fn test_clamp_encoder_intra_threads() {
-        // Default request of 1 is always returned unchanged (no behavior change).
-        assert_eq!(Engine::clamp_encoder_intra_threads(2, 1, 10), 1);
-        assert_eq!(Engine::clamp_encoder_intra_threads(4, 1, 4), 1);
-
-        // Fits within budget: pool 2 x 4 threads = 8 <= 16 CPUs -> 4.
-        assert_eq!(Engine::clamp_encoder_intra_threads(2, 4, 16), 4);
-
-        // Over budget: pool 4 x 4 = 16 > 10 CPUs -> floor(10/4) = 2 per encoder.
-        assert_eq!(Engine::clamp_encoder_intra_threads(4, 4, 10), 2);
-
-        // More pooled encoders than CPUs still leaves at least 1 thread each.
-        assert_eq!(Engine::clamp_encoder_intra_threads(8, 4, 4), 1);
-
-        // Zero inputs are floored to 1 (total function, never panics/divides-by-0).
-        assert_eq!(Engine::clamp_encoder_intra_threads(0, 4, 8), 4);
-        assert_eq!(Engine::clamp_encoder_intra_threads(2, 0, 8), 1);
-        assert_eq!(Engine::clamp_encoder_intra_threads(2, 4, 0), 1);
-    }
-
-    #[test]
-    fn test_batch_split_count_clamps() {
-        assert_eq!(Engine::batch_split_count(4, 1), 1); // typical: 1 batch, 3 stream
-        assert_eq!(Engine::batch_split_count(4, 0), 0); // split disabled
-        assert_eq!(Engine::batch_split_count(4, 10), 3); // clamped: leave 1 interactive
-        assert_eq!(Engine::batch_split_count(1, 1), 0); // can't split a single triplet
-        assert_eq!(Engine::batch_split_count(0, 1), 0); // empty pool
-        assert_eq!(Engine::batch_split_count(2, 1), 1);
+    fn word(text: &str, start: f64, end: f64) -> WordInfo {
+        WordInfo::new(text, start, end, 1.0, None)
     }
 
     #[test]
@@ -2932,555 +2172,6 @@ mod tests {
     }
 
     #[test]
-    fn test_token_formatter_groups_words() {
-        // `▁` (U+2581) marks a new word; continuation tokens have no prefix.
-        let tok = Tokenizer::from_tokens(vec![
-            "\u{2581}hel".into(), // 0: new word
-            "lo".into(),          // 1: continuation
-            "\u{2581}wor".into(), // 2: new word
-            "ld".into(),          // 3: continuation
-        ]);
-        let tokens = vec![
-            decode::TokenInfo {
-                token_id: 0,
-                frame_index: 0,
-                confidence: 0.9,
-            },
-            decode::TokenInfo {
-                token_id: 1,
-                frame_index: 1,
-                confidence: 0.8,
-            },
-            decode::TokenInfo {
-                token_id: 2,
-                frame_index: 2,
-                confidence: 0.95,
-            },
-            decode::TokenInfo {
-                token_id: 3,
-                frame_index: 3,
-                confidence: 0.85,
-            },
-        ];
-        let words = TokenFormatter::tokens_to_words(&tok, &tokens, 0);
-        assert_eq!(words.len(), 2);
-        assert_eq!(words[0].word, "hello");
-        assert_eq!(words[1].word, "world");
-        // Mean confidence per word.
-        assert!((words[0].confidence - 0.85).abs() < 1e-6);
-        assert!((words[1].confidence - 0.90).abs() < 1e-6);
-        // Frame timing (SECONDS_PER_FRAME = 0.04).
-        assert!((words[0].start - 0.0).abs() < 1e-9);
-        assert!((words[0].end - 0.04).abs() < 1e-9);
-        assert!((words[1].start - 0.08).abs() < 1e-9);
-    }
-
-    #[test]
-    fn test_token_formatter_empty_tokens() {
-        let tok = Tokenizer::from_tokens(vec!["\u{2581}a".into()]);
-        assert!(TokenFormatter::tokens_to_words(&tok, &[], 0).is_empty());
-    }
-
-    #[test]
-    fn test_token_formatter_frame_offset_shifts_time() {
-        let tok = Tokenizer::from_tokens(vec!["\u{2581}x".into()]);
-        let tokens = vec![decode::TokenInfo {
-            token_id: 0,
-            frame_index: 0,
-            confidence: 1.0,
-        }];
-        let words = TokenFormatter::tokens_to_words(&tok, &tokens, 10);
-        assert_eq!(words.len(), 1);
-        // frame_offset 10 → start = 10 * 0.04 = 0.4.
-        assert!((words[0].start - 0.4).abs() < 1e-9);
-    }
-
-    fn word(text: &str, start: f64, end: f64) -> WordInfo {
-        WordInfo::new(text, start, end, 1.0, None)
-    }
-
-    fn sample_word(w: &str, start: f64, end: f64, speaker: Option<u32>) -> WordInfo {
-        WordInfo::new(w, start, end, 0.9, speaker)
-    }
-
-    #[test]
-    fn test_merge_channel_results_empty() {
-        let merged = merge_channel_results(vec![
-            TranscribeResult {
-                text: String::new(),
-                words: vec![],
-                duration_s: 0.0,
-                confidence: None,
-            },
-            TranscribeResult {
-                text: String::new(),
-                words: vec![],
-                duration_s: 0.0,
-                confidence: None,
-            },
-        ]);
-        assert!(merged.words.is_empty());
-        assert!(merged.text.is_empty());
-    }
-
-    #[test]
-    fn test_merge_channel_results_interleaved_channels() {
-        let ch0 = TranscribeResult {
-            text: String::new(),
-            words: vec![
-                sample_word("привет", 0.0, 0.4, None),
-                sample_word("как", 1.0, 1.3, None),
-            ],
-            duration_s: 1.5,
-            confidence: None,
-        };
-        let ch1 = TranscribeResult {
-            text: String::new(),
-            words: vec![sample_word("да", 0.5, 0.8, None)],
-            duration_s: 1.5,
-            confidence: None,
-        };
-        let merged = merge_channel_results(vec![ch0, ch1]);
-        assert_eq!(merged.words.len(), 3);
-        assert_eq!(merged.words[0].word, "привет");
-        assert_eq!(merged.words[0].speaker, Some(0));
-        assert_eq!(merged.words[1].word, "да");
-        assert_eq!(merged.words[1].speaker, Some(1));
-        assert_eq!(merged.words[2].word, "как");
-        assert_eq!(merged.words[2].speaker, Some(0));
-    }
-
-    #[test]
-    fn test_merge_channel_results_tie_order_by_channel() {
-        let ch0 = TranscribeResult {
-            text: String::new(),
-            words: vec![sample_word("а", 0.5, 0.7, None)],
-            duration_s: 1.0,
-            confidence: None,
-        };
-        let ch1 = TranscribeResult {
-            text: String::new(),
-            words: vec![sample_word("б", 0.5, 0.7, None)],
-            duration_s: 1.0,
-            confidence: None,
-        };
-        let merged = merge_channel_results(vec![ch0, ch1]);
-        assert_eq!(merged.words[0].word, "а");
-        assert_eq!(merged.words[0].speaker, Some(0));
-        assert_eq!(merged.words[1].word, "б");
-        assert_eq!(merged.words[1].speaker, Some(1));
-    }
-
-    #[test]
-    fn test_merge_channel_results_no_channels() {
-        let merged = merge_channel_results(vec![]);
-        assert!(merged.words.is_empty());
-        assert!(merged.text.is_empty());
-        assert_eq!(merged.duration_s, 0.0);
-    }
-
-    #[test]
-    fn test_merge_channel_results_max_duration() {
-        let ch0 = TranscribeResult {
-            text: String::new(),
-            words: vec![sample_word("a", 0.0, 0.5, None)],
-            duration_s: 5.0,
-            confidence: None,
-        };
-        let ch1 = TranscribeResult {
-            text: String::new(),
-            words: vec![sample_word("b", 0.5, 1.0, None)],
-            duration_s: 12.0,
-            confidence: None,
-        };
-        let merged = merge_channel_results(vec![ch0, ch1]);
-        assert_eq!(merged.duration_s, 12.0);
-    }
-
-    #[test]
-    fn test_stitch_first_chunk_passes_through() {
-        // An empty `merged` (the very first chunk) is returned verbatim.
-        let next = vec![word("a", 0.0, 0.5), word("b", 0.6, 1.0)];
-        let out = stitch_chunk_words(Vec::new(), next.clone(), 11.0);
-        assert_eq!(out.len(), 2);
-        assert_eq!(out[0].word, "a");
-        assert_eq!(out[1].word, "b");
-    }
-
-    #[test]
-    fn test_stitch_dedups_overlap_no_drop_no_dup() {
-        // Two 24s windows with a 22s stride: chunk B starts at 22s, overlap
-        // [22s, 24s], seam at 23s. The word "dup" at ~22.5s is decoded by both
-        // chunks; the seam attributes it to exactly one. No unique word lost.
-        let chunk_a = vec![
-            word("first", 1.0, 1.4),    // unique to A
-            word("middle", 21.0, 21.4), // unique to A, before overlap
-            word("dup", 22.4, 22.8),    // in overlap, before seam → kept from A
-        ];
-        // B's words are already offset by its 22s start.
-        let chunk_b = vec![
-            word("dup", 22.5, 22.9),   // same word re-decoded → after-seam copy dropped
-            word("later", 25.0, 25.4), // unique to B
-            word("end", 40.0, 40.4),   // unique to B
-        ];
-        let seam_s = 22.0 + CHUNK_OVERLAP_SAMPLES as f64 / 2.0 / 16000.0; // 23.0
-        assert!((seam_s - 23.0).abs() < 1e-9);
-
-        let out = stitch_chunk_words(chunk_a, chunk_b, seam_s);
-        let texts: Vec<&str> = out.iter().map(|w| w.word.as_str()).collect();
-        // "dup" appears exactly once (A's copy, before the seam); nothing dropped.
-        assert_eq!(texts, vec!["first", "middle", "dup", "later", "end"]);
-        // Monotonic in `start`.
-        for w in out.windows(2) {
-            assert!(w[0].start <= w[1].start, "not monotonic: {:?}", out);
-        }
-    }
-
-    #[test]
-    fn test_stitch_drops_a_tail_past_seam() {
-        // A word decoded by A past the seam is dropped in favour of B's
-        // fuller-context copy; the back half of the overlap belongs to B.
-        let chunk_a = vec![word("keep", 22.0, 22.4), word("a_tail", 23.5, 23.9)];
-        let chunk_b = vec![word("b_seam", 23.2, 23.6), word("b_late", 30.0, 30.4)];
-        let out = stitch_chunk_words(chunk_a, chunk_b, 23.0);
-        let texts: Vec<&str> = out.iter().map(|w| w.word.as_str()).collect();
-        assert_eq!(texts, vec!["keep", "b_seam", "b_late"]);
-    }
-
-    // ---- Seam invariants --------------------------------------------------
-    //
-    // `stitch_chunk_words` cuts on `start` alone: the earlier chunk keeps
-    // `start <= seam_s`, the later chunk keeps `start > seam_s`. There is no
-    // text matching across the boundary, so the *interval* of a word is
-    // irrelevant to the decision. The tests below pin what that cut does in the
-    // cases the happy-path tests above skip — including the two lossy ones.
-    // They are characterisation tests: they describe today's behaviour so a
-    // change to the seam policy shows up as a diff, not as a silent shift in
-    // long-form WER.
-    //
-    // Every word below sits within ±0.05s of the seam (or inside a 200ms gap
-    // around it, for the silence control), so nudging the seam past that margin
-    // flips at least one assertion. That is the check that these tests pin the
-    // predicate rather than passing for any cut point.
-
-    #[test]
-    fn test_stitch_straddling_word_duplicated_across_seam() {
-        // Invariant pinned: a word whose interval straddles the seam is emitted
-        // TWICE when the two chunks disagree about its start across the cut —
-        // the earlier chunk's copy starts before the seam (kept) and the later
-        // chunk's copy starts after it (also kept). The stitch has no way to
-        // notice they are the same word. This is the duplicate half of the
-        // long-form seam cost.
-        let chunk_a = vec![word("на", 22.0, 22.32), word("мосту", 22.96, 23.36)];
-        let chunk_b = vec![word("мосту", 23.04, 23.44), word("стоял", 24.0, 24.4)];
-        let out = stitch_chunk_words(chunk_a, chunk_b, 23.0);
-        let texts: Vec<&str> = out.iter().map(|w| w.word.as_str()).collect();
-        assert_eq!(
-            texts,
-            vec!["на", "мосту", "мосту", "стоял"],
-            "a straddling word whose copies land on opposite sides of the seam is duplicated"
-        );
-    }
-
-    #[test]
-    fn test_stitch_straddling_word_deleted_at_seam() {
-        // Invariant pinned: the mirror-image case deletes the word outright.
-        // The earlier chunk placed its start just past the seam (dropped as
-        // "tail past the seam") while the later chunk placed it just before
-        // (dropped as "belongs to the earlier chunk"), so neither copy
-        // survives. This is the deletion half of the long-form seam cost, and
-        // it is the failure mode a text-matching stitch would have to fix.
-        let chunk_a = vec![word("на", 22.0, 22.32), word("мосту", 23.04, 23.44)];
-        let chunk_b = vec![word("мосту", 22.96, 23.36), word("стоял", 24.0, 24.4)];
-        let out = stitch_chunk_words(chunk_a, chunk_b, 23.0);
-        let texts: Vec<&str> = out.iter().map(|w| w.word.as_str()).collect();
-        assert_eq!(
-            texts,
-            vec!["на", "стоял"],
-            "a straddling word can vanish entirely: dropped by both sides of the seam"
-        );
-    }
-
-    #[test]
-    fn test_stitch_word_exactly_on_seam_kept_from_earlier_chunk() {
-        // Invariant pinned: `start == seam_s` is an inclusive boundary for the
-        // earlier chunk (`<=`) and an exclusive one for the later chunk (`>`),
-        // so a word that both chunks place exactly on the seam survives once,
-        // from the earlier chunk. Confidence tags which copy won: flipping the
-        // predicate to `<` / `>=` would keep B's copy instead, same text.
-        let chunk_a = vec![WordInfo::new("шов", 23.0, 23.4, 0.5, None)];
-        let chunk_b = vec![
-            WordInfo::new("шов", 23.0, 23.4, 0.9, None),
-            word("после", 24.0, 24.4),
-        ];
-        let out = stitch_chunk_words(chunk_a, chunk_b, 23.0);
-        let texts: Vec<&str> = out.iter().map(|w| w.word.as_str()).collect();
-        assert_eq!(
-            texts,
-            vec!["шов", "после"],
-            "no duplicate exactly on the seam"
-        );
-        assert_eq!(
-            out[0].confidence, 0.5,
-            "the surviving copy comes from the earlier chunk"
-        );
-    }
-
-    #[test]
-    fn test_stitch_empty_next_chunk_still_trims_tail_past_seam() {
-        // Invariant pinned: the tail trim runs unconditionally, so a chunk that
-        // decodes to nothing (silence, or a chunk the decoder emitted no tokens
-        // for) still deletes whatever the previous chunk decoded past the seam.
-        // The empty chunk is not a no-op.
-        let chunk_a = vec![word("до", 22.0, 22.4), word("хвост", 23.04, 23.44)];
-        let out = stitch_chunk_words(chunk_a, Vec::new(), 23.0);
-        let texts: Vec<&str> = out.iter().map(|w| w.word.as_str()).collect();
-        assert_eq!(
-            texts,
-            vec!["до"],
-            "an empty chunk still drops the earlier chunk's post-seam tail"
-        );
-    }
-
-    #[test]
-    fn test_stitch_silence_at_seam_loses_nothing() {
-        // Lossless-gap CONTROL — read this before "fixing" it. When the seam
-        // falls inside a silent gap (no word interval touches it), the stitch
-        // must stay lossless and duplicate-free for any reasonable seam
-        // placement. That robustness is the invariant this test pins, so it is
-        // DELIBERATELY insensitive to a ±60ms seam nudge: the gap here is 200ms
-        // wide and ±60ms stays inside it, leaving the output unchanged. The
-        // tolerance is intentional — do NOT tighten the fixture to make it react
-        // to small nudges; that would delete the property being guarded.
-        //
-        // It is not vacuous: mutating the seam by +150ms moves the cut out of
-        // the gap and reddens this test (it drops "после"). The other seam tests
-        // in this block already pin the ±60ms / inclusive-boundary sensitivity;
-        // this one pins the complementary claim that silence absorbs jitter.
-        let chunk_a = vec![word("перед", 22.6, 22.9)];
-        let chunk_b = vec![word("после", 23.1, 23.5), word("конец", 24.0, 24.4)];
-        let out = stitch_chunk_words(chunk_a, chunk_b, 23.0);
-        let texts: Vec<&str> = out.iter().map(|w| w.word.as_str()).collect();
-        assert_eq!(texts, vec!["перед", "после", "конец"]);
-        for w in out.windows(2) {
-            assert!(w[0].start <= w[1].start, "not monotonic: {:?}", out);
-        }
-    }
-
-    #[test]
-    fn test_stitch_truncate_matches_retain_predicate() {
-        // `stitch_chunk_words` trims the earlier chunk with
-        // `partition_point` + `truncate` instead of `retain` (which rescanned
-        // every merged word on every chunk). On the monotonic-in-`start` lists
-        // the chunked loop actually produces, the two are the same predicate —
-        // sweep seams on and between every word boundary to show it.
-        let merged: Vec<WordInfo> = (0..40)
-            .map(|i| word(&format!("w{i}"), i as f64 * 0.5, i as f64 * 0.5 + 0.3))
-            .collect();
-        for step in 0..=80 {
-            let seam_s = step as f64 * 0.25;
-            let mut expected = merged.clone();
-            expected.retain(|w| w.start <= seam_s);
-            let got = stitch_chunk_words(merged.clone(), Vec::new(), seam_s);
-            assert_eq!(
-                got.iter().map(|w| w.word.as_str()).collect::<Vec<_>>(),
-                expected.iter().map(|w| w.word.as_str()).collect::<Vec<_>>(),
-                "diverged at seam {seam_s}"
-            );
-        }
-    }
-
-    #[test]
-    fn test_stitch_timestamp_offset_math() {
-        // The chunked path offsets a chunk's frame indices by
-        // start_samples / (HOP_LENGTH * ENCODER_SUBSAMPLING). Verify that a word
-        // at frame 0 of a chunk starting `start_samples` in lands at the right
-        // absolute time via `tokens_to_words` (the same offset the engine feeds).
-        let tok = Tokenizer::from_tokens(vec!["\u{2581}w".into()]);
-        let tokens = vec![decode::TokenInfo {
-            token_id: 0,
-            frame_index: 0,
-            confidence: 1.0,
-        }];
-        let start_samples = 16000 * 22; // chunk starts at 22s
-        let frame_offset = start_samples / (HOP_LENGTH * ENCODER_SUBSAMPLING);
-        let words = TokenFormatter::tokens_to_words(&tok, &tokens, frame_offset);
-        assert_eq!(words.len(), 1);
-        // frame 0 + offset → absolute start == 22.0s exactly (aligned stride).
-        assert!(
-            (words[0].start - 22.0).abs() < 1e-9,
-            "got {}",
-            words[0].start
-        );
-    }
-
-    #[test]
-    #[allow(clippy::assertions_on_constants)] // intentional compile-time sanity check on the chunk constants
-    fn test_chunk_constants_sane() {
-        // Window > overlap (positive stride) and threshold ≥ window so the
-        // single-pass path covers everything up to one full window.
-        assert!(CHUNK_WINDOW_SAMPLES_ORT > CHUNK_OVERLAP_SAMPLES);
-        assert!(CHUNK_WINDOW_SAMPLES_ANE > CHUNK_OVERLAP_SAMPLES);
-        assert!(CHUNK_THRESHOLD_SAMPLES >= CHUNK_WINDOW_SAMPLES_ORT);
-        assert!(CHUNK_THRESHOLD_SAMPLES >= CHUNK_WINDOW_SAMPLES_ANE);
-    }
-
-    #[test]
-    fn test_window_spec_reproduces_legacy_chunk_geometry() {
-        // The long-form loop used to derive its own window/stride and read the
-        // overlap straight off `CHUNK_OVERLAP_SAMPLES`; it now takes all three
-        // from the spec. Any divergence here moves every seam, so pin it.
-        let frame_samples = HOP_LENGTH * ENCODER_SUBSAMPLING;
-        for ane in [false, true] {
-            let window = chunk_window_samples(ane);
-            let legacy_stride = ((window - CHUNK_OVERLAP_SAMPLES) / frame_samples) * frame_samples;
-            for ctc in [false, true] {
-                let spec = window_spec(ane, ctc);
-                assert_eq!(spec.window(), window, "window (ane={ane}, ctc={ctc})");
-                assert_eq!(
-                    spec.stride(),
-                    legacy_stride,
-                    "stride (ane={ane}, ctc={ctc})"
-                );
-                assert_eq!(
-                    spec.overlap(),
-                    CHUNK_OVERLAP_SAMPLES,
-                    "overlap (ane={ane}, ctc={ctc})"
-                );
-                assert!(spec.is_single_pass(CHUNK_THRESHOLD_SAMPLES));
-                assert!(!spec.is_single_pass(CHUNK_THRESHOLD_SAMPLES + 1));
-            }
-        }
-    }
-
-    #[test]
-    fn test_chunk_window_samples_backend_aware() {
-        // ort / non-ANE: 24s keeps peak encoder activation bounded.
-        assert_eq!(chunk_window_samples(false), 16000 * 24);
-        // ANE: 30s fills bucket 3000 at ~99.97%.
-        assert_eq!(chunk_window_samples(true), 16000 * 30);
-        assert!(chunk_window_samples(true) > chunk_window_samples(false));
-    }
-
-    #[test]
-    fn test_finalize_pool_load_full() {
-        let r: Vec<anyhow::Result<u32>> = vec![Ok(1), Ok(2), Ok(3)];
-        assert_eq!(Engine::finalize_pool_load(r, 3, 3).unwrap(), vec![1, 2, 3]);
-    }
-
-    #[test]
-    fn test_finalize_pool_load_degraded_boots() {
-        // 2 of 4 loaded with min_size 1 → degraded pool is accepted.
-        let r: Vec<anyhow::Result<u32>> = vec![
-            Ok(1),
-            Err(anyhow::anyhow!("boom")),
-            Ok(3),
-            Err(anyhow::anyhow!("boom2")),
-        ];
-        assert_eq!(Engine::finalize_pool_load(r, 4, 1).unwrap(), vec![1, 3]);
-    }
-
-    #[test]
-    fn test_finalize_pool_load_below_min_errors() {
-        // Only 1 loaded but min_size 2 → error naming the shortfall.
-        let r: Vec<anyhow::Result<u32>> = vec![
-            Ok(1),
-            Err(anyhow::anyhow!("boom")),
-            Err(anyhow::anyhow!("boom2")),
-        ];
-        let err = Engine::finalize_pool_load(r, 3, 2).unwrap_err().to_string();
-        assert!(err.contains("loaded only 1/3"), "got: {err}");
-        assert!(err.contains("need at least 2"), "got: {err}");
-    }
-
-    #[test]
-    fn test_finalize_pool_load_all_fail_errors() {
-        let r: Vec<anyhow::Result<u32>> =
-            vec![Err(anyhow::anyhow!("a")), Err(anyhow::anyhow!("b"))];
-        assert!(Engine::finalize_pool_load(r, 2, 1).is_err());
-    }
-
-    #[test]
-    fn test_finalize_pool_load_min_clamped_to_pool() {
-        // min_size > pool_size is clamped down; a full load still succeeds.
-        let r: Vec<anyhow::Result<u32>> = vec![Ok(1), Ok(2)];
-        assert_eq!(Engine::finalize_pool_load(r, 2, 99).unwrap(), vec![1, 2]);
-    }
-
-    #[test]
-    fn test_decoder_state_new_zeros() {
-        let blank_id = 1024;
-        let state = DecoderState::new(blank_id);
-        assert!(state.h.iter().all(|&v| v == 0.0));
-        assert!(state.c.iter().all(|&v| v == 0.0));
-        assert_eq!(state.prev_token, blank_id as i64);
-    }
-
-    #[test]
-    fn test_decoder_state_dimensions() {
-        let state = DecoderState::new(1024);
-        assert_eq!(state.h.len(), PRED_HIDDEN);
-        assert_eq!(state.c.len(), PRED_HIDDEN);
-    }
-
-    #[test]
-    fn test_decoder_state_custom_blank_id() {
-        let state = DecoderState::new(42);
-        assert_eq!(state.prev_token, 42);
-    }
-
-    #[test]
-    fn test_feature_extractor_default() {
-        let _fe = FeatureExtractor::default();
-    }
-
-    #[test]
-    fn test_transcript_assembler_default() {
-        let ta = TranscriptAssembler::default();
-        assert!(ta.is_empty());
-    }
-
-    #[test]
-    fn test_pool_checkout_blocking_fast_path() {
-        let pool = Pool::new(vec![42u32]);
-        let guard = pool.checkout_blocking().expect("checkout_blocking");
-        assert_eq!(*guard, 42);
-        drop(guard);
-        assert_eq!(pool.available(), 1);
-    }
-
-    #[test]
-    fn test_pool_checkout_blocking_closed() {
-        let pool = Pool::<u32>::new(vec![]);
-        pool.close();
-        assert!(matches!(pool.checkout_blocking(), Err(PoolError::Closed)));
-    }
-
-    #[test]
-    fn test_pool_checkout_blocking_slow_path() {
-        let pool = std::sync::Arc::new(Pool::new(vec![42u32]));
-        let primary = pool.checkout_blocking().unwrap();
-
-        let handle = std::thread::spawn({
-            let pool = pool.clone();
-            move || pool.checkout_blocking()
-        });
-
-        std::thread::sleep(std::time::Duration::from_millis(50));
-        drop(primary);
-
-        let guard = handle.join().expect("join").expect("checkout");
-        assert_eq!(*guard, 42);
-        drop(guard);
-        assert_eq!(pool.available(), 1);
-    }
-
-    #[test]
-    fn test_pool_error_display() {
-        assert_eq!(format!("{}", PoolError::Closed), "session pool is closed");
-    }
-
-    #[test]
     fn test_engine_load_missing_dir() {
         let result = Engine::load_with_pool_size("/nonexistent/path/for/tests", 1);
         assert!(matches!(result, Err(GigasttError::ModelLoad { .. })));
@@ -3491,504 +2182,6 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let result = Engine::load_with_pool_size(dir.path().to_str().unwrap(), 1);
         assert!(matches!(result, Err(GigasttError::ModelLoad { .. })));
-    }
-
-    #[test]
-    fn test_resolve_load_variant_override_beats_disk_detection() {
-        // A directory holding BOTH the rnnt and e2e_rnnt encoders: on-disk
-        // detection returns rnnt (precedence), so without an explicit override the
-        // engine would silently ignore `--model-variant e2e_rnnt`. This is the
-        // regression this fix guards.
-        let dir = tempfile::tempdir().expect("tempdir");
-        std::fs::write(dir.path().join(ModelVariant::Rnnt.encoder_file()), b"x").unwrap();
-        std::fs::write(dir.path().join(ModelVariant::E2eRnnt.encoder_file()), b"x").unwrap();
-
-        // Sanity: bare on-disk detection prefers rnnt.
-        assert_eq!(
-            ModelVariant::detect_in_dir(dir.path()),
-            Some(ModelVariant::Rnnt)
-        );
-        // No override → auto-detect (rnnt precedence): behavior is unchanged.
-        assert_eq!(
-            resolve_load_variant(None, dir.path()).unwrap(),
-            Some(ModelVariant::Rnnt)
-        );
-        // Explicit override wins over the higher-precedence head on disk.
-        assert_eq!(
-            resolve_load_variant(Some(ModelVariant::E2eRnnt), dir.path()).unwrap(),
-            Some(ModelVariant::E2eRnnt)
-        );
-
-        // The override is honored even when its files aren't present — the engine
-        // load then fails with a clear ModelLoad error instead of silently loading
-        // whatever else is on disk.
-        let empty = tempfile::tempdir().expect("tempdir");
-        assert_eq!(
-            resolve_load_variant(Some(ModelVariant::E2eRnnt), empty.path()).unwrap(),
-            Some(ModelVariant::E2eRnnt)
-        );
-        // No override + empty dir → nothing to load.
-        assert_eq!(resolve_load_variant(None, empty.path()).unwrap(), None);
-    }
-
-    #[test]
-    fn test_resolve_load_variant_manifest_beats_disk_detection() {
-        // Disk has rnnt (higher precedence), but manifest selects e2e_rnnt.
-        let dir = tempfile::tempdir().expect("tempdir");
-        std::fs::write(dir.path().join(ModelVariant::Rnnt.encoder_file()), b"x").unwrap();
-        std::fs::write(dir.path().join(ModelVariant::E2eRnnt.encoder_file()), b"x").unwrap();
-        std::fs::write(
-            dir.path().join(crate::model::MANIFEST_FILE),
-            r#"
-architecture = "e2e_rnnt"
-[files]
-encoder = "v3_e2e_rnnt_encoder.onnx"
-decoder = "v3_e2e_rnnt_decoder.onnx"
-joint = "v3_e2e_rnnt_joint.onnx"
-vocab = "v3_e2e_rnnt_vocab.txt"
-"#,
-        )
-        .unwrap();
-
-        assert_eq!(
-            ModelVariant::detect_in_dir(dir.path()),
-            Some(ModelVariant::Rnnt)
-        );
-        assert_eq!(
-            resolve_load_variant(None, dir.path()).unwrap(),
-            Some(ModelVariant::E2eRnnt)
-        );
-        // CLI override still wins over the manifest architecture.
-        assert_eq!(
-            resolve_load_variant(Some(ModelVariant::Rnnt), dir.path()).unwrap(),
-            Some(ModelVariant::Rnnt)
-        );
-    }
-
-    #[test]
-    fn test_resolve_load_variant_invalid_manifest_is_error() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        std::fs::write(
-            dir.path().join(crate::model::MANIFEST_FILE),
-            "not = [valid\n",
-        )
-        .unwrap();
-        assert!(resolve_load_variant(None, dir.path()).is_err());
-        // Even with an override, a corrupt manifest is a hard error.
-        assert!(resolve_load_variant(Some(ModelVariant::Rnnt), dir.path()).is_err());
-    }
-
-    #[test]
-    fn test_resolved_model_files_without_manifest_match_variant_basenames() {
-        // Regression: no manifest.toml → byte-identical hardcoded names.
-        let dir = tempfile::tempdir().expect("tempdir");
-        std::fs::write(dir.path().join("v3_rnnt_encoder.onnx"), b"fp32").unwrap();
-        std::fs::write(dir.path().join("v3_rnnt_encoder_int8.onnx"), b"int8").unwrap();
-
-        let files = ResolvedModelFiles::resolve(dir.path(), ModelVariant::Rnnt).unwrap();
-        assert_eq!(
-            files.encoder.file_name().unwrap(),
-            "v3_rnnt_encoder_int8.onnx"
-        );
-        assert!(files.using_int8);
-        assert_eq!(
-            files.decoder.as_ref().unwrap().file_name().unwrap(),
-            "v3_rnnt_decoder.onnx"
-        );
-        assert_eq!(
-            files.joint.as_ref().unwrap().file_name().unwrap(),
-            "v3_rnnt_joint.onnx"
-        );
-        assert_eq!(files.vocab.file_name().unwrap(), "v3_vocab.txt");
-    }
-
-    #[test]
-    fn test_resolved_model_files_manifest_encoder_prefers_int8() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        std::fs::write(dir.path().join("custom_enc.onnx"), b"fp32").unwrap();
-        std::fs::write(dir.path().join("custom_enc_int8.onnx"), b"int8").unwrap();
-        std::fs::write(
-            dir.path().join(crate::model::MANIFEST_FILE),
-            r#"
-architecture = "rnnt"
-[files]
-encoder = "custom_enc.onnx"
-encoder_int8 = "custom_enc_int8.onnx"
-decoder = "custom_dec.onnx"
-joint = "custom_joint.onnx"
-vocab = "custom_vocab.txt"
-"#,
-        )
-        .unwrap();
-
-        let files = ResolvedModelFiles::resolve(dir.path(), ModelVariant::Rnnt).unwrap();
-        assert_eq!(
-            files.encoder.file_name().unwrap(),
-            "custom_enc_int8.onnx",
-            "manifest INT8 encoder must win when present on disk"
-        );
-        assert!(files.using_int8);
-        assert_eq!(
-            files.decoder.as_ref().unwrap().file_name().unwrap(),
-            "custom_dec.onnx"
-        );
-        assert_eq!(files.vocab.file_name().unwrap(), "custom_vocab.txt");
-    }
-
-    // ---- Pool tests (B.7) ---------------------------------------------------
-    //
-    // These exercise `Pool<T>` with synthetic items so the contract is
-    // observable without loading ONNX models. `SessionPool = Pool<SessionTriplet>`
-    // is just an alias, so any property proven here also holds for the real
-    // pool.
-
-    #[tokio::test]
-    #[cfg_attr(miri, ignore = "tokio runtime is unsupported under Miri")]
-    async fn test_pool_guard_returns_triplet_on_normal_drop() {
-        let pool = Pool::new(vec![1u32, 2, 3]);
-        assert_eq!(pool.available(), 3);
-        {
-            let _guard = pool.checkout().await.expect("checkout");
-            assert_eq!(pool.available(), 2);
-        }
-        // Dropping the guard returns the item.
-        assert_eq!(pool.available(), 3);
-    }
-
-    #[tokio::test]
-    #[cfg_attr(miri, ignore = "tokio runtime is unsupported under Miri")]
-    async fn test_pool_guard_returns_triplet_on_panic_unwind() {
-        // The guard's Drop impl runs during unwind, so a panic between
-        // checkout and the natural end of scope still restores capacity.
-        let pool = std::sync::Arc::new(Pool::new(vec![1u32]));
-        assert_eq!(pool.available(), 1);
-
-        let pool_clone = pool.clone();
-        let result = tokio::spawn(async move {
-            let _guard = pool_clone.checkout().await.expect("checkout");
-            assert_eq!(pool_clone.available(), 0);
-            panic!("synthetic inference panic");
-        })
-        .await;
-        assert!(result.is_err(), "spawned task must report the panic");
-
-        // Capacity is restored thanks to PoolGuard::drop running on unwind.
-        assert_eq!(pool.available(), 1);
-    }
-
-    #[tokio::test]
-    #[cfg_attr(miri, ignore = "tokio runtime is unsupported under Miri")]
-    async fn test_pool_close_wakes_waiters_with_closed() {
-        // A waiter blocked in `checkout` after the inventory is exhausted
-        // must resolve to PoolError::Closed when `close()` fires. Map the
-        // borrowed guard to the `()` success path so the spawn doesn't
-        // need to carry the pool's lifetime.
-        let pool = std::sync::Arc::new(Pool::<u32>::new(vec![]));
-        let waiter = tokio::spawn({
-            let pool = pool.clone();
-            async move { pool.checkout().await.map(|_g| ()) }
-        });
-
-        // Give the waiter a moment to park on the channel.
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        pool.close();
-
-        let res = waiter.await.expect("join");
-        assert!(matches!(res, Err(PoolError::Closed)));
-    }
-
-    #[tokio::test]
-    #[cfg_attr(miri, ignore = "tokio runtime is unsupported under Miri")]
-    async fn test_pool_fifo_under_contention() {
-        // With a single-slot pool and three queued waiters, the order of
-        // wake-ups must match the order in which `checkout` was called.
-        // The mpsc channel itself is FIFO; the Mutex serializes waiters
-        // so ordering is preserved under normal contention.
-        let pool = std::sync::Arc::new(Pool::new(vec![0u32]));
-
-        let primary = pool.checkout().await.expect("primary checkout");
-        assert_eq!(pool.available(), 0);
-
-        let waker_log = std::sync::Arc::new(tokio::sync::Mutex::new(Vec::new()));
-        let mut handles = Vec::new();
-        for id in 0u32..3 {
-            let pool = pool.clone();
-            let log = waker_log.clone();
-            handles.push(tokio::spawn(async move {
-                let g = pool.checkout().await.expect("checkout");
-                log.lock().await.push(id);
-                drop(g);
-            }));
-            // Stagger spawns so each waiter is parked before the next one
-            // is registered with the channel.
-            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-        }
-
-        // Release the only inventory slot so the queued waiters can run.
-        drop(primary);
-        for h in handles {
-            h.await.expect("join");
-        }
-
-        let log = waker_log.lock().await.clone();
-        assert_eq!(log, vec![0, 1, 2], "waiters must wake in FIFO order");
-    }
-
-    #[tokio::test]
-    #[cfg_attr(miri, ignore = "tokio runtime is unsupported under Miri")]
-    async fn test_into_owned_for_spawn_blocking() {
-        // `into_owned` strips the lifetime so the item can be moved into a
-        // blocking thread, then `OwnedReservation::checkin` returns it.
-        let pool = std::sync::Arc::new(Pool::new(vec![String::from("triplet")]));
-        let guard = pool.checkout().await.expect("checkout");
-        let reservation = guard.into_owned();
-
-        let result = tokio::task::spawn_blocking(move || {
-            // Pretend we're running blocking inference.
-            assert_eq!(*reservation, "triplet");
-            reservation.checkin();
-            "done"
-        })
-        .await
-        .expect("join");
-
-        // After the blocking task returns the item, the pool is full again.
-        assert_eq!(pool.available(), 1);
-        assert_eq!(result, "done");
-    }
-
-    #[tokio::test]
-    #[cfg_attr(miri, ignore = "tokio runtime is unsupported under Miri")]
-    async fn test_owned_reservation_returns_on_spawn_blocking_panic() {
-        // If the blocking task panics, the reservation's Drop must still
-        // return the item so the pool does not leak capacity.
-        let pool = std::sync::Arc::new(Pool::new(vec![String::from("triplet")]));
-        let guard = pool.checkout().await.expect("checkout");
-        let reservation = guard.into_owned();
-
-        let result = tokio::task::spawn_blocking(move || {
-            let _reservation = reservation;
-            panic!("simulated inference panic");
-        })
-        .await;
-
-        assert!(result.is_err(), "spawn_blocking must report the panic");
-        assert_eq!(
-            pool.available(),
-            1,
-            "reservation must be returned after panic"
-        );
-    }
-
-    #[tokio::test]
-    #[cfg_attr(miri, ignore = "tokio runtime is unsupported under Miri")]
-    async fn test_owned_reservation_drop_returns_item() {
-        // Dropping an unchecked-in reservation still returns the item.
-        let pool = std::sync::Arc::new(Pool::new(vec![String::from("triplet")]));
-        let guard = pool.checkout().await.expect("checkout");
-        let reservation = guard.into_owned();
-
-        tokio::task::spawn_blocking(move || {
-            let _reservation = reservation;
-            // reservation dropped here
-        })
-        .await
-        .expect("join");
-
-        assert_eq!(pool.available(), 1);
-    }
-
-    #[tokio::test]
-    #[cfg_attr(miri, ignore = "tokio runtime is unsupported under Miri")]
-    async fn test_pool_close_is_idempotent() {
-        // `pool.close()` is wired into the shutdown hook; calling it twice
-        // (e.g. shutdown signal + Drop) must not panic.
-        let pool = Pool::<u32>::new(vec![]);
-        pool.close();
-        pool.close();
-    }
-
-    #[tokio::test]
-    #[cfg_attr(miri, ignore = "tokio runtime is unsupported under Miri")]
-    async fn test_pool_waiters_count() {
-        let pool = std::sync::Arc::new(Pool::<u32>::new(vec![]));
-        let w1 = tokio::spawn({
-            let p = pool.clone();
-            async move { p.checkout().await.map(|_| ()) }
-        });
-        let w2 = tokio::spawn({
-            let p = pool.clone();
-            async move { p.checkout().await.map(|_| ()) }
-        });
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        assert_eq!(pool.waiters(), 2, "both blocked tasks must be waiters");
-        pool.close();
-        let _ = w1.await;
-        let _ = w2.await;
-    }
-
-    #[tokio::test]
-    #[cfg_attr(miri, ignore = "tokio runtime is unsupported under Miri")]
-    async fn test_owned_reservation_round_trip_through_option() {
-        // Mirrors the pattern used by `handle_binary_frame` in ws.rs:
-        // the reservation is temporarily moved out of an Option into
-        // spawn_blocking and then placed back on success.
-        let pool = std::sync::Arc::new(Pool::new(vec![42u32]));
-        let guard = pool.checkout().await.expect("checkout");
-        let mut reservation: Option<OwnedReservation<u32>> = Some(guard.into_owned());
-
-        let (res_back, val) = tokio::task::spawn_blocking(move || {
-            let mut r = reservation.take().unwrap();
-            *r += 1;
-            let v = *r;
-            (r, v)
-        })
-        .await
-        .expect("join");
-
-        reservation = Some(res_back);
-        assert_eq!(val, 43);
-        drop(reservation);
-        assert_eq!(pool.available(), 1);
-    }
-
-    #[tokio::test]
-    #[cfg_attr(miri, ignore = "tokio runtime is unsupported under Miri")]
-    async fn test_pool_slot_not_leaked_on_cancelled_checkout() {
-        // If a checkout future is cancelled after registering a waiter but
-        // before receiving an item, the oneshot receiver is dropped while the
-        // sender remains in the waiters queue.  When another item is checked
-        // in, the dead waiter must be skipped and the item returned to the
-        // pool — otherwise the slot is leaked forever.
-        let pool = std::sync::Arc::new(Pool::new(vec![42u32]));
-        let primary = pool.checkout().await.expect("checkout");
-
-        let aborted = tokio::spawn({
-            let pool = pool.clone();
-            async move { pool.checkout().await }
-        });
-        // Let the spawned task register as a waiter.
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        aborted.abort();
-        let _ = aborted.await;
-
-        // The abandoned waiter is still queued.
-        assert_eq!(pool.waiters(), 1);
-
-        // Return the primary item.  Without the retry loop in checkin this
-        // would silently drop the item because tx.send fails.
-        drop(primary);
-
-        assert_eq!(pool.available(), 1, "item must return to pool, not leak");
-        assert_eq!(pool.waiters(), 0, "dead waiter must be removed");
-    }
-
-    #[tokio::test]
-    #[cfg_attr(miri, ignore = "tokio runtime is unsupported under Miri")]
-    async fn test_pool_slot_not_leaked_on_timeout_checkout() {
-        // Same scenario as above, but using tokio::time::timeout instead of
-        // abort — this is the exact path hit by the REST and WS handlers.
-        let pool = std::sync::Arc::new(Pool::new(vec![42u32]));
-        let primary = pool.checkout().await.expect("checkout");
-
-        let result =
-            tokio::time::timeout(std::time::Duration::from_millis(10), pool.checkout()).await;
-        assert!(result.is_err(), "checkout must time out");
-
-        assert_eq!(pool.waiters(), 1);
-
-        drop(primary);
-
-        assert_eq!(
-            pool.available(),
-            1,
-            "item must return to pool after timeout"
-        );
-        assert_eq!(pool.waiters(), 0, "dead waiter must be removed");
-    }
-
-    #[tokio::test]
-    #[cfg_attr(miri, ignore = "tokio runtime is unsupported under Miri")]
-    async fn test_pool_multiple_dead_waiters_are_skipped() {
-        // Several cancelled waiters in a row should all be skipped in one
-        // checkin pass.
-        let pool = std::sync::Arc::new(Pool::new(vec![0u32]));
-        let primary = pool.checkout().await.expect("checkout");
-
-        let mut handles = Vec::new();
-        for _ in 0..3 {
-            handles.push(tokio::spawn({
-                let pool = pool.clone();
-                async move { pool.checkout().await }
-            }));
-            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-        }
-        for h in handles {
-            h.abort();
-            let _ = h.await;
-        }
-
-        assert_eq!(pool.waiters(), 3);
-
-        drop(primary);
-
-        assert_eq!(
-            pool.available(),
-            1,
-            "item returned after skipping 3 dead waiters"
-        );
-        assert_eq!(pool.waiters(), 0);
-    }
-
-    #[test]
-    fn test_transcript_assembler_append_and_finalize() {
-        let mut asm = TranscriptAssembler::new();
-        assert!(asm.is_empty());
-        asm.append(vec![
-            WordInfo {
-                word: "hello".into(),
-                start: 0.0,
-                end: 0.5,
-                confidence: 0.9,
-                speaker: None,
-            },
-            WordInfo {
-                word: "world".into(),
-                start: 0.6,
-                end: 1.0,
-                confidence: 0.85,
-                speaker: None,
-            },
-        ]);
-        assert!(!asm.is_empty());
-        let seg = asm.finalize(1.0);
-        assert_eq!(seg.text, "hello world");
-        assert_eq!(seg.words.len(), 2);
-        assert!(seg.is_final);
-        assert!(seg.speech_final);
-        assert_eq!(seg.endpoint_reason, Some(EndpointReason::Stop));
-        assert_eq!(seg.timestamp, 1.0);
-        // After finalize the assembler is reset.
-        assert!(asm.is_empty());
-    }
-
-    #[test]
-    fn test_transcript_assembler_commit_live_preserves_prefix_across_set_words() {
-        let mut asm = TranscriptAssembler::new();
-        asm.append(vec![WordInfo::new("hello", 0.0, 0.5, 0.9, None)]);
-        asm.commit_live();
-        // Window slide re-decode replaces only the live tail.
-        asm.set_words(vec![WordInfo::new("world", 0.6, 1.0, 0.8, None)]);
-        let partial = asm.partial(1.0);
-        assert!(!partial.is_final);
-        assert!(!partial.speech_final);
-        assert_eq!(partial.text, "hello world");
-        assert_eq!(partial.words.len(), 2);
-        let fin = asm.finalize_with_reason(2.0, EndpointReason::Vad);
-        assert!(fin.speech_final);
-        assert_eq!(fin.endpoint_reason, Some(EndpointReason::Vad));
-        assert_eq!(fin.text, "hello world");
-        assert!(asm.is_empty());
     }
 
     #[test]
@@ -4035,301 +2228,6 @@ vocab = "custom_vocab.txt"
     }
 
     #[test]
-    fn test_endpoint_mode_parse_token() {
-        assert_eq!(EndpointMode::parse_token("auto"), Some(EndpointMode::Auto));
-        assert_eq!(
-            EndpointMode::parse_token("ASSISTANT"),
-            Some(EndpointMode::Assistant)
-        );
-        assert_eq!(
-            EndpointMode::parse_token("manual"),
-            Some(EndpointMode::Manual)
-        );
-        assert_eq!(EndpointMode::parse_token("nope"), None);
-    }
-
-    #[test]
-    fn test_transcript_assembler_partial() {
-        let mut asm = TranscriptAssembler::new();
-        asm.append(vec![WordInfo {
-            word: "partial".into(),
-            start: 0.0,
-            end: 0.3,
-            confidence: 0.8,
-            speaker: None,
-        }]);
-        let seg = asm.partial(0.3);
-        assert_eq!(seg.text, "partial");
-        assert!(!seg.is_final);
-        // partial must not reset the assembler.
-        assert!(!asm.is_empty());
-    }
-
-    #[test]
-    fn test_aggregate_confidence_duration_weighted() {
-        // The longer word dominates: (0.9*1.0 + 0.5*3.0) / 4.0 = 0.6.
-        let words = vec![
-            WordInfo::new("short", 0.0, 1.0, 0.9, None),
-            WordInfo::new("long", 1.0, 4.0, 0.5, None),
-        ];
-        let c = aggregate_confidence(&words).expect("non-empty words give a score");
-        assert!((c - 0.6).abs() < 1e-6, "duration-weighted mean, got {c}");
-    }
-
-    #[test]
-    fn test_aggregate_confidence_zero_duration_plain_mean() {
-        // Zero-duration words carry no weight; fall back to the plain mean
-        // (0.8 + 0.6) / 2 = 0.7 instead of a 0/0 divide.
-        let words = vec![
-            WordInfo::new("a", 1.0, 1.0, 0.8, None),
-            WordInfo::new("b", 2.0, 2.0, 0.6, None),
-        ];
-        let c = aggregate_confidence(&words).expect("non-empty words give a score");
-        assert!((c - 0.7).abs() < 1e-6, "plain mean, got {c}");
-    }
-
-    #[test]
-    fn test_aggregate_confidence_empty_words_none() {
-        assert_eq!(aggregate_confidence(&[]), None);
-    }
-
-    #[test]
-    fn test_assembler_fills_segment_confidence() {
-        let mut asm = TranscriptAssembler::new();
-        asm.append(vec![
-            WordInfo::new("hello", 0.0, 0.5, 0.9, None),
-            WordInfo::new("world", 0.5, 1.0, 0.8, None),
-        ]);
-        let partial = asm.partial(0.5);
-        let c = partial.confidence.expect("partial carries the aggregate");
-        assert!(
-            (c - 0.85).abs() < 1e-6,
-            "equal durations → plain mean, got {c}"
-        );
-        let final_seg = asm.finalize(1.0);
-        let c = final_seg.confidence.expect("final carries the aggregate");
-        assert!((c - 0.85).abs() < 1e-6, "got {c}");
-        // An empty assembler yields an empty segment with no score.
-        let empty = asm.finalize(1.0);
-        assert_eq!(empty.confidence, None);
-    }
-
-    #[test]
-    fn test_segment_confidence_omitted_from_json_when_none() {
-        // Backward-compatible payload: a segment without words must serialize
-        // exactly like before the field existed — no `confidence` key at all.
-        let seg = TranscriptSegment::empty_final();
-        let v = serde_json::to_value(&seg).unwrap();
-        assert!(v.get("confidence").is_none());
-    }
-
-    #[test]
-    fn test_segment_old_json_without_confidence_still_deserializes() {
-        // Client-side view of the wire contract: payloads written before the
-        // `confidence` field existed (no key) must keep parsing into a typed
-        // client that knows the field — it simply defaults to `None`. The
-        // core segment type is Serialize-only; this mirrors a typed SDK.
-        #[derive(serde::Deserialize)]
-        struct ClientSegmentView {
-            #[serde(default)]
-            confidence: Option<f32>,
-        }
-        let old_json = r#"{"text":"привет","words":[],"is_final":true,"timestamp":1.0}"#;
-        let view: ClientSegmentView = serde_json::from_str(old_json).unwrap();
-        assert_eq!(view.confidence, None);
-    }
-
-    #[test]
-    fn test_feature_extractor_compute_empty() {
-        let fe = FeatureExtractor::new();
-        let (mel, frames) = fe.compute(&[]);
-        // When samples are shorter than N_FFT, compute_with_buffers returns
-        // a single zero-filled frame with n_mels elements.
-        assert_eq!(mel.len(), N_MELS);
-        assert_eq!(frames, 1);
-        assert!(mel.iter().all(|&v| v == 0.0));
-    }
-
-    #[test]
-    fn test_now_timestamp_non_negative() {
-        let ts = now_timestamp();
-        assert!(ts >= 0.0, "timestamp must be non-negative");
-    }
-
-    #[test]
-    fn test_now_timestamp_monotonic_and_epoch_aligned() {
-        // Locks in the monotonic-anchor contract: two successive reads never go
-        // backwards (immune to NTP steps), and the value stays Unix-epoch
-        // aligned. A regression to a plain wall-clock read could violate either.
-        let a = now_timestamp();
-        let b = now_timestamp();
-        assert!(
-            b >= a,
-            "now_timestamp must be non-decreasing (monotonic anchor)"
-        );
-        // Comfortably after 2023-11-14 and before a far-future sanity bound.
-        assert!(
-            a > 1_700_000_000.0,
-            "timestamp must stay Unix-epoch aligned"
-        );
-        assert!(a < 4_000_000_000.0, "timestamp exceeds a sane upper bound");
-    }
-
-    #[test]
-    fn test_probe_or_rebuild_keeps_state_when_probe_passes() {
-        let rebuilt = std::cell::Cell::new(false);
-        let result = probe_or_rebuild(
-            7u32,
-            |v| {
-                assert_eq!(*v, 7);
-                Ok(())
-            },
-            |_, _| {
-                rebuilt.set(true);
-                Ok(99)
-            },
-        )
-        .expect("healthy state must survive unchanged");
-        assert_eq!(result, 7);
-        assert!(!rebuilt.get(), "rebuild must not run when the probe passes");
-    }
-
-    #[test]
-    fn test_probe_or_rebuild_rebuilds_when_probe_fails() {
-        let result = probe_or_rebuild(
-            1u32,
-            |v| {
-                if *v == 1 {
-                    Err(anyhow::anyhow!("first probe failed"))
-                } else {
-                    Ok(())
-                }
-            },
-            |old, probe_err| {
-                assert_eq!(old, 1, "rebuild receives the failed state");
-                assert!(
-                    probe_err.to_string().contains("first probe failed"),
-                    "rebuild receives the probe error for logging"
-                );
-                Ok(2)
-            },
-        )
-        .expect("rebuilt state passing the probe is OK");
-        assert_eq!(result, 2);
-    }
-
-    #[test]
-    fn test_probe_or_rebuild_propagates_rebuild_error() {
-        let result = probe_or_rebuild(
-            1u32,
-            |_| Err(anyhow::anyhow!("probe failed")),
-            |_, _| Err(anyhow::anyhow!("rebuild failed")),
-        );
-        let err = result.expect_err("rebuild failure must be fatal");
-        assert!(err.to_string().contains("rebuild failed"));
-    }
-
-    #[test]
-    fn test_probe_or_rebuild_fails_when_rebuilt_state_fails_probe() {
-        let result = probe_or_rebuild(
-            1u32,
-            |_| Err(anyhow::anyhow!("always fails")),
-            |_, _| Ok(2u32),
-        );
-        assert!(
-            result.is_err(),
-            "a rebuilt state that still fails the probe must be a hard error"
-        );
-    }
-
-    #[test]
-    fn test_encoder_model_path_prefers_int8_when_present() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        std::fs::write(dir.path().join("v3_e2e_rnnt_encoder.onnx"), b"fp32").unwrap();
-        std::fs::write(dir.path().join("v3_e2e_rnnt_encoder_int8.onnx"), b"int8").unwrap();
-        let path = Engine::encoder_model_path(dir.path(), ModelVariant::E2eRnnt);
-        assert_eq!(
-            path.file_name().unwrap(),
-            "v3_e2e_rnnt_encoder_int8.onnx",
-            "INT8 encoder must win when both files exist"
-        );
-    }
-
-    #[test]
-    fn test_encoder_model_path_fp32_only_is_rejected() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        std::fs::write(dir.path().join("v3_e2e_rnnt_encoder.onnx"), b"fp32").unwrap();
-        // Without INT8, resolve fails; helper still reports the INT8 basename
-        // (never the FP32 file).
-        let path = Engine::encoder_model_path(dir.path(), ModelVariant::E2eRnnt);
-        assert_eq!(path.file_name().unwrap(), "v3_e2e_rnnt_encoder_int8.onnx");
-        assert!(
-            ResolvedModelFiles::from_variant(dir.path(), ModelVariant::E2eRnnt).is_err(),
-            "FP32-only install must not be loadable"
-        );
-    }
-
-    #[test]
-    fn test_encoder_model_path_rnnt_prefers_int8() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        std::fs::write(dir.path().join("v3_rnnt_encoder.onnx"), b"fp32").unwrap();
-        std::fs::write(dir.path().join("v3_rnnt_encoder_int8.onnx"), b"int8").unwrap();
-        let path = Engine::encoder_model_path(dir.path(), ModelVariant::Rnnt);
-        assert_eq!(
-            path.file_name().unwrap(),
-            "v3_rnnt_encoder_int8.onnx",
-            "INT8 rnnt encoder must win when both files exist"
-        );
-    }
-
-    #[test]
-    fn test_encoder_model_path_rnnt_fp32_only_is_rejected() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        std::fs::write(dir.path().join("v3_rnnt_encoder.onnx"), b"fp32").unwrap();
-        assert!(
-            ResolvedModelFiles::from_variant(dir.path(), ModelVariant::Rnnt).is_err(),
-            "FP32-only install must not be loadable"
-        );
-    }
-
-    #[test]
-    fn test_encoder_model_path_uses_manifest_int8_when_present() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        std::fs::write(dir.path().join("pack_enc.onnx"), b"fp32").unwrap();
-        std::fs::write(dir.path().join("pack_enc_int8.onnx"), b"int8").unwrap();
-        std::fs::write(
-            dir.path().join(crate::model::MANIFEST_FILE),
-            r#"
-architecture = "rnnt"
-[files]
-encoder = "pack_enc.onnx"
-encoder_int8 = "pack_enc_int8.onnx"
-decoder = "pack_dec.onnx"
-joint = "pack_joint.onnx"
-vocab = "pack_vocab.txt"
-"#,
-        )
-        .unwrap();
-        let path = Engine::encoder_model_path(dir.path(), ModelVariant::Rnnt);
-        assert_eq!(path.file_name().unwrap(), "pack_enc_int8.onnx");
-    }
-
-    #[test]
-    fn test_pool_sequential_checkouts_visit_every_item() {
-        // Engine::warmup relies on this FIFO property: `total()` sequential
-        // checkout/checkin cycles touch every pooled item exactly once.
-        let pool = Pool::new(vec![1u32, 2, 3]);
-        let mut seen = Vec::new();
-        for _ in 0..pool.total() {
-            let guard = pool.checkout_blocking().expect("checkout");
-            seen.push(*guard);
-            // guard drops here — the item returns to the back of the queue
-        }
-        seen.sort_unstable();
-        assert_eq!(seen, vec![1, 2, 3]);
-    }
-
-    #[test]
     #[ignore = "requires model"]
     fn test_warmup_runs_silent_inference_on_every_triplet() {
         let engine = Engine::load_with_pool_size(&crate::model::default_model_dir(), 2)
@@ -4341,121 +2239,6 @@ vocab = "pack_vocab.txt"
             engine.pool.available(),
             engine.pool.total(),
             "every triplet must be returned to the pool after warmup"
-        );
-    }
-
-    // ---- More pure (no-model) coverage -------------------------------------
-
-    #[test]
-    fn test_finalize_pool_load_degraded_includes_error_detail() {
-        // The degraded-pool branch logs the first error; exercise the
-        // `first_err` formatting path (the loaded triplets are still returned).
-        let r: Vec<anyhow::Result<u32>> = vec![Ok(1), Err(anyhow::anyhow!("first failure cause"))];
-        assert_eq!(Engine::finalize_pool_load(r, 2, 1).unwrap(), vec![1]);
-    }
-
-    #[test]
-    fn test_finalize_pool_load_below_min_no_errors_when_all_ok_but_short() {
-        // No Err entries, but fewer results than pool_size with min above the
-        // loaded count → still errors (loaded count is what matters).
-        let r: Vec<anyhow::Result<u32>> = vec![Ok(1)];
-        let err = Engine::finalize_pool_load(r, 3, 2).unwrap_err().to_string();
-        assert!(err.contains("loaded only 1/3"), "got: {err}");
-    }
-
-    #[test]
-    fn test_transcript_assembler_set_words_overwrites() {
-        // The sliding-window streaming path overwrites (not appends) on each
-        // re-decode via `set_words`. A second call replaces the first.
-        let mut asm = TranscriptAssembler::new();
-        asm.set_words(vec![word("alpha", 0.0, 0.4), word("beta", 0.5, 0.9)]);
-        let p = asm.partial(0.0);
-        assert_eq!(p.text, "alpha beta");
-        assert_eq!(p.words.len(), 2);
-
-        asm.set_words(vec![word("gamma", 1.0, 1.4)]);
-        let p = asm.partial(0.0);
-        assert_eq!(p.text, "gamma", "set_words must overwrite, not append");
-        assert_eq!(p.words.len(), 1);
-    }
-
-    #[test]
-    fn test_transcript_assembler_set_words_empty_resets_text() {
-        let mut asm = TranscriptAssembler::new();
-        asm.set_words(vec![word("x", 0.0, 0.4)]);
-        assert!(!asm.is_empty());
-        asm.set_words(vec![]);
-        assert!(asm.is_empty(), "empty set_words clears the accumulation");
-    }
-
-    #[test]
-    fn test_token_formatter_last_word_empty_confidences_defaults_to_one() {
-        // A word whose only token is a bare boundary marker (`▁`, no body)
-        // contributes no confidence sample; a following real word that itself
-        // has no recorded confidences must default to 1.0 on the final-emit
-        // path. We build a vocab whose tokens are pure boundary markers so the
-        // `clean` body is empty and no confidence is pushed.
-        let tok = Tokenizer::from_tokens(vec![
-            "\u{2581}real".into(), // 0: a real word
-            "\u{2581}".into(),     // 1: bare boundary, empty body
-        ]);
-        let tokens = vec![
-            decode::TokenInfo {
-                token_id: 0,
-                frame_index: 0,
-                confidence: 0.7,
-            },
-            // A bare boundary token forces emission of "real" (mid-loop emit),
-            // then contributes nothing to a new word.
-            decode::TokenInfo {
-                token_id: 1,
-                frame_index: 1,
-                confidence: 0.5,
-            },
-        ];
-        let words = TokenFormatter::tokens_to_words(&tok, &tokens, 0);
-        // Only "real" is emitted; the trailing bare boundary leaves no word.
-        assert_eq!(words.len(), 1);
-        assert_eq!(words[0].word, "real");
-        assert!((words[0].confidence - 0.7).abs() < 1e-6);
-    }
-
-    #[test]
-    fn test_feature_extractor_prepare_buffer_accumulates() {
-        // `prepare_buffer` appends to the buffer and reports the usable sample
-        // count once a full frame is available; below N_FFT it returns None.
-        let fe = FeatureExtractor::new();
-        let mut buf: Vec<f32> = Vec::new();
-        // A handful of samples — fewer than N_FFT — yields no usable frame yet.
-        let usable = fe.prepare_buffer(&[0.1; 10], &mut buf);
-        assert_eq!(usable, None, "sub-frame input is buffered, not yet usable");
-        assert_eq!(buf.len(), 10, "samples are retained in the buffer");
-
-        // Append enough to cross a frame boundary; a usable count is reported.
-        let usable = fe.prepare_buffer(&vec![0.2; N_FFT], &mut buf);
-        assert!(
-            usable.is_some(),
-            "crossing a frame boundary yields a usable count"
-        );
-    }
-
-    #[test]
-    #[cfg_attr(miri, ignore = "mel FFT over 1s of audio is too slow under Miri")]
-    fn test_feature_extractor_compute_mel_reuses_buffers() {
-        // `compute_mel` writes into caller-owned scratch buffers and returns the
-        // frame count. One second of 16 kHz audio → ~100 frames; the output
-        // buffer holds frames * N_MELS values.
-        let fe = FeatureExtractor::new();
-        let samples = vec![0.0f32; 16000];
-        let mut fft_buf = Vec::new();
-        let mut power_buf = Vec::new();
-        let mut out_buf = Vec::new();
-        let frames = fe.compute_mel(&samples, &mut fft_buf, &mut power_buf, &mut out_buf);
-        assert!(frames > 0, "1s of audio yields at least one mel frame");
-        assert_eq!(
-            out_buf.len(),
-            frames * N_MELS,
-            "output buffer holds frames * N_MELS values"
         );
     }
 

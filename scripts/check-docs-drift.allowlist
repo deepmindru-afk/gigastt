@@ -5,25 +5,25 @@
 # debt — prefer fixing the docs over extending this list.
 
 [flags-undocumented-ok]
-# Flags that exist in crates/gigastt/src/main.rs but are intentionally absent
+# Flags that exist in CLI sources but are intentionally absent
 # from docs/cli.md.
 ane  # gated behind `--features ane` (experimental Core ML/ANE backend); documented separately in docs/ane-backend.md
 
 [envs-undocumented-ok]
-# GIGASTT_* env vars read by main.rs but intentionally absent from docs/cli.md.
+# GIGASTT_* env vars read by CLI sources but intentionally absent from docs/cli.md.
 
 [doc-flags-phantom-ok]
 # `--flag` tokens that appear in docs/cli.md but are not clap flags
 # (e.g. flags of other tools shown in examples).
 
 [doc-envs-phantom-ok]
-# GIGASTT_* tokens that appear in docs/cli.md but are not read by main.rs.
+# GIGASTT_* tokens that appear in docs/cli.md but are not read by CLI sources.
 
 [ws-codes-doc-only]
-# Codes in the docs/api.md + docs/asyncapi.yaml error-code sets that ws.rs
+# Codes in the docs/api.md + docs/asyncapi.yaml error-code sets that ws/
 # never emits (they belong to another surface but are listed for discoverability).
 payload_too_large  # REST/SSE-only (HTTP 413); api.md lists it in the WS table with an explicit "REST/SSE surface" note
 
 [ws-codes-undocumented-ok]
-# Codes emitted by ws.rs that are deliberately not part of the documented
+# Codes emitted by ws/ that are deliberately not part of the documented
 # error-code enum.

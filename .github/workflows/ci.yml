@@ -574,7 +574,12 @@ jobs:
             docs:
               - 'docs/**'
               - 'crates/gigastt/src/main.rs'
+              - 'crates/gigastt/src/serve.rs'
+              - 'crates/gigastt/src/transcribe_cmd.rs'
               - 'crates/gigastt/src/server/ws.rs'
+              - 'crates/gigastt/src/server/ws/**'
+              - 'crates/gigastt/src/server/mod.rs'
+              - 'crates/gigastt/src/server/router.rs'
               - 'crates/gigastt-core/src/inference/audio/**'
               - 'scripts/check-docs-drift.py'
               - 'scripts/check-docs-drift.allowlist'
