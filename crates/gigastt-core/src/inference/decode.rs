@@ -318,6 +318,65 @@ pub fn greedy_decode(
     greedy_decode_impl(&mut backend, encoded, encoded_len, blank_id, state, biaser)
 }
 
+/// Pick the next token from joiner logits, optionally applying hotword bias.
+///
+/// The boost is applied to a copy so `logits` keeps the model's own scores:
+/// it decides the pick, it does not get to report on it. A pick it flips
+/// spends this frame's override budget — see [`MAX_BIAS_OVERRIDES_PER_STEP`].
+///
+/// Returns `(token, confidence, spent_override)`.
+fn select_token(
+    logits: &[f32],
+    blank_id: usize,
+    biaser: Option<&Biaser>,
+    bias_state: Option<&super::bias::BiasState>,
+    bias_overrides: usize,
+    biased_buf: &mut Vec<f32>,
+) -> (usize, f32, bool) {
+    match (biaser, bias_state) {
+        (Some(b), Some(bs)) if bias_overrides < MAX_BIAS_OVERRIDES_PER_STEP => {
+            biased_buf.clear();
+            biased_buf.extend_from_slice(logits);
+            b.boost_logits(bs, biased_buf);
+            let boosted = argmax(biased_buf, blank_id);
+            let spent = boosted != argmax(logits, blank_id);
+            (boosted, token_confidence(logits, boosted), spent)
+        }
+        _ => {
+            let (token, confidence) = argmax_with_confidence(logits, blank_id);
+            (token, confidence, false)
+        }
+    }
+}
+
+/// Commit a non-blank token into decoder state and advance hotword prefix.
+fn commit_non_blank(
+    state: &mut DecoderState,
+    decoder_out: &DecoderOutput,
+    token: usize,
+    biaser: Option<&Biaser>,
+    bias_state: Option<&mut super::bias::BiasState>,
+) -> Result<()> {
+    state.consecutive_blanks = 0;
+    state.prev_token = token as i64;
+    if decoder_out.new_h.len() != PRED_HIDDEN || decoder_out.new_c.len() != PRED_HIDDEN {
+        anyhow::bail!(
+            "Unexpected decoder state shape: h={}, c={}, expected {}",
+            decoder_out.new_h.len(),
+            decoder_out.new_c.len(),
+            PRED_HIDDEN
+        );
+    }
+    state.h.copy_from_slice(&decoder_out.new_h);
+    state.c.copy_from_slice(&decoder_out.new_c);
+    // Advance the hotword prefix automaton on the emitted label. Blank
+    // frames emit no label, so a partial hotword survives silence gaps.
+    if let (Some(b), Some(bs)) = (biaser, bias_state) {
+        b.advance(bs, token);
+    }
+    Ok(())
+}
+
 /// Backend-generic greedy decode loop. Identical behaviour to the production
 /// path; extracted so unit tests can drive it with a stub [`DecodeBackend`].
 fn greedy_decode_impl<B: DecodeBackend>(
@@ -410,23 +469,17 @@ fn greedy_decode_impl<B: DecodeBackend>(
             )?;
 
             // === CONTEXTUAL HOTWORD BIASING (shallow fusion) ===
-            // The boost is applied to a copy so `logits_buf` keeps the model's
-            // own scores: it decides the pick, it does not get to report on it.
-            // A pick it flips spends this frame's budget — see
-            // MAX_BIAS_OVERRIDES_PER_STEP.
-            let (token, confidence) = match (biaser, bias_state.as_ref()) {
-                (Some(b), Some(bs)) if bias_overrides < MAX_BIAS_OVERRIDES_PER_STEP => {
-                    biased_buf.clear();
-                    biased_buf.extend_from_slice(&logits_buf);
-                    b.boost_logits(bs, &mut biased_buf);
-                    let boosted = argmax(&biased_buf, blank_id);
-                    if boosted != argmax(&logits_buf, blank_id) {
-                        bias_overrides += 1;
-                    }
-                    (boosted, token_confidence(&logits_buf, boosted))
-                }
-                _ => argmax_with_confidence(&logits_buf, blank_id),
-            };
+            let (token, confidence, spent) = select_token(
+                &logits_buf,
+                blank_id,
+                biaser,
+                bias_state.as_ref(),
+                bias_overrides,
+                &mut biased_buf,
+            );
+            if spent {
+                bias_overrides += 1;
+            }
 
             // === TOKEN CLASSIFICATION ===
             if token == blank_id {
@@ -452,24 +505,7 @@ fn greedy_decode_impl<B: DecodeBackend>(
 
             // === NON-BLANK TOKEN: commit state, emit token ===
             in_blank_run = false;
-            state.consecutive_blanks = 0;
-            state.prev_token = token as i64;
-            if decoder_out.new_h.len() != PRED_HIDDEN || decoder_out.new_c.len() != PRED_HIDDEN {
-                anyhow::bail!(
-                    "Unexpected decoder state shape: h={}, c={}, expected {}",
-                    decoder_out.new_h.len(),
-                    decoder_out.new_c.len(),
-                    PRED_HIDDEN
-                );
-            }
-            state.h.copy_from_slice(&decoder_out.new_h);
-            state.c.copy_from_slice(&decoder_out.new_c);
-            // Advance the hotword prefix automaton on the emitted label. Blank
-            // frames (handled above with `break`) emit no label, so a partial
-            // hotword survives the silence gaps between its tokens.
-            if let (Some(b), Some(bs)) = (biaser, bias_state.as_mut()) {
-                b.advance(bs, token);
-            }
+            commit_non_blank(state, &decoder_out, token, biaser, bias_state.as_mut())?;
             tokens.push(TokenInfo {
                 token_id: token,
                 frame_index: t,
