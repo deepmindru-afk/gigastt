@@ -36,6 +36,8 @@ were released without a git tag, so their headings carry no compare link.
   boot, serve, bias, pool, rate-limit, protocol, cache, state, CTC,
   features, metrics, and the rest). Jobs tests are split by store / queue
   / events. WordPiece Unicode category tables live in `wordpiece/unicode.rs`.
+  `FileWindows` lives in `audio/stream/file.rs`; window geometry stays in
+  `stream.rs`.
 
 ### Fixed
 
