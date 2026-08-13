@@ -44,7 +44,7 @@ impl JobQueue {
         })
     }
 
-    /// Spawn worker tasks onto the server drain [`TaskTracker`] so graceful
+    /// Spawn worker tasks onto the server drain [`tokio_util::task::TaskTracker`] so graceful
     /// shutdown waits for in-flight jobs (same lane as WS / SSE / REST).
     /// Each worker owns a clone of `executor`. Call once after constructing
     /// the queue.
