@@ -11,6 +11,7 @@ pub mod metrics;
 pub(crate) mod middleware;
 pub(crate) mod openai;
 pub mod rate_limit;
+mod router;
 mod ws;
 
 pub use config::{OriginPolicy, RuntimeLimits, ServerConfig};
@@ -20,8 +21,7 @@ use anyhow::{Context, Result};
 use arc_swap::ArcSwap;
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
-use axum::http::StatusCode;
-use axum::routing::{delete, get, options, post};
+use axum::routing::get;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -306,59 +306,7 @@ pub async fn run_with_config_listener_reloadable(
     // server in tests cannot collide with itself, so we do not need the
     // "already installed" warning fallback the old stack needed.
     let metrics_registry = if config.metrics_enabled {
-        let reg = std::sync::Arc::new(self::metrics::MetricsRegistry::new());
-        reg.register_counter(
-            "gigastt_http_requests_total",
-            "Total HTTP requests processed",
-        );
-        reg.register_histogram(
-            "gigastt_http_request_duration_seconds",
-            "HTTP request duration in seconds",
-            self::metrics::DEFAULT_BUCKETS,
-        );
-        reg.register_gauge(
-            "gigastt_pool_available",
-            "Number of session triplets currently available in the pool",
-        );
-        reg.register_gauge(
-            "gigastt_pool_waiters",
-            "Number of tasks currently waiting for a pool checkout",
-        );
-        reg.register_gauge(
-            "gigastt_batch_pool_available",
-            "Number of session triplets currently available in the batch pool \
-             (only populated when --batch-pool-size > 0)",
-        );
-        reg.register_gauge(
-            "gigastt_batch_pool_waiters",
-            "Number of tasks currently waiting for a batch-pool checkout",
-        );
-        reg.register_histogram(
-            "gigastt_pool_checkout_duration_seconds",
-            "Time spent waiting for a pool checkout",
-            self::metrics::DEFAULT_BUCKETS,
-        );
-        reg.register_counter(
-            "gigastt_pool_timeouts_total",
-            "Total pool checkout timeouts",
-        );
-        reg.register_gauge(
-            "gigastt_ws_active_connections",
-            "Number of active WebSocket connections",
-        );
-        reg.register_histogram(
-            "gigastt_inference_duration_seconds",
-            "Inference duration in seconds",
-            self::metrics::DEFAULT_BUCKETS,
-        );
-        reg.register_counter(
-            "gigastt_rate_limit_rejections_total",
-            "Total requests rejected by rate limiter",
-        );
-        reg.register_counter(
-            "gigastt_inference_timeouts_total",
-            "Total inference runs aborted by the per-request inference timeout",
-        );
+        let reg = std::sync::Arc::new(self::metrics::register_server_metrics());
         tracing::info!("Prometheus /metrics endpoint enabled");
         Some(reg)
     } else {
@@ -521,63 +469,7 @@ pub async fn run_with_config_listener_reloadable(
     // `/metrics` is intentionally NOT here: it lives on its own loopback
     // listener (see below) so telemetry is never exposed to allowlisted
     // browser origins nor throttled by the per-IP limiter.
-    let protected = Router::new()
-        .route("/v1/models", get(http::models))
-        .route("/v1/models", options(|| async { StatusCode::NO_CONTENT }))
-        .route("/v1/transcribe", post(http::transcribe))
-        .route(
-            "/v1/transcribe",
-            options(|| async { StatusCode::NO_CONTENT }),
-        )
-        .route("/v1/transcribe/stream", post(http::transcribe_stream))
-        .route(
-            "/v1/transcribe/stream",
-            options(|| async { StatusCode::NO_CONTENT }),
-        )
-        // OpenAI-compatible alias for clients (llama-swap, Hermes Agent, SDKs
-        // with a custom base_url) that POST multipart `file` + `model`.
-        .route(
-            "/v1/audio/transcriptions",
-            post(http::openai_transcriptions),
-        )
-        .route(
-            "/v1/audio/transcriptions",
-            options(|| async { StatusCode::NO_CONTENT }),
-        )
-        // /v1/ws is the canonical WebSocket path (versioned, aligned with REST).
-        .route("/v1/ws", get(ws::ws_handler))
-        .route("/v1/ws", options(|| async { StatusCode::NO_CONTENT }))
-        // Admin: hot-reload the model without a restart. Registered inside the
-        // protected router so it inherits `origin_middleware`, but the handler
-        // additionally enforces a strict loopback peer check (see `http::reload`)
-        // so it stays local even under `--bind-all` / `--cors-allow-any`.
-        .route("/v1/admin/reload", post(http::reload))
-        .route(
-            "/v1/admin/reload",
-            options(|| async { StatusCode::NO_CONTENT }),
-        );
-
-    // Asynchronous job API routes. Only registered when `--enable-jobs` is set;
-    // without the flag the paths fall through to axum's default 404.
-    let protected = if config.limits.jobs_enabled {
-        protected
-            .route("/v1/jobs", post(http::submit_job))
-            .route("/v1/jobs", options(|| async { StatusCode::NO_CONTENT }))
-            .route("/v1/jobs/{id}", get(http::get_job))
-            .route("/v1/jobs/{id}", delete(http::cancel_job))
-            .route(
-                "/v1/jobs/{id}",
-                options(|| async { StatusCode::NO_CONTENT }),
-            )
-            .route("/v1/jobs/{id}/result", get(http::get_job_result))
-            .route(
-                "/v1/jobs/{id}/result",
-                options(|| async { StatusCode::NO_CONTENT }),
-            )
-            .route("/v1/jobs/{id}/events", get(http::job_events))
-    } else {
-        protected
-    };
+    let protected = router::protected_v1_router(config.limits.jobs_enabled);
 
     let protected = protected
         .layer(axum::middleware::from_fn_with_state(

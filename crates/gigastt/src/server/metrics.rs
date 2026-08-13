@@ -328,6 +328,66 @@ fn fmt_f64_prom(v: f64) -> String {
     format!("{v}")
 }
 
+/// Register the server-wide Prometheus families used by HTTP / WS / pool
+/// middleware. Called once when `--metrics` is on; the returned registry is
+/// shared by the primary app and the loopback `/metrics` listener.
+pub(crate) fn register_server_metrics() -> MetricsRegistry {
+    let reg = MetricsRegistry::new();
+    reg.register_counter(
+        "gigastt_http_requests_total",
+        "Total HTTP requests processed",
+    );
+    reg.register_histogram(
+        "gigastt_http_request_duration_seconds",
+        "HTTP request duration in seconds",
+        DEFAULT_BUCKETS,
+    );
+    reg.register_gauge(
+        "gigastt_pool_available",
+        "Number of session triplets currently available in the pool",
+    );
+    reg.register_gauge(
+        "gigastt_pool_waiters",
+        "Number of tasks currently waiting for a pool checkout",
+    );
+    reg.register_gauge(
+        "gigastt_batch_pool_available",
+        "Number of session triplets currently available in the batch pool \
+             (only populated when --batch-pool-size > 0)",
+    );
+    reg.register_gauge(
+        "gigastt_batch_pool_waiters",
+        "Number of tasks currently waiting for a batch-pool checkout",
+    );
+    reg.register_histogram(
+        "gigastt_pool_checkout_duration_seconds",
+        "Time spent waiting for a pool checkout",
+        DEFAULT_BUCKETS,
+    );
+    reg.register_counter(
+        "gigastt_pool_timeouts_total",
+        "Total pool checkout timeouts",
+    );
+    reg.register_gauge(
+        "gigastt_ws_active_connections",
+        "Number of active WebSocket connections",
+    );
+    reg.register_histogram(
+        "gigastt_inference_duration_seconds",
+        "Inference duration in seconds",
+        DEFAULT_BUCKETS,
+    );
+    reg.register_counter(
+        "gigastt_rate_limit_rejections_total",
+        "Total requests rejected by rate limiter",
+    );
+    reg.register_counter(
+        "gigastt_inference_timeouts_total",
+        "Total inference runs aborted by the per-request inference timeout",
+    );
+    reg
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -344,6 +404,16 @@ mod tests {
             DEFAULT_BUCKETS,
         );
         r
+    }
+
+    #[test]
+    fn test_register_server_metrics_exports_expected_families() {
+        let text = register_server_metrics().render_prometheus();
+        assert!(text.contains("# TYPE gigastt_http_requests_total counter"));
+        assert!(text.contains("# TYPE gigastt_http_request_duration_seconds histogram"));
+        assert!(text.contains("# TYPE gigastt_pool_available gauge"));
+        assert!(text.contains("# TYPE gigastt_ws_active_connections gauge"));
+        assert!(text.contains("# TYPE gigastt_inference_timeouts_total counter"));
     }
 
     #[test]
