@@ -31,8 +31,9 @@ were released without a git tag, so their headings carry no compare link.
   Public `gigastt_core::model::*` paths are unchanged. CLI parse tests live
   next to `main.rs`; bind-gate tests live next to `serve.rs`.
 - Audio, engine, export, decode, punctuation, VAD, FFI, model, HTTP,
-  wordpiece, stream, quantize, batch, boot, and serve unit tests live next
-  to their modules.
+  wordpiece, stream, quantize, batch, boot, serve, bias, pool, rate-limit,
+  and Core ML bridge unit tests live next to their modules. Jobs unit
+  tests are split by store / queue / events.
 
 ### Fixed
 
