@@ -30,6 +30,8 @@ were released without a git tag, so their headings carry no compare link.
 - `model` download/identity split into `model/{progress,variant,download}.rs`.
   Public `gigastt_core::model::*` paths are unchanged. CLI parse tests live
   next to `main.rs`; bind-gate tests live in `serve.rs`.
+- Audio, engine, export, and FFI unit tests live next to their modules
+  (`audio/tests/`, `engine/tests/`, `export/tests.rs`, `gigastt-ffi/src/tests.rs`).
 
 ### Fixed
 
