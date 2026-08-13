@@ -440,3 +440,151 @@ mod request_tests {
         assert!(req.diarization);
     }
 }
+
+#[cfg(test)]
+mod override_and_merge_tests {
+    use super::super::state::WordInfo;
+    use super::*;
+
+    #[test]
+    fn test_transcribe_overrides_default_all_none() {
+        // The default overrides must be all-`None` so a request with no knobs
+        // reproduces the engine's boot behaviour byte-for-byte.
+        let o = TranscribeOverrides::default();
+        assert_eq!(o.punctuation, None);
+        assert_eq!(o.itn, None);
+        assert_eq!(o.vad, None);
+    }
+
+    #[test]
+    fn test_hotword_override_limits_constants() {
+        // Documented DoS caps used by validate_overrides and the REST 400 path.
+        assert_eq!(MAX_HOTWORDS_PER_REQUEST, 64);
+        assert_eq!(MAX_HOTWORD_PHRASE_CHARS, 64);
+        assert_eq!(DEFAULT_HOTWORDS_BOOST, 5.0);
+    }
+
+    #[test]
+    fn test_override_error_codes_stable() {
+        // Stable machine-readable codes surfaced as the REST error `code`.
+        assert_eq!(OverrideError::VadNotLoaded.code(), "vad_not_loaded");
+        assert_eq!(
+            OverrideError::PunctuationNotAvailable.code(),
+            "punctuation_not_available"
+        );
+        assert_eq!(HotwordError::TooManyHotwords.code(), "too_many_hotwords");
+        assert_eq!(
+            HotwordError::PhraseTooLong.code(),
+            "hotword_phrase_too_long"
+        );
+        // Messages are non-empty and don't leak internals.
+        assert!(!OverrideError::VadNotLoaded.message().is_empty());
+        assert!(!OverrideError::PunctuationNotAvailable.message().is_empty());
+        assert!(!HotwordError::TooManyHotwords.message().is_empty());
+        assert!(!HotwordError::PhraseTooLong.message().is_empty());
+        // Display matches message().
+        assert_eq!(
+            OverrideError::VadNotLoaded.to_string(),
+            OverrideError::VadNotLoaded.message()
+        );
+        // Limit violations are client errors (400); missing models are 409.
+    }
+
+    fn sample_word(w: &str, start: f64, end: f64, speaker: Option<u32>) -> WordInfo {
+        WordInfo::new(w, start, end, 0.9, speaker)
+    }
+
+    #[test]
+    fn test_merge_channel_results_empty() {
+        let merged = merge_channel_results(vec![
+            TranscribeResult {
+                text: String::new(),
+                words: vec![],
+                duration_s: 0.0,
+                confidence: None,
+            },
+            TranscribeResult {
+                text: String::new(),
+                words: vec![],
+                duration_s: 0.0,
+                confidence: None,
+            },
+        ]);
+        assert!(merged.words.is_empty());
+        assert!(merged.text.is_empty());
+    }
+
+    #[test]
+    fn test_merge_channel_results_interleaved_channels() {
+        let ch0 = TranscribeResult {
+            text: String::new(),
+            words: vec![
+                sample_word("привет", 0.0, 0.4, None),
+                sample_word("как", 1.0, 1.3, None),
+            ],
+            duration_s: 1.5,
+            confidence: None,
+        };
+        let ch1 = TranscribeResult {
+            text: String::new(),
+            words: vec![sample_word("да", 0.5, 0.8, None)],
+            duration_s: 1.5,
+            confidence: None,
+        };
+        let merged = merge_channel_results(vec![ch0, ch1]);
+        assert_eq!(merged.words.len(), 3);
+        assert_eq!(merged.words[0].word, "привет");
+        assert_eq!(merged.words[0].speaker, Some(0));
+        assert_eq!(merged.words[1].word, "да");
+        assert_eq!(merged.words[1].speaker, Some(1));
+        assert_eq!(merged.words[2].word, "как");
+        assert_eq!(merged.words[2].speaker, Some(0));
+    }
+
+    #[test]
+    fn test_merge_channel_results_tie_order_by_channel() {
+        let ch0 = TranscribeResult {
+            text: String::new(),
+            words: vec![sample_word("а", 0.5, 0.7, None)],
+            duration_s: 1.0,
+            confidence: None,
+        };
+        let ch1 = TranscribeResult {
+            text: String::new(),
+            words: vec![sample_word("б", 0.5, 0.7, None)],
+            duration_s: 1.0,
+            confidence: None,
+        };
+        let merged = merge_channel_results(vec![ch0, ch1]);
+        assert_eq!(merged.words[0].word, "а");
+        assert_eq!(merged.words[0].speaker, Some(0));
+        assert_eq!(merged.words[1].word, "б");
+        assert_eq!(merged.words[1].speaker, Some(1));
+    }
+
+    #[test]
+    fn test_merge_channel_results_no_channels() {
+        let merged = merge_channel_results(vec![]);
+        assert!(merged.words.is_empty());
+        assert!(merged.text.is_empty());
+        assert_eq!(merged.duration_s, 0.0);
+    }
+
+    #[test]
+    fn test_merge_channel_results_max_duration() {
+        let ch0 = TranscribeResult {
+            text: String::new(),
+            words: vec![sample_word("a", 0.0, 0.5, None)],
+            duration_s: 5.0,
+            confidence: None,
+        };
+        let ch1 = TranscribeResult {
+            text: String::new(),
+            words: vec![sample_word("b", 0.5, 1.0, None)],
+            duration_s: 12.0,
+            confidence: None,
+        };
+        let merged = merge_channel_results(vec![ch0, ch1]);
+        assert_eq!(merged.duration_s, 12.0);
+    }
+}
