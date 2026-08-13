@@ -82,3 +82,33 @@ pub fn now_timestamp() -> f64 {
     };
     base + start.elapsed().as_secs_f64()
 }
+
+#[cfg(test)]
+mod timestamp_tests {
+    use super::now_timestamp;
+
+    #[test]
+    fn test_now_timestamp_non_negative() {
+        let ts = now_timestamp();
+        assert!(ts >= 0.0, "timestamp must be non-negative");
+    }
+
+    #[test]
+    fn test_now_timestamp_monotonic_and_epoch_aligned() {
+        // Locks in the monotonic-anchor contract: two successive reads never go
+        // backwards (immune to NTP steps), and the value stays Unix-epoch
+        // aligned. A regression to a plain wall-clock read could violate either.
+        let a = now_timestamp();
+        let b = now_timestamp();
+        assert!(
+            b >= a,
+            "now_timestamp must be non-decreasing (monotonic anchor)"
+        );
+        // Comfortably after 2023-11-14 and before a far-future sanity bound.
+        assert!(
+            a > 1_700_000_000.0,
+            "timestamp must stay Unix-epoch aligned"
+        );
+        assert!(a < 4_000_000_000.0, "timestamp exceeds a sane upper bound");
+    }
+}
