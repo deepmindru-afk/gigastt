@@ -13,7 +13,12 @@
 
 use std::ffi::{CStr, CString, c_char};
 use std::ptr;
-use std::sync::atomic::{AtomicBool, Ordering};
+
+mod handles;
+pub use handles::{GigasttEngine, GigasttStream};
+use handles::{
+    StreamSlot, get_engine, get_stream, insert_engine, insert_stream, take_engine, take_stream,
+};
 
 /// Convert a Rust string to a C string, falling back to a static message
 /// if the input contains interior NUL bytes.  The fallback literal is
@@ -23,29 +28,30 @@ fn to_cstring(s: &str) -> CString {
         .unwrap_or_else(|_| CString::new("invalid string").expect("static literal is NUL-free"))
 }
 
-use gigastt_core::inference::{Engine, OwnedReservation, SessionTriplet, StreamingState, audio};
-
-/// Opaque handle to the inference engine.
+/// Run `f` and swallow a panic so it cannot unwind across the C ABI.
 ///
-/// The Kotlin side sees this as a `Long` (pointer-sized integer).
-pub struct GigasttEngine {
-    engine: Engine,
-    disposed: AtomicBool,
+/// A panic across `extern "C"` is undefined behaviour under `panic=unwind`.
+/// Every exported entry point must go through this (or an equivalent
+/// `catch_unwind`) and return a sentinel (`NULL` / error string) instead.
+fn catch_ffi_panic<T, F>(label: &'static str, f: F) -> Option<T>
+where
+    F: FnOnce() -> T,
+{
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+        Ok(value) => Some(value),
+        Err(_) => {
+            tracing::error!("{label}: panic");
+            eprintln!("{label}: panic");
+            None
+        }
+    }
 }
 
-/// Opaque handle to a streaming transcription session.
-///
-/// Holds a checked-out `SessionTriplet` and a `StreamingState`. The triplet is
-/// returned to the pool when `gigastt_stream_free` is called.
-pub struct GigasttStream {
-    state: StreamingState,
-    reservation: OwnedReservation<SessionTriplet>,
-    disposed: AtomicBool,
-}
+use gigastt_core::inference::{Engine, audio};
 
 /// Load the ONNX models from `model_dir` and create an inference engine.
 ///
-/// Uses the default pool size (4). For mobile devices, prefer
+/// Uses the default pool size (2). For mobile devices, prefer
 /// `gigastt_engine_new_with_pool_size` with `pool_size = 1` to reduce RAM.
 ///
 /// # Safety
@@ -53,15 +59,16 @@ pub struct GigasttStream {
 /// Returns a pointer to a `GigasttEngine` on success, or `NULL` on failure.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn gigastt_engine_new(model_dir: *const c_char) -> *mut GigasttEngine {
-    unsafe { gigastt_engine_new_with_pool_size(model_dir, 4) }
+    unsafe { gigastt_engine_new_with_pool_size(model_dir, 2) }
 }
 
 /// Load the ONNX models with a custom session pool size.
 ///
 /// `pool_size` controls how many concurrent inference sessions are kept in
-/// memory. Each session loads the full encoder, so RAM scales linearly:
-/// - pool_size = 1: ~350 MB (recommended for mobile)
-/// - pool_size = 4: ~560 MB (default desktop/server)
+/// memory. The INT8 encoder is memory-mapped and shared; an extra slot costs
+/// on the order of tens of megabytes resident, not another full model copy:
+/// - pool_size = 1: recommended for mobile
+/// - pool_size = 2: default desktop/server
 ///
 /// # Safety
 /// `model_dir` must be a valid, null-terminated UTF-8 string.
@@ -77,29 +84,28 @@ pub unsafe extern "C" fn gigastt_engine_new_with_pool_size(
         return ptr::null_mut();
     }
 
-    let dir_str = match unsafe { CStr::from_ptr(model_dir) }.to_str() {
-        Ok(s) => s,
-        Err(e) => {
-            tracing::error!("gigastt_engine_new_with_pool_size: model_dir is not valid UTF-8: {e}");
-            eprintln!("gigastt_engine_new_with_pool_size: model_dir is not valid UTF-8: {e}");
-            return ptr::null_mut();
-        }
-    };
+    catch_ffi_panic("gigastt_engine_new_with_pool_size", || {
+        let dir_str = match unsafe { CStr::from_ptr(model_dir) }.to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::error!(
+                    "gigastt_engine_new_with_pool_size: model_dir is not valid UTF-8: {e}"
+                );
+                eprintln!("gigastt_engine_new_with_pool_size: model_dir is not valid UTF-8: {e}");
+                return ptr::null_mut();
+            }
+        };
 
-    match Engine::load_with_pool_size(dir_str, pool_size) {
-        Ok(engine) => {
-            let handle = Box::new(GigasttEngine {
-                engine,
-                disposed: AtomicBool::new(false),
-            });
-            Box::into_raw(handle)
+        match Engine::load_with_pool_size(dir_str, pool_size) {
+            Ok(engine) => insert_engine(engine),
+            Err(e) => {
+                tracing::error!("gigastt_engine_new_with_pool_size: failed to load engine: {e}");
+                eprintln!("gigastt_engine_new_with_pool_size: failed to load engine: {e}");
+                ptr::null_mut()
+            }
         }
-        Err(e) => {
-            tracing::error!("gigastt_engine_new_with_pool_size: failed to load engine: {e}");
-            eprintln!("gigastt_engine_new_with_pool_size: failed to load engine: {e}");
-            ptr::null_mut()
-        }
-    }
+    })
+    .unwrap_or(ptr::null_mut())
 }
 
 /// Transcribe an audio file and return the recognized text as a newly allocated C string.
@@ -107,10 +113,9 @@ pub unsafe extern "C" fn gigastt_engine_new_with_pool_size(
 /// # Safety
 /// - `engine` must be a non-null pointer returned by `gigastt_engine_new` and not yet freed.
 /// - `wav_path` must be a valid, null-terminated UTF-8 string.
-/// - NOT thread-safe (single-threaded-per-handle): no thread may call
-///   `gigastt_engine_free` on `engine` concurrently with this call. The early
-///   `disposed` check rejects an already-freed handle but does not close the
-///   in-call race.
+/// - A concurrent `gigastt_engine_free` during this call is safe: the table
+///   holds an `Arc` for the duration of the call. A call after free returns
+///   `NULL`.
 ///
 /// Returns a pointer to a NUL-terminated UTF-8 string on success, or `NULL` on failure.
 /// The caller **must** free the returned string with `gigastt_string_free`.
@@ -119,18 +124,11 @@ pub unsafe extern "C" fn gigastt_transcribe_file(
     engine: *mut GigasttEngine,
     wav_path: *const c_char,
 ) -> *mut c_char {
-    if engine.is_null() {
-        tracing::error!("gigastt_transcribe_file: engine is null");
-        eprintln!("gigastt_transcribe_file: engine is null");
+    let Some(slot) = get_engine(engine) else {
+        tracing::error!("gigastt_transcribe_file: engine is null or freed");
+        eprintln!("gigastt_transcribe_file: engine is null or freed");
         return ptr::null_mut();
-    }
-    // Early disposed check (Acquire): reject an already-freed engine before any
-    // dereference. Does NOT close the in-call race — see the # Safety contract.
-    if unsafe { (*engine).disposed.load(Ordering::Acquire) } {
-        tracing::error!("gigastt_transcribe_file: engine is disposed");
-        eprintln!("gigastt_transcribe_file: engine is disposed");
-        return ptr::null_mut();
-    }
+    };
     if wav_path.is_null() {
         tracing::error!("gigastt_transcribe_file: wav_path is null");
         eprintln!("gigastt_transcribe_file: wav_path is null");
@@ -189,7 +187,7 @@ pub unsafe extern "C" fn gigastt_transcribe_file(
         return ptr::null_mut();
     }
 
-    let engine_ref = unsafe { &(*engine).engine };
+    let engine_ref = &slot.engine;
 
     let mut guard = match engine_ref.pool.checkout_blocking() {
         Ok(g) => g,
@@ -243,18 +241,11 @@ pub unsafe extern "C" fn gigastt_string_free(s: *mut c_char) {
 ///
 /// # Safety
 /// `engine` must be a pointer returned by `gigastt_engine_new` and not yet freed,
-/// or `NULL` (in which case this is a no-op). NOT thread-safe
-/// (single-threaded-per-handle): the caller must ensure no other call using this
-/// pointer runs concurrently with this free.
+/// or `NULL` (in which case this is a no-op). Concurrent free during an
+/// in-flight call is safe (the call's `Arc` keeps the engine alive).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn gigastt_engine_free(engine: *mut GigasttEngine) {
-    if !engine.is_null() {
-        let disposed = unsafe { std::ptr::addr_of_mut!((*engine).disposed) };
-        if unsafe { (*disposed).swap(true, Ordering::AcqRel) } {
-            return;
-        }
-        let _ = unsafe { Box::from_raw(engine) };
-    }
+    let _dropped = take_engine(engine);
 }
 
 // ---------------------------------------------------------------------------
@@ -284,43 +275,46 @@ pub unsafe extern "C" fn gigastt_quantize_model(
         return to_cstring("model_dir is null").into_raw();
     }
 
-    let dir_str = match unsafe { CStr::from_ptr(model_dir) }.to_str() {
-        Ok(s) => s,
-        Err(e) => {
-            tracing::error!("gigastt_quantize_model: model_dir is not valid UTF-8: {e}");
-            eprintln!("gigastt_quantize_model: model_dir is not valid UTF-8: {e}");
-            let msg = format!("model_dir is not valid UTF-8: {e}");
+    catch_ffi_panic("gigastt_quantize_model", || {
+        let dir_str = match unsafe { CStr::from_ptr(model_dir) }.to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::error!("gigastt_quantize_model: model_dir is not valid UTF-8: {e}");
+                eprintln!("gigastt_quantize_model: model_dir is not valid UTF-8: {e}");
+                let msg = format!("model_dir is not valid UTF-8: {e}");
+                return to_cstring(&msg).into_raw();
+            }
+        };
+
+        let model_dir = std::path::Path::new(dir_str);
+        // Auto-detect the head from whichever encoder is present so this works for
+        // the default rnnt model as well as e2e_rnnt.
+        let variant = match gigastt_core::model::ModelVariant::detect_in_dir(model_dir) {
+            Some(v) => v,
+            None => {
+                let msg = "no recognition-head encoder found in model_dir";
+                tracing::error!("gigastt_quantize_model: {msg}");
+                eprintln!("gigastt_quantize_model: {msg}");
+                return to_cstring(msg).into_raw();
+            }
+        };
+        let input = model_dir.join(variant.encoder_file());
+        let output = model_dir.join(variant.encoder_int8_file());
+
+        if !force && output.exists() {
+            return to_cstring("ok").into_raw();
+        }
+
+        if let Err(e) = gigastt_core::quantize::quantize_model(&input, &output) {
+            tracing::error!("gigastt_quantize_model: quantization failed: {e}");
+            eprintln!("gigastt_quantize_model: quantization failed: {e}");
+            let msg = format!("quantization failed: {e}");
             return to_cstring(&msg).into_raw();
         }
-    };
 
-    let model_dir = std::path::Path::new(dir_str);
-    // Auto-detect the head from whichever encoder is present so this works for
-    // the default rnnt model as well as e2e_rnnt.
-    let variant = match gigastt_core::model::ModelVariant::detect_in_dir(model_dir) {
-        Some(v) => v,
-        None => {
-            let msg = "no recognition-head encoder found in model_dir";
-            tracing::error!("gigastt_quantize_model: {msg}");
-            eprintln!("gigastt_quantize_model: {msg}");
-            return to_cstring(msg).into_raw();
-        }
-    };
-    let input = model_dir.join(variant.encoder_file());
-    let output = model_dir.join(variant.encoder_int8_file());
-
-    if !force && output.exists() {
-        return to_cstring("ok").into_raw();
-    }
-
-    if let Err(e) = gigastt_core::quantize::quantize_model(&input, &output) {
-        tracing::error!("gigastt_quantize_model: quantization failed: {e}");
-        eprintln!("gigastt_quantize_model: quantization failed: {e}");
-        let msg = format!("quantization failed: {e}");
-        return to_cstring(&msg).into_raw();
-    }
-
-    to_cstring("ok").into_raw()
+        to_cstring("ok").into_raw()
+    })
+    .unwrap_or_else(|| to_cstring("panic").into_raw())
 }
 
 // ---------------------------------------------------------------------------
@@ -338,33 +332,31 @@ pub unsafe extern "C" fn gigastt_quantize_model(
 /// Returns a pointer to a `GigasttStream` on success, or `NULL` on failure.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn gigastt_stream_new(engine: *mut GigasttEngine) -> *mut GigasttStream {
-    if engine.is_null() {
-        tracing::error!("gigastt_stream_new: engine is null");
-        eprintln!("gigastt_stream_new: engine is null");
+    let Some(slot) = get_engine(engine) else {
+        tracing::error!("gigastt_stream_new: engine is null or freed");
+        eprintln!("gigastt_stream_new: engine is null or freed");
         return ptr::null_mut();
-    }
-
-    let engine_ref = unsafe { &(*engine).engine };
-
-    let guard = match engine_ref.pool.checkout_blocking() {
-        Ok(g) => g,
-        Err(e) => {
-            tracing::error!("gigastt_stream_new: pool checkout failed: {e}");
-            eprintln!("gigastt_stream_new: pool checkout failed: {e}");
-            return ptr::null_mut();
-        }
     };
 
-    let reservation = guard.into_owned();
+    catch_ffi_panic("gigastt_stream_new", || {
+        let guard = match slot.engine.pool.checkout_blocking() {
+            Ok(g) => g,
+            Err(e) => {
+                tracing::error!("gigastt_stream_new: pool checkout failed: {e}");
+                eprintln!("gigastt_stream_new: pool checkout failed: {e}");
+                return ptr::null_mut();
+            }
+        };
 
-    let state = engine_ref.create_state(false);
-
-    let stream = GigasttStream {
-        state,
-        reservation,
-        disposed: AtomicBool::new(false),
-    };
-    Box::into_raw(Box::new(stream))
+        let reservation = guard.into_owned();
+        let state = slot.engine.create_state(false);
+        insert_stream(StreamSlot {
+            state,
+            reservation: Some(reservation),
+            engine: slot.clone(),
+        })
+    })
+    .unwrap_or(ptr::null_mut())
 }
 
 /// Process a chunk of PCM16 audio and return any partial/final segments.
@@ -372,10 +364,7 @@ pub unsafe extern "C" fn gigastt_stream_new(engine: *mut GigasttEngine) -> *mut 
 /// # Safety
 /// - `engine` and `stream` must be valid pointers.
 /// - `pcm16_bytes` must point to at least `len` valid bytes (little-endian mono PCM16).
-/// - NOT thread-safe (single-threaded-per-handle): no thread may call
-///   `gigastt_engine_free`/`gigastt_stream_free` on these pointers concurrently
-///   with this call. The early `disposed` check rejects already-freed handles but
-///   does not close the in-call race.
+/// - Concurrent free during this call is safe. A call after free returns `NULL`.
 ///
 /// Returns a newly allocated JSON array string on success, or `NULL` on failure.
 /// The caller **must** free the returned string with `gigastt_string_free`.
@@ -387,29 +376,18 @@ pub unsafe extern "C" fn gigastt_stream_process_chunk(
     len: usize,
     sample_rate: u32,
 ) -> *mut c_char {
-    if engine.is_null() {
-        tracing::error!("gigastt_stream_process_chunk: engine is null");
+    let _ = engine; // engine id is optional; the stream holds its own Arc
+    let Some(stream_arc) = get_stream(stream) else {
+        tracing::error!("gigastt_stream_process_chunk: stream is null or freed");
         return ptr::null_mut();
-    }
-    if stream.is_null() {
-        tracing::error!("gigastt_stream_process_chunk: stream is null");
-        return ptr::null_mut();
-    }
+    };
     if pcm16_bytes.is_null() {
         tracing::error!("gigastt_stream_process_chunk: pcm16_bytes is null");
         return ptr::null_mut();
     }
-    // Early disposed check (Acquire): reject already-freed handles before any
-    // dereference. Does NOT close the in-call race — see the # Safety contract.
-    if unsafe { (*engine).disposed.load(Ordering::Acquire) }
-        || unsafe { (*stream).disposed.load(Ordering::Acquire) }
-    {
-        tracing::error!("gigastt_stream_process_chunk: engine or stream is disposed");
-        return ptr::null_mut();
-    }
 
-    let engine_ref = unsafe { &(*engine).engine };
-    let stream_ref = unsafe { &mut (*stream) };
+    let mut stream_guard = stream_arc.lock().unwrap_or_else(|e| e.into_inner());
+    let stream_ref = &mut *stream_guard;
 
     // Convert PCM16 LE bytes → f32 samples.
     let bytes = unsafe { std::slice::from_raw_parts(pcm16_bytes, len) };
@@ -434,12 +412,15 @@ pub unsafe extern "C" fn gigastt_stream_process_chunk(
         samples_f32 = std::mem::take(&mut stream_ref.state.resample_output_buf);
     }
 
+    let engine_slot = stream_ref.engine.clone();
+    let Some(reservation) = stream_ref.reservation.as_mut() else {
+        tracing::error!("gigastt_stream_process_chunk: stream already freed");
+        return ptr::null_mut();
+    };
     let segments = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        engine_ref.process_chunk(
-            &samples_f32,
-            &mut stream_ref.state,
-            &mut stream_ref.reservation,
-        )
+        engine_slot
+            .engine
+            .process_chunk(&samples_f32, &mut stream_ref.state, reservation)
     })) {
         Ok(Ok(segs)) => segs,
         Ok(Err(e)) => {
@@ -462,10 +443,8 @@ pub unsafe extern "C" fn gigastt_stream_process_chunk(
 /// Flush the streaming state and return the final segment(s).
 ///
 /// # Safety
-/// `engine` and `stream` must be valid pointers. NOT thread-safe
-/// (single-threaded-per-handle): no thread may call `gigastt_engine_free`/
-/// `gigastt_stream_free` on these pointers concurrently with this call. The early
-/// `disposed` check rejects already-freed handles but does not close the in-call race.
+/// `stream` must be a pointer returned by `gigastt_stream_new`. Concurrent
+/// free during this call is safe. A call after free returns `NULL`.
 ///
 /// Returns a newly allocated JSON array string (possibly `[]`) on success,
 /// or `NULL` on failure. The caller **must** free the returned string with
@@ -475,61 +454,50 @@ pub unsafe extern "C" fn gigastt_stream_flush(
     engine: *mut GigasttEngine,
     stream: *mut GigasttStream,
 ) -> *mut c_char {
-    if engine.is_null() {
-        tracing::error!("gigastt_stream_flush: engine is null");
+    let _ = engine;
+    let Some(stream_arc) = get_stream(stream) else {
+        tracing::error!("gigastt_stream_flush: stream is null or freed");
         return ptr::null_mut();
-    }
-    if stream.is_null() {
-        tracing::error!("gigastt_stream_flush: stream is null");
-        return ptr::null_mut();
-    }
-    // Early disposed check (Acquire): reject already-freed handles before any
-    // dereference. Does NOT close the in-call race — see the # Safety contract.
-    if unsafe { (*engine).disposed.load(Ordering::Acquire) }
-        || unsafe { (*stream).disposed.load(Ordering::Acquire) }
-    {
-        tracing::error!("gigastt_stream_flush: engine or stream is disposed");
-        return ptr::null_mut();
-    }
+    };
 
-    let engine_ref = unsafe { &(*engine).engine };
-    let stream_ref = unsafe { &mut (*stream) };
+    catch_ffi_panic("gigastt_stream_flush", || {
+        let mut stream_ref = stream_arc.lock().unwrap_or_else(|e| e.into_inner());
+        let engine_slot = stream_ref.engine.clone();
+        let segments: Vec<gigastt_core::inference::TranscriptSegment> = engine_slot
+            .engine
+            .flush_state(&mut stream_ref.state)
+            .into_iter()
+            .collect();
 
-    let segments: Vec<gigastt_core::inference::TranscriptSegment> = engine_ref
-        .flush_state(&mut stream_ref.state)
-        .into_iter()
-        .collect();
-
-    let json = serde_json::to_string(&segments).unwrap_or_else(|_| "[]".into());
-    match CString::new(json) {
-        Ok(cstr) => cstr.into_raw(),
-        Err(_) => ptr::null_mut(),
-    }
+        let json = serde_json::to_string(&segments).unwrap_or_else(|_| "[]".into());
+        match CString::new(json) {
+            Ok(cstr) => cstr.into_raw(),
+            Err(_) => ptr::null_mut(),
+        }
+    })
+    .unwrap_or(ptr::null_mut())
 }
 
 /// Free a streaming session and return its triplet to the pool.
 ///
 /// # Safety
 /// `stream` must be a pointer returned by `gigastt_stream_new` and not yet freed,
-/// or `NULL` (in which case this is a no-op). NOT thread-safe
-/// (single-threaded-per-handle): the caller must ensure no other call using this
-/// pointer runs concurrently with this free.
+/// or `NULL` (in which case this is a no-op). Concurrent free during an
+/// in-flight call is safe.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn gigastt_stream_free(stream: *mut GigasttStream) {
-    if !stream.is_null() {
-        let disposed = unsafe { std::ptr::addr_of_mut!((*stream).disposed) };
-        if unsafe { (*disposed).swap(true, Ordering::AcqRel) } {
-            return;
-        }
-        let stream = unsafe { Box::from_raw(stream) };
-        stream.reservation.checkin();
-        // `state` is dropped automatically when `stream` goes out of scope.
-    }
+    let _dropped = take_stream(stream);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_catch_ffi_panic_swallows_unwind() {
+        assert!(catch_ffi_panic("test", || -> i32 { panic!("boom") }).is_none());
+        assert_eq!(catch_ffi_panic("test", || 7), Some(7));
+    }
 
     fn shared_test_engine() -> *mut GigasttEngine {
         use std::sync::OnceLock;
@@ -579,6 +547,13 @@ mod tests {
     #[test]
     fn test_stream_new_null_engine() {
         let stream = unsafe { gigastt_stream_new(ptr::null_mut()) };
+        assert!(stream.is_null());
+    }
+
+    #[test]
+    fn test_stream_new_unknown_handle_is_null() {
+        let bogus = 0xFFFF_FFFFu64 as *mut GigasttEngine;
+        let stream = unsafe { gigastt_stream_new(bogus) };
         assert!(stream.is_null());
     }
 
