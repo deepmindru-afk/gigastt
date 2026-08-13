@@ -43,7 +43,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.gigastt/models
-          key: gigastt-models-${{ hashFiles('crates/gigastt-core/src/model/mod.rs') }}
+          key: gigastt-models-${{ hashFiles('crates/gigastt-core/src/model/**') }}
 
       - name: Cache competitor models
         uses: actions/cache@v6

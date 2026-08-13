@@ -192,7 +192,8 @@ crates/
       session.rs · tensor.rs · error.rs
       ort/ · coreml/ · candle/ · mock/
     protocol/mod.rs       # WebSocket JSON message types (Ready, Partial, Final, Error)
-    model/                # Model download (streaming + SHA256 + atomic rename), cache, manifest
+    model/                # Model download (streaming + SHA256 + atomic rename)
+                          #   (progress / variant / download / cache / manifest)
   gigastt-quantize/proto/
     onnx.proto            # Vendored ONNX protobuf schema (quantizer crate)
   gigastt-ffi/src/        # C-ABI FFI layer (cdylib for Android/mobile)
@@ -317,7 +318,7 @@ The `e2e_rnnt` head (`--model-variant e2e_rnnt`) uses the parallel `v3_e2e_rnnt_
 ### E2E test strategy
 
 - E2E tests run **only on main push**, not on PRs, to keep PR feedback fast
-- Model is cached via `actions/cache` with key derived from `crates/gigastt-core/src/model/mod.rs`
+- Model is cached via `actions/cache` with key derived from `crates/gigastt-core/src/model/`
 - E2E tests run with `--test-threads=1` because each loads the full ONNX model
   into memory; concurrent runs OOM on CI runners
 
@@ -499,7 +500,7 @@ RUST_LOG=gigastt=debug cargo run -- serve
   both `main.rs` and this file.
 - The `quantize` Cargo feature enables `crates/gigastt-quantize` (on by default
   for the server binary). Lean embedders may disable it and side-load INT8 only.
-- Model download logic is in `crates/gigastt-core/src/model/mod.rs`. If you change HF repo or file
+- Model download logic is in `crates/gigastt-core/src/model/`. If you change HF repo or file
   names, update `MODEL_CHECKSUMS` and the cache key in `.github/workflows/ci.yml`.
 - The project uses English for all code comments, documentation, and commit
   messages.
