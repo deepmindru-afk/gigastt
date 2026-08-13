@@ -3,11 +3,12 @@
 
 Nine axes, all stdlib-only (no third-party deps, no network):
 
-  1. CLI flags/envs: every clap flag + GIGASTT_* env in crates/gigastt/src/main.rs
-     is documented in docs/cli.md, and cli.md names no flag/env that does not
-     exist (intentional exceptions live in scripts/check-docs-drift.allowlist).
+  1. CLI flags/envs: every clap flag + GIGASTT_* env in the CLI sources
+     (crates/gigastt/src/{main,serve,transcribe_cmd}.rs) is documented in
+     docs/cli.md, and cli.md names no flag/env that does not exist
+     (intentional exceptions live in scripts/check-docs-drift.allowlist).
   2. WS error codes: the enum in docs/asyncapi.yaml == the table in docs/api.md
-     == the codes emitted by crates/gigastt/src/server/ws.rs (plus allowlisted
+     == the codes emitted under crates/gigastt/src/server/ws/ (plus allowlisted
      doc-only entries).
   3. Audio formats: the canonical FORMATS list below == the `// docs-drift: codecs`
      marker block in crates/gigastt-core/src/inference/audio/decode.rs, and every format
@@ -23,7 +24,7 @@ Nine axes, all stdlib-only (no third-party deps, no network):
      and packaging/**/README* resolves to an existing file/directory, and
      #anchors resolve to a heading in the target file.
   7. OpenAPI paths: every `paths:` key in docs/openapi.yaml is registered in
-     crates/gigastt/src/server/mod.rs (or is the separate metrics listener),
+     crates/gigastt/src/server/{mod,router}.rs (or is the separate metrics listener),
      and OpenAPI must not resurrect a stale unconditional duration-cap claim
      now that the default file-transcription path has no duration limit.
   8. SECURITY.md supported-version table marks the workspace Cargo.toml major.minor
@@ -51,9 +52,16 @@ from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parent.parent
 
-MAIN_RS = ROOT / "crates/gigastt/src/main.rs"
-WS_RS = ROOT / "crates/gigastt/src/server/ws.rs"
-SERVER_MOD_RS = ROOT / "crates/gigastt/src/server/mod.rs"
+CLI_SOURCES = (
+    ROOT / "crates/gigastt/src/main.rs",
+    ROOT / "crates/gigastt/src/serve.rs",
+    ROOT / "crates/gigastt/src/transcribe_cmd.rs",
+)
+WS_DIR = ROOT / "crates/gigastt/src/server/ws"
+SERVER_ROUTE_SOURCES = (
+    ROOT / "crates/gigastt/src/server/mod.rs",
+    ROOT / "crates/gigastt/src/server/router.rs",
+)
 # Codec marker lives in the decode module after the audio/ feature split.
 AUDIO_RS = ROOT / "crates/gigastt-core/src/inference/audio/decode.rs"
 CARGO_TOML = ROOT / "Cargo.toml"
@@ -126,7 +134,10 @@ def load_allowlist(path: Path) -> dict[str, dict[str, str]]:
 # 1. CLI flags / env vars
 # ---------------------------------------------------------------------------
 
-ARG_RE = re.compile(r"#\[arg\((.*?)\)\]\s*(?:pub\s+)?(\w+)\s*:", re.S)
+ARG_RE = re.compile(
+    r"#\[arg\((.*?)\)\]\s*(?:pub(?:\([^)]+\))?\s+)?(\w+)\s*:",
+    re.S,
+)
 LONG_NAME_RE = re.compile(r'long\s*=\s*"([^"]+)"')
 ENV_RE = re.compile(r'env\s*=\s*"(GIGASTT_[A-Z0-9_]+)"')
 ENV_CALL_RE = re.compile(r'env::(?:var|var_os|set_var)\(\s*"(GIGASTT_[A-Z0-9_]+)"')
@@ -135,16 +146,18 @@ ENV_TOKEN_RE = re.compile(r"\bGIGASTT_[A-Z0-9_]+\b")
 
 
 def parse_cli_definition() -> tuple[set[str], set[str]]:
-    """Extract clap long-flag names and GIGASTT_* env vars from main.rs."""
-    src = MAIN_RS.read_text(encoding="utf-8")
+    """Extract clap long-flag names and GIGASTT_* env vars from CLI sources."""
     flags: set[str] = set()
-    envs: set[str] = set(ENV_CALL_RE.findall(src))
-    for attrs, field in ARG_RE.findall(src):
-        if "long" not in attrs:
-            continue
-        m = LONG_NAME_RE.search(attrs)
-        flags.add(m.group(1) if m else field.replace("_", "-"))
-        envs.update(ENV_RE.findall(attrs))
+    envs: set[str] = set()
+    for path in CLI_SOURCES:
+        src = path.read_text(encoding="utf-8")
+        envs.update(ENV_CALL_RE.findall(src))
+        for attrs, field in ARG_RE.findall(src):
+            if "long" not in attrs:
+                continue
+            m = LONG_NAME_RE.search(attrs)
+            flags.add(m.group(1) if m else field.replace("_", "-"))
+            envs.update(ENV_RE.findall(attrs))
     return flags, envs
 
 
@@ -161,13 +174,13 @@ def check_cli(allow: dict[str, dict[str, str]]) -> list[str]:
 
     failures: list[str] = []
     for flag in sorted(flags - doc_flags - ok_flags):
-        failures.append(f"cli.md: flag --{flag} (crates/gigastt/src/main.rs) is not documented")
+        failures.append(f"cli.md: flag --{flag} (CLI sources) is not documented")
     for env in sorted(envs - doc_envs - ok_envs):
-        failures.append(f"cli.md: env var {env} (crates/gigastt/src/main.rs) is not documented")
+        failures.append(f"cli.md: env var {env} (CLI sources) is not documented")
     for flag in sorted(doc_flags - flags - phantom_flags):
-        failures.append(f"cli.md: --{flag} does not match any clap flag in main.rs")
+        failures.append(f"cli.md: --{flag} does not match any clap flag in CLI sources")
     for env in sorted(doc_envs - envs - phantom_envs):
-        failures.append(f"cli.md: {env} is not a GIGASTT_* env var read by main.rs")
+        failures.append(f"cli.md: {env} is not a GIGASTT_* env var read by CLI sources")
     return failures
 
 
@@ -209,22 +222,34 @@ def api_md_ws_codes() -> set[str]:
     return {row.group(1) for row in re.finditer(r"^\|\s*`([a-z_]+)`\s*\|", section, re.M)}
 
 
+def emitted_ws_codes() -> set[str]:
+    codes: set[str] = set()
+    if not WS_DIR.is_dir():
+        return codes
+    for path in sorted(WS_DIR.rglob("*.rs")):
+        codes.update(WS_CODE_RE.findall(path.read_text(encoding="utf-8")))
+    return codes
+
+
 def check_ws_error_codes(allow: dict[str, dict[str, str]]) -> list[str]:
     async_codes = asyncapi_codes()
     api_codes = api_md_ws_codes()
-    emitted = set(WS_CODE_RE.findall(WS_RS.read_text(encoding="utf-8")))
+    emitted = emitted_ws_codes()
     doc_only = set(allow.get("ws-codes-doc-only", {}))
     undoc_ok = set(allow.get("ws-codes-undocumented-ok", {}))
 
     failures: list[str] = []
+    if not WS_DIR.is_dir():
+        failures.append("crates/gigastt/src/server/ws/: directory missing")
+        return failures
     for code in sorted(async_codes - api_codes):
         failures.append(f"asyncapi.yaml: `{code}` is missing from the docs/api.md error-code table")
     for code in sorted(api_codes - async_codes):
         failures.append(f"api.md: `{code}` is missing from the docs/asyncapi.yaml enum")
     for code in sorted(emitted - api_codes - undoc_ok):
-        failures.append(f"ws.rs: `{code}` is emitted but not documented in api.md/asyncapi.yaml")
+        failures.append(f"ws/: `{code}` is emitted but not documented in api.md/asyncapi.yaml")
     for code in sorted(api_codes - emitted - doc_only):
-        failures.append(f"api.md: `{code}` is documented but never emitted by ws.rs (allowlist if REST-only)")
+        failures.append(f"api.md: `{code}` is documented but never emitted by ws/ (allowlist if REST-only)")
     return failures
 
 
@@ -408,9 +433,12 @@ def workspace_version() -> tuple[int, int, int]:
 
 
 def server_routes() -> set[str]:
-    """Collect string route paths from server/mod.rs `.route("…")` calls."""
-    text = SERVER_MOD_RS.read_text(encoding="utf-8")
-    return set(re.findall(r'\.route\(\s*"([^"]+)"', text))
+    """Collect string route paths from the server route table `.route("…")` calls."""
+    routes: set[str] = set()
+    for path in SERVER_ROUTE_SOURCES:
+        if path.exists():
+            routes.update(re.findall(r'\.route\(\s*"([^"]+)"', path.read_text(encoding="utf-8")))
+    return routes
 
 
 def openapi_paths() -> set[str]:
@@ -435,20 +463,20 @@ def openapi_paths() -> set[str]:
 
 def check_openapi() -> list[str]:
     failures: list[str] = []
-    if not OPENAPI_YAML.exists() or not SERVER_MOD_RS.exists():
-        failures.append("openapi.yaml or server/mod.rs missing")
+    if not OPENAPI_YAML.exists() or not any(p.exists() for p in SERVER_ROUTE_SOURCES):
+        failures.append("openapi.yaml or server route sources missing")
         return failures
 
     routes = server_routes()
     # Metrics is served on a separate listener; still a real HTTP path.
     routes.add("/metrics")
     # OpenAPI uses templated job paths; normalize server routes that use {id}.
-    # server/mod.rs already uses `/v1/jobs/{id}` style axum paths.
+    # The route table already uses `/v1/jobs/{id}` style axum paths.
     oas = openapi_paths()
     for path in sorted(oas):
         if path not in routes:
             failures.append(
-                f"openapi.yaml: path `{path}` is not registered in server/mod.rs "
+                f"openapi.yaml: path `{path}` is not registered in the server route table "
                 f"(known routes include {sorted(p for p in routes if p.startswith('/v1') or p in ('/health', '/ready', '/metrics'))})"
             )
 
@@ -621,8 +649,8 @@ def main() -> int:
     allow = load_allowlist(ALLOWLIST)
 
     results: list[tuple[str, list[str]]] = []
-    results.append(("CLI flags/envs (cli.md == main.rs)", check_cli(allow)))
-    results.append(("WS error codes (asyncapi.yaml == api.md == ws.rs)", check_ws_error_codes(allow)))
+    results.append(("CLI flags/envs (cli.md == CLI sources)", check_cli(allow)))
+    results.append(("WS error codes (asyncapi.yaml == api.md == ws/)", check_ws_error_codes(allow)))
     results.append(("audio formats (api.md/cli.md == audio.rs marker)", check_formats()))
     results.append(("mdBook SUMMARY + build", check_workbook(args.skip_mdbook)))
     results.append(("workbook EN/RU parity", check_parity()))
