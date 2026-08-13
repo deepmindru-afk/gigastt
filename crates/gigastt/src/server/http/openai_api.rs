@@ -52,6 +52,10 @@ pub async fn openai_transcriptions(
 }
 
 /// OpenAI `stream=true` path: chunked file transcription as SSE transcript events.
+///
+/// Uses the same lazy [`AudioChunks`] open as native `/v1/transcribe/stream`
+/// (reserve pool first, probe duration, decode on demand) so large uploads
+/// cannot expand full PCM before inference.
 async fn openai_transcriptions_stream(
     state: Arc<AppState>,
     body: Bytes,
@@ -77,13 +81,14 @@ async fn openai_transcriptions_stream(
     let mut reservation =
         reserve_batch_slot(&engine, &limits, state.metrics_registry.as_ref()).await?;
 
-    let samples = tokio::task::spawn_blocking(move || {
+    let max_audio_secs = limits.max_audio_secs_opt();
+    let chunks = tokio::task::spawn_blocking(move || {
         match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            gigastt_core::inference::audio::decode_audio_bytes_shared(body)
+            super::stream::open_stream_chunks_blocking(body, max_audio_secs)
         })) {
             Ok(inner) => inner,
             Err(_) => {
-                tracing::error!("Panic in OpenAI SSE audio decode — treated as decode error");
+                tracing::error!("Panic in OpenAI SSE audio probe — treated as decode error");
                 Err(anyhow::anyhow!("Audio decode thread panicked"))
             }
         }
@@ -97,14 +102,7 @@ async fn openai_transcriptions_stream(
             "internal",
         )
     })?
-    .map_err(|e| {
-        tracing::error!("Audio decode error: {e:#}");
-        api_error(
-            StatusCode::UNPROCESSABLE_ENTITY,
-            "Failed to decode audio file. Check format (WAV, MP3, M4A, OGG, FLAC supported).",
-            "invalid_audio",
-        )
-    })?;
+    .map_err(super::stream::map_stream_open_error)?;
 
     // Channel of pre-rendered SSE `data:` payloads (JSON events or `[DONE]`).
     let (tx, rx) = tokio::sync::mpsc::channel::<String>(32);
@@ -121,13 +119,23 @@ async fn openai_transcriptions_stream(
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let mut stream_state = engine.create_state(false);
             let mut asm = OpenAIStreamAssembler::new();
-            let chunk_size = 16000; // 1 s @ 16 kHz
+            let mut chunks = chunks;
 
-            for chunk in samples.chunks(chunk_size) {
+            loop {
                 if cancel.is_cancelled() {
                     tracing::info!("OpenAI SSE transcription cancelled by shutdown");
                     return;
                 }
+                let chunk = match chunks.next_chunk() {
+                    Ok(Some(c)) => c,
+                    Ok(None) => break,
+                    Err(e) => {
+                        tracing::error!("OpenAI SSE audio decode error: {e:#}");
+                        let _ = send(sse_done_payload(asm.text()));
+                        let _ = send("[DONE]".into());
+                        return;
+                    }
+                };
                 match engine.process_chunk(chunk, &mut stream_state, &mut reservation) {
                     Ok(segs) => {
                         for seg in segs {

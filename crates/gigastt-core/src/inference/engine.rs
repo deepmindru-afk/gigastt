@@ -16,7 +16,7 @@ use super::bias;
 use super::ctc;
 use super::decode;
 use super::load_files::{
-    ResolvedModelFiles, encoder_model_path, load_triplets_runtime, resolve_load_variant,
+    ResolvedModelFiles, encoder_model_path, load_triplets_runtime, resolve_variant_required,
 };
 use super::pool::{Pool, SessionPool, SessionTriplet};
 use super::sizing;
@@ -550,21 +550,7 @@ impl Engine {
         // manifest.toml architecture, else detect from disk (rnnt precedence).
         // Resolving here (not just inside `load_with_factory`) keeps the RAM cap
         // sized to the head that will actually load.
-        let variant = match resolve_load_variant(variant, dir) {
-            Ok(Some(v)) => v,
-            Ok(None) => {
-                return Err(GigasttError::ModelLoad {
-                    path: dir.display().to_string(),
-                    source: None,
-                });
-            }
-            Err(e) => {
-                return Err(GigasttError::ModelLoad {
-                    path: dir.display().to_string(),
-                    source: Some(e.into()),
-                });
-            }
-        };
+        let variant = resolve_variant_required(variant, dir)?;
         // Bound the idle footprint: each pooled triplet deserializes its own
         // encoder copy, so a large `--pool-size` on a small host can OOM at
         // load. Clamp by available RAM (logs when it clamps); a no-op on hosts
@@ -611,21 +597,7 @@ impl Engine {
         // what makes `--model-variant` effective when a directory holds more than
         // one head — without it the engine always re-detects and silently loads
         // the highest-precedence head.
-        let variant = match resolve_load_variant(variant_override, model_dir) {
-            Ok(Some(v)) => v,
-            Ok(None) => {
-                return Err(GigasttError::ModelLoad {
-                    path: model_dir.display().to_string(),
-                    source: None,
-                });
-            }
-            Err(e) => {
-                return Err(GigasttError::ModelLoad {
-                    path: model_dir.display().to_string(),
-                    source: Some(e.into()),
-                });
-            }
-        };
+        let variant = resolve_variant_required(variant_override, model_dir)?;
         let pool_size = pool_size.max(1);
         let min_size = min_size.clamp(1, pool_size);
 
@@ -2962,12 +2934,16 @@ mod tests {
         );
         // No override → auto-detect (rnnt precedence): behavior is unchanged.
         assert_eq!(
-            resolve_load_variant(None, dir.path()).unwrap(),
+            crate::inference::load_files::resolve_load_variant(None, dir.path()).unwrap(),
             Some(ModelVariant::Rnnt)
         );
         // Explicit override wins over the higher-precedence head on disk.
         assert_eq!(
-            resolve_load_variant(Some(ModelVariant::E2eRnnt), dir.path()).unwrap(),
+            crate::inference::load_files::resolve_load_variant(
+                Some(ModelVariant::E2eRnnt),
+                dir.path()
+            )
+            .unwrap(),
             Some(ModelVariant::E2eRnnt)
         );
 
@@ -2976,11 +2952,18 @@ mod tests {
         // whatever else is on disk.
         let empty = tempfile::tempdir().expect("tempdir");
         assert_eq!(
-            resolve_load_variant(Some(ModelVariant::E2eRnnt), empty.path()).unwrap(),
+            crate::inference::load_files::resolve_load_variant(
+                Some(ModelVariant::E2eRnnt),
+                empty.path()
+            )
+            .unwrap(),
             Some(ModelVariant::E2eRnnt)
         );
         // No override + empty dir → nothing to load.
-        assert_eq!(resolve_load_variant(None, empty.path()).unwrap(), None);
+        assert_eq!(
+            crate::inference::load_files::resolve_load_variant(None, empty.path()).unwrap(),
+            None
+        );
     }
 
     #[test]
@@ -3007,12 +2990,16 @@ vocab = "v3_e2e_rnnt_vocab.txt"
             Some(ModelVariant::Rnnt)
         );
         assert_eq!(
-            resolve_load_variant(None, dir.path()).unwrap(),
+            crate::inference::load_files::resolve_load_variant(None, dir.path()).unwrap(),
             Some(ModelVariant::E2eRnnt)
         );
         // CLI override still wins over the manifest architecture.
         assert_eq!(
-            resolve_load_variant(Some(ModelVariant::Rnnt), dir.path()).unwrap(),
+            crate::inference::load_files::resolve_load_variant(
+                Some(ModelVariant::Rnnt),
+                dir.path()
+            )
+            .unwrap(),
             Some(ModelVariant::Rnnt)
         );
     }
@@ -3025,9 +3012,15 @@ vocab = "v3_e2e_rnnt_vocab.txt"
             "not = [valid\n",
         )
         .unwrap();
-        assert!(resolve_load_variant(None, dir.path()).is_err());
+        assert!(crate::inference::load_files::resolve_load_variant(None, dir.path()).is_err());
         // Even with an override, a corrupt manifest is a hard error.
-        assert!(resolve_load_variant(Some(ModelVariant::Rnnt), dir.path()).is_err());
+        assert!(
+            crate::inference::load_files::resolve_load_variant(
+                Some(ModelVariant::Rnnt),
+                dir.path()
+            )
+            .is_err()
+        );
     }
 
     #[test]

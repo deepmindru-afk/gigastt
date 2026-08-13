@@ -12,10 +12,42 @@ use super::error::{ApiError, api_error};
 use super::state::AppState;
 use super::transcribe::reserve_batch_slot;
 
-/// Samples per `process_chunk` call on the SSE path: one second at 16 kHz.
-/// Frame-aligned, and pinned because the streaming recognizer's state — and so
-/// the emitted segments — depend on the chunk cadence.
-const SSE_CHUNK_SAMPLES: usize = 16_000;
+/// Samples per `process_chunk` call on file-stream paths (native SSE and
+/// OpenAI `stream=true`): one second at 16 kHz. Frame-aligned, and pinned
+/// because the streaming recognizer's state — and so the emitted segments —
+/// depend on the chunk cadence.
+pub(super) const STREAM_CHUNK_SAMPLES: usize = 16_000;
+
+/// Probe the container (optional duration ceiling) and open a lazy
+/// [`AudioChunks`] iterator. Shared by native SSE and OpenAI stream so both
+/// reserve a pool slot before expanding audio and never materialize full PCM.
+pub(super) fn open_stream_chunks_blocking(
+    body: Bytes,
+    max_audio_secs: Option<f64>,
+) -> Result<gigastt_core::inference::audio::AudioChunks, anyhow::Error> {
+    // Enforce an operator length limit up front where the container
+    // declares its duration (WAV / FLAC / M4A / OGG), so `--max-audio-secs`
+    // keeps answering a clean 413 instead of tripping mid-stream. The
+    // incremental budget inside the decode remains the backstop for
+    // containers that declare nothing.
+    if let Some(limit) = max_audio_secs
+        && let Ok(Some(declared)) =
+            gigastt_core::inference::audio::probe_duration_bytes(body.clone())
+        && declared > limit
+    {
+        return Err(anyhow::Error::from(
+            gigastt_core::error::GigasttError::AudioTooLong {
+                observed_secs: declared,
+                limit_secs: limit,
+            },
+        ));
+    }
+    gigastt_core::inference::audio::AudioChunks::from_bytes(
+        body,
+        STREAM_CHUNK_SAMPLES,
+        max_audio_secs,
+    )
+}
 
 /// Per-segment error carried over the SSE channel: a stable machine-readable
 /// code plus a sanitized message, mirroring the WebSocket error contract so
@@ -113,35 +145,13 @@ pub async fn transcribe_stream(
     // here (so an unsupported or malformed header still fails as a clean HTTP
     // status, before the stream opens) and decodes packets on demand.
     let max_audio_secs = limits.max_audio_secs_opt();
-    let body_for_probe = body.clone();
     let chunks = tokio::task::spawn_blocking(move || {
         // catch_unwind mirrors the REST handler: a panic inside the blocking
         // probe (e.g. a crafted container that trips an upstream arithmetic
         // panic) is absorbed and surfaced as a normal decode error instead of a
         // `JoinError`, so the SSE path returns a clean 422 rather than a 500.
         match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            // Enforce an operator length limit up front where the container
-            // declares its duration (WAV / FLAC / M4A / OGG), so `--max-audio-secs`
-            // keeps answering a clean 413 instead of tripping mid-stream. The
-            // incremental budget inside the decode remains the backstop for
-            // containers that declare nothing.
-            if let Some(limit) = max_audio_secs
-                && let Ok(Some(declared)) =
-                    gigastt_core::inference::audio::probe_duration_bytes(body_for_probe.clone())
-                && declared > limit
-            {
-                return Err(anyhow::Error::from(
-                    gigastt_core::error::GigasttError::AudioTooLong {
-                        observed_secs: declared,
-                        limit_secs: limit,
-                    },
-                ));
-            }
-            gigastt_core::inference::audio::AudioChunks::from_bytes(
-                body_for_probe,
-                SSE_CHUNK_SAMPLES,
-                max_audio_secs,
-            )
+            open_stream_chunks_blocking(body, max_audio_secs)
         })) {
             Ok(inner) => inner,
             Err(_) => {
@@ -159,21 +169,7 @@ pub async fn transcribe_stream(
             "internal",
         )
     })?
-    .map_err(|e| {
-        // "Too long" is distinct from "corrupt": answer 413 `audio_too_long`
-        // with the observed/limit seconds instead of the generic 422.
-        if let Some(g @ gigastt_core::error::GigasttError::AudioTooLong { .. }) =
-            e.downcast_ref::<gigastt_core::error::GigasttError>()
-        {
-            return api_error(StatusCode::PAYLOAD_TOO_LARGE, &g.to_string(), g.code());
-        }
-        tracing::error!("Audio decode error: {e:#}");
-        api_error(
-            StatusCode::UNPROCESSABLE_ENTITY,
-            "Failed to decode audio file. Check format (WAV, MP3, M4A, OGG, FLAC supported).",
-            "invalid_audio",
-        )
-    })?;
+    .map_err(map_stream_open_error)?;
 
     // Create mpsc channel for streaming segments from the inference task to SSE.
     let (tx, rx) = tokio::sync::mpsc::channel::<
@@ -200,9 +196,8 @@ pub async fn transcribe_stream(
             let mut stream_state = engine.create_state(false);
             let mut chunks = chunks;
 
-            // Same chunk sequence `samples.chunks(SSE_CHUNK_SAMPLES)` produced —
-            // fixed-size, last one short — so the streaming state advances
-            // exactly as before; only where the samples come from changed.
+            // Fixed-size chunks (STREAM_CHUNK_SAMPLES), last one short — so the
+            // streaming state advances with a stable cadence.
             loop {
                 if cancel.is_cancelled() {
                     tracing::info!("SSE transcription cancelled by shutdown");
@@ -277,4 +272,21 @@ pub async fn transcribe_stream(
             .interval(std::time::Duration::from_secs(15))
             .text(""),
     ))
+}
+
+/// Map probe/open failures for file-stream endpoints to HTTP errors.
+pub(super) fn map_stream_open_error(e: anyhow::Error) -> ApiError {
+    // "Too long" is distinct from "corrupt": answer 413 `audio_too_long`
+    // with the observed/limit seconds instead of the generic 422.
+    if let Some(g @ gigastt_core::error::GigasttError::AudioTooLong { .. }) =
+        e.downcast_ref::<gigastt_core::error::GigasttError>()
+    {
+        return api_error(StatusCode::PAYLOAD_TOO_LARGE, &g.to_string(), g.code());
+    }
+    tracing::error!("Audio decode error: {e:#}");
+    api_error(
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "Failed to decode audio file. Check format (WAV, MP3, M4A, OGG, FLAC supported).",
+        "invalid_audio",
+    )
 }

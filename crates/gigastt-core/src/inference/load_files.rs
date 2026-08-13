@@ -5,6 +5,7 @@
 
 use std::path::Path;
 
+use crate::error::GigasttError;
 use crate::model::{ModelManifest, ModelVariant};
 
 /// Resolve which recognition head the engine should load.
@@ -29,6 +30,25 @@ pub(crate) fn resolve_load_variant(
         return Ok(Some(m.architecture));
     }
     Ok(ModelVariant::detect_in_dir(model_dir))
+}
+
+/// Like [`resolve_load_variant`], but maps missing/invalid layouts to
+/// [`GigasttError::ModelLoad`] for engine load entry points.
+pub(crate) fn resolve_variant_required(
+    override_: Option<ModelVariant>,
+    model_dir: &Path,
+) -> Result<ModelVariant, GigasttError> {
+    match resolve_load_variant(override_, model_dir) {
+        Ok(Some(v)) => Ok(v),
+        Ok(None) => Err(GigasttError::ModelLoad {
+            path: model_dir.display().to_string(),
+            source: None,
+        }),
+        Err(e) => Err(GigasttError::ModelLoad {
+            path: model_dir.display().to_string(),
+            source: Some(e.into()),
+        }),
+    }
 }
 
 /// On-disk model file paths for a load: either from `manifest.toml` or from the
