@@ -202,6 +202,20 @@ jobs:
           tool: nextest
       - run: cargo nextest run --workspace --lib --bins --retries 2
 
+  unit-tests-windows:
+    runs-on: windows-latest
+    name: Unit Tests (Windows)
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install protoc
+        run: choco install protoc -y
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-windows
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: cargo test --workspace --lib --bins
+
   build-coreml:
     runs-on: macos-14
     name: Build (CoreML)
@@ -345,8 +359,8 @@ jobs:
         run: cargo run -p gigastt -- download
 
       - name: Run e2e tests
-        run: cargo test -p gigastt --test e2e_rest --test e2e_ws --test e2e_errors --test e2e_shutdown --test e2e_rate_limit -- --ignored --test-threads=1
-        timeout-minutes: 30
+        run: cargo test -p gigastt --test e2e_rest --test e2e_ws --test e2e_errors --test e2e_shutdown --test e2e_rate_limit --test e2e_jobs --test e2e_cli --test e2e_admin_reload --test e2e_http_cov -- --ignored --test-threads=1
+        timeout-minutes: 45
 
   quality-gate:
     # Model-gated multi-metric gate (WER / RTF / RSS / cold-start). Runs on
