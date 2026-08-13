@@ -21,7 +21,7 @@ pub use cache::{
 };
 pub use manifest::{MANIFEST_FILE, ManifestFiles, ModelManifest};
 
-#[cfg(feature = "net")]
+use crate::error::GigasttError;
 use crate::sha256::{Sha256, hex_lower};
 #[cfg(feature = "net")]
 use anyhow::Context;
@@ -36,6 +36,40 @@ use tokio::io::AsyncWriteExt;
 #[cfg(unix)]
 #[cfg(feature = "net")]
 use std::os::fd::AsRawFd;
+
+/// Stream a file and return its lowercase SHA-256 hex digest.
+///
+/// Used at engine load (not just download) so a tampered file in
+/// `~/.gigastt/models/` cannot be silently mapped.
+pub(crate) fn hash_file_sha256(path: &Path) -> std::io::Result<String> {
+    use std::io::Read;
+    let mut file = std::fs::File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+        let n = file.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Ok(hex_lower(&hasher.finalize()))
+}
+
+/// Refuse `path` when its digest is not `expected`.
+pub(crate) fn verify_pinned_checksum(path: &Path, expected: &str) -> Result<(), GigasttError> {
+    let actual = hash_file_sha256(path).map_err(|e| GigasttError::ModelLoad {
+        path: path.display().to_string(),
+        source: Some(e.into()),
+    })?;
+    if actual != expected {
+        return Err(GigasttError::ModelLoad {
+            path: path.display().to_string(),
+            source: Some(format!("SHA-256 mismatch: expected {expected}, got {actual}").into()),
+        });
+    }
+    Ok(())
+}
 
 /// Progress reporting mode for `gigastt download` (and any other caller that
 /// sets it process-wide): `Human` keeps the interactive `\r` stderr reporter,
@@ -1606,6 +1640,24 @@ fn offline_mode() -> bool {
     std::env::var_os("GIGASTT_OFFLINE").is_some_and(|v| !v.is_empty() && v != "0")
 }
 
+/// Hard ceiling on a single model-file download. The largest shipped INT8
+/// encoder (`ml_ctc_large`) is ~592 MB; 2 GiB leaves room for ANE packages
+/// without letting a redirected host fill the disk.
+#[cfg(feature = "net")]
+const MAX_DOWNLOAD_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+
+/// Return an error once `so_far + extra` would exceed [`MAX_DOWNLOAD_BYTES`].
+#[cfg(feature = "net")]
+fn reject_if_over_download_cap(so_far: u64, extra: u64) -> Result<()> {
+    if so_far.saturating_add(extra) > MAX_DOWNLOAD_BYTES {
+        anyhow::bail!(
+            "download exceeded size cap of {MAX_DOWNLOAD_BYTES} bytes \
+             ({so_far} already written, +{extra})"
+        );
+    }
+    Ok(())
+}
+
 /// Streaming download with SHA-256 verification and atomic rename.
 ///
 /// Stages the response into `<final_dest>.partial`, verifies the hash (when
@@ -1684,6 +1736,9 @@ async fn stream_to_partial_then_finalize_with_sink(
         anyhow::bail!("Download failed for {label}: HTTP {status}");
     }
     let total_size = response.content_length().unwrap_or(0);
+    if total_size > 0 {
+        reject_if_over_download_cap(0, total_size)?;
+    }
 
     let mut progress = DownloadProgress::new(total_size);
 
@@ -1695,6 +1750,7 @@ async fn stream_to_partial_then_finalize_with_sink(
     let mut downloaded: u64 = 0;
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.context("Download stream error")?;
+        reject_if_over_download_cap(downloaded, chunk.len() as u64)?;
         file.write_all(&chunk)
             .await
             .context("Failed to write chunk")?;
@@ -1731,6 +1787,32 @@ mod tests {
             home_dir().is_some(),
             "home_dir() must return Some on this platform"
         );
+    }
+
+    #[test]
+    fn test_hash_file_sha256_and_verify() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join("blob.bin");
+        std::fs::write(&path, b"hello").unwrap();
+        let digest = hash_file_sha256(&path).expect("hash");
+        assert_eq!(digest.len(), 64);
+        verify_pinned_checksum(&path, &digest).expect("matching digest");
+        let wrong = "00".repeat(32);
+        let err = verify_pinned_checksum(&path, &wrong).expect_err("wrong digest");
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("SHA-256 mismatch") || msg.contains("model load error"),
+            "unexpected: {msg}"
+        );
+    }
+
+    #[cfg(feature = "net")]
+    #[test]
+    fn test_reject_if_over_download_cap() {
+        assert!(reject_if_over_download_cap(0, MAX_DOWNLOAD_BYTES).is_ok());
+        assert!(reject_if_over_download_cap(0, MAX_DOWNLOAD_BYTES + 1).is_err());
+        assert!(reject_if_over_download_cap(MAX_DOWNLOAD_BYTES, 1).is_err());
+        assert!(reject_if_over_download_cap(MAX_DOWNLOAD_BYTES - 10, 10).is_ok());
     }
 
     #[test]

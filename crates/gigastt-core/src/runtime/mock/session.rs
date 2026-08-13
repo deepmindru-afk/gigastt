@@ -38,6 +38,10 @@ impl RuntimeFactory for MockFactory {
             sessions: self.sessions.clone(),
         })
     }
+
+    fn verify_on_disk_checksums(&self) -> bool {
+        false
+    }
 }
 
 /// Mock runtime that hands out pre-configured [`MockSession`]s by path stem.
