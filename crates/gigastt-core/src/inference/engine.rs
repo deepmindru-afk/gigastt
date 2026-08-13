@@ -31,6 +31,10 @@ use super::types::{
     MAX_HOTWORD_PHRASE_CHARS, MAX_HOTWORDS_PER_REQUEST, OverrideError, TranscribeOverrides,
     TranscribeRequest, TranscribeResult, TranscribeSource, merge_channel_results,
 };
+use super::windows::{
+    STREAM_DECODE_STRIDE_SAMPLES, STREAM_LEFT_CONTEXT_SAMPLES, STREAM_MAX_WINDOW_SAMPLES,
+    window_spec,
+};
 use super::{ENCODER_SUBSAMPLING, HOP_LENGTH, N_FFT, N_MELS, SECONDS_PER_FRAME, now_timestamp};
 
 #[cfg(feature = "diarization")]
@@ -76,75 +80,6 @@ impl DecodeControls<'_> {
             on_progress: None,
         }
     }
-}
-
-/// Max streaming encoder window before sliding (samples @16kHz, 2.5s).
-/// Re-decoding the whole window each stride gives the offline Conformer left
-/// context; this cap bounds the per-stride encoder cost. With the 1.5s retained
-/// left context and the 0.8s stride, a 2.5s window keeps the steady-state
-/// re-encode overlap near ~3x (vs ~6.25x at a 5s window) — roughly half the
-/// streaming encoder work — while retaining enough left context that streaming
-/// quality stays on par with batch (covered by the `streaming_quality` tests).
-///
-/// Hitting the cap **commits a stable prefix** and slides; it does **not** emit
-/// a speech-final `final` (that would mean "utterance complete" to assistants).
-const STREAM_MAX_WINDOW_SAMPLES: usize = 16000 * 5 / 2;
-/// Left-context audio retained across a streaming finalize/slide (samples @16kHz,
-/// ~1.5s) so the next window keeps acoustic context instead of restarting cold.
-const STREAM_LEFT_CONTEXT_SAMPLES: usize = 16000 * 3 / 2;
-/// Decode stride: re-run the encoder only after this much NEW audio has
-/// accumulated (samples @16kHz, 0.8s) instead of on every ~100ms chunk.
-/// Re-decoding the window is the dominant streaming cost, so the stride keeps
-/// the engine real-time; `finish_stream` decodes the sub-stride remainder at EOF.
-const STREAM_DECODE_STRIDE_SAMPLES: usize = 16000 * 4 / 5;
-
-/// File-transcription chunking threshold (samples @16kHz, 30s). Inputs at or
-/// below this length take the single-pass path unchanged; longer inputs are
-/// split into overlapping windows so the encoder's peak activation memory is
-/// bounded by the chunk size, not the file length. The Conformer encoder only
-/// carries ~20–30s of useful context, so chunking above this costs no accuracy
-/// in the common case. (A higher single-pass ceiling for CTC was tried for
-/// stretch RTF on ~40s clips; measured wall time was worse than 24s windows —
-/// larger activation tensors thrash CPU caches — so both head families share
-/// this 30s ceiling.)
-const CHUNK_THRESHOLD_SAMPLES: usize = 16000 * 30;
-/// Long-form decode window on ort / CoreML-EP / CUDA (samples @16kHz, 24s).
-/// Bounds per-chunk encoder activation memory; the ANE path uses a longer
-/// window via [`chunk_window_samples`].
-const CHUNK_WINDOW_SAMPLES_ORT: usize = 16000 * 24;
-/// Long-form decode window on the ANE encoder (samples @16kHz, 30s). Full chunks
-/// fill ANE bucket 3000 at ~99.97% (vs ~80% fill at 24s), recovering pad-up
-/// waste. Peak activation is free on-device; ort keeps the shorter window.
-const CHUNK_WINDOW_SAMPLES_ANE: usize = 16000 * 30;
-/// Overlap retained between consecutive long-form windows (samples @16kHz, 2s),
-/// so a word straddling a seam is decoded fully in at least one chunk. The
-/// stitch step de-dups words in the overlap region (see [`stitch_chunk_words`]).
-const CHUNK_OVERLAP_SAMPLES: usize = 16000 * 2;
-
-/// Select the long-form chunk window length for the active encoder backend.
-///
-/// ANE uses 30s so each full chunk nearly fills bucket 3000; every other
-/// backend keeps 24s to bound peak encoder activation memory on CPU/EP paths.
-/// Pure so the selection is unit-tested without a loaded model.
-pub(crate) fn chunk_window_samples(ane_encoder: bool) -> usize {
-    if ane_encoder {
-        CHUNK_WINDOW_SAMPLES_ANE
-    } else {
-        CHUNK_WINDOW_SAMPLES_ORT
-    }
-}
-
-/// Long-form window geometry for the active encoder backend: the single-pass
-/// ceiling, the backend's window length, and the fixed inter-window overlap.
-/// Free-standing (like [`chunk_window_samples`]) so the geometry is unit-tested
-/// without a loaded model. `ctc` is accepted for call-site uniformity (CTC and
-/// RNN-T share the same 30s ceiling after measurement).
-pub(crate) fn window_spec(ane_encoder: bool, _ctc: bool) -> WindowSpec {
-    WindowSpec::new(
-        CHUNK_THRESHOLD_SAMPLES,
-        chunk_window_samples(ane_encoder),
-        CHUNK_OVERLAP_SAMPLES,
-    )
 }
 
 /// Default number of session triplets in the pool.
@@ -580,6 +515,38 @@ impl Engine {
         )
     }
 
+    /// Assemble an engine from already-loaded sessions, tokenizer, and variant.
+    ///
+    /// Optional attachments (punctuator, ITN, biaser, VAD) stay off — callers
+    /// chain [`Engine::with_punctuator`] / [`Engine::with_itn`] / etc.
+    fn from_loaded_parts(
+        pool: SessionPool,
+        batch_pool: Option<SessionPool>,
+        tokenizer: Tokenizer,
+        variant: ModelVariant,
+        int8: bool,
+        ane_encoder: bool,
+        #[cfg(feature = "diarization")] speaker_encoder: Option<LazySpeakerEncoder>,
+    ) -> Self {
+        Self {
+            pool,
+            batch_pool,
+            tokenizer,
+            features: FeatureExtractor::new(),
+            variant,
+            punctuator: None,
+            itn: false,
+            biaser: None,
+            vad: None,
+            vad_config: crate::vad::VadConfig::default(),
+            endpoint_mode: EndpointMode::Auto,
+            int8,
+            ane_encoder,
+            #[cfg(feature = "diarization")]
+            speaker_encoder,
+        }
+    }
+
     /// Package-private factory-based loader. Used by production code paths and
     /// by tests that inject a [`crate::runtime::factory::RuntimeFactory`].
     pub(crate) fn load_with_factory(
@@ -657,7 +624,6 @@ impl Engine {
             .map_err(model_load)?;
 
         let tokenizer = Tokenizer::load(&files.vocab).map_err(model_load)?;
-        let features = FeatureExtractor::new();
 
         tracing::info!(
             "Models loaded (vocab_size={}, pool_size={pool_size})",
@@ -673,23 +639,16 @@ impl Engine {
         // non-rnnt heads / injected factories keep the ort chunk window.
         let ane_encoder = triplets.first().is_some_and(|t| t.encoder.is_ane_encoder());
         let (pool, batch_pool) = Self::split_triplets(triplets, batch_pool_size);
-        let engine = Self {
+        let engine = Self::from_loaded_parts(
             pool,
             batch_pool,
             tokenizer,
-            features,
             variant,
-            punctuator: None,
-            itn: false,
-            biaser: None,
-            vad: None,
-            vad_config: crate::vad::VadConfig::default(),
-            endpoint_mode: EndpointMode::Auto,
-            int8: is_int8,
+            is_int8,
             ane_encoder,
             #[cfg(feature = "diarization")]
             speaker_encoder,
-        };
+        );
 
         // CoreML compiles its graph partitions lazily, so sessions that loaded
         // fine can still fail at the first `Run()`. Probe one triplet now; if the
@@ -1896,7 +1855,7 @@ impl Engine {
     /// per-chunk word lists with overlap de-dup via [`stitch_chunk_words`].
     ///
     /// Peak encoder activation memory is bounded by the source's window length
-    /// (24s ort / 30s ANE, see [`chunk_window_samples`]) rather than the full
+    /// (24s ort / 30s ANE, see [`super::windows::chunk_window_samples`]) rather than the full
     /// file length. Window starts are aligned to encoder frame boundaries
     /// (multiples of `HOP_LENGTH * ENCODER_SUBSAMPLING`) so the per-chunk frame
     /// offset is exact, matching the streaming path's math.
@@ -2180,6 +2139,7 @@ mod tests {
     #[cfg(feature = "diarization")]
     use crate::inference::diarization::SPEAKER_EMBEDDING_DIM;
     use crate::inference::state::aggregate_confidence;
+    use crate::inference::windows::{CHUNK_OVERLAP_SAMPLES, CHUNK_THRESHOLD_SAMPLES};
     use crate::inference::{
         DEFAULT_HOTWORDS_BOOST, DecoderState, EndpointMode, EndpointReason, FeatureExtractor,
         MAX_HOTWORD_PHRASE_CHARS, MAX_HOTWORDS_PER_REQUEST, OwnedReservation, PRED_HIDDEN, Pool,
@@ -2736,54 +2696,6 @@ mod tests {
             "got {}",
             words[0].start
         );
-    }
-
-    #[test]
-    #[allow(clippy::assertions_on_constants)] // intentional compile-time sanity check on the chunk constants
-    fn test_chunk_constants_sane() {
-        // Window > overlap (positive stride) and threshold ≥ window so the
-        // single-pass path covers everything up to one full window.
-        assert!(CHUNK_WINDOW_SAMPLES_ORT > CHUNK_OVERLAP_SAMPLES);
-        assert!(CHUNK_WINDOW_SAMPLES_ANE > CHUNK_OVERLAP_SAMPLES);
-        assert!(CHUNK_THRESHOLD_SAMPLES >= CHUNK_WINDOW_SAMPLES_ORT);
-        assert!(CHUNK_THRESHOLD_SAMPLES >= CHUNK_WINDOW_SAMPLES_ANE);
-    }
-
-    #[test]
-    fn test_window_spec_reproduces_legacy_chunk_geometry() {
-        // The long-form loop used to derive its own window/stride and read the
-        // overlap straight off `CHUNK_OVERLAP_SAMPLES`; it now takes all three
-        // from the spec. Any divergence here moves every seam, so pin it.
-        let frame_samples = HOP_LENGTH * ENCODER_SUBSAMPLING;
-        for ane in [false, true] {
-            let window = chunk_window_samples(ane);
-            let legacy_stride = ((window - CHUNK_OVERLAP_SAMPLES) / frame_samples) * frame_samples;
-            for ctc in [false, true] {
-                let spec = window_spec(ane, ctc);
-                assert_eq!(spec.window(), window, "window (ane={ane}, ctc={ctc})");
-                assert_eq!(
-                    spec.stride(),
-                    legacy_stride,
-                    "stride (ane={ane}, ctc={ctc})"
-                );
-                assert_eq!(
-                    spec.overlap(),
-                    CHUNK_OVERLAP_SAMPLES,
-                    "overlap (ane={ane}, ctc={ctc})"
-                );
-                assert!(spec.is_single_pass(CHUNK_THRESHOLD_SAMPLES));
-                assert!(!spec.is_single_pass(CHUNK_THRESHOLD_SAMPLES + 1));
-            }
-        }
-    }
-
-    #[test]
-    fn test_chunk_window_samples_backend_aware() {
-        // ort / non-ANE: 24s keeps peak encoder activation bounded.
-        assert_eq!(chunk_window_samples(false), 16000 * 24);
-        // ANE: 30s fills bucket 3000 at ~99.97%.
-        assert_eq!(chunk_window_samples(true), 16000 * 30);
-        assert!(chunk_window_samples(true) > chunk_window_samples(false));
     }
 
     #[test]

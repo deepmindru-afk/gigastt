@@ -18,6 +18,7 @@ mod sizing;
 mod state;
 mod token_format;
 mod types;
+mod windows;
 
 #[cfg(not(feature = "__internals"))]
 mod tokenizer;
