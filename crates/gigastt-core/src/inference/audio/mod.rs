@@ -12,7 +12,6 @@ mod telephony;
 mod vad_windows;
 
 #[cfg(test)]
-#[path = "tests.rs"]
 mod tests;
 
 // Excluded under Miri: proptest runs hundreds of cases per property, each
