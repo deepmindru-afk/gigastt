@@ -49,8 +49,9 @@ impl OriginPolicy {
 
 #[derive(Debug)]
 pub(crate) enum OriginVerdict {
-    /// No `Origin` header or opaque `null` — treat as non-browser client,
-    /// no CORS echo required.
+    /// No `Origin` header — treat as a non-browser client (curl, native
+    /// SDK). Opaque `null` is **not** this: sandboxed iframes and `data:`
+    /// documents send it, and the default policy exists to stop that drive-by.
     AllowedNoEcho,
     /// Origin matches the policy; echo the exact string (or `*` if
     /// `allow_any` is on).
@@ -85,8 +86,11 @@ impl OriginPolicy {
         let Some(origin) = origin else {
             return OriginVerdict::AllowedNoEcho;
         };
+        // Browsers send `Origin: null` from sandboxed iframes and `data:`
+        // documents. That is still a cross-origin drive-by against a
+        // loopback server — deny it. Native clients omit the header entirely.
         if origin.eq_ignore_ascii_case("null") {
-            return OriginVerdict::AllowedNoEcho;
+            return OriginVerdict::Denied;
         }
         if self.allow_any || is_loopback_origin(origin) {
             return OriginVerdict::Allowed(origin.to_string());
@@ -530,9 +534,18 @@ mod tests {
             policy.evaluate(None),
             OriginVerdict::AllowedNoEcho
         ));
+    }
+
+    #[test]
+    fn test_origin_policy_null_origin_denied() {
+        let policy = OriginPolicy::loopback_only();
         assert!(matches!(
             policy.evaluate(Some("null")),
-            OriginVerdict::AllowedNoEcho
+            OriginVerdict::Denied
+        ));
+        assert!(matches!(
+            policy.evaluate(Some("NULL")),
+            OriginVerdict::Denied
         ));
     }
 

@@ -313,8 +313,8 @@ pub(crate) struct ServeArgs {
     pub(crate) max_audio_secs: Option<u64>,
 
     /// Trust `X-Forwarded-For` and `X-Real-IP` headers for rate-limit IP
-    /// extraction. When enabled, the direct peer must be loopback or an
-    /// RFC1918 private address; otherwise headers are ignored.
+    /// extraction. When enabled, the direct peer must be loopback, RFC1918,
+    /// IPv6 unique-local, or IPv6 link-local; otherwise headers are ignored.
     #[arg(long, env = "GIGASTT_TRUST_PROXY", default_value_t = false)]
     pub(crate) trust_proxy: bool,
 

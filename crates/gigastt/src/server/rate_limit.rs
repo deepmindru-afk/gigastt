@@ -302,7 +302,8 @@ fn unix_ms() -> u64 {
 ///
 /// When `trust_proxy` is `false`, forwarded headers are ignored entirely and
 /// only `ConnectInfo` is used. When `true`, the headers are consulted only
-/// if the direct peer IP is loopback or RFC1918.
+/// if the direct peer IP is loopback or a trusted proxy hop (RFC1918 /
+/// IPv6 unique-local / IPv6 link-local).
 ///
 /// ```text
 /// { true }
@@ -323,7 +324,7 @@ pub fn extract_client_ip(req: &Request, trust_proxy: bool) -> Option<IpAddr> {
     // is a known private proxy subnet.
     if let Some(connect_ip) = direct_ip
         && !connect_ip.is_loopback()
-        && !is_rfc1918(connect_ip)
+        && !is_trusted_proxy_hop(connect_ip)
     {
         return Some(connect_ip);
     }
@@ -346,15 +347,17 @@ pub fn extract_client_ip(req: &Request, trust_proxy: bool) -> Option<IpAddr> {
     direct_ip
 }
 
-/// Return true for IPv4 addresses in RFC1918 space:
-/// 10/8, 172.16/12, 192.168/16.
-fn is_rfc1918(ip: IpAddr) -> bool {
+/// Return true for addresses that may sit in front of this process as a
+/// reverse proxy: IPv4 RFC1918 (10/8, 172.16/12, 192.168/16), IPv6 unique
+/// local (`fc00::/7`), and IPv6 link-local (`fe80::/10`). Loopback is
+/// handled separately by the caller.
+fn is_trusted_proxy_hop(ip: IpAddr) -> bool {
     match ip {
         IpAddr::V4(v4) => {
             let o = v4.octets();
             o[0] == 10 || (o[0] == 172 && (o[1] & 0xF0) == 16) || (o[0] == 192 && o[1] == 168)
         }
-        IpAddr::V6(_) => false,
+        IpAddr::V6(v6) => v6.is_unique_local() || v6.is_unicast_link_local(),
     }
 }
 
@@ -418,7 +421,7 @@ mod tests {
     use super::*;
     use axum::body::Body;
     use axum::http::{HeaderValue, Request as HttpRequest};
-    use std::net::Ipv4Addr;
+    use std::net::{Ipv4Addr, Ipv6Addr};
 
     #[test]
     fn test_token_bucket_allows_within_capacity() {
@@ -574,6 +577,37 @@ mod tests {
         )));
         let got = extract_client_ip(&req, true).expect("X-Real-IP fallback");
         assert_eq!(got, "198.51.100.7".parse::<IpAddr>().unwrap());
+    }
+
+    #[test]
+    fn test_extract_ip_trusts_ipv6_ula_proxy() {
+        let mut req = HttpRequest::builder()
+            .uri("/v1/models")
+            .body(Body::empty())
+            .unwrap();
+        req.headers_mut()
+            .insert("x-forwarded-for", HeaderValue::from_static("203.0.113.42"));
+        req.extensions_mut().insert(ConnectInfo(SocketAddr::new(
+            IpAddr::V6(Ipv6Addr::new(0xfd00, 0, 0, 0, 0, 0, 0, 1)),
+            12345,
+        )));
+        let got = extract_client_ip(&req, true).expect("ULA proxy must trust XFF");
+        assert_eq!(got, "203.0.113.42".parse::<IpAddr>().unwrap());
+    }
+
+    #[test]
+    fn test_extract_ip_ignores_forwarded_from_public_ipv6() {
+        let mut req = HttpRequest::builder()
+            .uri("/v1/models")
+            .body(Body::empty())
+            .unwrap();
+        req.headers_mut()
+            .insert("x-forwarded-for", HeaderValue::from_static("203.0.113.42"));
+        let public = Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1);
+        req.extensions_mut()
+            .insert(ConnectInfo(SocketAddr::new(IpAddr::V6(public), 12345)));
+        let got = extract_client_ip(&req, true).expect("public IPv6 is not a trusted hop");
+        assert_eq!(got, IpAddr::V6(public));
     }
 
     #[test]

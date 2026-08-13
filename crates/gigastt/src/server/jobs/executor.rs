@@ -68,29 +68,12 @@ impl JobExecution for RealJobExecutor {
         .ok()
         .flatten();
 
-        let total_seconds = match probed {
-            Some(seconds) => seconds,
-            None => {
-                // The header declares no usable duration (often a raw MP3
-                // stream): fall back to the full decode so the job keeps its
-                // progress bar. Wrap the decoder in catch_unwind so a malformed
-                // file cannot be retried as a transient inference panic; the
-                // samples are only used for their count and then dropped.
-                let samples = tokio::task::spawn_blocking({
-                    let body = body.clone();
-                    move || {
-                        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                            gigastt_core::inference::audio::decode_audio_bytes_shared(body)
-                        }))
-                    }
-                })
-                .await
-                .map_err(|e| anyhow::anyhow!("audio decode task panicked: {e}"))?
-                .map_err(|_| anyhow::anyhow!("Invalid audio: decoder panicked"))?
-                .map_err(|e| anyhow::anyhow!("Invalid audio: {e:#}"))?;
-                samples.len() as f64 / TARGET_SAMPLE_RATE
-            }
-        };
+        // Unknown duration (raw MP3, headerless streams): do **not** expand
+        // the whole file to f32 just to size a progress bar. That used to run
+        // before pool checkout and could OOM a `--enable-jobs` host on a
+        // compressed upload. Percent stays 0 until the job finishes; the
+        // engine still decodes after the slot is reserved.
+        let total_seconds = probed.unwrap_or(0.0);
         let _ = store
             .update(id, Box::new(move |j| j.total_seconds = total_seconds))
             .await;

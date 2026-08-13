@@ -384,17 +384,19 @@ pub async fn parse_openai_multipart(
     let mut options = OpenAITranscriptionOptions::default();
 
     while let Some(field) = multipart.next_field().await.map_err(|e| {
+        tracing::error!("OpenAI multipart parse failed: {e:#}");
         openai_error(
             StatusCode::BAD_REQUEST,
-            &format!("Invalid multipart body: {e}"),
+            "Invalid multipart body",
             "invalid_multipart",
         )
     })? {
         let name = field.name().unwrap_or("").to_string();
         let data = field.bytes().await.map_err(|e| {
+            tracing::error!("OpenAI multipart field read failed: {e:#}");
             openai_error(
                 StatusCode::BAD_REQUEST,
-                &format!("Failed to read multipart field: {e}"),
+                "Invalid multipart body",
                 "invalid_multipart",
             )
         })?;
