@@ -63,9 +63,10 @@ Prep: [`benchmark/README.md`](../benchmark/README.md#datasets).
 | 6 | ToneWebinars | **done** — 13.02 / 14.87 / **8.33** (n=1000) |
 | 7 | Phone-sim (optional) | optional |
 
-## Resource TTX (2026-07-27) — product backlog
+## Resource TTX (2026-07-27) — completed program
 
-Confirmed-impact work only. Full task list with DoD / order:
+Confirmed-impact work only. Full task list with DoD / order. There is no
+standing local task queue beyond this historical record:
 
 **[`specs/resource-ttx-roadmap.md`](resource-ttx-roadmap.md)** (TTX-01…TTX-20)
 

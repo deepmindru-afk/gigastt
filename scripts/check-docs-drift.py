@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Docs drift gate: fail when documentation drifts away from the code.
 
-Nine axes, all stdlib-only (no third-party deps, no network):
+Ten axes, all stdlib-only (no third-party deps, no network):
 
   1. CLI flags/envs: every clap flag + GIGASTT_* env in the CLI sources
      (crates/gigastt/src/{main,serve,transcribe_cmd}.rs) is documented in
@@ -28,7 +28,7 @@ Nine axes, all stdlib-only (no third-party deps, no network):
      and OpenAPI must not resurrect a stale unconditional duration-cap claim
      now that the default file-transcription path has no duration limit.
   8. SECURITY.md supported-version table marks the workspace Cargo.toml major.minor
-     as current.
+     as current and the previous minor as previous.
   9. Crate version pins: `gigastt-core = "X.Y"` in README*/architecture.md must
      match the workspace package major.minor.
   10. Workbook currency: docs/workbook/** must not hard-code the previous minor
@@ -565,6 +565,15 @@ def check_security_versions() -> list[str]:
             f"SECURITY.md: supported-versions table must mark `{current}` as Yes (current) "
             f"(workspace version is {major}.{minor}.*)"
         )
+    if minor > 0:
+        previous = f"{major}.{minor - 1}.x"
+        if not re.search(
+            rf"\|\s*{re.escape(previous)}\s*\|\s*Yes\s*\(previous\)", text
+        ):
+            failures.append(
+                f"SECURITY.md: supported-versions table must mark `{previous}` as Yes (previous) "
+                f"(workspace minor is {major}.{minor})"
+            )
     return failures
 
 

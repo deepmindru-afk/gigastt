@@ -1,8 +1,10 @@
-# Resource TTX — product backlog
+# Resource TTX — completed program
 
-**Status:** living backlog of **work to do**, promoted from confirmed lab research.  
-**Lab evidence:** `specs/research/` (CATALOG / RESULTS / experiments).  
-**Goal:** same accuracy class, less disk and RAM, not slower (WER risk 0 unless noted).
+**Status:** TTX-01…TTX-20 all **done**. Kept as the historical record of the
+lean-INT8 / pool / cache work. There is no standing local task queue;
+the shipped state is `CHANGELOG.md`.
+**Lab evidence:** `specs/research/` (CATALOG / RESULTS / experiments).
+**Goal (then):** same accuracy class, less disk and RAM, not slower.
 
 Only items with **confirmed** impact (or a **confirmed gap**) appear as tasks below.  
 Research spikes without a ship decision stay in § Optional later / out of backlog.

@@ -48,7 +48,7 @@ onboarding lives in the bilingual workbook on GitHub Pages.
 - [`specs/prod-readiness-v1.0.md`](../specs/prod-readiness-v1.0.md) — production readiness tracker
 - [`specs/todo.md`](../specs/todo.md) — historical critique follow-ups
 - [`specs/held-out-datasets-roadmap.md`](../specs/held-out-datasets-roadmap.md) — extra public benchmark sets (one-by-one)
-- [`specs/resource-ttx-roadmap.md`](../specs/resource-ttx-roadmap.md) — resource TTX product backlog (TTX-01…; pool=1, ensure prequantized, cache GC, …)
+- [`specs/resource-ttx-roadmap.md`](../specs/resource-ttx-roadmap.md) — completed resource program (lean INT8, pool defaults, cache GC, …)
 - [`CHANGELOG.md`](../CHANGELOG.md) — release notes
 - [`SECURITY.md`](../SECURITY.md) — vulnerability reporting + supported versions
 - [`NOTICE`](../NOTICE) — third-party notices (opus, WeSpeaker, benchmark data)

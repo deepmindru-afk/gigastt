@@ -174,7 +174,8 @@ crates/
     vad.rs                # Voice activity detection
     inference/
       mod.rs              # Module wiring + shared constants (N_MELS, N_FFT, HOP_LENGTH, PRED_HIDDEN)
-      engine.rs           # Engine: load, warmup, transcribe, streaming decode loop
+      engine/             # Engine: load, warmup, transcribe, streaming decode loop
+                          #   (config / load / stream / transcribe / infer)
       pool.rs             # SessionPool (checkout, backpressure)
       state.rs            # StreamingState / DecoderState
       features.rs         # Mel spectrogram (64 bins, FFT=320, hop=160, HTK)
@@ -186,13 +187,14 @@ crates/
       types.rs            # TranscribeRequest / TranscribeResult and friends
       audio/              # Decode, resample, channel mixing, windowing, VAD windows, telephony
     runtime/              # Backend seam — THIS is where execution providers are chosen
-      factory.rs          # cfg-gated EP/backend selection (coreml / cuda / nnapi / ane / candle / CPU)
+      factory.rs          # RuntimeFactory / Runtime traits only
+      ort/factory.rs      # cfg-gated EP/backend selection (coreml / cuda / nnapi / ane / candle / CPU)
       session.rs · tensor.rs · error.rs
       ort/ · coreml/ · candle/ · mock/
     protocol/mod.rs       # WebSocket JSON message types (Ready, Partial, Final, Error)
     model/                # Model download (streaming + SHA256 + atomic rename), cache, manifest
-  gigastt-core/proto/
-    onnx.proto            # Vendored ONNX protobuf schema
+  gigastt-quantize/proto/
+    onnx.proto            # Vendored ONNX protobuf schema (quantizer crate)
   gigastt-ffi/src/        # C-ABI FFI layer (cdylib for Android/mobile)
     lib.rs                # Exported C functions: engine_new, transcribe_file, stream_*, etc.
   gigastt-node/           # napi-rs Node binding
@@ -218,7 +220,8 @@ sdks/
 
 ## Key Constants
 
-Defined in `crates/gigastt-core/src/inference/mod.rs`:
+Defined in `crates/gigastt-core/src/inference/mod.rs` (`N_MELS` / `N_FFT` /
+`HOP_LENGTH` / `PRED_HIDDEN`) and `engine/mod.rs` (`DEFAULT_POOL_SIZE`):
 
 | Constant | Value | Meaning |
 |---|---|---|
@@ -251,8 +254,9 @@ The `e2e_rnnt` head (`--model-variant e2e_rnnt`) uses the parallel `v3_e2e_rnnt_
 - **No `unwrap()` in production paths** — use `?`, `.context()`, or `unwrap_or_else`
 - Shared constants live in `inference/mod.rs`, referenced by sub-modules
 - `ort` errors are converted to typed `RuntimeError` at the `runtime/ort` seam (no `anyhow` wrapping)
-- Execution provider / backend selection lives in `crates/gigastt-core/src/runtime/factory.rs`
-  (`#[cfg(feature = "…")]` blocks, default falls through to the CPU EP) — **not** in `inference/`
+- Execution provider / backend selection lives in `crates/gigastt-core/src/runtime/ort/factory.rs`
+  (`#[cfg(feature = "…")]` blocks, default falls through to the CPU EP) — **not** in `inference/`.
+  `runtime/factory.rs` holds only the `RuntimeFactory` / `Runtime` traits.
 - **No internal task-tracker IDs outside the tracker itself.** Never write tracker indices (`TTX-NN`, `T-NNN`, `V1-NN`, `SUS-NN`, `TODO-NN`, ticket keys, etc.) into:
   - source comments or code strings
   - `CHANGELOG.md`, `docs/`, CI/workflows, README, user-facing text

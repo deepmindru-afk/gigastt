@@ -10,7 +10,58 @@ were released without a git tag, so their headings carry no compare link.
 
 ## [Unreleased]
 
+### Security
+
+- **Engine load re-checks pinned SHA-256** of the INT8 encoder (and any
+  other file with a table entry) before mapping it. Download already
+  verified; a tampered file in the model directory is now refused.
+- **FFI handles are table ids, not raw `Box` pointers.** Free during an
+  in-flight call keeps the engine alive via `Arc`; a call after free is a
+  failed lookup, not a use-after-free.
+- **Jobs no longer expand undeclared-duration audio to PCM** before
+  taking a pool slot. Progress percent stays 0 until the job finishes.
+
+### Added
+
+- Windows `cargo test --workspace --lib --bins` CI job.
+- Nightly AddressSanitizer job over the session pool (alongside Miri + TSAN).
+- `Engine` impl split into `engine/{config,load,stream,transcribe,infer}.rs`.
+  Public API is unchanged.
+
 ### Fixed
+
+- **Opaque `Origin: null` is denied.** Sandboxed iframes and `data:` documents
+  send that header; treating it as a non-browser client let a drive-by page
+  hold a pool slot on the default loopback server. Native clients still omit
+  `Origin` and are allowed.
+
+- **C-ABI exports no longer unwind across FFI.** `gigastt_engine_new*`,
+  `gigastt_stream_new`, `gigastt_stream_flush`, and `gigastt_quantize_model`
+  catch panics and return a sentinel. `gigastt_stream_new` also rejects a
+  disposed engine handle.
+
+- **CHANGELOG 2.17.0 no longer claims CTC glossaries are inert.** The same
+  release shipped the prefix-beam path; the leftover “ignored” bullet
+  contradicted the Added section and the code.
+
+- **OpenAPI documents `?hotwords=` / `?hotwords_boost=`** on `/v1/transcribe`
+  and `/v1/jobs`.
+
+- **SECURITY.md previous line tracks the prior minor** (2.16.x), and the
+  docs-drift gate now requires that row.
+
+- **IPv6 unique-local / link-local hops are trusted proxies** for
+  `X-Forwarded-For` when `--trust-proxy` is on, so clients behind a ULA
+  reverse proxy get their own rate-limit bucket.
+
+- **OpenAI multipart errors no longer echo parser internals** to the client.
+
+- **Model download refuses a body larger than 2 GiB**, advertised
+  `Content-Length` included, so a redirected host cannot fill the disk.
+
+- **Main-push `e2e-tests` runs the jobs / CLI / admin-reload / HTTP-coverage
+  targets** that the docs already listed. Local `make check` / pre-commit
+  clippy matches CI (`--all-targets`, no `dead_code` allow).
 
 - **`cache-gc` no longer prunes the optimized graph of a served head.** With
   several heads installed in one model directory, the prune kept only the
@@ -222,15 +273,6 @@ were released without a git tag, so their headings carry no compare link.
   them: on the Cyrillic-only `rnnt` vocabulary a Latin brand cannot be
   represented at any casing, and naming it is what tells the user to write it
   phonetically.
-
-- **A CTC head no longer reports hotword biasing as enabled.** `ml_ctc` and
-  `ml_ctc_large` decode by per-frame argmax, which has no continuation state for
-  shallow fusion to steer, so a glossary was inert there — while the server
-  still logged `Hotword biasing enabled (N phrase(s))` at startup and left
-  users trusting a glossary that never ran (#260). Supplying one on a CTC head
-  now warns that it is ignored, `has_hotwords()` reports the truth, and the CLI
-  help and API docs say which heads biasing applies to. Contextual biasing for
-  CTC needs a prefix-beam decoder and is tracked separately.
 
 ## [2.16.0] - 2026-07-30
 

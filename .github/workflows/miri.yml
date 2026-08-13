@@ -120,3 +120,34 @@ jobs:
           -Zbuild-std
           --target x86_64-unknown-linux-gnu
           pool -- --test-threads=1
+
+  asan:
+    runs-on: ubuntu-latest
+    name: ASAN (Pool + audio)
+    timeout-minutes: 40
+    env:
+      RUSTUP_TOOLCHAIN: nightly
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: asan
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: cargo test -Zsanitizer=address (pool)
+        env:
+          RUSTFLAGS: -Zsanitizer=address
+          RUSTDOCFLAGS: -Zsanitizer=address
+          ASAN_OPTIONS: detect_leaks=0
+        run: >
+          cargo test
+          -p gigastt-core --lib
+          --no-default-features
+          --features "__internals file-decode net async-pool"
+          -Zbuild-std
+          --target x86_64-unknown-linux-gnu
+          pool -- --test-threads=1
