@@ -832,4 +832,83 @@ mod tests {
         );
         assert_eq!(cfg.limits.idle_timeout_secs, limits.idle_timeout_secs);
     }
+
+    // Serialize tests that mutate process env vars to avoid races under
+    // cargo test's default multi-threaded harness (used by tarpaulin).
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn test_ensure_bind_allowed_non_loopback_requires_flag() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let previous = std::env::var("GIGASTT_ALLOW_BIND_ANY").ok();
+        unsafe {
+            std::env::remove_var("GIGASTT_ALLOW_BIND_ANY");
+        }
+        let result = ensure_bind_allowed("0.0.0.0", false);
+        if let Some(v) = previous {
+            unsafe {
+                std::env::set_var("GIGASTT_ALLOW_BIND_ANY", v);
+            }
+        }
+        assert!(
+            result.is_err(),
+            "0.0.0.0 without --bind-all must be rejected"
+        );
+    }
+
+    #[test]
+    fn test_ensure_metrics_bind_allowed_loopback_ok() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let addr = "127.0.0.1:9090".parse().unwrap();
+        ensure_metrics_bind_allowed(true, &addr, false)
+            .expect("loopback metrics bind must be allowed");
+    }
+
+    #[test]
+    fn test_ensure_metrics_bind_allowed_non_loopback_requires_flag() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let previous = std::env::var("GIGASTT_ALLOW_BIND_ANY").ok();
+        unsafe {
+            std::env::remove_var("GIGASTT_ALLOW_BIND_ANY");
+        }
+        let addr = "0.0.0.0:9090".parse().unwrap();
+        let result = ensure_metrics_bind_allowed(true, &addr, false);
+        if let Some(v) = previous {
+            unsafe {
+                std::env::set_var("GIGASTT_ALLOW_BIND_ANY", v);
+            }
+        }
+        assert!(
+            result.is_err(),
+            "0.0.0.0 metrics bind without --bind-all must be rejected"
+        );
+    }
+
+    #[test]
+    fn test_ensure_metrics_bind_allowed_explicit_flag_ok() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let addr = "0.0.0.0:9090".parse().unwrap();
+        ensure_metrics_bind_allowed(true, &addr, true)
+            .expect("explicit --bind-all must allow the metrics bind");
+    }
+
+    #[test]
+    fn test_ensure_bind_allowed_env_opt_in() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let previous = std::env::var("GIGASTT_ALLOW_BIND_ANY").ok();
+        unsafe {
+            std::env::set_var("GIGASTT_ALLOW_BIND_ANY", "1");
+        }
+        let result = ensure_bind_allowed("0.0.0.0", false);
+        if let Some(v) = previous {
+            unsafe {
+                std::env::set_var("GIGASTT_ALLOW_BIND_ANY", v);
+            }
+        } else {
+            unsafe {
+                std::env::remove_var("GIGASTT_ALLOW_BIND_ANY");
+            }
+        }
+        assert!(result.is_ok(), "env opt-in must allow non-loopback bind");
+    }
 }

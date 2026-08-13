@@ -27,6 +27,9 @@ were released without a git tag, so their headings carry no compare link.
 - Nightly AddressSanitizer job over the session pool (alongside Miri + TSAN).
 - `Engine` impl split into `engine/{config,load,stream,transcribe,infer}.rs`.
   Public API is unchanged.
+- `model` download/identity split into `model/{progress,variant,download}.rs`.
+  Public `gigastt_core::model::*` paths are unchanged. CLI parse tests live
+  next to `main.rs`; bind-gate tests live in `serve.rs`.
 
 ### Fixed
 
