@@ -464,5 +464,4 @@ async fn main() -> anyhow::Result<()> {
 }
 
 #[cfg(test)]
-#[path = "cli_tests.rs"]
-mod tests;
+mod cli_tests;
