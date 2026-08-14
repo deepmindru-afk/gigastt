@@ -4,9 +4,9 @@
 Ten axes, all stdlib-only (no third-party deps, no network):
 
   1. CLI flags/envs: every clap flag + GIGASTT_* env in the CLI sources
-     (crates/gigastt/src/{main,serve,transcribe_cmd}.rs) is documented in
-     docs/cli.md, and cli.md names no flag/env that does not exist
-     (intentional exceptions live in scripts/check-docs-drift.allowlist).
+     (crates/gigastt/src/{main,serve,serve/bind,transcribe_cmd}.rs) is
+     documented in docs/cli.md, and cli.md names no flag/env that does not
+     exist (intentional exceptions live in scripts/check-docs-drift.allowlist).
   2. WS error codes: the enum in docs/asyncapi.yaml == the table in docs/api.md
      == the codes emitted under crates/gigastt/src/server/ws/ (plus allowlisted
      doc-only entries).
@@ -24,7 +24,7 @@ Ten axes, all stdlib-only (no third-party deps, no network):
      and packaging/**/README* resolves to an existing file/directory, and
      #anchors resolve to a heading in the target file.
   7. OpenAPI paths: every `paths:` key in docs/openapi.yaml is registered in
-     crates/gigastt/src/server/{mod,router}.rs (or is the separate metrics listener),
+     crates/gigastt/src/server/{mod,router,listen}.rs (or is the separate metrics listener),
      and OpenAPI must not resurrect a stale unconditional duration-cap claim
      now that the default file-transcription path has no duration limit.
   8. SECURITY.md supported-version table marks the workspace Cargo.toml major.minor
@@ -55,12 +55,14 @@ ROOT = Path(__file__).resolve().parent.parent
 CLI_SOURCES = (
     ROOT / "crates/gigastt/src/main.rs",
     ROOT / "crates/gigastt/src/serve.rs",
+    ROOT / "crates/gigastt/src/serve/bind.rs",
     ROOT / "crates/gigastt/src/transcribe_cmd.rs",
 )
 WS_DIR = ROOT / "crates/gigastt/src/server/ws"
 SERVER_ROUTE_SOURCES = (
     ROOT / "crates/gigastt/src/server/mod.rs",
     ROOT / "crates/gigastt/src/server/router.rs",
+    ROOT / "crates/gigastt/src/server/listen.rs",
 )
 # Codec marker lives in the decode module after the audio/ feature split.
 AUDIO_RS = ROOT / "crates/gigastt-core/src/inference/audio/decode.rs"
