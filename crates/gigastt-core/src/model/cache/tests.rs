@@ -267,6 +267,8 @@ fn test_dedupe_hardlinks_exact_copies() {
     let report = dedupe_model_dir(dir, false).unwrap();
     assert_eq!(report.groups, 1);
     assert_eq!(report.hardlinked, 1);
+    // `same_file` is inode-based and always returns false on stable Windows.
+    #[cfg(unix)]
     assert!(same_file(&a, &b).unwrap());
     assert_eq!(std::fs::read(&a).unwrap(), payload);
     assert_eq!(std::fs::read(&b).unwrap(), payload);

@@ -409,24 +409,11 @@ fn same_file(a: &Path, b: &Path) -> Result<bool> {
         use std::os::unix::fs::MetadataExt;
         Ok(ma.dev() == mb.dev() && ma.ino() == mb.ino())
     }
-    #[cfg(windows)]
+    #[cfg(not(unix))]
     {
-        use std::os::windows::fs::MetadataExt;
-        Ok(
-            match (
-                ma.volume_serial_number(),
-                mb.volume_serial_number(),
-                ma.file_index(),
-                mb.file_index(),
-            ) {
-                (Some(va), Some(vb), Some(ia), Some(ib)) => va == vb && ia == ib,
-                _ => false,
-            },
-        )
-    }
-    #[cfg(not(any(unix, windows)))]
-    {
-        // Best-effort: identical size is not enough; always attempt hardlink.
+        // Stable `MetadataExt` on Windows does not expose file index / volume
+        // serial (those APIs are still `windows_by_handle`). Treat as "not
+        // known to be the same" so the caller still attempts a hardlink.
         let _ = (ma, mb);
         Ok(false)
     }
