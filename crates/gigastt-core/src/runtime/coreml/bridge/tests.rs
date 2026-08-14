@@ -1,6 +1,10 @@
+use super::cache::{
+    build_source_key, cached_meta_path, cached_model_path, compiled_cache_dir, copy_dir_recursive,
+    current_source_key, meta_matches, populate_cache,
+};
 use super::*;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 fn package_path() -> PathBuf {

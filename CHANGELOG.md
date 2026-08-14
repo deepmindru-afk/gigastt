@@ -51,7 +51,9 @@ were released without a git tag, so their headings carry no compare link.
   `BytesMediaSource`, header duration probe, and per-channel decode live
   in `audio/decode/{bytes_source,probe,channels}.rs`. The INT8 quantizer
   graph rewrite lives in `gigastt-quantize` `graph.rs`; per-channel
-  weight math lives in `weights.rs`.
+  weight math lives in `weights.rs`. The ANE Core ML bridge's compile
+  cache lives in `runtime/coreml/bridge/cache.rs`; Float16 predict
+  lives in `bridge/predict.rs`.
 
 ### Fixed
 
