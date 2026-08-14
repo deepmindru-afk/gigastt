@@ -171,6 +171,7 @@ pub struct Engine {
     speaker_encoder: Option<LazySpeakerEncoder>,
 }
 
+mod api;
 mod channels;
 mod config;
 mod infer;
