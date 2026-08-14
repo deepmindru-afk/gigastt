@@ -84,7 +84,7 @@ where
     run_with_config_loading_reloadable(config, shutdown, load, None).await
 }
 
-/// Like [`run_with_config_loading`], but also carries the [`EngineBuilder`]
+/// Like [`run_with_config_loading`], but also carries the [`http::EngineBuilder`]
 /// recipe so the server that starts after the model loads exposes a working
 /// `POST /v1/admin/reload`. The `load` future typically calls the *same*
 /// builder once to produce the boot engine, so boot and reload share one recipe.
@@ -200,7 +200,7 @@ pub async fn run_with_config_listener(
     run_with_config_listener_reloadable(engine, config, shutdown, listener, None).await
 }
 
-/// Like [`run_with_config_listener`], but also accepts the [`EngineBuilder`]
+/// Like [`run_with_config_listener`], but also accepts the [`http::EngineBuilder`]
 /// recipe that `POST /v1/admin/reload` uses to rebuild the engine in place.
 /// `None` disables the reload endpoint (`reload_unsupported`) — the thin
 /// `run` / `run_with_shutdown` and test entry points take that path.
