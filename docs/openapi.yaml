@@ -350,6 +350,8 @@ paths:
             return 400 `invalid_sample_rate`). G.722 always decodes to its
             native 16 kHz; both 8000 (the SDP clock-rate convention) and 16000
             are accepted for it.
+        - $ref: "#/components/parameters/Hotwords"
+        - $ref: "#/components/parameters/HotwordsBoost"
       requestBody:
         required: true
         content:
@@ -681,6 +683,8 @@ paths:
         - $ref: "#/components/parameters/Punctuation"
         - $ref: "#/components/parameters/Itn"
         - $ref: "#/components/parameters/Vad"
+        - $ref: "#/components/parameters/Hotwords"
+        - $ref: "#/components/parameters/HotwordsBoost"
       requestBody:
         required: true
         content:
@@ -978,6 +982,25 @@ components:
       schema:
         type: boolean
       description: Override voice activity detection policy
+    Hotwords:
+      name: hotwords
+      in: query
+      schema:
+        type: string
+      description: >
+        Per-request hotword phrases, comma-separated (`сбер,тинькофф`).
+        Absent keeps the engine boot glossary; present with an empty value
+        forces biasing off; non-empty replaces the glossary for this request
+        only (capped at 64 phrases / 64 chars each).
+    HotwordsBoost:
+      name: hotwords_boost
+      in: query
+      schema:
+        type: number
+        format: float
+      description: >
+        Additive logit boost for `hotwords`. Ignored unless `hotwords` is
+        also present; defaults to 5.0.
 
   schemas:
     HealthResponse:

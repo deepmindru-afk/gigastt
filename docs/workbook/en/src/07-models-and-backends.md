@@ -58,7 +58,7 @@ gigastt download --model-variant e2e_rnnt
 gigastt serve --model-variant e2e_rnnt
 ```
 
-Auto-detection rules (from `crates/gigastt-core/src/model/mod.rs`):
+Auto-detection rules (from `crates/gigastt-core/src/model/variant.rs`):
 
 - No `--model-variant` → the engine detects the installed head from the files
   in the model directory and uses a complete install **as-is** (no network

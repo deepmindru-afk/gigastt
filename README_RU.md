@@ -64,6 +64,9 @@ WER (%) на четырёх русских доменах, меньше — лу
 # Homebrew (macOS arm64 / Linux x86_64)
 brew tap ekhodzitsky/gigastt https://github.com/ekhodzitsky/gigastt && brew install gigastt
 
+# Windows x86_64 (и другие готовые тройки) — tarball из Releases
+# https://github.com/ekhodzitsky/gigastt/releases
+
 # crates.io — нужен protoc в PATH (brew install protobuf / apt install protobuf-compiler)
 cargo install gigastt
 
@@ -130,7 +133,7 @@ $ gigastt serve
 
 ## Требования
 
-Rust **1.88+**, `protoc` в `PATH` (только на этапе сборки — крейт quantize регенерирует ONNX-типы). macOS 14+ (Apple Silicon, CoreML) или Linux x86_64 (опц. NVIDIA CUDA 12+). **~250–400 МБ диска** для lean INT8 + бинарника (опциональные punct/VAD — отдельно), ~66 МБ resident RAM при дефолтном `--pool-size 2` (~46 МБ на одну сессию; `ps` RSS показывает ~510 / ~277 МБ из-за общего memory-mapped образа модели). Крейт `gigastt-core` без серверных зависимостей: `gigastt-core = "2.17"`.
+Rust **1.88+**, `protoc` в `PATH` (только на этапе сборки — крейт quantize регенерирует ONNX-типы). macOS 14+ (Apple Silicon, CoreML), Linux x86_64 (опц. NVIDIA CUDA 12+ через образ GHCR `:cuda`), Linux aarch64 или Windows x86_64 CPU (готовый tarball). **~250–400 МБ диска** для lean INT8 + бинарника (опциональные punct/VAD — отдельно), ~66 МБ resident RAM при дефолтном `--pool-size 2` (~46 МБ на одну сессию; `ps` RSS показывает ~510 / ~277 МБ из-за общего memory-mapped образа модели). Крейт `gigastt-core` без серверных зависимостей: `gigastt-core = "2.17"`.
 
 ## Лицензия
 

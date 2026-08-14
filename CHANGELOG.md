@@ -10,7 +10,94 @@ were released without a git tag, so their headings carry no compare link.
 
 ## [Unreleased]
 
+### Security
+
+- **Engine load re-checks pinned SHA-256** of the INT8 encoder (and any
+  other file with a table entry) before mapping it. Download already
+  verified; a tampered file in the model directory is now refused.
+- **FFI handles are table ids, not raw `Box` pointers.** Free during an
+  in-flight call keeps the engine alive via `Arc`; a call after free is a
+  failed lookup, not a use-after-free.
+- **Jobs no longer expand undeclared-duration audio to PCM** before
+  taking a pool slot. Progress percent stays 0 until the job finishes.
+
+### Added
+
+- Windows `cargo test --workspace --lib --bins` CI job.
+- Nightly AddressSanitizer job over the session pool (alongside Miri + TSAN).
+- `Engine` impl split into
+  `engine/{config,load,stream,transcribe,infer,words,channels,api,file_stream}.rs`.
+  Public transcribe wrappers live in `engine/api.rs`; the request
+  pipeline stays in `transcribe.rs`; the windowed file path lives in
+  `file_stream.rs`. Public API is unchanged.
+- `model` download/identity split into `model/{progress,variant,download}.rs`;
+  the streaming SHA-256 fetch lives in `download/fetch.rs`, ANE
+  packages in `download/ane.rs`, and sidecar ensure (speaker / punct /
+  VAD) in `download/sidecars.rs`.
+  Public `gigastt_core::model::*` paths are unchanged. CLI parse tests live
+  next to `main.rs` split by command (`cli_tests/{serve,download,transcribe,
+  batch,parse}.rs`); bind-gate tests live next to `serve.rs`.
+- Unit tests live next to their modules (audio, engine, export, decode,
+  punctuation, VAD, FFI, model, HTTP, wordpiece, stream, quantize, batch,
+  boot, serve, bias, pool, rate-limit, protocol, cache, state, CTC,
+  features, metrics, and the rest). Jobs tests are split by store / queue
+  / events. WordPiece Unicode category tables live in `wordpiece/unicode.rs`.
+  `FileWindows` lives in `audio/stream/file.rs`; window geometry stays in
+  `stream.rs`. Dual-mono detection lives in `audio/decode/dual_mono.rs`;
+  `ChannelScan` lives in `audio/decode/scan.rs`. VAD is split into
+  `vad/{config,silero,regions,segmenter,endpoint}.rs`. Opus RFC 6716
+  packet framing lives in `audio/opus/framing.rs`. The server bind /
+  drain / SIGHUP reload loop lives in `server/listen.rs`. Audio
+  `BytesMediaSource`, header duration probe, and per-channel decode live
+  in `audio/decode/{bytes_source,probe,channels}.rs`. The INT8 quantizer
+  graph rewrite lives in `gigastt-quantize` `graph.rs`; per-channel
+  weight math lives in `weights.rs`. The ANE Core ML bridge's compile
+  cache lives in `runtime/coreml/bridge/cache.rs`; Float16 predict
+  lives in `bridge/predict.rs`. WordPiece `tokenizer.json` parsing
+  lives in `wordpiece/json.rs`. Punctuation window tiling lives in
+  `punctuation/windows.rs`. Serve bind gates live in `serve/bind.rs`.
+  `TranscribeRequest` / `TranscribeSource` live in
+  `inference/types/request.rs`; override / hotword types live in
+  `types/overrides.rs`. Candle RoPE and Conformer blocks live in
+  `runtime/candle/conformer/{rope,blocks}.rs`. Boot CLI modes and
+  sidecar loaders live in `boot/{modes,sidecars}.rs`. OpenAI SSE
+  events live in `server/openai/sse.rs`. Batch path helpers live in
+  `batch/paths.rs`.
+
 ### Fixed
+
+- **Opaque `Origin: null` is denied.** Sandboxed iframes and `data:` documents
+  send that header; treating it as a non-browser client let a drive-by page
+  hold a pool slot on the default loopback server. Native clients still omit
+  `Origin` and are allowed.
+
+- **C-ABI exports no longer unwind across FFI.** `gigastt_engine_new*`,
+  `gigastt_stream_new`, `gigastt_stream_flush`, and `gigastt_quantize_model`
+  catch panics and return a sentinel. `gigastt_stream_new` also rejects a
+  disposed engine handle.
+
+- **CHANGELOG 2.17.0 no longer claims CTC glossaries are inert.** The same
+  release shipped the prefix-beam path; the leftover “ignored” bullet
+  contradicted the Added section and the code.
+
+- **OpenAPI documents `?hotwords=` / `?hotwords_boost=`** on `/v1/transcribe`
+  and `/v1/jobs`.
+
+- **SECURITY.md previous line tracks the prior minor** (2.16.x), and the
+  docs-drift gate now requires that row.
+
+- **IPv6 unique-local / link-local hops are trusted proxies** for
+  `X-Forwarded-For` when `--trust-proxy` is on, so clients behind a ULA
+  reverse proxy get their own rate-limit bucket.
+
+- **OpenAI multipart errors no longer echo parser internals** to the client.
+
+- **Model download refuses a body larger than 2 GiB**, advertised
+  `Content-Length` included, so a redirected host cannot fill the disk.
+
+- **Main-push `e2e-tests` runs the jobs / CLI / admin-reload / HTTP-coverage
+  targets** that the docs already listed. Local `make check` / pre-commit
+  clippy matches CI (`--all-targets`, no `dead_code` allow).
 
 - **`cache-gc` no longer prunes the optimized graph of a served head.** With
   several heads installed in one model directory, the prune kept only the
@@ -222,15 +309,6 @@ were released without a git tag, so their headings carry no compare link.
   them: on the Cyrillic-only `rnnt` vocabulary a Latin brand cannot be
   represented at any casing, and naming it is what tells the user to write it
   phonetically.
-
-- **A CTC head no longer reports hotword biasing as enabled.** `ml_ctc` and
-  `ml_ctc_large` decode by per-frame argmax, which has no continuation state for
-  shallow fusion to steer, so a glossary was inert there — while the server
-  still logged `Hotword biasing enabled (N phrase(s))` at startup and left
-  users trusting a glossary that never ran (#260). Supplying one on a CTC head
-  now warns that it is ignored, `has_hotwords()` reports the truth, and the CLI
-  help and API docs say which heads biasing applies to. Contextual biasing for
-  CTC needs a prefix-beam decoder and is tracked separately.
 
 ## [2.16.0] - 2026-07-30
 

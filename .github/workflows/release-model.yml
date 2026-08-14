@@ -8,7 +8,7 @@
 # and the `protoc` build dependency.
 #
 # The download path verifies each file against the SHA-256 pinned in
-# `crates/gigastt-core/src/model/mod.rs` (`encoder_int8_checksum` +
+# `crates/gigastt-core/src/model/` (`encoder_int8_checksum` +
 # `RNNT_CHECKSUMS`/`E2E_RNNT_CHECKSUMS`). The quantizer is deterministic, so a CI
 # re-quantization reproduces the pinned encoder bytes; if it ever diverges, the
 # pinned constants AND the release `tag` must be bumped together (the printed
@@ -19,7 +19,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Model release tag (must match PREQUANT_RELEASE_BASE in model/mod.rs)'
+        description: 'Model release tag (must match PREQUANT_RELEASE_BASE in model/variant.rs)'
         required: true
         default: 'models-v3-2026-06-22'
 
@@ -78,7 +78,7 @@ jobs:
             [ "$f" = "SHA256SUMS.txt" ] && continue
             (sha256sum "$f" 2>/dev/null || shasum -a 256 "$f") >> SHA256SUMS.txt
           done
-          echo "::notice ::Reconcile the INT8 encoder hashes below with the pinned constants in model/mod.rs:"
+          echo "::notice ::Reconcile the INT8 encoder hashes below with the pinned constants in model/variant.rs:"
           cat SHA256SUMS.txt
 
       # minisign signatures over every asset + the checksum file. The signing
