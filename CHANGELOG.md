@@ -46,7 +46,9 @@ were released without a git tag, so their headings carry no compare link.
   `ChannelScan` lives in `audio/decode/scan.rs`. VAD is split into
   `vad/{config,silero,regions,segmenter,endpoint}.rs`. Opus RFC 6716
   packet framing lives in `audio/opus/framing.rs`. The server bind /
-  drain / SIGHUP reload loop lives in `server/listen.rs`.
+  drain / SIGHUP reload loop lives in `server/listen.rs`. Audio
+  `BytesMediaSource`, header duration probe, and per-channel decode live
+  in `audio/decode/{bytes_source,probe,channels}.rs`.
 
 ### Fixed
 
