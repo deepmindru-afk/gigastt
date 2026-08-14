@@ -177,12 +177,12 @@ Each tagged release publishes multi-arch images to GitHub Container Registry, so
 you can `docker pull` instead of building from source (`cargo install`):
 
 ```sh
-docker pull ghcr.io/ekhodzitsky/gigastt:2.17.0        # CPU, linux/amd64 + linux/arm64
-docker pull ghcr.io/ekhodzitsky/gigastt:2.17.0-cuda   # CUDA, linux/amd64
-docker run -p 127.0.0.1:9876:9876 ghcr.io/ekhodzitsky/gigastt:2.17.0
+docker pull ghcr.io/ekhodzitsky/gigastt:2.18.0        # CPU, linux/amd64 + linux/arm64
+docker pull ghcr.io/ekhodzitsky/gigastt:2.18.0-cuda   # CUDA, linux/amd64
+docker run -p 127.0.0.1:9876:9876 ghcr.io/ekhodzitsky/gigastt:2.18.0
 ```
 
-Pin a concrete version (`:2.17.0`) for reproducible deploys; `:latest` / `:cuda`
+Pin a concrete version (`:2.18.0`) for reproducible deploys; `:latest` / `:cuda`
 track the newest release. Want zero cold-start? Build a model-baked image
 locally with `docker build --build-arg GIGASTT_BAKE_MODEL=1 -t gigastt:baked .`
 (adds ~225 MB INT8).
@@ -233,7 +233,7 @@ Both proxies can target `http://127.0.0.1:9876/health` for health checks. The `/
 
 ```sh
 curl http://127.0.0.1:9876/health
-# {"status":"ok","model":"gigaam-v3-rnnt","variant":"rnnt","version":"2.17.0","punctuation":true,"itn":true}
+# {"status":"ok","model":"gigaam-v3-rnnt","variant":"rnnt","version":"2.18.0","punctuation":true,"itn":true}
 ```
 
 **Non-blocking first run.** The port binds immediately, before the ~225 MB INT8 model
