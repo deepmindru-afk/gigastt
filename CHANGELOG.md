@@ -10,6 +10,25 @@ were released without a git tag, so their headings carry no compare link.
 
 ## [Unreleased]
 
+### Added
+
+- **Model-free mock engine for unit tests.** `gigastt_core::test_support`
+  (behind the private `__internals` feature) loads a scripted INT8 rnnt
+  engine whose encoder accepts any audio length. HTTP, WebSocket, jobs,
+  OpenAI transcriptions, and CLI helpers now run in `cargo test
+  --workspace --lib --bins` without the 225 MB model.
+- In-process live tests: `/health`, `/v1/audio/transcriptions`, and
+  `/v1/ws` (Ready → configure → audio → Stop → Final, plus invalid
+  sample-rate rejection) against the mock engine.
+- Unit coverage of packaging (`quantize` no-op / missing FP32,
+  `cache-gc`), job HTTP handlers, `RealJobExecutor`, engine file/bytes/
+  channels/cancel wrappers, and `transcribe` batch helpers.
+
+### Changed
+
+- Codecov patch target raised from 80% to 90%. Previously `#[ignore]`d
+  HTTP handler tests now run on every PR.
+
 ## [2.18.0] - 2026-08-14
 
 ### Security
