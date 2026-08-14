@@ -1050,7 +1050,7 @@ jobs:
           filters: |
             sdks:
               - 'sdks/**'
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         if: steps.filter.outputs.sdks == 'true'
         with:
           go-version: 'stable'
