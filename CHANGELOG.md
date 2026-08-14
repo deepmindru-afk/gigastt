@@ -53,7 +53,9 @@ were released without a git tag, so their headings carry no compare link.
   graph rewrite lives in `gigastt-quantize` `graph.rs`; per-channel
   weight math lives in `weights.rs`. The ANE Core ML bridge's compile
   cache lives in `runtime/coreml/bridge/cache.rs`; Float16 predict
-  lives in `bridge/predict.rs`.
+  lives in `bridge/predict.rs`. WordPiece `tokenizer.json` parsing
+  lives in `wordpiece/json.rs`. Punctuation window tiling lives in
+  `punctuation/windows.rs`.
 
 ### Fixed
 
