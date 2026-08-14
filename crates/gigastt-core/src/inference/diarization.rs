@@ -1,7 +1,7 @@
 //! Speaker diarization via [polyvoice] (feature-gated).
 //!
 //! Both pipelines take the v1.0 [`polyvoice::Embedder`] contract: the offline
-//! [`polyvoice::Pipeline`] and the per-session
+//! [`polyvoice::pipeline::LegacyPipeline`] and the per-session
 //! [`polyvoice::streaming::StreamingPipeline`] are generic over `E: Embedder`,
 //! and [`FbankOnnxExtractor`] implements it directly. The legacy
 //! `EmbeddingExtractor` / `EmbeddingError` surface this module used to contain
@@ -15,10 +15,11 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use parking_lot::Mutex;
+use polyvoice::pipeline::{LegacyPipeline, LegacyPipelineError};
 use polyvoice::streaming::StreamingPipeline;
 use polyvoice::{
     ClusterConfig, DiarizationConfig as DiaConfig, Embedder, EmbedderError, EnergyVad,
-    FbankOnnxExtractor, Pipeline, PipelineError, VadConfig,
+    FbankOnnxExtractor, VadConfig,
 };
 
 use super::DiarizationOutcome;
@@ -64,12 +65,12 @@ pub(crate) fn load_speaker_encoder(
     model_path: &Path,
     pool_size: usize,
 ) -> anyhow::Result<FbankOnnxExtractor> {
-    FbankOnnxExtractor::new(
+    Ok(FbankOnnxExtractor::new(
         model_path,
         SPEAKER_EMBEDDING_DIM,
         pool_size,
         polyvoice::onnx::ExecutionProvider::Cpu,
-    )
+    )?)
 }
 
 /// Lazy WeSpeaker handle: path probed at engine boot, ONNX session loaded on
@@ -208,7 +209,7 @@ pub fn run_offline(
 ) -> Result<Vec<LabeledTurn>, DiarizationOutcome> {
     let config = DiaConfig::default();
     let vad_config = VadConfig::default();
-    let pipeline = Pipeline::new(config, vad_config);
+    let pipeline = LegacyPipeline::new(config, vad_config);
     let mut vad = EnergyVad::new(-40.0, 16000, vad_config.frame_size);
     match pipeline.run(samples, encoder.as_ref(), &mut vad) {
         Ok(dia_result) => Ok(dia_result
@@ -224,14 +225,14 @@ pub fn run_offline(
     }
 }
 
-/// Map a polyvoice [`PipelineError`] to the client-facing [`DiarizationOutcome`].
+/// Map a polyvoice [`LegacyPipelineError`] to the client-facing [`DiarizationOutcome`].
 ///
 /// The duration ceiling is surfaced with the real numbers polyvoice reported;
 /// every other failure is logged and collapsed to
 /// [`DiarizationOutcome::Failed`].
-fn classify_offline_error(e: PipelineError) -> DiarizationOutcome {
+fn classify_offline_error(e: LegacyPipelineError) -> DiarizationOutcome {
     match e {
-        PipelineError::AudioTooLong {
+        LegacyPipelineError::AudioTooLong {
             actual_secs,
             max_secs,
         } => DiarizationOutcome::DurationCeiling {
@@ -264,7 +265,7 @@ mod tests {
     // the ceiling. This is the sole case that carries numbers.
     #[test]
     fn test_classify_offline_error_duration_ceiling_carries_numbers() {
-        let outcome = classify_offline_error(PipelineError::AudioTooLong {
+        let outcome = classify_offline_error(LegacyPipelineError::AudioTooLong {
             actual_secs: 5400.0,
             max_secs: 3600.0,
         });
@@ -281,7 +282,10 @@ mod tests {
     #[test]
     fn test_classify_offline_error_other_is_failed() {
         assert_eq!(
-            classify_offline_error(PipelineError::NoSpeech),
+            classify_offline_error(LegacyPipelineError::UnsupportedSampleRate {
+                expected: 16_000,
+                actual: 8_000,
+            }),
             DiarizationOutcome::Failed
         );
     }
