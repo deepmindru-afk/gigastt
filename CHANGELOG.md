@@ -25,7 +25,8 @@ were released without a git tag, so their headings carry no compare link.
 
 - Windows `cargo test --workspace --lib --bins` CI job.
 - Nightly AddressSanitizer job over the session pool (alongside Miri + TSAN).
-- `Engine` impl split into `engine/{config,load,stream,transcribe,infer,words}.rs`.
+- `Engine` impl split into
+  `engine/{config,load,stream,transcribe,infer,words,channels}.rs`.
   Public API is unchanged.
 - `model` download/identity split into `model/{progress,variant,download}.rs`;
   the streaming SHA-256 fetch lives in `download/fetch.rs`, ANE
@@ -40,7 +41,9 @@ were released without a git tag, so their headings carry no compare link.
   features, metrics, and the rest). Jobs tests are split by store / queue
   / events. WordPiece Unicode category tables live in `wordpiece/unicode.rs`.
   `FileWindows` lives in `audio/stream/file.rs`; window geometry stays in
-  `stream.rs`. Dual-mono detection lives in `audio/decode/dual_mono.rs`.
+  `stream.rs`. Dual-mono detection lives in `audio/decode/dual_mono.rs`;
+  `ChannelScan` lives in `audio/decode/scan.rs`. VAD is split into
+  `vad/{config,silero,regions,segmenter,endpoint}.rs`.
 
 ### Fixed
 
