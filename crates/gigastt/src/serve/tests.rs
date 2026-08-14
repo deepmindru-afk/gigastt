@@ -1,7 +1,5 @@
-use super::{
-    build_limits, build_server_config, ensure_bind_allowed, ensure_metrics_bind_allowed,
-    is_loopback_host,
-};
+use super::bind::is_loopback_host;
+use super::{build_limits, build_server_config, ensure_bind_allowed, ensure_metrics_bind_allowed};
 use gigastt::server::RuntimeLimits;
 
 #[test]
