@@ -55,7 +55,11 @@ were released without a git tag, so their headings carry no compare link.
   cache lives in `runtime/coreml/bridge/cache.rs`; Float16 predict
   lives in `bridge/predict.rs`. WordPiece `tokenizer.json` parsing
   lives in `wordpiece/json.rs`. Punctuation window tiling lives in
-  `punctuation/windows.rs`.
+  `punctuation/windows.rs`. Serve bind gates live in `serve/bind.rs`.
+  `TranscribeRequest` / `TranscribeSource` live in
+  `inference/types/request.rs`; override / hotword types live in
+  `types/overrides.rs`. Candle RoPE and Conformer blocks live in
+  `runtime/candle/conformer/{rope,blocks}.rs`.
 
 ### Fixed
 
