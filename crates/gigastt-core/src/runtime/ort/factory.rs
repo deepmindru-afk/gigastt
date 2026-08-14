@@ -303,8 +303,8 @@ pub(crate) fn production_factory_variant(
         // Shared PrepackedWeights across every session this factory creates.
         // ORT still materializes per-session initializers for most graphs; the
         // container shares prepacked kernel buffers when the EP supports it.
-        // Enabled as the weight-share spike: remeasure pool1→2 RSS after deploy
-        // (see specs/research theories T-002 / T-021). Safe no-op if unused.
+        // Enabled so an extra pool slot can share prepacked kernel buffers.
+        // Remeasure the pool-1→2 RSS after ORT upgrades. Safe no-op if unused.
         let prepacked = std::sync::Arc::new(ort::session::builder::PrepackedWeights::new());
         OrtFactory::cpu()
             .with_optimized_cache_dir(model_dir.join("optimized_cache"))

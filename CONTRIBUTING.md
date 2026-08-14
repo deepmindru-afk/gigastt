@@ -9,7 +9,7 @@ cargo build --features cuda            # Linux x86_64 with CUDA 12+
 cargo build -p gigastt-ffi             # C-ABI FFI layer (Android / mobile)
 
 cargo test --workspace --lib --bins    # unit tests (no model needed)
-cargo clippy --workspace -- -D warnings -A dead_code
+cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all -- --check
 ```
 
@@ -42,7 +42,7 @@ source of truth, and out-of-band uploads break SHA-pinned clients (e.g. Murmur).
 
 1. **Bump version** in `Cargo.toml` (`version = "x.y.z"`). Run `cargo check` so `Cargo.lock` updates.
 2. **Update `CHANGELOG.md`**: move the `## [Unreleased]` bullets into a new `## [x.y.z] - YYYY-MM-DD` section; leave an empty `## [Unreleased]` for the next cycle.
-3. **Verify locally**: `cargo test --workspace --lib --bins && cargo clippy --workspace -- -D warnings -A dead_code && cargo fmt --all -- --check && python3 scripts/check-docs-drift.py`.
+3. **Verify locally**: `cargo test --workspace --lib --bins && cargo clippy --workspace --all-targets -- -D warnings && cargo fmt --all -- --check && python3 scripts/check-docs-drift.py`.
 4. **Commit**: `chore: bump version to x.y.z, update CHANGELOG`.
 5. **Tag & push** (signed):
    ```sh

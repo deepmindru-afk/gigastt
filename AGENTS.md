@@ -168,31 +168,34 @@ crates/
   gigastt-core/src/       # Core library (inference engine, no server deps)
     lib.rs                # Public module exports
     error.rs              # Typed error types (GigasttError)
-    export.rs             # Transcript export: TXT / SRT / VTT / Markdown
-    punctuation.rs        # Punctuation restoration (windowed)
+    export/               # Transcript export: TXT / SRT / VTT / Markdown
+    punctuation/          # Punctuation restoration (windowed)
     itn.rs · lexicon.rs   # Inverse text normalization, lexicon
-    vad.rs                # Voice activity detection
+    vad/                  # Voice activity detection
     inference/
       mod.rs              # Module wiring + shared constants (N_MELS, N_FFT, HOP_LENGTH, PRED_HIDDEN)
-      engine.rs           # Engine: load, warmup, transcribe, streaming decode loop
+      engine/             # Engine: load, warmup, transcribe, streaming decode loop
+                          #   (config / load / stream / transcribe / infer)
       pool.rs             # SessionPool (checkout, backpressure)
       state.rs            # StreamingState / DecoderState
       features.rs         # Mel spectrogram (64 bins, FFT=320, hop=160, HTK)
       tokenizer.rs        # Vocabulary: char (rnnt, 34) / BPE (e2e_rnnt, 1025) / multilingual char (ml_ctc, 71)
-      decode.rs           # RNN-T greedy decode loop
+      decode/             # RNN-T greedy decode loop
       ctc.rs              # Greedy CTC decode (ml_ctc heads — no decoder / joiner)
       bias.rs             # Hotword biasing
       diarization.rs      # polyvoice glue: Embedder adapter, offline + streaming pipelines
       types.rs            # TranscribeRequest / TranscribeResult and friends
       audio/              # Decode, resample, channel mixing, windowing, VAD windows, telephony
     runtime/              # Backend seam — THIS is where execution providers are chosen
-      factory.rs          # cfg-gated EP/backend selection (coreml / cuda / nnapi / ane / candle / CPU)
+      factory.rs          # RuntimeFactory / Runtime traits only
+      ort/factory.rs      # cfg-gated EP/backend selection (coreml / cuda / nnapi / ane / candle / CPU)
       session.rs · tensor.rs · error.rs
       ort/ · coreml/ · candle/ · mock/
     protocol/mod.rs       # WebSocket JSON message types (Ready, Partial, Final, Error)
-    model/                # Model download (streaming + SHA256 + atomic rename), cache, manifest
-  gigastt-core/proto/
-    onnx.proto            # Vendored ONNX protobuf schema
+    model/                # Model download (streaming + SHA256 + atomic rename)
+                          #   (progress / variant / download / cache / manifest)
+  gigastt-quantize/proto/
+    onnx.proto            # Vendored ONNX protobuf schema (quantizer crate)
   gigastt-ffi/src/        # C-ABI FFI layer (cdylib for Android/mobile)
     lib.rs                # Exported C functions: engine_new, transcribe_file, stream_*, etc.
   gigastt-node/           # napi-rs Node binding
@@ -218,7 +221,8 @@ sdks/
 
 ## Key Constants
 
-Defined in `crates/gigastt-core/src/inference/mod.rs`:
+Defined in `crates/gigastt-core/src/inference/mod.rs` (`N_MELS` / `N_FFT` /
+`HOP_LENGTH` / `PRED_HIDDEN`) and `engine/mod.rs` (`DEFAULT_POOL_SIZE`):
 
 | Constant | Value | Meaning |
 |---|---|---|
@@ -251,8 +255,9 @@ The `e2e_rnnt` head (`--model-variant e2e_rnnt`) uses the parallel `v3_e2e_rnnt_
 - **No `unwrap()` in production paths** — use `?`, `.context()`, or `unwrap_or_else`
 - Shared constants live in `inference/mod.rs`, referenced by sub-modules
 - `ort` errors are converted to typed `RuntimeError` at the `runtime/ort` seam (no `anyhow` wrapping)
-- Execution provider / backend selection lives in `crates/gigastt-core/src/runtime/factory.rs`
-  (`#[cfg(feature = "…")]` blocks, default falls through to the CPU EP) — **not** in `inference/`
+- Execution provider / backend selection lives in `crates/gigastt-core/src/runtime/ort/factory.rs`
+  (`#[cfg(feature = "…")]` blocks, default falls through to the CPU EP) — **not** in `inference/`.
+  `runtime/factory.rs` holds only the `RuntimeFactory` / `Runtime` traits.
 - **No internal task-tracker IDs outside the tracker itself.** Never write tracker indices (`TTX-NN`, `T-NNN`, `V1-NN`, `SUS-NN`, `TODO-NN`, ticket keys, etc.) into:
   - source comments or code strings
   - `CHANGELOG.md`, `docs/`, CI/workflows, README, user-facing text
@@ -313,7 +318,7 @@ The `e2e_rnnt` head (`--model-variant e2e_rnnt`) uses the parallel `v3_e2e_rnnt_
 ### E2E test strategy
 
 - E2E tests run **only on main push**, not on PRs, to keep PR feedback fast
-- Model is cached via `actions/cache` with key derived from `crates/gigastt-core/src/model/mod.rs`
+- Model is cached via `actions/cache` with key derived from `crates/gigastt-core/src/model/`
 - E2E tests run with `--test-threads=1` because each loads the full ONNX model
   into memory; concurrent runs OOM on CI runners
 
@@ -495,7 +500,7 @@ RUST_LOG=gigastt=debug cargo run -- serve
   both `main.rs` and this file.
 - The `quantize` Cargo feature enables `crates/gigastt-quantize` (on by default
   for the server binary). Lean embedders may disable it and side-load INT8 only.
-- Model download logic is in `crates/gigastt-core/src/model/mod.rs`. If you change HF repo or file
+- Model download logic is in `crates/gigastt-core/src/model/`. If you change HF repo or file
   names, update `MODEL_CHECKSUMS` and the cache key in `.github/workflows/ci.yml`.
 - The project uses English for all code comments, documentation, and commit
   messages.

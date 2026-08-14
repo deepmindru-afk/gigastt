@@ -1,10 +1,10 @@
 # gigastt — fix-rollout plan
 
 > **Superseded — historical record.** This plan covers the v0.5 → v2.5 rollout and
-> stops at Phase 10 (2026-07-09). The shipped state is far past it (2.16.0 as of
-> 2026-07-30), and the carry-over list below is stale: several items marked open
-> here have since landed. For what is actually released, read `CHANGELOG.md`; for
-> the active backlog, read `specs/resource-ttx-roadmap.md`.
+> stops at Phase 10 (2026-07-09). The shipped state is far past it (2.17.0 as of
+> 2026-08-13), and the carry-over list below is stale: several items marked open
+> here have since landed. For what is actually released, read `CHANGELOG.md`.
+> There is no standing local task queue.
 
 Plan of attack for the follow-ups in `specs/todo.md`. Ordered so
 that each milestone unblocks the next and keeps `main` shippable

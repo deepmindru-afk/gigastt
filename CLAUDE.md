@@ -62,22 +62,23 @@ The Dockerfile passes `--bind-all` so the server listens on `0.0.0.0` inside the
 crates/
   gigastt-core/src/       # Core library (inference engine, no server deps)
     lib.rs                # Public module exports
-    model/mod.rs          # HuggingFace model download (streaming + SHA256 + atomic rename)
+    model/                # HuggingFace model download (streaming + SHA256 + atomic rename)
     inference/
       mod.rs              # Module wiring + shared constants
-      engine.rs           # Engine: load, warmup, transcribe, streaming decode loop
+      engine/             # Engine: load, warmup, transcribe, streaming (split impl)
       pool.rs             # SessionPool (checkout, backpressure)
       state.rs            # StreamingState / DecoderState
       features.rs         # Mel spectrogram (64 bins, FFT=320, hop=160, HTK)
       tokenizer.rs        # Vocabulary per head: char (rnnt) / BPE (e2e_rnnt) / multilingual char (ml_ctc)
-      decode.rs           # RNN-T greedy decode loop
+      decode/             # RNN-T greedy decode loop
       ctc.rs              # Greedy CTC decode (ml_ctc heads)
       bias.rs             # Hotword biasing
       diarization.rs      # polyvoice glue (Embedder adapter, offline + streaming)
       types.rs            # TranscribeRequest / TranscribeResult
       audio/              # Decode, resample, channel mixing, windowing, VAD windows, telephony
     runtime/              # Backend seam: EP/backend selection lives here, NOT in inference/
-      factory.rs          # cfg-gated coreml / cuda / nnapi / ane / candle / CPU
+      factory.rs          # RuntimeFactory / Runtime traits
+      ort/factory.rs      # cfg-gated coreml / cuda / nnapi / ane / candle / CPU
       ort/ · coreml/ · candle/ · mock/
     error.rs              # Typed error types (GigasttError)
     protocol/mod.rs       # JSON message types (Ready, Partial, Final, Error + retry_after_ms)
@@ -205,7 +206,7 @@ OpenSLR download that does not fit the CI cache budget, so these never run in CI
 - No `unwrap()` in production paths (use `?`, `context()`, or `unwrap_or_else`)
 - Shared constants in `crates/gigastt-core/src/inference/mod.rs`, referenced by sub-modules
 - `ort` errors are converted to typed `RuntimeError` at the `runtime/ort` seam (no `anyhow` wrapping)
-- Execution provider / backend selection lives in `crates/gigastt-core/src/runtime/factory.rs` (`#[cfg(feature = "…")]` blocks for coreml / cuda / nnapi / ane / candle); default falls through to CPU EP. It is **not** in `inference/`
+- Execution provider / backend selection lives in `crates/gigastt-core/src/runtime/ort/factory.rs` (`#[cfg(feature = "…")]` blocks for coreml / cuda / nnapi / ane / candle); default falls through to CPU EP. `runtime/factory.rs` is the trait surface only. It is **not** in `inference/`
 - **No internal task-tracker IDs outside the tracker itself.** Never write tracker indices (`TTX-NN`, `T-NNN`, `V1-NN`, `SUS-NN`, `TODO-NN`, ticket keys, etc.) into source comments/code, `CHANGELOG.md`, `docs/`, CI/workflows, README, user-facing text, **git branch names**, **commit subjects/bodies**, or **PR titles/descriptions**. They are noise without the tracker. Use conventional language only (e.g. branch `ttx/lazy-speaker`, commit `feat(core): lazy-load speaker encoder…`). Link work to a tracked item only inside tracker docs: anything under `specs/` (notably `specs/todo.md`, `specs/plan.md`, `specs/prod-readiness-v1.0.md`, `specs/resource-ttx-roadmap.md`, and lab notes under `specs/research/`) or `roadmap/` — both are the tracker. Everything outside those two directories must stay index-free.
 
 ### Audio format support
@@ -291,4 +292,4 @@ So both stay self-contained on the essentials, and the two overlap on purpose:
 
 When a fact appears in both, `AGENTS.md` wins and this file must be updated to
 match. Facts that live in exactly one place: the shipped state of the code is
-`CHANGELOG.md`, the active backlog is `specs/resource-ttx-roadmap.md`.
+`CHANGELOG.md`. There is no standing local task queue.

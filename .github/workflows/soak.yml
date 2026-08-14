@@ -42,7 +42,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.gigastt/models
-          key: gigastt-model-v3-onnx-${{ hashFiles('crates/gigastt-core/src/model/mod.rs') }}
+          key: gigastt-model-v3-onnx-${{ hashFiles('crates/gigastt-core/src/model/**') }}
 
       - name: Download model
         if: steps.cache-model.outputs.cache-hit != 'true'

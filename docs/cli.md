@@ -104,8 +104,9 @@ gigastt serve [OPTIONS]
   --rate-limit-burst <N>    Token-bucket burst size [default: 10].
                             Env: GIGASTT_RATE_LIMIT_BURST.
   --trust-proxy             Trust X-Forwarded-For / X-Real-IP for rate-limit IP
-                            extraction (only when the direct peer is loopback or
-                            RFC1918 private). Env: GIGASTT_TRUST_PROXY.
+                            extraction (only when the direct peer is loopback,
+                            RFC1918, IPv6 unique-local, or IPv6 link-local).
+                            Env: GIGASTT_TRUST_PROXY.
   --metrics                 Expose Prometheus metrics at GET /metrics.
                             Off by default. Env: GIGASTT_METRICS.
   --metrics-listen <ADDR>   Bind address for the separate metrics listener

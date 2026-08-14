@@ -58,7 +58,7 @@ gigastt download --model-variant e2e_rnnt
 gigastt serve --model-variant e2e_rnnt
 ```
 
-Правила автоопределения (из `crates/gigastt-core/src/model/mod.rs`):
+Правила автоопределения (из `crates/gigastt-core/src/model/variant.rs`):
 
 - Без `--model-variant` движок определяет установленную голову по файлам в
   каталоге модели и использует полный комплект **как есть** (вообще без

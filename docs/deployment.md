@@ -140,7 +140,7 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ## Rate-limiter & X-Forwarded-For
 
-When `--rate-limit-per-minute` is enabled, gigastt reads the peer IP from `X-Forwarded-For` (first hop, trimmed), then `X-Real-IP`, then the TCP `ConnectInfo` — see `crates/gigastt/src/server/rate_limit.rs::extract_client_ip` — so each real client gets its own token bucket instead of hashing every request behind the single proxy IP.
+When `--rate-limit-per-minute` is enabled, gigastt reads the peer IP from `X-Forwarded-For` (first hop, trimmed), then `X-Real-IP`, then the TCP `ConnectInfo` — see `crates/gigastt/src/server/rate_limit.rs::extract_client_ip` — so each real client gets its own token bucket instead of hashing every request behind the single proxy IP. Forwarded headers are honoured only when `--trust-proxy` is set **and** the direct peer is loopback, RFC1918, IPv6 unique-local (`fc00::/7`), or IPv6 link-local.
 
 **The proxy is the trust boundary.** A client can put any value they want in an `X-Forwarded-For` header they send you; if the proxy blindly passes that header through (or _appends_ the peer address to the client's forgery), the rate-limiter bucket is keyed on attacker-controlled data and easily bypassed.
 
@@ -153,7 +153,7 @@ If you deploy without a proxy (not recommended for public exposure), leave `--ra
 When a browser at `https://stt.example.com` makes a request through the proxy, it sets `Origin: https://stt.example.com`.
 
 **Default (no action needed):**
-Loopback Origins (`http://127.0.0.1:*`, `http://[::1]:*`, `http://localhost:*`) are always allowed. Since your browser talks to the proxy (not directly to the server), you don't need to add the origin to gigastt.
+Loopback Origins (`http://127.0.0.1:*`, `http://[::1]:*`, `http://localhost:*`) are always allowed. A missing `Origin` header (curl, native SDK) is allowed. Opaque `Origin: null` (sandboxed iframe / `data:` document) is **denied**. Since your browser talks to the proxy (not directly to the server), you don't need to add the origin to gigastt.
 
 **If you want to talk directly to gigastt** (same machine, `http://localhost:9876`):
 ```sh
