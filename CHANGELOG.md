@@ -49,7 +49,9 @@ were released without a git tag, so their headings carry no compare link.
   packet framing lives in `audio/opus/framing.rs`. The server bind /
   drain / SIGHUP reload loop lives in `server/listen.rs`. Audio
   `BytesMediaSource`, header duration probe, and per-channel decode live
-  in `audio/decode/{bytes_source,probe,channels}.rs`.
+  in `audio/decode/{bytes_source,probe,channels}.rs`. The INT8 quantizer
+  graph rewrite lives in `gigastt-quantize` `graph.rs`; per-channel
+  weight math lives in `weights.rs`.
 
 ### Fixed
 
