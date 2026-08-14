@@ -29,7 +29,6 @@ fn test_peer_is_loopback_guard() {
 }
 
 #[tokio::test]
-#[ignore = "requires model"]
 async fn test_reload_rejects_non_loopback_peer() {
     // The loopback guard fires before any engine work: a non-loopback
     // ConnectInfo yields 403 `loopback_only` even with a builder present.
@@ -62,7 +61,6 @@ async fn test_reload_rejects_non_loopback_peer() {
 }
 
 #[tokio::test]
-#[ignore = "requires model"]
 async fn test_reload_unsupported_when_no_builder() {
     // A loopback peer with no stored builder (the thin `run_with_shutdown` /
     // test path) gets `reload_unsupported`, not a swap.

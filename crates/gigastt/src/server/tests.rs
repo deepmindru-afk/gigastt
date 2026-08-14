@@ -90,14 +90,18 @@ fn test_json_text_fallback_on_serialization_error() {
     );
 }
 
+mod live;
+
+fn mock_engine() -> (gigastt_core::inference::Engine, tempfile::TempDir) {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    gigastt_core::test_support::write_rnnt_layout(tmp.path()).expect("layout");
+    let engine = gigastt_core::test_support::load_rnnt_engine(tmp.path(), 1).expect("mock engine");
+    (engine, tmp)
+}
+
 #[tokio::test]
-#[ignore = "requires model"]
 async fn test_run_with_shutdown_starts_and_stops() {
-    let engine = gigastt_core::inference::Engine::load_with_pool_size(
-        &gigastt_core::model::default_model_dir(),
-        1,
-    )
-    .unwrap();
+    let (engine, _tmp) = mock_engine();
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
     let handle =
         tokio::spawn(
@@ -110,13 +114,8 @@ async fn test_run_with_shutdown_starts_and_stops() {
 }
 
 #[tokio::test]
-#[ignore = "requires model"]
 async fn test_run_with_config_listener_clamps_zero_timeout() {
-    let engine = gigastt_core::inference::Engine::load_with_pool_size(
-        &gigastt_core::model::default_model_dir(),
-        1,
-    )
-    .unwrap();
+    let (engine, _tmp) = mock_engine();
     let mut config = ServerConfig::local(0);
     config.limits.pool_checkout_timeout_secs = 0;
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();

@@ -73,6 +73,11 @@ mod wordpiece;
 
 pub use runtime::cpu_factory;
 
+/// Model-free mock engines for tests. Behind `__internals` (and `cfg(test)`
+/// inside this crate). Not a stable public surface.
+#[cfg(any(test, feature = "__internals"))]
+pub mod test_support;
+
 /// Runtime abstraction surface needed to drive backends directly (e.g. parity
 /// tests that construct and compare the ort and candle encoder sessions).
 pub mod runtime_api {

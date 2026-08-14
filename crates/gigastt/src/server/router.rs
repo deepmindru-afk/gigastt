@@ -69,3 +69,16 @@ pub(crate) fn protected_v1_router(jobs_enabled: bool) -> Router<Arc<http::AppSta
         protected
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_protected_v1_router_builds_with_and_without_jobs() {
+        // Both branches must construct: jobs routes are only registered when
+        // the flag is on, and a panic here would be a boot-time outage.
+        let _ = protected_v1_router(false);
+        let _ = protected_v1_router(true);
+    }
+}

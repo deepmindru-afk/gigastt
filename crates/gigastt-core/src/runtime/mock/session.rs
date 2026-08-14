@@ -87,6 +87,9 @@ pub struct MockSession {
     /// [`MockSession::with_script`]).
     script: Option<Vec<Vec<Tensor>>>,
     call_count: AtomicUsize,
+    /// When false, `run` skips input-count and shape checks so a scripted
+    /// encoder can accept any audio length (REST/SSE/jobs tests).
+    check_inputs: bool,
 }
 
 #[allow(dead_code)]
@@ -97,6 +100,20 @@ impl MockSession {
             outputs,
             script: None,
             call_count: AtomicUsize::new(0),
+            check_inputs: true,
+        }
+    }
+
+    /// Return `outputs` for every call and accept any input tensors.
+    ///
+    /// Used for encoder mocks whose time dimension follows the clip length.
+    pub fn unconstrained(outputs: Vec<Tensor>) -> Self {
+        Self {
+            expected_inputs: Vec::new(),
+            outputs,
+            script: None,
+            call_count: AtomicUsize::new(0),
+            check_inputs: false,
         }
     }
 
@@ -121,24 +138,27 @@ impl Clone for MockSession {
             outputs: self.outputs.clone(),
             script: self.script.clone(),
             call_count: AtomicUsize::new(self.call_count.load(Ordering::Relaxed)),
+            check_inputs: self.check_inputs,
         }
     }
 }
 
 impl RuntimeSession for MockSession {
     fn run(&self, inputs: &[Tensor]) -> Result<Vec<Tensor>, RuntimeError> {
-        if inputs.len() != self.expected_inputs.len() {
-            return Err(RuntimeError::InvalidInputCount {
-                expected: self.expected_inputs.len(),
-                got: inputs.len(),
-            });
-        }
-        for (actual, expected) in inputs.iter().zip(self.expected_inputs.iter()) {
-            if actual.shape() != expected {
-                return Err(RuntimeError::InvalidShape {
-                    expected: expected.clone(),
-                    got: actual.shape().clone(),
+        if self.check_inputs {
+            if inputs.len() != self.expected_inputs.len() {
+                return Err(RuntimeError::InvalidInputCount {
+                    expected: self.expected_inputs.len(),
+                    got: inputs.len(),
                 });
+            }
+            for (actual, expected) in inputs.iter().zip(self.expected_inputs.iter()) {
+                if actual.shape() != expected {
+                    return Err(RuntimeError::InvalidShape {
+                        expected: expected.clone(),
+                        got: actual.shape().clone(),
+                    });
+                }
             }
         }
         let call = self.call_count.fetch_add(1, Ordering::Relaxed);
@@ -219,6 +239,18 @@ mod tests {
         let input = Tensor::new(Shape::new(vec![1]), TensorData::F32(vec![0.0])).unwrap();
         let outputs = session.run(&[input]).unwrap();
         assert_eq!(outputs.len(), 1);
+    }
+
+    #[test]
+    fn test_mock_session_unconstrained_accepts_any_input_shape() {
+        let session = MockSession::unconstrained(vec![
+            Tensor::new(Shape::new(vec![1]), TensorData::F32(vec![7.0])).unwrap(),
+        ]);
+        let input =
+            Tensor::new(Shape::new(vec![1, 64, 9]), TensorData::F32(vec![0.0; 576])).unwrap();
+        let outputs = session.run(&[input]).unwrap();
+        assert_eq!(outputs[0].view().data().as_f32().unwrap()[0], 7.0);
+        assert_eq!(session.call_count(), 1);
     }
 
     #[test]
