@@ -57,7 +57,7 @@ publishes tarballs for `x86_64-unknown-linux-gnu` and
 `aarch64-unknown-linux-gnu`:
 
 ```sh
-# Resolve the latest release tag (or set TAG=v2.17.0 by hand):
+# Resolve the latest release tag (or set TAG=v2.18.0 by hand):
 TAG=$(curl -fsSL https://api.github.com/repos/ekhodzitsky/gigastt/releases/latest \
       | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
 VER=${TAG#v}
@@ -100,7 +100,7 @@ Every release publishes `x86_64-pc-windows-msvc` tarballs (CPU). PowerShell
 
 ```powershell
 $rel = Invoke-RestMethod https://api.github.com/repos/ekhodzitsky/gigastt/releases/latest
-$TAG = $rel.tag_name          # e.g. v2.17.0
+$TAG = $rel.tag_name          # e.g. v2.18.0
 $VER = $TAG.TrimStart('v')
 $asset = "gigastt-$VER-x86_64-pc-windows-msvc.tar.gz"
 $base = "https://github.com/ekhodzitsky/gigastt/releases/download/$TAG"
@@ -161,7 +161,7 @@ curl -F file=@recording.wav http://127.0.0.1:9876/v1/transcribe
 **Verify:** `/health` returns
 
 ```json
-{"status":"ok","model":"gigaam-v3-rnnt","variant":"rnnt","version":"2.17.0","punctuation":true,"itn":true}
+{"status":"ok","model":"gigaam-v3-rnnt","variant":"rnnt","version":"2.18.0","punctuation":true,"itn":true}
 ```
 
 (the `version` field reflects the image you pulled), and the POST returns a

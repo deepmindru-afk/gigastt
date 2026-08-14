@@ -10,6 +10,8 @@ were released without a git tag, so their headings carry no compare link.
 
 ## [Unreleased]
 
+## [2.18.0] - 2026-08-14
+
 ### Security
 
 - **Engine load re-checks pinned SHA-256** of the INT8 encoder (and any
@@ -107,6 +109,21 @@ were released without a git tag, so their headings carry no compare link.
   weights are present (including a custom encoder named by `manifest.toml`);
   it still drops legacy `*_optimized.onnx` graphs and `.ort` graphs whose
   encoder is not installed.
+
+- **Job sanitizer recognizes typed `InvalidAudio`.** The error displays as
+  lowercase `invalid audio: …`; the matcher only looked for title case, so a
+  corrupt upload became the generic "Transcription failed." Clients again get
+  "Failed to decode audio file. Check format."
+
+### Changed
+
+- **polyvoice 0.12 → 0.14** for speaker diarization. Crate-root `Pipeline` is
+  now the v2 ONNX stack and is gated behind download/segmentation features
+  this crate does not enable. The BYO path stays on `LegacyPipeline` (same
+  `Embedder` + `EnergyVad` contract).
+- **rubato 4 → 5** for the polyphase resampler. The public
+  `StreamingState.resampler` field type follows; create the state via
+  `Engine::create_state`.
 
 ## [2.17.0] - 2026-08-10
 
@@ -2511,7 +2528,8 @@ _Release candidate for v0.9.0 — bundles five P0 fixes plus two supporting item
 - Multi-format audio support: WAV, MP3, M4A/AAC, OGG/Vorbis, FLAC (via symphonia).
 - 39 unit tests (tokenizer, features, decode, inference, protocol).
 
-[Unreleased]: https://github.com/ekhodzitsky/gigastt/compare/v2.16.0...HEAD
+[Unreleased]: https://github.com/ekhodzitsky/gigastt/compare/v2.18.0...HEAD
+[2.18.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.17.0...v2.18.0
 [2.17.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.16.0...v2.17.0
 [2.16.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.15.0...v2.16.0
 [2.0.9]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.8...v2.0.9
