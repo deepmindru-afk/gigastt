@@ -434,3 +434,47 @@ pub(crate) async fn run_watch(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_batch_options_defaults() {
+        let out = BatchOutputArgs {
+            format: "txt,json".into(),
+            move_to: None,
+            delete_source: false,
+            retries: None,
+            max_chars_per_line: None,
+            max_words_per_line: None,
+            word_timestamps: false,
+        };
+        let opts = build_batch_options("/in", "/out", 2, 3, &out).expect("opts");
+        assert_eq!(opts.input_dir, std::path::PathBuf::from("/in"));
+        assert_eq!(opts.output_dir, std::path::PathBuf::from("/out"));
+        assert_eq!(opts.concurrency, 2);
+        assert_eq!(opts.retries, 3);
+        assert_eq!(opts.render_opts.max_chars_per_line, 80);
+        assert_eq!(opts.render_opts.max_words_per_line, 14);
+        assert!(!opts.delete_source);
+    }
+
+    #[test]
+    fn test_make_transcribe_fn_reads_wav() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        gigastt_core::test_support::write_rnnt_layout(tmp.path()).expect("layout");
+        let engine = std::sync::Arc::new(
+            gigastt_core::test_support::load_rnnt_engine(tmp.path(), 1).expect("engine"),
+        );
+        let wav = tmp.path().join("clip.wav");
+        std::fs::write(
+            &wav,
+            gigastt_core::test_support::pcm16_wav(&[0i16; 320], 16_000),
+        )
+        .expect("wav");
+        let f = make_transcribe_fn(engine);
+        let result = f(wav).expect("transcribe");
+        assert!(result.duration_s > 0.0);
+    }
+}

@@ -10,12 +10,13 @@
 # coverage (~75%) until Coverage (E2E) finishes (~20+ min later), and the
 # badge dips even though real merged coverage is unchanged.
 #
-# Merged line coverage of production paths is ~90–91%. The remaining
-# uncovered lines are dominated by fault-injection-only paths (ONNX-runtime
-# internal failures, network model-download errors, forced panics /
-# inference timeouts, OS-signal handlers) and defensive guards that are
-# unreachable in normal operation — deliberately left untested rather than
-# covered with brittle mocks.
+# Unit coverage (`--lib --bins`) is ~78% after the mock-engine layer
+# (HTTP / WS / jobs / OpenAI / CLI helpers run without the INT8 model).
+# Merged with the e2e flag (main-push) is the number on the badge.
+# Remaining uncovered lines are dominated by fault-injection-only paths
+# (ONNX-runtime internal failures, network model-download errors, forced
+# panics / inference timeouts, OS-signal handlers) and `process::exit`
+# / SIGINT arms that cannot return to the test harness.
 
 codecov:
   require_ci_to_pass: true
@@ -34,8 +35,10 @@ coverage:
         informational: false
     patch:
       default:
-        # New / changed lines should be well covered.
-        target: 80%
+        # New / changed lines should be well covered. Mock-engine tests
+        # make HTTP / WS / jobs / OpenAI paths unit-testable, so the
+        # bar is the SOTA floor rather than a model-gated 80%.
+        target: 90%
         threshold: 0%
         informational: false
 

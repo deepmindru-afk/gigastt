@@ -164,3 +164,35 @@ pub(crate) async fn run_download(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_run_quantize_noops_when_int8_already_present() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        std::fs::write(tmp.path().join("v3_rnnt_encoder_int8.onnx"), b"int8").unwrap();
+        run_quantize(tmp.path().display().to_string(), false).expect("existing INT8 is a no-op");
+        assert!(!tmp.path().join("v3_rnnt_encoder.onnx").exists());
+    }
+
+    #[test]
+    fn test_run_quantize_errors_when_fp32_missing() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let err = run_quantize(tmp.path().display().to_string(), true)
+            .expect_err("force still needs FP32");
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("FP32 encoder not found"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_run_cache_gc_empty_dir_is_ok() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        run_cache_gc(tmp.path().display().to_string(), true, true).expect("empty dry-run");
+        run_cache_gc(tmp.path().display().to_string(), false, false).expect("empty prune");
+    }
+}

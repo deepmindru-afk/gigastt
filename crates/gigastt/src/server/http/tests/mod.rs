@@ -36,15 +36,19 @@ pub(super) fn test_engine() -> Arc<Engine> {
     static ENGINE: OnceLock<Arc<Engine>> = OnceLock::new();
     ENGINE
         .get_or_init(|| {
+            let tmp = tempfile::tempdir().expect("tempdir");
+            gigastt_core::test_support::write_rnnt_layout(tmp.path()).expect("layout");
             Arc::new(
-                Engine::load_with_pool_size(&gigastt_core::model::default_model_dir(), 1).unwrap(),
+                gigastt_core::test_support::load_rnnt_engine(tmp.path(), 1).expect("mock engine"),
             )
         })
         .clone()
 }
 
 pub(super) fn fresh_engine() -> Arc<Engine> {
-    Arc::new(Engine::load_with_pool_size(&gigastt_core::model::default_model_dir(), 1).unwrap())
+    let tmp = tempfile::tempdir().expect("tempdir");
+    gigastt_core::test_support::write_rnnt_layout(tmp.path()).expect("layout");
+    Arc::new(gigastt_core::test_support::load_rnnt_engine(tmp.path(), 1).expect("mock engine"))
 }
 
 /// Wrap an engine handle in the `ArcSwap` the `AppState` now holds. Keeps
@@ -106,5 +110,6 @@ mod codec;
 mod error;
 mod export;
 mod handlers;
+mod jobs;
 mod serde_contract;
 mod sse;
