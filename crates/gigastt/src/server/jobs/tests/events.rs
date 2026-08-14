@@ -10,6 +10,15 @@ fn test_sanitize_job_error_maps_known_errors() {
         sanitize_job_error(&anyhow::anyhow!("Invalid audio: unsupported format")),
         "Failed to decode audio file. Check format."
     );
+    // Typed InvalidAudio displays as lowercase "invalid audio: …".
+    let decode: anyhow::Error = gigastt_core::error::GigasttError::InvalidAudio {
+        reason: "unsupported format".into(),
+    }
+    .into();
+    assert_eq!(
+        sanitize_job_error(&decode),
+        "Failed to decode audio file. Check format."
+    );
     assert_eq!(
         sanitize_job_error(&anyhow::anyhow!("some internal onnx path /foo/bar")),
         "Transcription failed."

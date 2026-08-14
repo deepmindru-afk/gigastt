@@ -295,19 +295,27 @@ pub(crate) fn sanitize_job_error(e: &anyhow::Error) -> String {
     // `--max-audio-secs` or split) from "corrupt" — the same distinction the REST
     // path answers with 413. The blocking result reaches us via
     // `anyhow::Error::from`, so the concrete variant survives the downcast.
-    if let Some(gigastt_core::error::GigasttError::AudioTooLong {
-        observed_secs,
-        limit_secs,
-    }) = e.downcast_ref::<gigastt_core::error::GigasttError>()
-    {
-        return format!(
-            "Audio too long: {observed_secs:.0}s exceeds the maximum of {limit_secs:.0}s."
-        );
+    if let Some(err) = e.downcast_ref::<gigastt_core::error::GigasttError>() {
+        match err {
+            gigastt_core::error::GigasttError::AudioTooLong {
+                observed_secs,
+                limit_secs,
+            } => {
+                return format!(
+                    "Audio too long: {observed_secs:.0}s exceeds the maximum of {limit_secs:.0}s."
+                );
+            }
+            gigastt_core::error::GigasttError::InvalidAudio { .. } => {
+                return "Failed to decode audio file. Check format.".into();
+            }
+            _ => {}
+        }
     }
     let msg = format!("{e:#}");
-    if msg.contains("inference_timeout") {
+    let lower = msg.to_ascii_lowercase();
+    if lower.contains("inference_timeout") {
         "Inference timed out.".into()
-    } else if msg.contains("Invalid audio") {
+    } else if lower.contains("invalid audio") {
         "Failed to decode audio file. Check format.".into()
     } else {
         "Transcription failed.".into()
