@@ -1,0 +1,48 @@
+{
+  "protocol": "1.0",
+  "measured": "2026-08-14",
+  "machine": "Apple M1 Pro, CPU INT8, rnnt",
+  "note": "First 100 clips of each committed manifest. WER used default --pool-size 2. Latency used --pool-size 1. Not the 1000-row competitor table.",
+  "wer": {
+    "golos_crowd_1k": {
+      "n": 100,
+      "wer_batch": 4.97,
+      "wer_stream": 19.46,
+      "delta_pp": 14.49,
+      "ci_low": 10.91,
+      "ci_high": 18.24,
+      "stream_failures": 2
+    },
+    "golos_farfield": {
+      "n": 100,
+      "wer_batch": 4.82,
+      "wer_stream": 15.42,
+      "delta_pp": 10.6,
+      "ci_low": 6.53,
+      "ci_high": 15.09,
+      "stream_failures": 0
+    }
+  },
+  "latency": {
+    "golos_crowd_1k": {
+      "n": 100,
+      "n_timeout": 0,
+      "n_no_partial": 2,
+      "n_error": 2,
+      "ttfp_ms": {"n": 98, "p50": 1652.5, "p95": 2627.9, "max": 3044.8},
+      "ttfs_ms": {"n": 89, "p50": 802.5, "p95": 2513.7, "max": 3044.8},
+      "partial_lag_ms": {"n": 452, "p50": 51.4, "p95": 100.2, "max": 298.1},
+      "finalization_lag_ms": {"n": 98, "p50": 4284.2, "p95": 7324.9, "max": 10753.8}
+    },
+    "golos_farfield": {
+      "n": 100,
+      "n_timeout": 0,
+      "n_no_partial": 0,
+      "n_error": 0,
+      "ttfp_ms": {"n": 100, "p50": 819.8, "p95": 828.8, "max": 1704.3},
+      "ttfs_ms": {"n": 42, "p50": 500.1, "p95": 656.1, "max": 731.0, "note": "non-negative only; 45 no onset, 13 onset-after-partial dropped"},
+      "partial_lag_ms": {"n": 310, "p50": 41.4, "p95": 113.7, "max": 442.9},
+      "finalization_lag_ms": {"n": 100, "p50": 2786.7, "p95": 5442.6, "max": 7453.9}
+    }
+  }
+}
