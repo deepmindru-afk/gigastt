@@ -26,9 +26,10 @@ were released without a git tag, so their headings carry no compare link.
 - Windows `cargo test --workspace --lib --bins` CI job.
 - Nightly AddressSanitizer job over the session pool (alongside Miri + TSAN).
 - `Engine` impl split into
-  `engine/{config,load,stream,transcribe,infer,words,channels,api}.rs`.
+  `engine/{config,load,stream,transcribe,infer,words,channels,api,file_stream}.rs`.
   Public transcribe wrappers live in `engine/api.rs`; the request
-  pipeline stays in `transcribe.rs`. Public API is unchanged.
+  pipeline stays in `transcribe.rs`; the windowed file path lives in
+  `file_stream.rs`. Public API is unchanged.
 - `model` download/identity split into `model/{progress,variant,download}.rs`;
   the streaming SHA-256 fetch lives in `download/fetch.rs`, ANE
   packages in `download/ane.rs`, and sidecar ensure (speaker / punct /
