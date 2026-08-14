@@ -174,6 +174,7 @@ pub struct Engine {
 mod api;
 mod channels;
 mod config;
+mod file_stream;
 mod infer;
 mod load;
 mod stream;
