@@ -26,8 +26,9 @@ were released without a git tag, so their headings carry no compare link.
 - Windows `cargo test --workspace --lib --bins` CI job.
 - Nightly AddressSanitizer job over the session pool (alongside Miri + TSAN).
 - `Engine` impl split into
-  `engine/{config,load,stream,transcribe,infer,words,channels}.rs`.
-  Public API is unchanged.
+  `engine/{config,load,stream,transcribe,infer,words,channels,api}.rs`.
+  Public transcribe wrappers live in `engine/api.rs`; the request
+  pipeline stays in `transcribe.rs`. Public API is unchanged.
 - `model` download/identity split into `model/{progress,variant,download}.rs`;
   the streaming SHA-256 fetch lives in `download/fetch.rs`, ANE
   packages in `download/ane.rs`, and sidecar ensure (speaker / punct /
@@ -43,7 +44,9 @@ were released without a git tag, so their headings carry no compare link.
   `FileWindows` lives in `audio/stream/file.rs`; window geometry stays in
   `stream.rs`. Dual-mono detection lives in `audio/decode/dual_mono.rs`;
   `ChannelScan` lives in `audio/decode/scan.rs`. VAD is split into
-  `vad/{config,silero,regions,segmenter,endpoint}.rs`.
+  `vad/{config,silero,regions,segmenter,endpoint}.rs`. Opus RFC 6716
+  packet framing lives in `audio/opus/framing.rs`. The server bind /
+  drain / SIGHUP reload loop lives in `server/listen.rs`.
 
 ### Fixed
 
