@@ -212,7 +212,11 @@ fn test_require_ane_tar_checksum_resolves_pinned_and_bails_unpinned() {
 fn test_fetch_offline_models_script_pins_match_crate_constants() {
     let script_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../scripts/fetch_offline_models.sh");
-    let script = std::fs::read_to_string(&script_path).expect("read fetch_offline_models.sh");
+    let script = std::fs::read_to_string(&script_path)
+        .expect("read fetch_offline_models.sh")
+        // Windows checkouts may use CRLF; join-continuations below match on `\n`.
+        .replace("\r\n", "\n")
+        .replace('\r', "\n");
 
     assert!(
         script.contains(PREQUANT_RELEASE_BASE),

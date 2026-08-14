@@ -6,7 +6,7 @@ use super::VadConfig;
 /// speech-sample spans. Pure (no model) so it is unit-testable on synthetic
 /// probabilities.
 ///
-/// `frame_samples` is the samples-per-probability stride ([`VAD_FRAME_SAMPLES`]
+/// `frame_samples` is the samples-per-probability stride ([`crate::vad::VAD_FRAME_SAMPLES`]
 /// in production); `total_samples` clamps the final span to the real signal
 /// length. Applies, in order: threshold, min-silence merge (gaps shorter than
 /// `min_silence_ms` do not split a region), min-speech drop, and symmetric
