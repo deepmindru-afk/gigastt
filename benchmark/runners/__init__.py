@@ -1,6 +1,7 @@
 """ASR benchmark runners."""
 
 from .gigastt import GigasttRunner, GigasttCoreMLRunner
+from .gigastt_stream import GigasttStreamRunner
 from .gigastt_ml_ctc import GigasttMlCtcRunner, GigasttMlCtcLargeRunner
 from .whisper_cpp import WhisperCppRunner
 from .faster_whisper import FasterWhisperRunner
@@ -11,6 +12,7 @@ from .t_one import TOneRunner
 
 __all__ = [
     "GigasttRunner",
+    "GigasttStreamRunner",
     "GigasttCoreMLRunner",
     "GigasttMlCtcRunner",
     "GigasttMlCtcLargeRunner",

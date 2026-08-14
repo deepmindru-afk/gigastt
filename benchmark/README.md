@@ -23,7 +23,9 @@ Reproducible benchmark comparing **gigastt** against popular open-source ASR eng
 
 RTF is measured against a **pre-warmed engine** so that model-load time is not unfairly charged to any runner:
 
-- **gigastt** is measured via HTTP POST to a `gigastt serve` process that stays up for the whole benchmark. WebSocket streaming was evaluated but abandoned for WER benchmarking: when inference is slower than real-time, the streaming endpoint finalizes on incomplete audio and returns truncated transcripts.
+- **gigastt (batch)** is measured via HTTP POST to a `gigastt serve` process that stays up for the whole benchmark.
+- **gigastt (stream)** (`--mode stream` / `--mode both`) uses the same process over `/v1/ws`: 16 kHz mono PCM16, 100 ms real-time chunks, Stop at EOF. Protocol: [`docs/benchmarks.md` § Streaming measurement protocol](../docs/benchmarks.md#streaming-measurement-protocol). `--mode both` emits `stream_vs_batch` (Δ = WER_stream − WER_batch, paired files, bootstrap 95% CI). Stream **RTF** in the results table is paced wall-clock (≈ 1.0 + drain), not encoder compute — do not compare it to REST ~0.10. The runner starts `serve` with the default `--pool-size 2`; published TTFP rows use a separately started `--pool-size 1` server.
+- A 2026-06 attempt to use WebSocket for the *cross-engine* WER table was abandoned when the then-streaming path could not keep up with real-time audio and truncated finals. The stride (0.8 s) path is real-time on CPU; stream WER is now a first-class mode, not a replacement for the REST competitor table.
 - **faster-whisper** and **Vosk** load their models once in `is_available()` and reuse them for every sample.
 - **whisper.cpp** runs in **server mode** (`whisper-server`). The model is loaded once when the server starts; each sample is sent as an HTTP POST to `/inference` and the wall-clock request latency is used as `processing_time`. This replaces the previous per-sample `whisper-cli` invocation that re-loaded the ~3 GB model on every file and produced an artificially high RTF.
 
@@ -99,6 +101,13 @@ python benchmark.py --max-samples 0 --output results_full.json
 
 # Run only specific engines
 python benchmark.py --runners gigastt,whisper_cpp
+
+# Streaming WER vs REST batch on the same gigastt server (Δ in results JSON)
+python benchmark.py --mode both --runners gigastt --dataset golos_crowd --max-samples 100 \
+  --output results_stream_wer.json
+
+# TTFP / TTFS p50–p95 (start `gigastt serve --port 9877 --pool-size 1` first)
+python benchmark_latency.py --dataset golos_crowd --max-samples 100 --output results_latency_corpus.json
 
 # Use environment variable for limit
 GIGASTT_BENCHMARK_MAX_SAMPLES=50 python benchmark.py
