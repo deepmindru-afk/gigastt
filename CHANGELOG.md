@@ -59,7 +59,10 @@ were released without a git tag, so their headings carry no compare link.
   `TranscribeRequest` / `TranscribeSource` live in
   `inference/types/request.rs`; override / hotword types live in
   `types/overrides.rs`. Candle RoPE and Conformer blocks live in
-  `runtime/candle/conformer/{rope,blocks}.rs`.
+  `runtime/candle/conformer/{rope,blocks}.rs`. Boot CLI modes and
+  sidecar loaders live in `boot/{modes,sidecars}.rs`. OpenAI SSE
+  events live in `server/openai/sse.rs`. Batch path helpers live in
+  `batch/paths.rs`.
 
 ### Fixed
 
