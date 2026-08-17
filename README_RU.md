@@ -1,6 +1,6 @@
 <p align="center">
   <h1 align="center">gigastt</h1>
-  <p align="center"><strong>Встраиваемое локальное распознавание русской речи — один бинарник на Rust, без облака, MIT-чистые веса.</strong></p>
+  <p align="center"><strong>Встраиваемое локальное распознавание русской речи — один бинарник на Rust, без облака. MIT-движок; веса ASR по умолчанию MIT (опциональная speaker-модель — CC BY 4.0, см. NOTICE).</strong></p>
   <p align="center">
     <a href="https://github.com/ekhodzitsky/gigastt/actions"><img src="https://github.com/ekhodzitsky/gigastt/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
     <a href="https://codecov.io/gh/ekhodzitsky/gigastt"><img src="https://codecov.io/gh/ekhodzitsky/gigastt/branch/main/graph/badge.svg" alt="codecov"></a>
@@ -17,11 +17,11 @@ gigastt превращает любую машину в приватный се�
 
 ## Обзор
 
-| Локально, приватно | Встраивание + стриминг | Точный русский | Маленький и real-time |
+| Локально, приватно | Встраивание + стриминг | Точный русский | Маленький, file-RTF ~0.10 |
 |---|---|---|---|
-| Без облака и ключей — после разовой загрузки модели инференс 100% локальный. MIT-движок на MIT-весах, пригоден для коммерции. | Один бинарник, C-ABI FFI для мобильных или крейт `gigastt-core` — с инкрементальными partial'ами по WebSocket, без Python. | Самый точный на 3 из 4 русских доменов: far-field 4.08%, телефон 18.50%, YouTube 10.91%; ничья на чистой речи. | ~225 МБ INT8, RTF ~0.10 (~10× быстрее реального времени на CPU), холодный старт 0.94 с. |
+| Без облака и ключей — после разовой загрузки модели инференс 100% локальный. MIT-движок на MIT-весах ASR (опциональный WeSpeaker — CC BY 4.0). | Один бинарник, C-ABI FFI для мобильных или крейт `gigastt-core` — с инкрементальными partial'ами по WebSocket, без Python. Живой WS не равен batch WER. | Самый точный на 3 из 4 in-distribution русских доменов: far-field 4.08%, телефон 18.50%, YouTube 10.91%; ничья на чистой речи. | ~225 МБ INT8, файловый RTF ~0.10 (~10× быстрее аудио на CPU), холодный старт 0.94 с. |
 
-**WER** чистая 3.55% / far-field 4.08% / телефон 18.50% / YouTube 10.91%  ·  **held-out** CV **2.63%** (лучше Vosk+FW) · FLEURS 5.26% (лидер FW 3.84) · RuLS **4.21%** (лучше Vosk+FW) · SOVA device: Vosk впереди  · ToneWebinars: лидер FW 8.33 (gigastt 13.0)  ·  **RTF** ~0.10  ·  **Модель** ~225 МБ INT8  ·  **Холодный старт** 0.94 с  ·  **RAM** ~46 МБ resident (~277 МБ `ps`) · ~66 МБ pool-2 (~510 МБ `ps`)  ·  **Стриминг** первый partial ~0.78 с
+**WER** чистая 3.55% / far-field 4.08% / телефон 18.50% / YouTube 10.91%  ·  **held-out** CV **2.63%** (лучше Vosk+FW) · FLEURS 5.26% (лидер FW 3.84) · RuLS **4.21%** (лучше Vosk+FW) · SOVA device: Vosk впереди  · ToneWebinars: лидер FW 8.33 (gigastt 13.0)  ·  **RTF** ~0.10 (файлы)  ·  **Модель** ~225 МБ INT8  ·  **Холодный старт** 0.94 с  ·  **RAM** ~46 МБ resident (~277 МБ `ps`) · ~66 МБ pool-2 (~510 МБ `ps`)  ·  **Стриминг** TTFP p50 ~0.82 с far-field / ~1.65 с crowd (один клип `golos_00` ~0.78 с)
 
 > Голова GigaAM v3 `rnnt`, INT8, Apple M1 CPU, 1000 сэмплов на домен (FLEURS n=775), отказы = 100% WER, 95% bootstrap CI. Все конкуренты замерены одинаково — тем же [харнессом](docs/benchmarks.md), манифестами и нормализацией.
 
@@ -31,7 +31,7 @@ WER (%) на четырёх русских доменах, меньше — лу
 
 | Движок | Чистая | Far-field | Телефон | YouTube | RTF | Диск | Пик RAM | Холодный старт | Стриминг | Пункт. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|---|---|
-| **gigastt** (GigaAM v3 `rnnt`) | 3.55 | **4.08** | **18.50** | **10.91** | 0.10 | ~225 МБ | ~46 МБ · ~66 МБ pool-2 | **0.94 с** | **Да** — инкр. WS | **Да** |
+| **gigastt** (GigaAM v3 `rnnt`) | 3.55 | **4.08** | **18.50** | **10.91** | 0.10 | ~225 МБ | **46/66 res · 277/510 RSS** | **0.94 с** | Partial'ы; TTFP ~0.8–1.7 с; WER ≠ batch | **Да** |
 | Vosk 0.54 (Zipformer2) | **2.97** | 6.29 | 22.74 | 17.24 | ~0.03 | 966 МБ | 560 МБ | 1.16 с | Да (сервер) | Аддон |
 | T-one (beam + LM) | 6.61 | 14.62 | 21.73 | 23.23 | 0.065 | 138 МБ + 5.5 ГБ LM | — | — | Да (300 мс) | Нет |
 | T-one (greedy, без LM) | 7.85 | 17.22 | 22.37 | 26.54 | 0.065 | 138 МБ | 672 МБ | 1.87 с | Да (300 мс) | Нет |
@@ -43,7 +43,7 @@ WER (%) на четырёх русских доменах, меньше — лу
 
 **Raspberry Pi / edge:** на «железе» Pi ещё **не замерялось** — никаких заявлений про RTF, RAM или холодный старт на edge-устройствах; статус и протокол: [Benchmarks § Edge / Raspberry Pi](docs/benchmarks.md#edge--raspberry-pi) и [edge-роадмап](specs/edge-raspberry-pi-roadmap.md).
 
-**Стриминг:** Whisper-движки работают только офлайн — никаких partial'ов во время речи. gigastt отдаёт настоящие инкрементальные partial'ы по WebSocket (первый ~0.78 с на CPU) из одного самодостаточного бинарника без Python; Vosk-server и T-one (чанки 300 мс) тоже стримят. То есть стриминг — чистая победа над Whisper-семейством; а перед Vosk / T-one преимущество в упаковке — инкрементальные partial'ы плюс C-ABI FFI в одном бинарнике, а не в меньшей задержке.
+**Стриминг:** Whisper-движки работают только офлайн — никаких partial'ов во время речи. gigastt отдаёт инкрементальные partial'ы по WebSocket из одного бинарника без Python; Vosk-server и T-one (чанки 300 мс) тоже стримят. Победа над Whisper — в partial'ах; перед Vosk / T-one преимущество в упаковке (partial'ы + C-ABI FFI в одном бинарнике), **не** в меньшей задержке **и не** в равной точности. Живой WS — буферизованный/чанковый поверх офлайн RNN-T: TTFP p50 **~0.82 с** (far-field) / **~1.65 с** (crowd) по протоколу 1.0, а WER стрима на **~11–15 п.п. хуже** того же файла через REST batch (срезы по 100 клипов). Подробности: [Benchmarks § Streaming](docs/benchmarks.md#streaming-measurement-protocol).
 
 **Пунктуация и регистр:** gigastt выдаёт читаемый русский из коробки — нативно на голове `e2e_rnnt` или маленьким встроенным проходом RuPunct + ITN на дефолтной `rnnt` (`--punctuation` / `--itn`, авто-докачка). Это на уровне Whisper-движков (у них пунктуация нативная) и лучше русских специалистов — Vosk требует отдельный аддон `recasepunc` (отдельная модель, сопоставимая по размеру с распознавателем), а T-one не даёт пунктуации вовсе.
 
@@ -55,7 +55,7 @@ WER (%) на четырёх русских доменах, меньше — лу
 - **Русский в первую очередь, узкий multilingual** — дефолтные головы `rnnt` / `e2e_rnnt` только русские; опциональные `ml_ctc` / `ml_ctc_large` добавляют лишь ru/en/kk/ky/uz. Для реальной широты языков — Vosk (20+) или whisper.cpp / faster-whisper / sherpa-onnx (~99). gigastt — специалист.
 - **Не лидер по скорости** — Vosk (RTF ~0.03) и T-one (~0.06) быстрее; gigastt (~0.10) уверенно real-time, но не самый быстрый.
 - **RAM крошечная, но легко читается неправильно** — resident footprint ~46 МБ при `--pool-size 1` / ~66 МБ при дефолтном pool 2, самый лёгкий в таблице (Vosk 0.54 — 560 МБ, T-one greedy — 672 МБ; дополнительный слот пула стоит всего ~20 МБ resident). Но `ps` / Мониторинг системы показывает ~277 / ~510 МБ, потому что RSS считает общий memory-mapped образ модели; ОС забирает эти чистые страницы под давлением памяти, так что закладывать нужно именно resident-цифру.
-- **Стриминг — буферизованный/чанковый** поверх офлайн RNN-T, не нативно-стримящая акустическая модель; ~0.78 с до первого partial — не заявка на минимальную задержку.
+- **Стриминг — буферизованный/чанковый** поверх офлайн RNN-T, не нативно-стримящая акустическая модель. TTFP — не заявка «sub-200 ms» (p50 ~0.82–1.65 с). **Точность не равна batch:** WER_stream − WER_batch ≈ **+11–15 п.п.** на 100-клиповых срезах Golos (обрезанные / потерянные слова). Для файлов, где важен WER, берите REST; для живого WS цитируйте таблицу стрима, не 1000-рядную таблицу конкурентов.
 - **Пересечение с обучающими данными** — GigaAM v3 обучена в основном на Golos; Golos / OpenSTT — in-distribution upper bound. **Held-out** (CV / FLEURS / RuLS / SOVA / Podlodka / ToneWebinars) — второй столбец; см. [Benchmarks](docs/benchmarks.md#held-out--additional-public-sets--wer--95-ci).
 
 ## Установка
@@ -77,7 +77,7 @@ docker pull ghcr.io/ekhodzitsky/gigastt:latest
 docker build -t gigastt . && docker run -p 9876:9876 gigastt
 ```
 
-Встраивание вместо сервера? `npm install gigastt` (Node.js) · `pip install gigastt` (Python на PyPI) · Swift / Kotlin биндинги в работе — все оборачивают тот же движок, модель подкладывается отдельно: [In-process quickstarts](docs/quickstarts.md).
+Встраивание вместо сервера? `npm install gigastt` (Node, опубликован) · `pip install gigastt` (Python, опубликован) · SwiftPM / Kotlin AAR — **упаковка в работе**; тот же движок, модель подкладывается отдельно: [In-process quickstarts](docs/quickstarts.md).
 
 Модель GigaAM v3 INT8 (~225 МБ) скачивается при первом запуске (lean-бандл с GitHub Releases). Runtime — **только INT8**: нет загрузки и инференса FP32.
 
@@ -109,7 +109,7 @@ $ gigastt serve
 | Головы | `rnnt` (34-токенный char, дефолт — ниже всех WER) · `e2e_rnnt` (1025-токенный BPE, пунктуация / регистр / ITN встроены) · `ml_ctc` / `ml_ctc_large` (GigaAM Multilingual charwise-CTC, 220M / 600M, 71-токенный multilingual char — ru/en/kk/ky/uz) |
 | Постобработка | опциональные пунктуация, регистр и русский ITN — нативно на `e2e_rnnt` или встроенный проход RuPunct + ITN на `rnnt` (авто-докачка; `--punctuation` / `--itn`), переопределяемо на каждый запрос (`?punctuation=` / `?itn=` / `?vad=`) |
 | Доставка | статический бинарник · C-ABI FFI `cdylib` (Android / mobile) · крейт `gigastt-core` (без серверных зависимостей) |
-| Провайдеры исполнения | CPU (любая платформа) · CoreML EP (macOS ARM64) · CUDA 12+ (Linux x86_64) · NNAPI (Android) · [ANE](docs/ane-backend.md) (`--features ane`, macOS ARM64 — энкодер ≈15.6× на Neural Engine, тёплый e2e ≈10× быстрее CPU-сборки, WER ≈1.11% против `ort`; только файловый режим) · [Candle/Metal](docs/candle-backend.md) (`--features candle`, экспериментальный — вывод побайтово совпадает с `ort`) |
+| Провайдеры исполнения | CPU (любая платформа) · CoreML EP (macOS ARM64) · CUDA 12+ (Linux x86_64) · NNAPI (Android) · [ANE](docs/ane-backend.md) (`--features ane`, macOS ARM64, **только файловый режим** — энкодер ~15×; Δ vs `ort` ~1 п.п. на n=15, **не** продуктовый WER) · [Candle/Metal](docs/candle-backend.md) (`--features candle`, экспериментальный FP32 safetensors — транскрипты побайтово совпадают с `ort`; `is_int8()` = false) |
 | Стриминг | инкрементальные partial'ы по WebSocket · REST + SSE для файлов · OpenAI-совместимый `/v1/audio/transcriptions` · один порт 9876 |
 | Аудио на вход | WAV · M4A/AAC · MP3 · OGG/Vorbis · OGG/Opus (`.opus`) · WebM/Opus (браузерный `MediaRecorder`) · FLAC (авто-микс в моно) |
 | Стерео-телефония | Опциональный режим «канал = спикер» (`--stereo-speakers` в CLI / `channels=split` в REST) помечает левый/правый каналы как `speaker_0` и `speaker_1` |

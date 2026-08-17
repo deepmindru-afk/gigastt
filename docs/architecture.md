@@ -26,7 +26,7 @@ Optional parallel paths (not on the ASR critical path by default):
 - **Speaker diarization** — WeSpeaker ResNet34 fbank embeddings + polyvoice clustering; opt-in per REST request (`?diarization=true`) or WS `Configure`. Offline matches word midpoints to turns; streaming assigns the latest turn to the current word tail.
 - **Stereo channel-speakers** — `channels=split` / `--stereo-speakers` runs ASR per channel and labels `speaker_0` / `speaker_1` (mutually exclusive with ML diarization).
 - **Jobs queue** — opt-in `--enable-jobs` async store for long-file / batch REST work.
-- **Hot reload** — loopback-only `POST /v1/admin/reload` rebuilds the engine from the boot recipe, warms it, then swaps atomically (keeps the old engine on failure). Peak RSS during reload is about **+0.5× ready** (old + new engine briefly co-resident; ~**+536 MiB** at pool=1).
+- **Hot reload** — loopback-only `POST /v1/admin/reload` rebuilds the engine from the boot recipe, warms it, then swaps atomically (keeps the old engine on failure). The mapped encoder is shared; extra peak is unmeasured after mmap — keep headroom or restart on edge.
 
 ## Crates
 
@@ -61,9 +61,9 @@ Server surfaces (single process, one primary port unless metrics is enabled):
 LSTM decoder + joiner), 16-layer 768-dim encoder (240M params); the vocab depends on the
 head (`rnnt` 34-token char — the v2.3 default — or `e2e_rnnt` 1025-token BPE), 16 kHz
 mono input, MIT licensed. Default install is lean INT8 (~225 MB total: encoder
-~215 MB + decoder/joiner/vocab) via `gigastt download` / first `serve`. Runtime
-loads INT8 only — there is no FP32 download or inference path. Trained on 700K+
-hours of Russian speech.
+~215 MB + decoder/joiner/vocab) via `gigastt download` / first `serve` from
+**GitHub Releases**. Runtime loads INT8 only — there is no FP32 download or
+inference path. Trained on 700K+ hours of Russian speech.
 
 Two opt-in heads (`--model-variant ml_ctc` / `ml_ctc_large`) use
 [**GigaAM Multilingual**](https://huggingface.co/istupakov/gigaam-multilingual-ctc-onnx)
@@ -89,9 +89,12 @@ switch.
 | macOS ARM64 (M1–M4) | `--features coreml` | CoreML + Neural Engine |
 | Linux x86_64 + NVIDIA | `--features cuda` | CUDA 12+ |
 | Android / ARM64 | `--features nnapi` | NNAPI (NPU/DSP) |
+| macOS ARM64 | `--features ane` | Apple Neural Engine `.mlpackage` (file mode; see [ane-backend.md](ane-backend.md)) |
+| macOS ARM64 | `--features candle` | Candle/Metal, experimental parity (see [candle-backend.md](candle-backend.md)) |
 | Any platform | _(default)_ | CPU |
 
-`coreml` and `cuda` are mutually exclusive; `nnapi` can be combined with either.
+`coreml` and `cuda` are mutually exclusive. `ane` and `candle` select a non-`ort`
+backend rather than an ORT EP. `nnapi` can be combined with `coreml` or `cuda`.
 
 **CoreML path.** The Conformer encoder has a dynamic time axis, and CoreML cannot
 reliably execute dynamic-shape partitions (they fail at prediction time, issue #42).

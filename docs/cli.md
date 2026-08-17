@@ -4,7 +4,8 @@
 
 Complete command-line interface for `gigastt`.
 
-All flags have corresponding environment variables (see individual options below).
+Most flags have a matching `GIGASTT_*` environment variable (noted on each
+option). A few are CLI-only — notably `--pool-size`.
 
 ```
 gigastt [OPTIONS] <COMMAND>
@@ -75,9 +76,13 @@ gigastt serve [OPTIONS]
                             edge applies --pool-size 1 and --vad when those
                             flags are left at defaults. Env: GIGASTT_PROFILE.
   --pool-size <N>           Concurrent inference sessions [default: 2].
-                            Multi-connection default; edge / low-RAM hosts should
-                            use 1 (~400 MB RSS). Pool > 1 costs RAM and can cost
-                            ~10–20% single-job RTF (encoder threads split across slots).
+                            CLI-only (no matching env var). Edge / low-RAM:
+                            `--pool-size 1` (~46 MB resident / ~277 MB `ps` RSS).
+                            Default 2 is ~66 MB resident / ~510 MB `ps` RSS;
+                            the 215 MB encoder is memory-mapped and shared
+                            (~20 MB resident per extra slot). `ps` RSS overstates
+                            because it counts the mapping. Pool > 1 can cost
+                            ~10–20% single-job RTF (encoder threads split).
   --encoder-intra-threads <N>  Intra-op threads for the encoder session (CPU build
                             only). Unset: logical CPUs divided across the pool.
                             Avoid `1` on multi-core (~3× slower than auto); explicit
@@ -174,9 +179,9 @@ gigastt download [OPTIONS]
 
     download events fire on the first chunk, then at most once per ~200 ms per
     file, and always once at 100% (bytes_total is 0 when the server does not
-    send a length). verify fires per SHA-256 check; quantize marks the start
-    of the ~2-minute on-device INT8 pass. done is emitted once, last, on
-    success; error is emitted right before a non-zero exit.
+    send a length). verify fires per SHA-256 check. There is **no** `quantize`
+    phase on the product path (INT8 is pre-shipped). done is emitted once,
+    last, on success; error is emitted right before a non-zero exit.
 
   Exit codes (sysexits-flavored; 2 is deliberately unused — clap exits 2 on
   argument/usage errors before any NDJSON event can be emitted, so a code-2
@@ -268,8 +273,10 @@ gigastt transcribe-batch [OPTIONS] <INPUT_DIR> <OUTPUT_DIR>
   -f, --format <LIST>         Export formats, comma-separated: txt, json, md, srt, vtt
                               [default: txt,json]. Env: GIGASTT_FORMAT.
   --pool-size <N>             Concurrent transcription workers [default: 2].
-                              Edge / low-RAM: use 1. Pool > 1 costs RAM and can
-                              cost ~10–20% single-job RTF (thread split).
+                              CLI-only. Edge: `--pool-size 1` (~46 MB resident).
+                              Default 2 ~66 MB resident; `ps` RSS is higher
+                              (mapped encoder). Pool > 1 can cost ~10–20%
+                              single-job RTF (thread split).
   --retries <N>               Extra attempts per file after a failure [default: 0].
                               Env: GIGASTT_BATCH_RETRIES.
   --move-to <DIR>             Move each successfully transcribed source into DIR

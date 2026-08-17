@@ -17,8 +17,9 @@ and is not repeated here.
 
 - gigastt installed (binary, package, or image) — see
   [Getting started](01-getting-started.md).
-- A Linux host with **4+ GB RAM**: the default `--pool-size 2` with the INT8
-  encoder sits at ~790 MiB RSS; leave headroom for the OS and request peaks.
+- A Linux host with **4+ GB RAM** is the usual production floor (OS + peaks).
+  Process RAM: ~46 / ~66 MB resident at pool 1 / 2. Figures:
+  [docs/benchmarks.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md).
 - For the systemd path: systemd 241 or newer (any modern distro, including
   Astra Linux, RED OS, ALT) and root access.
 - For the Docker path: Docker 20.10+; the NVIDIA Container Toolkit only for
@@ -34,11 +35,13 @@ Each tagged release publishes multi-arch images to GHCR — prefer pulling over
 building:
 
 ```sh
-docker pull ghcr.io/ekhodzitsky/gigastt:2.18.0        # CPU, linux/amd64 + linux/arm64
-docker pull ghcr.io/ekhodzitsky/gigastt:2.18.0-cuda   # CUDA, linux/amd64
+TAG=$(gh api repos/ekhodzitsky/gigastt/releases/latest -q .tag_name)  # e.g. v2.18.0
+VER=${TAG#v}
+docker pull ghcr.io/ekhodzitsky/gigastt:${VER}        # CPU, linux/amd64 + linux/arm64
+docker pull ghcr.io/ekhodzitsky/gigastt:${VER}-cuda   # CUDA, linux/amd64
 ```
 
-Pin a concrete tag for reproducible deploys; `:latest` / `:cuda` float.
+Pin `$VER` for reproducible deploys; `:latest` / `:cuda` float.
 
 Run with a named volume so the ~225 MB INT8 model (and any
 encoder) survives container replacement:
@@ -47,7 +50,7 @@ encoder) survives container replacement:
 docker run -d --name gigastt \
   -p 127.0.0.1:9876:9876 \
   -v gigastt-models:/home/gigastt/.gigastt/models \
-  ghcr.io/ekhodzitsky/gigastt:2.18.0
+  ghcr.io/ekhodzitsky/gigastt:${VER}
 ```
 
 Notes:
@@ -67,7 +70,7 @@ Notes:
 - **Baked image** (zero cold start, +~225 MB INT8): build locally with the model
   inside — `docker build --build-arg GIGASTT_BAKE_MODEL=1 -t gigastt:baked .`
 - **CUDA**: `docker run --gpus all -p 127.0.0.1:9876:9876
-  ghcr.io/ekhodzitsky/gigastt:2.18.0-cuda` (requires the NVIDIA Container
+  ghcr.io/ekhodzitsky/gigastt:${VER}-cuda` (requires the NVIDIA Container
   Toolkit; the binary falls back to CPU when no GPU is present).
 
 **Verify:**
@@ -76,7 +79,7 @@ Notes:
 curl -s http://127.0.0.1:9876/ready
 # {"status":"ready","pool_available":2,"pool_total":2}
 curl -s http://127.0.0.1:9876/health
-# {"status":"ok","model":"gigaam-v3-rnnt","variant":"rnnt","version":"2.18.0","punctuation":true,"itn":true}
+# {"status":"ok","model":"gigaam-v3-rnnt","variant":"rnnt","version":"...","punctuation":true,"itn":true}
 ```
 
 ### Air-gapped / offline installation
@@ -101,21 +104,23 @@ over (the why and the threat model:
 [docs/verifying-releases.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/verifying-releases.md)):
 
 ```sh
-gh release download v2.18.0 -R ekhodzitsky/gigastt \
-    -p 'gigastt-2.18.0-offline-x86_64-unknown-linux-gnu.tar.gz' \
-    -p 'gigastt-2.18.0-offline-x86_64-unknown-linux-gnu.tar.gz.sha256' \
-    -p 'gigastt-2.18.0-offline-x86_64-unknown-linux-gnu.tar.gz.minisig'
-sha256sum -c gigastt-2.18.0-offline-x86_64-unknown-linux-gnu.tar.gz.sha256
-minisign -Vm gigastt-2.18.0-offline-x86_64-unknown-linux-gnu.tar.gz -p gigastt.pub
-gh attestation verify gigastt-2.18.0-offline-x86_64-unknown-linux-gnu.tar.gz \
+TAG=$(gh api repos/ekhodzitsky/gigastt/releases/latest -q .tag_name)  # e.g. v2.18.0
+VER=${TAG#v}
+gh release download "$TAG" -R ekhodzitsky/gigastt \
+    -p "gigastt-${VER}-offline-x86_64-unknown-linux-gnu.tar.gz" \
+    -p "gigastt-${VER}-offline-x86_64-unknown-linux-gnu.tar.gz.sha256" \
+    -p "gigastt-${VER}-offline-x86_64-unknown-linux-gnu.tar.gz.minisig"
+sha256sum -c "gigastt-${VER}-offline-x86_64-unknown-linux-gnu.tar.gz.sha256"
+minisign -Vm "gigastt-${VER}-offline-x86_64-unknown-linux-gnu.tar.gz" -p gigastt.pub
+gh attestation verify "gigastt-${VER}-offline-x86_64-unknown-linux-gnu.tar.gz" \
     --repo ekhodzitsky/gigastt
 ```
 
 On the target host:
 
 ```sh
-tar xf gigastt-2.18.0-offline-x86_64-unknown-linux-gnu.tar.gz
-cd gigastt-2.18.0-offline
+tar xf "gigastt-${VER}-offline-x86_64-unknown-linux-gnu.tar.gz"
+cd "gigastt-${VER}-offline"
 sudo ./install.sh    # verifies SHA256SUMS.txt, then installs binary + models + unit
 sudo systemctl enable --now gigastt
 ```
@@ -123,7 +128,7 @@ sudo systemctl enable --now gigastt
 Debian-family alternative:
 
 ```sh
-sudo dpkg -i gigastt_2.18.0_amd64.deb gigastt-model-int8_2.18.0_all.deb
+sudo dpkg -i "gigastt_${VER}_amd64.deb" "gigastt-model-int8_${VER}_all.deb"
 sudo systemctl enable --now gigastt
 ```
 
@@ -231,42 +236,11 @@ rule_files:
   - /etc/prometheus/rules/gigastt-alerts.yml   # copy of docs/observability/alerts.yml
 ```
 
-The metrics that matter (all prefixed `gigastt_`). Ready-made Prometheus rules and
-a Grafana dashboard live in
-[`docs/observability/`](https://github.com/ekhodzitsky/gigastt/tree/main/docs/observability) —
-that directory is the canonical source if this table ever drifts from it:
-
-| Metric | Meaning |
-|---|---|
-| `gigastt_http_requests_total` | Requests by path/method/status — 5xx rate, 503s |
-| `gigastt_http_request_duration_seconds` | HTTP latency histogram (p50/p95/p99) |
-| `gigastt_pool_available` / `gigastt_pool_waiters` | Free inference triplets vs queued callers — the saturation signal |
-| `gigastt_pool_timeouts_total` | Checkout timeouts → clients received 503 + `Retry-After` |
-| `gigastt_inference_timeouts_total` | Runs aborted by `--inference-timeout-secs` |
-| `gigastt_inference_duration_seconds` | Inference latency histogram |
-| `gigastt_ws_active_connections` | Live WebSocket sessions |
-| `gigastt_rate_limit_rejections_total` | 429s from the per-IP limiter |
-| `gigastt_batch_pool_available` / `gigastt_batch_pool_waiters` | Same pool gauges, for the `--batch-pool-size` split |
-
-Ready-made assets — import, don't reinvent:
-
-- [docs/observability/alerts.yml](https://github.com/ekhodzitsky/gigastt/blob/main/docs/observability/alerts.yml)
-  — Prometheus rules: 5xx above 5%, `gigastt_pool_available == 0` for 1m,
-  p95 above 10 s, sustained pool timeouts, health probe down (blackbox
-  exporter).
-- [docs/observability/dashboard.json](https://github.com/ekhodzitsky/gigastt/blob/main/docs/observability/dashboard.json)
-  — Grafana dashboard (Dashboards → Import): request rate, latency, 5xx,
-  pool availability, active WebSockets, inference duration, rate-limit
-  rejections.
-
-What to alert on in practice: **pool saturation** (`gigastt_pool_available
-== 0` sustained — clients are getting 503s), **5xx ratio**, and **RAM** at
-the node level (gigastt exports no self-RSS metric; use node_exporter or
-cAdvisor).
-
-Logs: `tracing` env-filter via `RUST_LOG` (default `gigastt=info`;
-`gigastt=debug` for triage). Logs carry request metadata — durations, word
-counts — never transcript text
+Watch **pool saturation** (`gigastt_pool_available == 0`), **5xx**, and
+node-level RAM. Import rules and the Grafana dashboard from
+[`docs/observability/`](https://github.com/ekhodzitsky/gigastt/tree/main/docs/observability)
+— do not copy the metric catalog here. Logs: `RUST_LOG=gigastt=info` (debug
+for triage); no transcript text
 ([docs/privacy.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/privacy.md)).
 
 **Verify:**
@@ -279,38 +253,18 @@ curl -s http://127.0.0.1:9090/metrics | grep '^gigastt_pool_available'
 
 ### Secure by default
 
-The defaults are already the hardened posture — this recipe is mostly about
-not weakening them:
-
-- **Loopback bind.** `serve` refuses non-loopback addresses unless
-  `--bind-all` / `GIGASTT_ALLOW_BIND_ANY=1` is set. Remote access = a
-  TLS-terminating reverse proxy on the same host (Caddy/nginx configs:
-  [docs/deployment.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/deployment.md)).
-- **Origin allowlist.** Loopback origins are always allowed; every other
-  `Origin` must be listed via `--allow-origin` (repeatable, exact match).
-  `--cors-allow-any` is development-only. Disallowed origins get `403`.
-- **Request limits.** `--body-limit-bytes` (default 50 MiB),
-  `--ws-frame-max-bytes` (512 KiB), `--idle-timeout-secs` (300),
-  `--max-session-secs` (3600), `--inference-timeout-secs` (600),
-  `--pool-checkout-timeout-secs` (30) — 503 + `Retry-After` on pool
-  saturation.
-- **Rate limiting** (opt-in): `--rate-limit-per-minute N` with
-  `--rate-limit-burst` → `429` + `Retry-After`. Behind a proxy it works
-  per-client only if the proxy *overwrites* `X-Forwarded-For` and
-  `--trust-proxy` is set — copy the proxy snippets in
-  [docs/deployment.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/deployment.md#rate-limiter--x-forwarded-for)
-  verbatim.
-- **Model integrity.** Downloads are SHA-256-verified and atomically renamed
-  (`.partial` → final); a corrupt file is never promoted.
-- **Release verification.** Every release asset has a `.sha256` sidecar +
-  `SHA256SUMS.txt`, a minisign signature, a CycloneDX SBOM, and SLSA build
-  provenance. Verify before installing anything —
-  [docs/verifying-releases.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/verifying-releases.md).
-  Minimum routine:
+Do not weaken the defaults: loopback bind, origin allowlist, body/frame
+caps. Proxy + rate-limit snippets:
+[docs/deployment.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/deployment.md).
+Verify a release before install:
+[docs/verifying-releases.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/verifying-releases.md).
+Minimum routine:
 
 ```sh
-minisign -Vm gigastt-2.18.0-x86_64-unknown-linux-gnu.tar.gz -p gigastt.pub
-gh attestation verify gigastt-2.18.0-x86_64-unknown-linux-gnu.tar.gz \
+TAG=$(gh api repos/ekhodzitsky/gigastt/releases/latest -q .tag_name)  # e.g. v2.18.0
+VER=${TAG#v}
+minisign -Vm "gigastt-${VER}-x86_64-unknown-linux-gnu.tar.gz" -p gigastt.pub
+gh attestation verify "gigastt-${VER}-x86_64-unknown-linux-gnu.tar.gz" \
     --repo ekhodzitsky/gigastt
 ```
 
@@ -369,15 +323,15 @@ TAG=$(gh api repos/ekhodzitsky/gigastt/releases/latest -q .tag_name)   # e.g. v2
 VER=${TAG#v}
 ```
 
-Docker (upgrade to the pin you chose — here `2.18.0`):
+Docker (upgrade to `$VER` from the block above):
 
 ```sh
-docker pull ghcr.io/ekhodzitsky/gigastt:2.18.0
+docker pull ghcr.io/ekhodzitsky/gigastt:${VER}
 docker stop --time 15 gigastt && docker rm gigastt
 docker run -d --name gigastt \
   -p 127.0.0.1:9876:9876 \
   -v gigastt-models:/home/gigastt/.gigastt/models \
-  ghcr.io/ekhodzitsky/gigastt:2.18.0
+  ghcr.io/ekhodzitsky/gigastt:${VER}
 ```
 
 `docker stop` sends `SIGTERM`; `--time 15` gives the drain window
@@ -388,7 +342,7 @@ Docker's default of 10 s races the drain. Clients receive `Final` +
 systemd / deb:
 
 ```sh
-sudo dpkg -i gigastt_2.18.0_amd64.deb
+sudo dpkg -i "gigastt_${VER}_amd64.deb"
 sudo systemctl restart gigastt
 journalctl -u gigastt -f    # expect a clean drain, no "Drain window expired"
 ```
@@ -438,12 +392,9 @@ recipes: [CLI and batch processing](02-cli-batch.md); CLI check:
 
 ## Common pitfalls
 
-- **OOM — container or service killed.** RSS scales with `--pool-size`: the
-  INT8 encoder is ~400 MiB per triplet, ~790 MiB at the default pool of 2.
-  On a 4 GB box keep `--pool-size` at 1–2; `--pool-min-size 1`
-  lets the server boot on a degraded pool instead of crashing when memory is
-  tight. If Kubernetes reports `OOMKilled`, lower the pool or raise the pod
-  limit — details in
+- **OOM — container or service killed.** Budget resident (~46 / ~66 MB at
+  pool 1 / 2). `--pool-min-size 1` boots degraded. Figures and OOMKilled:
+  [docs/benchmarks.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md),
   [docs/runbook.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/runbook.md).
 - **503 `timeout` under load.** Every triplet is busy and a caller waited out
   `--pool-checkout-timeout-secs` (30 s): REST gets `503` + `Retry-After`,

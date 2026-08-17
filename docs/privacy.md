@@ -8,8 +8,10 @@ retained.
 
 - All audio processing runs locally via ONNX Runtime. Audio frames never leave
   the machine.
-- Transcripts are returned only to the caller of the local API. They are not
-  stored, written to disk, or logged.
+- Transcripts are returned to the caller of the local API. The inference
+  server does **not** persist them unless you enable `/v1/jobs` (in-memory,
+  TTL `--jobs-ttl-secs`) or use CLI `transcribe-batch` / `watch` (you chose
+  the output path). Logs never include transcript text.
 - Tracing logs (controlled by `RUST_LOG`) record request metadata such as
   duration and word count. They do not contain transcript text. PII sanitization
   of log output shipped in v0.9.6.
@@ -27,10 +29,12 @@ retained.
 The only outbound network call a running gigastt process makes is the one-time
 model download (ASR heads, and optionally punctuation / VAD / speaker models):
 
-- Files are fetched from `huggingface.co` (`istupakov/gigaam-v3-onnx` for the
-  `rnnt`/`e2e_rnnt` heads; `istupakov/gigaam-multilingual-ctc-onnx` and
-  `istupakov/gigaam-multilingual-large-ctc-onnx` for the `ml_ctc`/`ml_ctc_large` heads;
-  plus optional punctuation, Silero VAD, and WeSpeaker diarization weights).
+- Default `rnnt` / `e2e_rnnt` INT8 files come from **GitHub Releases**.
+  `ml_ctc` / `ml_ctc_large` INT8 encoders come from HuggingFace
+  (`istupakov/gigaam-multilingual-ctc-onnx` and
+  `istupakov/gigaam-multilingual-large-ctc-onnx`). Optional punctuation,
+  Silero VAD, and WeSpeaker diarization weights are also fetched when those
+  features are first enabled.
 - Each file is SHA-256 verified before use and written atomically to disk.
 - After the initial download, gigastt operates fully offline.
 - Audited: the HTTP client (`reqwest`) is referenced from exactly one module —
@@ -67,6 +71,6 @@ user-identifying information — only aggregate HTTP counters and durations.
 | Data type | Leaves the device? | Stored on disk? | Logged? |
 |-----------|-------------------|-----------------|---------|
 | Audio frames | No | No | No |
-| Transcript text | No | No | No |
+| Transcript text | No | CLI batch/watch write the files you asked for; `/v1/jobs` keeps results in memory for `--jobs-ttl-secs` | No |
 | Request metadata (duration, word count) | No | Only if you redirect logs | Yes (word count only) |
 | Model weights | No (downloaded once, then local) | Yes (`~/.gigastt/models/`) | No |

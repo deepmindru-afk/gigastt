@@ -28,7 +28,9 @@ cargo run -p gigastt-uniffi --bin uniffi-bindgen -- generate --library "$LIB" --
 cargo run -p gigastt-uniffi --bin uniffi-bindgen -- generate --library "$LIB" --language kotlin --out-dir bindings/kotlin
 ```
 
-Generated bindings are build artifacts (`bindings/` is git-ignored). Packaging them into a SwiftPM `.xcframework`, an Android `.aar`, and a PyPI wheel is the next step (prebuilt-artifacts task).
+Generated bindings are build artifacts (`bindings/` is git-ignored). Python
+wheels are published (`pip install gigastt`). SwiftPM xcframework and Android
+AAR packaging is still in progress.
 
 ## Python (quickstart, verified)
 

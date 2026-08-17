@@ -51,8 +51,9 @@ gigastt transcribe-batch calls/ transcripts/ \
 
 - `--format` — comma-separated list of `txt,json,md,srt,vtt`; one output file
   per format per input.
-- `--pool-size` — parallel workers; each costs ~0.4 GB RAM (INT8 encoder), so
-  scale with memory, not just cores (see the throughput recipe below).
+- `--pool-size` — parallel workers. Extra slot ~20 MB resident (mapped
+  encoder). Figures:
+  [docs/benchmarks.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md).
 - `--retries` — extra attempts per file with a short backoff (200 ms, 400 ms,
   …). Default 0 for batch, 2 for watch.
 - `--move-to` — move each *successfully* transcribed source into the given
@@ -400,18 +401,11 @@ processes an hour of audio in about 6 minutes. A 100-hour archive at
 Full measurements, other hardware, and WER numbers:
 [docs/benchmarks.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md).
 
-Budget memory before raising `--pool-size`:
-
-- Each worker loads its own encoder copy: **~0.4 GB resident** with the
-  INT8 encoder (the only runtime path). Default pool of 2 ≈ 790 MB RSS.
-- The engine refuses to let the pool eat more than half of total RAM: an
-  oversized `--pool-size` is **clamped with a warning** at load, so check the
-  log instead of assuming you got the parallelism you asked for.
-- Runtime is **INT8 only** (~215 MB encoder on disk from `gigastt download`).
-  There is no FP32 inference path for batch workers.
-- On CPU builds, `--encoder-intra-threads` defaults to logical CPUs divided
-  across the pool — the right value for a dedicated batch box; tune only for
-  shared machines.
+Budget memory before raising `--pool-size`: ~46 / ~66 MB resident at pool
+1 / 2 (~277 / ~510 `ps` RSS); extra slot ~20 MB. An oversized request is
+**clamped with a warning** (conservative `2 × encoder-file-size` budget).
+Leave `--encoder-intra-threads` unset. Figures:
+[docs/benchmarks.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md).
 
 ### Verify the result
 
@@ -435,9 +429,9 @@ time gigastt transcribe-batch calls/ transcripts/ --pool-size 4 --move-to calls/
   and `a/week2/call.wav` collide as one `done/call.wav` (and the run warns
   `duplicate output ... inputs with equal file stems overwrite each other`
   for the transcripts). Keep source filenames unique.
-- **Expecting parallelism you did not get.** `--pool-size 16` on 8 GB RAM is
-  silently clamped at load (warning logged). Check the startup log and size
-  the pool against ~0.4 GB resident per worker.
+- **Expecting parallelism you did not get.** `--pool-size 16` on 8 GB is
+  often clamped (warning at load). Check the log. RAM:
+  [docs/benchmarks.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md).
 - **`invalid audio` / 422 on an unsupported container.** AMR, MP4 video,
   or a corrupt upload fails decoding. Convert first
   (`ffmpeg -i in.amr -ar 16000 -ac 1 out.wav`) or, for raw telephony streams,

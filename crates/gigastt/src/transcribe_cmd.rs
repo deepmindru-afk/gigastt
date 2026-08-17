@@ -100,11 +100,11 @@ pub(crate) struct OfflineEngineArgs {
     #[arg(long, env = "GIGASTT_ENCODER_INTRA_THREADS")]
     pub(crate) encoder_intra_threads: Option<usize>,
 
-    /// Number of concurrent transcription workers (engine session pool). Each
-    /// session loads its own encoder copy (~0.4 GB resident for the INT8
-    /// encoder). Default 2 suits multi-file hosts; use `--pool-size 1` on
-    /// edge / low-RAM (~400 MB RSS). Pool > 1 costs RAM and can cost ~10–20%
-    /// single-job RTF (threads split across slots).
+    /// Number of concurrent transcription workers (engine session pool).
+    /// Encoder weights are memory-mapped and shared; budget resident
+    /// footprint (~46 MB at `--pool-size 1`, ~66 MB at the default 2).
+    /// `ps` RSS is higher (~277 / ~510 MB). Pool > 1 can cost ~10–20%
+    /// single-job RTF (threads split across slots). CLI-only.
     #[arg(long, default_value_t = 2)]
     pub(crate) pool_size: usize,
 }

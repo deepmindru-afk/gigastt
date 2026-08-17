@@ -8,7 +8,7 @@ and run is inside this tarball: no HuggingFace, no GitHub, no network at all.
 
 ```
 bin/gigastt                          the server / CLI binary (statically linked onnxruntime)
-models/v3_rnnt_encoder_int8.onnx     pre-quantized INT8 Conformer encoder (~225 MB)
+models/v3_rnnt_encoder_int8.onnx     pre-quantized INT8 Conformer encoder (~215 MB)
 models/v3_rnnt_decoder.onnx          LSTM prediction network
 models/v3_rnnt_joint.onnx            RNN-T joiner
 models/v3_vocab.txt                  34-token character vocabulary

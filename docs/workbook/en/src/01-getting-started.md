@@ -9,12 +9,17 @@ you should not need any other document to get here.
 
 ## Prerequisites
 
-- **Disk:** ~250 MB for the lean INT8 install (the only runtime path).
-- **RAM:** ~800 MB free at the default `--pool-size 2` (~400 MB per session).
+- **Disk:** ~225 MB model; plan **~250–400 MB** with the binary (optional
+  punct/VAD side models extra).
+- **RAM:** ~46 / ~66 MB resident at `--pool-size` 1 / 2 (~277 / ~510 MB
+  `ps` RSS). Method:
+  [docs/benchmarks.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md).
 - **Network** (unless you follow the air-gapped recipe): reach `github.com`
   for the pre-quantized INT8 bundle (CTC heads use HuggingFace INT8).
-- **An audio file to transcribe** — WAV, M4A, MP3, OGG, or FLAC. Any short
-  recording of Russian speech works.
+- **An audio file to transcribe** — WAV, M4A, MP3, OGG/Vorbis, OGG/Opus
+  (`.opus`), WebM/Opus, or FLAC. The repo ships a 4 s Russian fixture:
+  `crates/gigastt/tests/fixtures/golos_00.wav`. Any short Russian recording
+  works. Files → this chapter / REST. Live partials → [Streaming](04-streaming-ws.md).
 - Only for `cargo install` (build from source): Rust 1.88+ and `protoc` on
   `PATH` (`brew install protobuf` / `apt install protobuf-compiler`).
 
@@ -265,7 +270,7 @@ ls ~/.gigastt/models/
 #   v3_rnnt_encoder_int8.onnx  v3_rnnt_decoder.onnx  v3_rnnt_joint.onnx  v3_vocab.txt  ...
 
 # 2. Offline transcription works (no server needed):
-gigastt transcribe recording.wav
+gigastt transcribe crates/gigastt/tests/fixtures/golos_00.wav
 #   → prints the recognized text on stdout
 
 # 3. The server comes up and reports the loaded head:
@@ -275,7 +280,7 @@ curl http://127.0.0.1:9876/health
 #   {"status":"ok","model":"gigaam-v3-rnnt","variant":"rnnt","version":"...","punctuation":true,"itn":true}
 
 # 4. REST transcription works:
-curl -F file=@recording.wav http://127.0.0.1:9876/v1/transcribe
+curl -F file=@crates/gigastt/tests/fixtures/golos_00.wav http://127.0.0.1:9876/v1/transcribe
 #   → {"text":"...","words":[...],"duration":N}
 ```
 
@@ -299,9 +304,9 @@ curl -F file=@recording.wav http://127.0.0.1:9876/v1/transcribe
   not, use `gigastt download`; in a fully closed contour use
   the air-gapped bundle. Check `~/.gigastt/models/` permissions on disk
   errors.
-- **OOM or heavy swap on startup** — each pool session loads its own encoder
-  copy (~400 MB resident with INT8); the default `--pool-size 2` peaks around
-  790 MB. On small machines run with `--pool-size 1`.
+- **OOM or heavy swap on startup** — use `--pool-size 1` on small machines.
+  RAM figures:
+  [docs/benchmarks.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md).
 
 The full symptom → cause → fix table lives in
 [docs/troubleshooting.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/troubleshooting.md).

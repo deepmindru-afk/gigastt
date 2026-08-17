@@ -9,8 +9,11 @@
 
 ## Project Overview
 
-**gigastt** is a single-binary Rust server that turns any machine into a
-real-time Russian speech-to-text endpoint. It loads the GigaAM v3 RNN-T model
+**gigastt** is a single-binary Rust server that turns any machine into an
+on-device Russian speech-to-text endpoint. File/REST WER is the headline
+number; live WebSocket is incremental partials over a buffered offline RNN-T
+(not batch-equal WER — see [docs/benchmarks.md](docs/benchmarks.md#streaming-measurement-protocol)).
+It loads the GigaAM v3 RNN-T model
 (Conformer encoder + LSTM decoder + joiner, 240M params) via ONNX Runtime and
 exposes:
 
@@ -142,6 +145,11 @@ cargo test -p gigastt --test e2e_rest --test e2e_ws --test e2e_errors --test e2e
 
 Shared helpers are in `tests/common/mod.rs` (server startup with shutdown handle,
 WAV generation, WebSocket connect, readiness polling).
+
+Long-form stitch quality (`tests/longform_quality.rs`) is local-only (needs the
+RuLS corpus). See `CLAUDE.md` for the command. Node in-process binding:
+`engines.node` in `crates/gigastt-node/package.json` is `>=18`; the WS client
+SDK is Node ≥ 20.
 
 ### Load & soak tests (require model, run locally + nightly CI)
 
@@ -310,7 +318,7 @@ The `e2e_rnnt` head (`--model-variant e2e_rnnt`) uses the parallel `v3_e2e_rnnt_
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| `.github/workflows/ci.yml` | PR + main push | fmt, clippy, unit tests, feature compile checks (coreml, cuda, diarization), `cargo audit`, `cargo deny` |
+| `.github/workflows/ci.yml` | PR + main push | fmt, clippy, unit tests, feature compile checks (coreml, cuda, diarization, candle, ane), `cargo audit`, `cargo deny` |
 | `.github/workflows/soak.yml` | Nightly 03:17 UTC + manual | soak_test + load_test with cached model |
 | `.github/workflows/release.yml` | Tag push `v*` + manual | Multi-arch build, tarball + SHA256, CycloneDX SBOM, SLSA provenance, minisign signatures |
 | `.github/workflows/homebrew.yml` | Release published | Update Homebrew tap Formula |

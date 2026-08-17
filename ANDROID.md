@@ -6,7 +6,7 @@
 
 ## Overview
 
-gigastt's inference engine (`gigastt::inference::Engine`) is pure Rust and has no dependency on the server stack (`axum`, `tokio` runtime, etc.). This makes it an ideal candidate for on-device STT inside Android applications — no network latency, no cloud API keys, and full privacy.
+gigastt's inference engine (`gigastt_core::inference::Engine`) is pure Rust and has no dependency on the server stack (`axum`, `tokio` runtime, etc.). This makes it an ideal candidate for on-device STT inside Android applications — no network latency, no cloud API keys, and full privacy.
 
 This document describes the architecture, build process, and integration steps needed to ship gigastt as a native library (`libgigastt_ffi.so`) inside an Android app.
 
@@ -25,7 +25,7 @@ This document describes the architecture, build process, and integration steps n
 │  libgigastt_ffi.so  ──►  C-ABI FFI         │
 │  (crates/gigastt-ffi/src/lib.rs)                           │
 ├─────────────────────────────────────────┤
-│  gigastt::inference::Engine             │
+│  gigastt_core::inference::Engine        │
 │  (ONNX Runtime + GigaAM v3 RNN-T)       │
 └─────────────────────────────────────────┘
 ```
@@ -146,7 +146,9 @@ You have two strategies for shipping models:
 ### B. Download on first run (smaller APK)
 
 1. Ship a tiny stub APK.
-2. On first launch, download the model files from your own CDN or HuggingFace.
+2. On first launch, download the INT8 files from your own CDN or the GitHub
+   Release bundle (same files as `gigastt download`). HuggingFace is only
+   needed for the `ml_ctc` / `ml_ctc_large` heads.
 3. Extract to the app's private files directory.
 
 > ⚠️ The total APK size with bundled assets is ~220+ MB. Google Play supports up to 200 MB for APKs and larger sizes via App Bundles, but consider using [Play Feature Delivery](https://developer.android.com/guide/playcore/feature-delivery) or download-on-demand for the model files.
@@ -160,7 +162,8 @@ The `ort` crate supports Android through multiple execution providers:
 - **NNAPI** (Neural Networks API) — uses the device's NPU / DSP when available. Enable with `cargo ndk ... build -p gigastt-ffi --features nnapi`.
 - **CPU** — pure CPU fallback, works on every device. This is the default when NNAPI is unavailable or fails to initialize.
 
-No code changes are required to switch between EPs; `ort` selects the best available provider at session creation time.
+EPs are **compile-time** (`--features nnapi` vs default CPU). The binary you
+ship already picked the provider; there is no runtime "best EP" switch.
 
 ---
 
@@ -239,15 +242,15 @@ Tips to reduce binary size:
 
 ## Current Limitations
 
-1. **Server code is excluded from FFI** — The FFI build only exposes `gigastt::inference::Engine`. The WebSocket server, REST handlers, and rate limiting live only in the server binary (`cargo build --bin gigastt`). The FFI depends on `gigastt-core` with `default-features = false, features = ["file-decode"]`, so the `tokio` runtime, the `reqwest`/HTTP download stack, and the async session pool are compiled out — the FFI uses synchronous `checkout_blocking` and side-loaded models.
+1. **Server code is excluded from FFI** — The FFI build only exposes `gigastt_core::inference::Engine`. The WebSocket server, REST handlers, and rate limiting live only in the server binary (`cargo build --bin gigastt`). The FFI depends on `gigastt-core` with `default-features = false, features = ["file-decode"]`, so the `tokio` runtime, the `reqwest`/HTTP download stack, and the async session pool are compiled out — the FFI uses synchronous `checkout_blocking` and side-loaded models.
 
 2. **Synchronous transcription only** — `gigastt_transcribe_file` blocks the calling thread while inference runs. Call it from a Kotlin coroutine (`withContext(Dispatchers.IO)`) so the UI thread stays responsive.
 
 3. **No Java exception translation** — Rust errors are logged and returned as `NULL` / empty string. The Kotlin side should treat `engineNew == 0L` or `transcribeFile == ""` as failure and surface a generic error message.
 
-4. **Model directory layout is fixed** — `Engine::load` expects exactly the filenames from the download and auto-detects the head from them: the default `rnnt` head (`v3_rnnt_encoder_int8.onnx` or `v3_rnnt_encoder.onnx`, `v3_rnnt_decoder.onnx`, `v3_rnnt_joint.onnx`, `v3_vocab.txt`), or the `e2e_rnnt` head (`v3_e2e_rnnt_*`). Do not rename them.
+4. **Model directory layout is fixed** — `Engine::load` expects exactly the filenames from the download and auto-detects the head from them: the default `rnnt` head (`v3_rnnt_encoder_int8.onnx`, `v3_rnnt_decoder.onnx`, `v3_rnnt_joint.onnx`, `v3_vocab.txt`), or the `e2e_rnnt` head (`v3_e2e_rnnt_*`). Runtime is INT8 only — an FP32 `v3_rnnt_encoder.onnx` is not a fallback. Do not rename files.
 
-5. **Memory footprint** — ~790 MB RSS at the default pool size 2 (INT8). On mobile, use `pool_size = 1` to reduce RAM to ~400 MB.
+5. **Memory footprint** — budget **resident** RAM: ~46 MB at `pool_size = 1`, ~66 MB at pool 2 (INT8 `rnnt`; the 215 MB encoder is memory-mapped). `ps` RSS reads ~277 / ~510 MB because it counts the mapping. On mobile use `pool_size = 1`.
 
 ---
 
@@ -289,10 +292,13 @@ This is safe — inference still works, just on CPU.
 
 ### Out of memory on model load
 
-- Ensure you are using the INT8 encoder (`v3_e2e_rnnt_encoder_int8.onnx`), not the FP32 one.
-- Reduce pool size to 1 by modifying `Engine::load` call or using a custom build.
+- Ensure you are using the INT8 encoder (`v3_rnnt_encoder_int8.onnx` by
+  default, or `v3_e2e_rnnt_encoder_int8.onnx` for the e2e head). There is no
+  FP32 fallback.
+- Reduce pool size to 1 via `Engine::load_with_pool_size(dir, 1)` or
+  `gigastt_engine_new_with_pool_size` (Android default pool is already 1).
 - Close other apps before testing on low-RAM devices.
 
 ---
 
-*Last updated: 2026-04-23*
+*Last updated: 2026-08-17*

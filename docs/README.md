@@ -54,4 +54,8 @@ onboarding lives in the bilingual workbook on GitHub Pages.
 - [`NOTICE`](../NOTICE) — third-party notices (opus, WeSpeaker, benchmark data)
 
 Archive / design notes under `docs/archive/` and `docs/superpowers/` are historical
-and may lag the current release.
+and may lag the current release. Dated `project-audit-*` snapshots (local,
+not shipped) are **not** current product truth — do not quote them.
+
+Android C-ABI: [`ANDROID.md`](../ANDROID.md). Experimental UniFFI AAR:
+[`packaging/android/README.md`](../packaging/android/README.md).
