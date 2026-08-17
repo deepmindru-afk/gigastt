@@ -717,7 +717,7 @@ and the field-level tables in
 | Socket closes 1008 exactly at the 1-hour mark | `--max-session-secs` cap; a `final` is flushed first, so just reconnect | Recipe 4; [troubleshooting](https://github.com/ekhodzitsky/gigastt/blob/main/docs/troubleshooting.md) |
 | Socket closes 1001 after ~5 min of silence | Idle timeout — no frames at all; stream quiet PCM to stay alive | Recipe 4; [troubleshooting](https://github.com/ekhodzitsky/gigastt/blob/main/docs/troubleshooting.md) |
 | Socket closes 1009 | A frame exceeded `--ws-frame-max-bytes` (default 512 KiB) — chunk smaller | Recipe 1; [api.md limits](https://github.com/ekhodzitsky/gigastt/blob/main/docs/api.md#session-and-frame-limits) |
-| Upgrade refused with HTTP 503 `{"code":"initializing"}` | Model still downloading/quantizing — poll `/ready`, don't restart | [troubleshooting](https://github.com/ekhodzitsky/gigastt/blob/main/docs/troubleshooting.md) |
+| Upgrade refused with HTTP 503 `{"code":"initializing"}` | Model still downloading — poll `/ready`, don't restart | [troubleshooting](https://github.com/ekhodzitsky/gigastt/blob/main/docs/troubleshooting.md) |
 | Browser app from another origin can't connect | Origin allowlist — loopback origins only by default; add `--allow-origin` | [docs/cli.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/cli.md) |
 | Finals arrive bare lowercase, no punctuation | Punctuation model not attached, or policy off; `e2e_rnnt` punctuates itself | Recipe 2; [troubleshooting](https://github.com/ekhodzitsky/gigastt/blob/main/docs/troubleshooting.md) |
 | `configure` has no effect | Sent after the first audio frame (`configure_too_late`) — send it right after `ready` | Recipe 1 |

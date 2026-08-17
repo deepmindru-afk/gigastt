@@ -23,7 +23,7 @@ REST batch на тех же файлах (обрезанные / потерян�
 захватываются два источника сразу (микрофон + системный звук), а клиент
 обязан переживать насыщение пула и сетевые обрывы без ручного вмешательства.
 
-## Требования
+## Предпосылки
 
 - Запущенный сервер с моделью — по главе [Начало работы](01-getting-started.md):
   `gigastt serve` (первый запуск скачивает lean INT8-модель (~225 МБ) — ждите
@@ -699,7 +699,7 @@ python3 stream_wav.py crates/gigastt/tests/fixtures/golos_00.wav
   ротации/backoff (рецепты 4/5) переживает принудительный потолок:
   `gigastt serve --max-session-secs 30`.
 
-## Типичные ошибки
+## Частые ошибки
 
 Симптом → причина с указателем на исправление — jump table в
 [Приложении A — Коды ошибок](appendix-error-codes.md); полная таблица
@@ -714,7 +714,7 @@ python3 stream_wav.py crates/gigastt/tests/fixtures/golos_00.wav
 | Сокет закрывается 1008 ровно на часовой отметке | Потолок `--max-session-secs`; `final` сбрасывается первым, так что просто переподключайтесь | Рецепт 4; [troubleshooting](https://github.com/ekhodzitsky/gigastt/blob/main/docs/troubleshooting.md) |
 | Сокет закрывается 1001 после ~5 мин тишины | Idle-таймаут — ни одного фрейма; шлите тихий PCM, чтобы остаться живыми | Рецепт 4; [troubleshooting](https://github.com/ekhodzitsky/gigastt/blob/main/docs/troubleshooting.md) |
 | Сокет закрывается 1009 | Фрейм превысил `--ws-frame-max-bytes` (по умолчанию 512 КиБ) — режьте мельче | Рецепт 1; [api.md limits](https://github.com/ekhodzitsky/gigastt/blob/main/docs/api.md#session-and-frame-limits) |
-| Upgrade отклонён с HTTP 503 `{"code":"initializing"}` | Модель ещё скачивается/квантизируется — опрашивайте `/ready`, не перезапускайте | [troubleshooting](https://github.com/ekhodzitsky/gigastt/blob/main/docs/troubleshooting.md) |
+| Upgrade отклонён с HTTP 503 `{"code":"initializing"}` | Модель ещё скачивается — опрашивайте `/ready`, не перезапускайте | [troubleshooting](https://github.com/ekhodzitsky/gigastt/blob/main/docs/troubleshooting.md) |
 | Браузерное приложение с другого origin не подключается | Allowlist origin — по умолчанию только loopback; добавьте `--allow-origin` | [docs/cli.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/cli.md) |
 | Финалы приходят в голом нижнем регистре, без пунктуации | Пунктуационная модель не подключена или политика выключена; `e2e_rnnt` пунктуирует сам | Рецепт 2; [troubleshooting](https://github.com/ekhodzitsky/gigastt/blob/main/docs/troubleshooting.md) |
 | `configure` не действует | Отправлен после первого аудиофрейма (`configure_too_late`) — шлите сразу после `ready` | Рецепт 1 |

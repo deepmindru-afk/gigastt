@@ -17,7 +17,10 @@ GigaAM v3, транскрибировать первый аудиофайл — 
 - **Сеть** (если вы не идёте по рецепту для замкнутого контура): доступ к
   `github.com` для lean INT8-бандла (головы CTC — INT8 с HuggingFace).
 - **Аудиофайл для транскрибации** — WAV, M4A, MP3, OGG/Vorbis, OGG/Opus
-  (`.opus`), WebM/Opus или FLAC. Подойдёт любая короткая запись русской речи.
+  (`.opus`), WebM/Opus или FLAC. В репозитории есть 4-секундная русская
+  фикстура: `crates/gigastt/tests/fixtures/golos_00.wav`. Подойдёт любая
+  короткая русская запись. Файлы → эта глава / REST. Живые partials →
+  [Стриминг](04-streaming-ws.md).
 - Только для `cargo install` (сборка из исходников): Rust 1.88+ и `protoc` в
   `PATH` (`brew install protobuf` / `apt install protobuf-compiler`).
 
@@ -271,7 +274,7 @@ ls ~/.gigastt/models/
 #   v3_rnnt_encoder_int8.onnx  v3_rnnt_decoder.onnx  v3_rnnt_joint.onnx  v3_vocab.txt  ...
 
 # 2. Офлайн-транскрибация работает (сервер не нужен):
-gigastt transcribe recording.wav
+gigastt transcribe crates/gigastt/tests/fixtures/golos_00.wav
 #   → печатает распознанный текст в stdout
 
 # 3. Сервер поднимается и сообщает загруженную голову:
@@ -281,7 +284,7 @@ curl http://127.0.0.1:9876/health
 #   {"status":"ok","model":"gigaam-v3-rnnt","variant":"rnnt","version":"...","punctuation":true,"itn":true}
 
 # 4. REST-транскрибация работает:
-curl -F file=@recording.wav http://127.0.0.1:9876/v1/transcribe
+curl -F file=@crates/gigastt/tests/fixtures/golos_00.wav http://127.0.0.1:9876/v1/transcribe
 #   → {"text":"...","words":[...],"duration":N}
 ```
 

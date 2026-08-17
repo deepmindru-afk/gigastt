@@ -52,48 +52,22 @@
 [Английская версия](../../en/src/README.md) — каноническая; эта книга
 зеркалирует её глава в главу.
 
-## Карта документации
+## Какой API?
 
-Полный инвентарь документации репозитория: что в каждом файле и где он живёт.
-
-### Справочники (канонические — в книге не дублируются)
-
-| Файл | Содержимое | Судьба |
+| У вас | Берите | Не берите |
 |---|---|---|
-| [docs/api.md](../../../api.md) | Справочник HTTP / WebSocket / SSE API | остаётся |
-| [docs/asyncapi.yaml](../../../asyncapi.yaml) | AsyncAPI-схема WS-протокола | остаётся |
-| [docs/openapi.yaml](../../../openapi.yaml) | OpenAPI-схема REST API | остаётся |
-| [docs/cli.md](../../../cli.md) | Справочник CLI (`serve`, `download`, `transcribe`, …) | остаётся |
-| [docs/architecture.md](../../../architecture.md) | Обзор архитектуры | остаётся |
-| [docs/benchmarks.md](../../../benchmarks.md) | Измерения WER / RTF | остаётся |
-| [docs/privacy.md](../../../privacy.md) | Приватность и потоки данных | остаётся |
-| [docs/troubleshooting.md](../../../troubleshooting.md) | Таблица «симптом → причина → решение» | остаётся |
-| [docs/observability/](../../../observability/) | Алерты Prometheus и дашборд Grafana | остаётся |
+| Файл на диске, важен WER | REST `/v1/transcribe` или CLI `transcribe` — [01](01-getting-started.md), [02](02-cli-batch.md) | Живой WebSocket (WER хуже на ~11–15 п.п.) |
+| Папка / drop box | `transcribe-batch` / `watch` — [02](02-cli-batch.md) | `transcribe` в цикле |
+| Длинный файл, нельзя ждать | `/v1/jobs` (`--enable-jobs`) — [02](02-cli-batch.md) | Один блокирующий REST без плана по таймауту |
+| Микрофон / нога звонка, partials во время речи | WebSocket `/v1/ws` — [04](04-streaming-ws.md) | REST; не цитируйте 1000-рядную таблицу WER для этого пути |
+| Клиент под OpenAI | `/v1/audio/transcriptions` — [docs/api.md](../../../api.md) | Свой WS, если клиент умеет только multipart |
+| Приложение in-process (без сервера) | Биндинги — [05](05-desktop-embedded.md) | `serve`, если не нужна изоляция падений |
 
-### Гайды (актуальные)
+## Остальная документация
 
-| Файл | Содержимое | Судьба |
-|---|---|---|
-| [docs/deployment.md](../../../deployment.md) | Reverse proxy, TLS, systemd, Docker | остаётся |
-| [docs/quickstarts.md](../../../quickstarts.md) | Квикстарты по встраиванию (FFI-биндинги) | остаётся |
-| [docs/runbook.md](../../../runbook.md) | Ранбук оператора для production | остаётся |
-| [docs/self-hosted-runner.md](../../../self-hosted-runner.md) | Self-hosted CI-раннеры для бенчмарков | остаётся |
-| [docs/embedding-packaging.md](../../../embedding-packaging.md) | Линковка и упаковка onnxruntime | остаётся |
-| [docs/verifying-releases.md](../../../verifying-releases.md) | Проверка релизных артефактов | остаётся |
-| [docs/ane-backend.md](../../../ane-backend.md) | Заметка о бэкенде ANE (Core ML) — живой код `--features ane` | остаётся |
-| [docs/candle-backend.md](../../../candle-backend.md) | Заметка о бэкенде Candle/Metal — живой код `--features candle` | остаётся |
-| [sdks/go/README.md](../../../../sdks/go/README.md) | Go SDK для WebSocket-клиента | остаётся |
-| [sdks/js/README.md](../../../../sdks/js/README.md) | TypeScript SDK для WebSocket-клиента | остаётся |
-
-### Исторические (в архиве)
-
-Завершённые дизайн-документы и планы, сохранённые для истории в
-[`docs/archive/`](../../../archive/):
-
-| Файл | Содержимое | Судьба |
-|---|---|---|
-| [docs/archive/candle-metal-backend-plan.md](../../../archive/candle-metal-backend-plan.md) | План реализации бэкенда Candle/Metal (завершён) | в архиве |
-| [docs/archive/candle-metal-backend-design.md](../../../archive/candle-metal-backend-design.md) | Дизайн бэкенда Candle/Metal (замещён поставленным бэкендом) | в архиве |
+Полная карта справочников (API, CLI, бенчмарки, runbook, бэкенды) —
+[docs/README.md](../../../README.md). Книга ссылается наружу и не копирует
+эти страницы.
 
 ## Правила для контрибьюторов
 
@@ -113,6 +87,7 @@
   аудиоформаты), обновляйте главу, оглавление книги `SUMMARY.md` и
   канонические справочники в том же PR — и держите docs-drift gate зелёным:
   `python3 scripts/check-docs-drift.py` (пока advisory в CI; сверяет с кодом
-  CLI-флаги, коды ошибок WS, аудиоформаты, оглавления mdBook, паритет EN/RU,
-  относительные ссылки, пути OpenAPI, версии в SECURITY.md, пины крейтов,
-  а также актуальность версии и обязательные рецепты воркбука).
+  CLI-флаги, коды ошибок WS, аудиоформаты, оглавления mdBook, паритет числа
+  заголовков EN/RU, относительные ссылки, пути OpenAPI, версии в SECURITY.md,
+  пины крейтов, актуальность версии и обязательные рецепты воркбука).
+  Свежесть перевода — обязанность ревью, гейт считает только заголовки.

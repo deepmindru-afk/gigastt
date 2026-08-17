@@ -57,12 +57,12 @@ simulator `arm64`/`x86_64`, macOS `arm64`) with ONNX Runtime statically
 linked — there is no separate runtime to bundle. Requires iOS 15 / macOS 13
 (Apple Silicon only — there is no Intel macOS slice) and Xcode 15+.
 
-1. **Add the package.** Xcode → File → Add Package Dependencies… → enter the
-   mirror repository URL `https://github.com/ekhodzitsky/gigastt-swift` and add
-   the `GigaSTT` product to your target. The mirror is the canonical remote
-   source (SwiftPM needs `Package.swift` at the repository root, so the
-   monorepo subdirectory `packaging/swift` cannot be consumed via URL — use it
-   only as a local path dependency for development).
+1. **Add the package.** Remote SwiftPM (`https://github.com/ekhodzitsky/gigastt-swift`)
+   is **packaging in progress** — treat it as a snapshot, not a versioned
+   release. For development add the in-tree `packaging/swift` as a local path
+   dependency. Xcode → File → Add Package Dependencies… only after the mirror
+   publishes a tagged xcframework. SwiftPM needs `Package.swift` at the
+   repository root, so the monorepo subdirectory cannot be consumed via URL.
 2. **Bundle the model.** Copy `~/.gigastt/models` into your app target as a
    **folder reference** (the blue folder — it preserves the directory layout;
    a yellow "group" flattens the files and the engine will not find them).
