@@ -12,6 +12,14 @@ were released without a git tag, so their headings carry no compare link.
 
 ### Added
 
+- **Streaming WER + TTFP corpus harness.** `benchmark.py --mode batch|stream|both`
+  runs the live `/v1/ws` path (16 kHz PCM16, 100 ms real-time chunks) next to
+  REST batch and writes paired **Δ = WER_stream − WER_batch** with a bootstrap
+  CI. `benchmark_latency.py --dataset` reports TTFP / TTFS p50–p95. Protocol
+  is pinned in [`docs/benchmarks.md`](docs/benchmarks.md#streaming-measurement-protocol).
+  First 100-clip measurement (M1 Pro, CPU INT8): crowd Δ **+14.5 pp**
+  (4.97 → 19.46), far-field **+10.6 pp** (4.82 → 15.42); TTFP p50
+  **820 ms** far-field / **1653 ms** crowd; per-partial lag p50 **41–51 ms**.
 - **Model-free mock engine for unit tests.** `gigastt_core::test_support`
   (behind the private `__internals` feature) loads a scripted INT8 rnnt
   engine whose encoder accepts any audio length. HTTP, WebSocket, jobs,
@@ -23,6 +31,13 @@ were released without a git tag, so their headings carry no compare link.
 - Unit coverage of packaging (`quantize` no-op / missing FP32,
   `cache-gc`), job HTTP handlers, `RealJobExecutor`, engine file/bytes/
   channels/cancel wrappers, and `transcribe` batch helpers.
+
+### Fixed
+
+- Candle/Metal CI: mock-engine getter test no longer asserts `is_int8()`
+  (the candle loader reports FP32 safetensors even when the on-disk
+  layout uses INT8 ONNX filenames). This is what kept `Build (Candle/Metal)`
+  red on `main` after the mock-engine coverage merge.
 
 ### Changed
 

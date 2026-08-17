@@ -250,14 +250,99 @@ extra slot) sits below Vosk 0.54 (560 MB) and T-one greedy (672 MB). The
 resident figure is what to budget: RSS counts the shared memory-mapped model,
 whose pages the OS reclaims under pressure.
 
-## Streaming latency
+## Streaming measurement protocol
 
-Only gigastt exposes genuine incremental WebSocket streaming. Measured on `golos_00.wav`
-(4 s, fed in real time, timer from connect): **TTFP ~782 ms (CPU) / ~693 ms (CoreML)**.
-This is *buffered/chunked over an offline RNN-T*, not a natively streaming acoustic model
-— the win is "true incremental partials from a single embedded binary" vs Whisper's
-no-streaming, **not** a sub-second-latency claim. Vosk-server and T-one (300 ms chunks)
-are also genuine streaming designs.
+Streaming is **buffered/chunked over an offline RNN-T**, not a native streaming AM.
+Encoder geometry (do not change without a new protocol version): stride **0.8 s**,
+max window **2.5 s**, left context **1.5 s**. The first decode cannot run before
+~0.8 s of new audio, so end-to-end TTFP cannot honestly be “sub-200 ms” on this path.
+
+**Client (canonical, `STREAM_PROTOCOL_VERSION = 1.0`):**
+
+1. Connect `GET /v1/ws`. Wait for `Ready`.
+2. Send `{"type":"configure","sample_rate":16000}` **before** any audio.
+3. Feed **16 kHz mono PCM16**, `chunk_ms=100`, real-time `sleep` between frames.
+4. Start the TTFP clock on the **first audio frame** (after Ready + configure), not on connect.
+5. Ignore empty / whitespace `partial`s. They do not start the clock.
+6. Send `{"type":"stop"}` at EOF. Keep every `final` until the socket ends (mid-stream utterances + Stop flush); join them in order, then append a live partial only if it is not the last final. The Stop handler may drop TCP without a close frame — that is session end, not a dropped clip.
+7. A clip with no counted partial before timeout stays in the corpus as `n` / `n_timeout` / `n_no_partial`. **p50/p95 are over observed TTFPs only** (a missing partial is not imputed). Quote `n_timeout` next to p95.
+8. Warm server, INT8, CPU. Published latency rows use `--pool-size 1`. WER `--mode both` starts `serve` with the default `--pool-size 2`; do not mix those rows with the latency table. Stream RTF in `benchmark.py` is paced wall-clock (~1.0+), not encoder compute.
+
+Commands:
+
+```sh
+# Streaming WER vs the same REST batch path (same files, same normalizer)
+cd benchmark
+python benchmark.py --mode both --runners gigastt --dataset golos_crowd --max-samples 100 \
+  --output results_stream_wer.json
+
+# TTFP / TTFS p50–p95 (server must already be up)
+gigastt serve --port 9877 --pool-size 1
+python benchmark_latency.py --dataset golos_crowd --max-samples 100 \
+  --port 9877 --output results_latency_corpus.json
+```
+
+`--mode batch` is the historical REST table (default). `--mode stream` is WebSocket only.
+`--mode both` prints **Δ = WER_stream − WER_batch** with a bootstrap 95% CI on the paired clips.
+
+### Streaming vs batch WER
+
+First **100** clips of each committed manifest (not the 1000-row competitor table
+above). Apple M1 Pro, CPU INT8, `rnnt`. WER `--mode both` uses default
+`--pool-size 2`. Same files, same normalizer. Measured 2026-08-14.
+Summary artifact:
+[`benchmark/results_full/stream_protocol_v1_100.json`](../benchmark/results_full/stream_protocol_v1_100.json).
+
+| Dataset | n | WER_batch | WER_stream | Δ pp (stream − batch) | 95% CI on Δ |
+|---|--:|--:|--:|--:|---|
+| `golos_crowd_1k` | 100 | 4.97 | 19.46 | **+14.49** | [10.91, 18.24] |
+| `golos_farfield` | 100 | 4.82 | 15.42 | **+10.60** | [6.53, 15.09] |
+
+Crowd: 2 stream clips produced no transcript (counted as 100% WER). Farfield: 0
+timeouts. Typical stream errors are dropped / truncated words (`сколько` →
+`сколь`, long commands collapsed to a prefix), not substitutions of a full
+sentence.
+
+This 100-clip batch WER (4.97 / 4.82) is a **different n** from the 1000-row
+table (3.55 / 4.08). Do not splice them. The Δ is the number that matters:
+**streaming currently costs about 11–15 pp** on these slices.
+
+A single-file guard still exists: `crates/gigastt-core/tests/streaming_quality.rs` (`golos_00`, word overlap ≥ 0.5). That is not a corpus WER.
+
+### Streaming latency (p50 / p95)
+
+Older single-clip smoke (`golos_00.wav`, 4 s, real-time, timer from first audio):
+**TTFP ~782 ms (CPU) / ~693 ms (CoreML)**. That number is dominated by *where the first word
+falls* plus the 0.8 s stride — not by encoder compute (~70–100 ms/chunk).
+
+Corpus (same protocol, Apple M1 Pro, CPU INT8, warm `--pool-size 1`, 2026-08-14).
+p50/p95 are over **observed** values only. `n_timeout` / `n_no_partial` /
+`n_error` stay in the experiment count.
+
+**`golos_crowd_1k`** (n=100; 2 clips no partial / harness error):
+
+| Metric | n | p50 | p95 | max | notes |
+|---|--:|--:|--:|--:|---|
+| TTFP (first audio → first non-empty partial) | 98 | 1653 | 2628 | 3045 | clip-start; 0.8 s stride buckets |
+| TTFS (energy onset → first partial) | 89 | 803 | 2514 | 3045 | 11 clips had no onset |
+| Partial lag (send → partial) | 452 | 51 | 100 | 298 | compute + queue |
+| Finalization lag (first audio → final) | 98 | 4284 | 7325 | 10754 | includes clip duration |
+
+**`golos_farfield`** (n=100; 0 timeouts):
+
+| Metric | n | p50 | p95 | max | notes |
+|---|--:|--:|--:|--:|---|
+| TTFP | 100 | 820 | 829 | 1704 | almost all first-stride |
+| TTFS | 42 | 500 | 656 | 731 | 45 no onset; 13 dropped (onset after partial) |
+| Partial lag | 310 | 41 | 114 | 443 | compute + queue |
+| Finalization lag | 100 | 2787 | 5443 | 7454 | includes clip duration |
+
+TTFP p50 is **0.82 s (far-field) / 1.65 s (crowd)** — first-word position plus
+the 0.8 s stride, not encoder compute. Per-partial lag p50 is **41–51 ms**,
+p95 ~100–114 ms. Negative TTFS (energy onset after the first partial) is
+dropped from the percentile, not imputed.
+
+Vosk-server and T-one (300 ms chunks) are also genuine streaming designs. Whisper engines are offline. gigastt’s streaming win vs Whisper is incremental partials from one binary, **not** a lowest-latency claim, and **not** batch-equal WER on the live path.
 
 ## Edge / Raspberry Pi
 

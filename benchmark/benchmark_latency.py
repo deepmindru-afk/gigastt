@@ -1,136 +1,130 @@
 #!/usr/bin/env python3
-"""Measure streaming latency: time-to-first-partial and finalization lag."""
+"""Measure streaming latency: TTFP / TTFS p50–p95 and finalization lag.
+
+Single clip (legacy):
+    python benchmark_latency.py --wav path.wav --port 9877
+
+Corpus (p50/p95):
+    python benchmark_latency.py --dataset golos_crowd --max-samples 100 --port 9877
+
+The server must already be running (warm, `--pool-size 1` for the published
+protocol). Clock starts on the first audio frame after Ready + configure.
+"""
+
+from __future__ import annotations
 
 import argparse
-import asyncio
 import json
-import time
-import wave
 from pathlib import Path
 
-import websockets
+from common import load_manifest
+from streaming import STREAM_CHUNK_MS, STREAM_PROTOCOL_VERSION, STREAM_SAMPLE_RATE, summarize_latency, transcribe_ws
 
 
-class GigasttLatencyClient:
-    def __init__(self, port: int = 9877):
-        self.port = port
-        self.url = f"ws://127.0.0.1:{port}/v1/ws"
-
-    async def measure(self, wav_path: str, chunk_ms: int = 100) -> dict:
-        # Pre-load and validate the clip up front so the sender just paces already
-        # decoded PCM frames out over the socket while the reader runs concurrently.
-        with wave.open(wav_path, "rb") as wf:
-            channels = wf.getnchannels()
-            width = wf.getsampwidth()
-            rate = wf.getframerate()
-            if channels != 1 or width != 2 or rate != 16000:
-                raise ValueError("gigastt WebSocket streaming expects 16kHz mono 16-bit WAV")
-            frames_per_chunk = int(rate * chunk_ms / 1000)
-            audio_duration_ms = wf.getnframes() / rate * 1000.0
-            chunks = []
-            while True:
-                data = wf.readframes(frames_per_chunk)
-                if not data:
-                    break
-                chunks.append(data)
-
-        first_partial_at = None
-        final_at = None
-        # Wall-clock when the most recent audio chunk left the client. Because the sender is
-        # real-time paced, it also marks that audio's position in the stream, so a partial's
-        # delay relative to it approximates the server's per-chunk response (compute) lag.
-        last_sent_at = None
-        partial_lags = []  # seconds: (partial arrival - last_sent_at), one per partial
-
-        async with websockets.connect(self.url) as ws:
-            # Consume the ready message and tell the server we are streaming 16kHz PCM.
-            await ws.recv()
-            await ws.send(json.dumps({"type": "configure", "sample_rate": 16000}))
-
-            async def _read_loop():
-                # Runs concurrently with the sender, so a partial emitted mid-stream is
-                # timestamped when it actually arrives — not after the whole clip is sent.
-                nonlocal first_partial_at, final_at
-                async for msg in ws:
-                    now = time.perf_counter()
-                    obj = json.loads(msg)
-                    kind = obj.get("type")
-                    if kind == "partial":
-                        if last_sent_at is not None:
-                            partial_lags.append(now - last_sent_at)
-                        if first_partial_at is None:
-                            first_partial_at = now
-                    elif kind == "final":
-                        final_at = now
-                        return
-
-            # Start the reader before any audio leaves the client, then stamp started_at
-            # on the first chunk (handshake + configure already done) so TTFP is measured
-            # against the audio stream, not the connection setup.
-            reader = asyncio.create_task(_read_loop())
-            started_at = time.perf_counter()
-            last_sent_at = started_at
-            for data in chunks:
-                await ws.send(data)
-                last_sent_at = time.perf_counter()
-                await asyncio.sleep(chunk_ms / 1000.0)
-            await ws.send(json.dumps({"type": "stop"}))
-            send_done_at = time.perf_counter()
-
-            # The sender is real-time paced (~clip length); give the reader a bounded
-            # window after `stop` to observe the final segment, then stop waiting.
-            try:
-                await asyncio.wait_for(reader, timeout=30.0)
-            except asyncio.TimeoutError:
-                reader.cancel()
-
-        ttfp_ms = round((first_partial_at - started_at) * 1000, 1) if first_partial_at else None
-        result = {
-            "time_to_first_partial_ms": ttfp_ms,
-            "first_partial_after_audio_ms": ttfp_ms,
-            "finalization_lag_ms": round((final_at - started_at) * 1000, 1) if final_at else None,
-            "audio_duration_ms": round(audio_duration_ms, 1),
-            "total_audio_sent_ms": round((send_done_at - started_at) * 1000, 1),
-        }
-        # Per-chunk server response lag: delay of each partial relative to the most recently
-        # sent audio chunk. Isolates compute (+queue) latency from real-time pacing and from
-        # where the first word happens to fall in the clip — this is the number comparable to
-        # "incremental streaming latency". NOTE: it is an UPPER-bounded approximation and is
-        # under-estimated when per-chunk compute >= chunk_ms (a newer chunk is sent before the
-        # prior partial arrives, resetting last_sent_at); cross-check against the server log's
-        # `encoder_inference elapsed_ms`.
-        if partial_lags:
-            ordered = sorted(partial_lags)
-            n = len(ordered)
-            result["partial_response_lag_ms"] = {
+def evaluate_gigastt(wav_path: str, port: int = 9877, chunk_ms: int = STREAM_CHUNK_MS) -> dict:
+    """One clip. Keeps the legacy JSON keys used by older notes."""
+    _text, _elapsed, session = transcribe_ws(wav_path, port=port, chunk_ms=chunk_ms, pace=True)
+    lags = session.get("partial_lags_ms") or []
+    ordered = sorted(lags)
+    n = len(ordered)
+    return {
+        "time_to_first_partial_ms": session["ttfp_ms"],
+        "first_partial_after_audio_ms": session["ttfp_ms"],
+        "ttfs_ms": session["ttfs_ms"],
+        "finalization_lag_ms": session["finalization_lag_ms"],
+        "audio_duration_ms": session["audio_duration_ms"],
+        "total_audio_sent_ms": session["total_audio_sent_ms"],
+        "timed_out": session["timed_out"],
+        "no_partial": session["no_partial"],
+        "onset_s": session["onset_s"],
+        "ttfp_ms": session["ttfp_ms"],
+        "partial_lags_ms": lags,
+        "partial_response_lag_ms": (
+            {
                 "count": n,
-                "min": round(ordered[0] * 1000, 1),
-                "median": round(ordered[n // 2] * 1000, 1),
-                "max": round(ordered[-1] * 1000, 1),
+                "min": ordered[0],
+                "median": ordered[n // 2],
+                "max": ordered[-1],
             }
-        else:
-            result["partial_response_lag_ms"] = None
-        return result
+            if ordered
+            else None
+        ),
+        "wav": wav_path,
+        "engine": "gigastt",
+        "protocol": {
+            "sample_rate": STREAM_SAMPLE_RATE,
+            "chunk_ms": chunk_ms,
+            "version": STREAM_PROTOCOL_VERSION,
+        },
+    }
 
 
-def evaluate_gigastt(wav_path: str, port: int = 9877) -> dict:
-    return asyncio.run(GigasttLatencyClient(port).measure(wav_path))
+def evaluate_corpus(samples: list[dict], port: int, chunk_ms: int) -> dict:
+    rows = []
+    for idx, sample in enumerate(samples):
+        wav_path = sample["filename"]
+        try:
+            row = evaluate_gigastt(wav_path, port=port, chunk_ms=chunk_ms)
+            row["ok"] = True
+        except Exception as e:
+            print(f"  [{idx + 1}/{len(samples)}] ERROR {Path(wav_path).name}: {e}")
+            row = {
+                "wav": wav_path,
+                "ttfp_ms": None,
+                "ttfs_ms": None,
+                "finalization_lag_ms": None,
+                "timed_out": False,
+                "no_partial": True,
+                "partial_lags_ms": [],
+                "ok": False,
+                "error": str(e),
+            }
+        # summarize_latency reads ttfp_ms / timed_out / no_partial
+        if "ttfp_ms" not in row:
+            row["ttfp_ms"] = row.get("time_to_first_partial_ms")
+        if row.get("partial_response_lag_ms") and "partial_lags_ms" not in row:
+            # single-clip helper stores a summary; corpus rollup wants the list
+            row["partial_lags_ms"] = []
+        rows.append(row)
+        print(
+            f"  [{idx + 1}/{len(samples)}] TTFP={row.get('ttfp_ms')}  "
+            f"TTFS={row.get('ttfs_ms')}  {Path(wav_path).name}"
+        )
+    return {
+        "engine": "gigastt",
+        "port": port,
+        "chunk_ms": chunk_ms,
+        "summary": summarize_latency(rows),
+        "clips": rows,
+    }
 
 
 def main():
     parser = argparse.ArgumentParser(description="Streaming latency benchmark")
-    parser.add_argument("--wav", required=True, help="16kHz mono 16-bit WAV file")
+    parser.add_argument("--wav", help="Single 16 kHz (or resampled) WAV")
+    parser.add_argument("--dataset", help="Manifest name (e.g. golos_crowd)")
+    parser.add_argument("--max-samples", type=int, default=100, help="0 = all (dataset mode)")
     parser.add_argument("--output", default="results_latency.json")
     parser.add_argument("--port", type=int, default=9877)
+    parser.add_argument("--chunk-ms", type=int, default=STREAM_CHUNK_MS)
     args = parser.parse_args()
 
-    result = evaluate_gigastt(args.wav, port=args.port)
-    result["engine"] = "gigastt"
-    result["wav"] = args.wav
+    if bool(args.wav) == bool(args.dataset):
+        parser.error("provide exactly one of --wav or --dataset")
+
+    if args.wav:
+        result = evaluate_gigastt(args.wav, port=args.port, chunk_ms=args.chunk_ms)
+    else:
+        max_samples = args.max_samples if args.max_samples > 0 else None
+        manifest = load_manifest(max_samples=max_samples, dataset=args.dataset)
+        print(f"Loaded {len(manifest['samples'])} samples from '{args.dataset}'")
+        result = evaluate_corpus(manifest["samples"], port=args.port, chunk_ms=args.chunk_ms)
+        result["dataset"] = args.dataset
 
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    print(json.dumps(result if args.wav else result["summary"], ensure_ascii=False, indent=2))
+    print(f"\nWrote {args.output}")
 
 
 if __name__ == "__main__":

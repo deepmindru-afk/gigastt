@@ -1,5 +1,6 @@
 """Unit tests for benchmark/benchmark.py orchestration."""
 
+import json
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -54,6 +55,95 @@ def _fake_result(name: str = "fake") -> dict:
         "details": [],
         "histograms": {},
     }
+
+
+def test_mode_batch_does_not_select_stream_runner(tmp_path):
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
+    batch = _fake_runner("gigastt")
+    stream = _fake_runner("gigastt-stream")
+    manifest = [{"filename": "a.wav", "reference": "hello"}]
+    fake_result = {**_fake_result(), "samples": 1, "total_ref_words": 1}
+
+    with patch.object(benchmark, "ALL_RUNNERS", [batch, stream]):
+        with patch.object(benchmark, "load_manifest", return_value={"samples": manifest, "skipped_empty_refs": 0}):
+            with patch.object(benchmark, "run_benchmark", return_value=fake_result) as mock_run:
+                with patch.object(sys, "argv", [
+                    "benchmark.py",
+                    "--cache-dir", str(cache_dir),
+                    "--mode", "batch",
+                    "--output", str(tmp_path / "results.json"),
+                    "--max-samples", "1",
+                ]):
+                    benchmark._main()
+    names = [c.args[0].name for c in mock_run.call_args_list]
+    assert names == ["gigastt"]
+
+
+def test_mode_stream_selects_only_stream_runner(tmp_path):
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
+    batch = _fake_runner("gigastt")
+    stream = _fake_runner("gigastt-stream")
+    manifest = [{"filename": "a.wav", "reference": "hello"}]
+    fake_result = {**_fake_result(), "samples": 1, "total_ref_words": 1}
+
+    with patch.object(benchmark, "ALL_RUNNERS", [batch, stream]):
+        with patch.object(benchmark, "load_manifest", return_value={"samples": manifest, "skipped_empty_refs": 0}):
+            with patch.object(benchmark, "run_benchmark", return_value=fake_result) as mock_run:
+                with patch.object(sys, "argv", [
+                    "benchmark.py",
+                    "--cache-dir", str(cache_dir),
+                    "--mode", "stream",
+                    "--output", str(tmp_path / "results.json"),
+                    "--max-samples", "1",
+                ]):
+                    benchmark._main()
+    names = [c.args[0].name for c in mock_run.call_args_list]
+    assert names == ["gigastt-stream"]
+
+
+def test_mode_both_selects_batch_and_stream_and_writes_delta(tmp_path):
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
+    batch = _fake_runner("gigastt")
+    stream = _fake_runner("gigastt-stream")
+    whisper = _fake_runner("whisper_cpp")
+    manifest = [{"filename": "a.wav", "reference": "hello"}]
+    out = tmp_path / "results.json"
+
+    def _run(runner, *_args, **_kwargs):
+        if runner.name == "gigastt":
+            return {
+                **_fake_result("gigastt"),
+                "details": [{"file": "a.wav", "ref_words": 10, "errors": 1, "failed": False}],
+            }
+        if runner.name == "gigastt-stream":
+            return {
+                **_fake_result("gigastt-stream"),
+                "details": [{"file": "a.wav", "ref_words": 10, "errors": 2, "failed": False}],
+            }
+        return _fake_result(runner.name)
+
+    with patch.object(benchmark, "ALL_RUNNERS", [batch, stream, whisper]):
+        with patch.object(benchmark, "load_manifest", return_value={"samples": manifest, "skipped_empty_refs": 0}):
+            with patch.object(benchmark, "run_benchmark", side_effect=_run) as mock_run:
+                with patch.object(sys, "argv", [
+                    "benchmark.py",
+                    "--cache-dir", str(cache_dir),
+                    "--mode", "both",
+                    "--runners", "gigastt",
+                    "--output", str(out),
+                    "--max-samples", "1",
+                ]):
+                    benchmark._main()
+
+    names = [c.args[0].name for c in mock_run.call_args_list]
+    assert names == ["gigastt", "gigastt-stream"]
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    assert payload["mode"] == "both"
+    assert payload["stream_vs_batch"]["paired"] == 1
+    assert payload["stream_vs_batch"]["delta_pp"] == pytest.approx(10.0)
 
 
 def test_runner_selection_filters_by_name(tmp_path):
