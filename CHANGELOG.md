@@ -50,7 +50,11 @@ were released without a git tag, so their headings carry no compare link.
   ~350 MB / +536 MiB / invented `ml_ctc_large` per-slot RAM removed;
   privacy scoped to jobs/batch; no phantom `quantize` download phase.
   Workbook intro lost the docs-inventory dump, gained a REST-vs-WS
-  chooser; RU section titles match the template.
+  chooser; RU section titles match the template. Chapters 01/02/06/07
+  now share one RAM line + a benchmarks link (no cloned pool table);
+  ch.06 install/upgrade pins resolve the latest GitHub release tag;
+  ch.06 observability/secure copy is cut to recipes + links; contributor
+  rules add a translation-review checklist (heading-count gate unchanged).
 - Codecov patch target raised from 80% to 90%. Previously `#[ignore]`d
   HTTP handler tests now run on every PR.
 

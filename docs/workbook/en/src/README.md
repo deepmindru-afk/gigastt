@@ -91,4 +91,11 @@ those pages.
   flags, WS error codes, audio formats, mdBook TOCs, EN/RU heading-count
   parity, relative links, OpenAPI/SECURITY/crate pins, and workbook version
   currency + required recipe tokens against the code). Translation freshness
-  is a review duty — the gate only counts headings.
+  is a review duty — the gate only counts `^#{1,6} ` lines (markdown headings
+  *and* start-of-line `# ` comments in fences). Do not expand that gate.
+  Before merge, for every changed chapter, read the other language and check:
+  - same headings, Verify blocks, flags, env vars, paths, and error codes
+  - same measured numbers (RAM, RTF, sizes) — do not invent figures
+  - same start-of-line `# ` comment count (otherwise the parity gate fails)
+  - no previous-minor version pins (resolve latest via `TAG`/`VER`, or keep
+    `vX.Y.0` only as an example in a comment)

@@ -11,9 +11,9 @@ GigaAM v3, транскрибировать первый аудиофайл — 
 
 - **Диск:** ~225 МБ модель; закладывайте **~250–400 МБ** с бинарником
   (опциональные punct/VAD — отдельно).
-- **RAM:** ~66 МБ resident при дефолтном `--pool-size 2` (~510 МБ `ps` RSS —
-  считает mapped 215 МБ энкодера). На слабых машинах — `--pool-size 1`
-  (~46 МБ resident / ~277 МБ `ps` RSS).
+- **RAM:** ~46 / ~66 МБ resident при `--pool-size` 1 / 2 (~277 / ~510 МБ
+  `ps` RSS). Метод:
+  [docs/benchmarks.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md).
 - **Сеть** (если вы не идёте по рецепту для замкнутого контура): доступ к
   `github.com` для lean INT8-бандла (головы CTC — INT8 с HuggingFace).
 - **Аудиофайл для транскрибации** — WAV, M4A, MP3, OGG/Vorbis, OGG/Opus
@@ -308,12 +308,9 @@ curl -F file=@crates/gigastt/tests/fixtures/golos_00.wav http://127.0.0.1:9876/v
   `github.com` — нет, используйте `gigastt download`; в полностью
   замкнутом контуре — офлайн-бандл. При ошибках диска проверьте права на
   `~/.gigastt/models/`.
-- **OOM или активный swap при старте** — INT8-энкодер memory-mapped и общий
-  (~46 МБ resident / ~277 МБ `ps` RSS при `--pool-size 1`, ~66 / ~510 при
-  дефолтном 2; ~20 МБ resident на дополнительный слот). На слабых машинах
-  или жёстком cgroup запускайте с `--pool-size 1`. Ограничение при загрузке
-  по-прежнему закладывает консервативные `2 × размер-файла-энкодера` на слот,
-  поэтому завышенный пул может урезаться, даже если resident влез бы.
+- **OOM или активный swap при старте** — на слабых машинах
+  `--pool-size 1`. Цифры RAM:
+  [docs/benchmarks.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md).
 
 Полная таблица «симптом → причина → исправление» — в
 [docs/troubleshooting.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/troubleshooting.md).

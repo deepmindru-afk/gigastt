@@ -17,9 +17,9 @@
 
 - gigastt установлен (бинарник, пакет или образ) — см.
   [Начало работы](01-getting-started.md).
-- Linux-хост с **4+ ГБ RAM** — обычный production-пол (ОС + пики запросов).
-  Сам процесс — ~66 МБ resident / ~510 МБ `ps` RSS при дефолтном
-  `--pool-size 2` (INT8 `rnnt`; 215 МБ энкодера mapped).
+- Linux-хост с **4+ ГБ RAM** — обычный production-пол (ОС + пики).
+  RAM процесса: ~46 / ~66 МБ resident при пуле 1 / 2. Цифры:
+  [docs/benchmarks.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md).
 - Для пути с systemd: systemd 241 или новее (любой современный дистрибутив,
   включая Astra Linux, RED OS, ALT) и root-доступ.
 - Для пути с Docker: Docker 20.10+; NVIDIA Container Toolkit — только для
@@ -35,11 +35,13 @@
 предпочтительнее тянуть готовое, а не собирать:
 
 ```sh
-docker pull ghcr.io/ekhodzitsky/gigastt:2.18.0        # CPU, linux/amd64 + linux/arm64
-docker pull ghcr.io/ekhodzitsky/gigastt:2.18.0-cuda   # CUDA, linux/amd64
+TAG=$(gh api repos/ekhodzitsky/gigastt/releases/latest -q .tag_name)  # e.g. v2.18.0
+VER=${TAG#v}
+docker pull ghcr.io/ekhodzitsky/gigastt:${VER}        # CPU, linux/amd64 + linux/arm64
+docker pull ghcr.io/ekhodzitsky/gigastt:${VER}-cuda   # CUDA, linux/amd64
 ```
 
-Закрепляйте конкретный тег для воспроизводимых развёртываний; `:latest` /
+Закрепляйте `$VER` для воспроизводимых развёртываний; `:latest` /
 `:cuda` — плавающие.
 
 Запускайте с именованным томом, чтобы lean INT8-модель (~225 МБ) переживала
@@ -49,7 +51,7 @@ docker pull ghcr.io/ekhodzitsky/gigastt:2.18.0-cuda   # CUDA, linux/amd64
 docker run -d --name gigastt \
   -p 127.0.0.1:9876:9876 \
   -v gigastt-models:/home/gigastt/.gigastt/models \
-  ghcr.io/ekhodzitsky/gigastt:2.18.0
+  ghcr.io/ekhodzitsky/gigastt:${VER}
 ```
 
 Примечания:
@@ -71,7 +73,7 @@ docker run -d --name gigastt \
   моделью внутри — `docker build --build-arg GIGASTT_BAKE_MODEL=1 -t
   gigastt:baked .`
 - **CUDA**: `docker run --gpus all -p 127.0.0.1:9876:9876
-  ghcr.io/ekhodzitsky/gigastt:2.18.0-cuda` (требуется NVIDIA Container
+  ghcr.io/ekhodzitsky/gigastt:${VER}-cuda` (требуется NVIDIA Container
   Toolkit; при отсутствии GPU бинарник откатывается на CPU).
 
 **Проверить:**
@@ -80,7 +82,7 @@ docker run -d --name gigastt \
 curl -s http://127.0.0.1:9876/ready
 # {"status":"ready","pool_available":2,"pool_total":2}
 curl -s http://127.0.0.1:9876/health
-# {"status":"ok","model":"gigaam-v3-rnnt","variant":"rnnt","version":"2.18.0","punctuation":true,"itn":true}
+# {"status":"ok","model":"gigaam-v3-rnnt","variant":"rnnt","version":"...","punctuation":true,"itn":true}
 ```
 
 ### Установка без сети (замкнутый контур)
@@ -104,21 +106,23 @@ tarball под каждую Linux-цель — бинарник + предква
 [docs/verifying-releases.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/verifying-releases.md)):
 
 ```sh
-gh release download v2.18.0 -R ekhodzitsky/gigastt \
-    -p 'gigastt-2.18.0-offline-x86_64-unknown-linux-gnu.tar.gz' \
-    -p 'gigastt-2.18.0-offline-x86_64-unknown-linux-gnu.tar.gz.sha256' \
-    -p 'gigastt-2.18.0-offline-x86_64-unknown-linux-gnu.tar.gz.minisig'
-sha256sum -c gigastt-2.18.0-offline-x86_64-unknown-linux-gnu.tar.gz.sha256
-minisign -Vm gigastt-2.18.0-offline-x86_64-unknown-linux-gnu.tar.gz -p gigastt.pub
-gh attestation verify gigastt-2.18.0-offline-x86_64-unknown-linux-gnu.tar.gz \
+TAG=$(gh api repos/ekhodzitsky/gigastt/releases/latest -q .tag_name)  # e.g. v2.18.0
+VER=${TAG#v}
+gh release download "$TAG" -R ekhodzitsky/gigastt \
+    -p "gigastt-${VER}-offline-x86_64-unknown-linux-gnu.tar.gz" \
+    -p "gigastt-${VER}-offline-x86_64-unknown-linux-gnu.tar.gz.sha256" \
+    -p "gigastt-${VER}-offline-x86_64-unknown-linux-gnu.tar.gz.minisig"
+sha256sum -c "gigastt-${VER}-offline-x86_64-unknown-linux-gnu.tar.gz.sha256"
+minisign -Vm "gigastt-${VER}-offline-x86_64-unknown-linux-gnu.tar.gz" -p gigastt.pub
+gh attestation verify "gigastt-${VER}-offline-x86_64-unknown-linux-gnu.tar.gz" \
     --repo ekhodzitsky/gigastt
 ```
 
 На целевом хосте:
 
 ```sh
-tar xf gigastt-2.18.0-offline-x86_64-unknown-linux-gnu.tar.gz
-cd gigastt-2.18.0-offline
+tar xf "gigastt-${VER}-offline-x86_64-unknown-linux-gnu.tar.gz"
+cd "gigastt-${VER}-offline"
 sudo ./install.sh    # verifies SHA256SUMS.txt, then installs binary + models + unit
 sudo systemctl enable --now gigastt
 ```
@@ -126,7 +130,7 @@ sudo systemctl enable --now gigastt
 Альтернатива для Debian-семейства:
 
 ```sh
-sudo dpkg -i gigastt_2.18.0_amd64.deb gigastt-model-int8_2.18.0_all.deb
+sudo dpkg -i "gigastt_${VER}_amd64.deb" "gigastt-model-int8_${VER}_all.deb"
 sudo systemctl enable --now gigastt
 ```
 
@@ -237,42 +241,11 @@ rule_files:
   - /etc/prometheus/rules/gigastt-alerts.yml   # copy of docs/observability/alerts.yml
 ```
 
-Метрики, которые важны (все с префиксом `gigastt_`). Готовые правила Prometheus и
-дашборд Grafana лежат в
-[`docs/observability/`](https://github.com/ekhodzitsky/gigastt/tree/main/docs/observability) —
-этот каталог канонический, если таблица ниже когда-нибудь с ним разойдётся:
-
-| Метрика | Значение |
-|---|---|
-| `gigastt_http_requests_total` | Запросы по path/method/status — доля 5xx, 503 |
-| `gigastt_http_request_duration_seconds` | Гистограмма HTTP-латентности (p50/p95/p99) |
-| `gigastt_pool_available` / `gigastt_pool_waiters` | Свободные триплеты инференса против ожидающих вызовов — сигнал насыщения |
-| `gigastt_pool_timeouts_total` | Таймауты checkout → клиенты получили 503 + `Retry-After` |
-| `gigastt_inference_timeouts_total` | Запуски, прерванные `--inference-timeout-secs` |
-| `gigastt_inference_duration_seconds` | Гистограмма латентности инференса |
-| `gigastt_ws_active_connections` | Живые WebSocket-сессии |
-| `gigastt_rate_limit_rejections_total` | Ответы 429 от per-IP лимитера |
-| `gigastt_batch_pool_available` / `gigastt_batch_pool_waiters` | Те же метрики пула для раздела `--batch-pool-size` |
-
-Готовые артефакты — импортируйте, не изобретайте:
-
-- [docs/observability/alerts.yml](https://github.com/ekhodzitsky/gigastt/blob/main/docs/observability/alerts.yml)
-  — правила Prometheus: 5xx выше 5%, `gigastt_pool_available == 0` в течение
-  1 мин, p95 выше 10 с, устойчивые таймауты пула, падение health-пробы
-  (blackbox exporter).
-- [docs/observability/dashboard.json](https://github.com/ekhodzitsky/gigastt/blob/main/docs/observability/dashboard.json)
-  — дашборд Grafana (Dashboards → Import): частота запросов, латентность,
-  5xx, доступность пула, активные WebSocket, длительность инференса,
-  отказы rate-лимитера.
-
-Что алертить на практике: **насыщение пула** (`gigastt_pool_available == 0`
-устойчиво — клиенты получают 503), **долю 5xx** и **RAM** на уровне узла
-(gigastt не экспортирует метрику собственного RSS; используйте node_exporter
-или cAdvisor).
-
-Логи: env-фильтр `tracing` через `RUST_LOG` (по умолчанию `gigastt=info`;
-`gigastt=debug` для разбора). Логи содержат метаданные запросов — длительности,
-число слов — но никогда текст транскриптов
+Следите за **насыщением пула** (`gigastt_pool_available == 0`), **5xx** и
+RAM на уровне узла. Правила и дашборд Grafana импортируйте из
+[`docs/observability/`](https://github.com/ekhodzitsky/gigastt/tree/main/docs/observability)
+— каталог метрик сюда не копируйте. Логи: `RUST_LOG=gigastt=info` (debug
+для разбора); текста транскриптов нет
 ([docs/privacy.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/privacy.md)).
 
 **Проверить:**
@@ -285,40 +258,18 @@ curl -s http://127.0.0.1:9090/metrics | grep '^gigastt_pool_available'
 
 ### Безопасность по умолчанию
 
-Значения по умолчанию — это уже усиленная конфигурация, поэтому рецепт в
-основном о том, как её не ослабить:
-
-- **Привязка к loopback.** `serve` отказывается слушать не-loopback адреса,
-  пока не задан `--bind-all` / `GIGASTT_ALLOW_BIND_ANY=1`. Удалённый доступ =
-  TLS-терминирующий reverse proxy на том же хосте (конфиги Caddy/nginx:
-  [docs/deployment.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/deployment.md)).
-- **Origin-allowlist.** Loopback-источники разрешены всегда; любой другой
-  `Origin` нужно перечислить через `--allow-origin` (повторяемый флаг, точное
-  совпадение). `--cors-allow-any` — только для разработки. Неразрешённые
-  источники получают `403`.
-- **Лимиты запросов.** `--body-limit-bytes` (по умолчанию 50 МиБ),
-  `--ws-frame-max-bytes` (512 КиБ), `--idle-timeout-secs` (300),
-  `--max-session-secs` (3600), `--inference-timeout-secs` (600),
-  `--pool-checkout-timeout-secs` (30) — при насыщении пула 503 +
-  `Retry-After`.
-- **Rate-лимитинг** (опционально): `--rate-limit-per-minute N` с
-  `--rate-limit-burst` → `429` + `Retry-After`. За прокси он работает
-  по-клиентски, только если прокси *перезаписывает* `X-Forwarded-For` и задан
-  `--trust-proxy` — копируйте сниппеты прокси из
-  [docs/deployment.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/deployment.md#rate-limiter--x-forwarded-for)
-  дословно.
-- **Целостность модели.** Скачивания проверяются по SHA-256 и атомарно
-  переименовываются (`.partial` → финальный); повреждённый файл никогда не
-  попадает в каталог моделей.
-- **Верификация релизов.** У каждого артефакта релиза есть `.sha256`-сайдкар +
-  `SHA256SUMS.txt`, подпись minisign, CycloneDX SBOM и SLSA-провенанс сборки.
-  Проверяйте перед установкой —
-  [docs/verifying-releases.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/verifying-releases.md).
-  Минимальный ритуал:
+Не ослабляйте значения по умолчанию: loopback, origin-allowlist, лимиты
+тела/кадра. Сниппеты прокси и rate-limit:
+[docs/deployment.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/deployment.md).
+Проверяйте релиз перед установкой:
+[docs/verifying-releases.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/verifying-releases.md).
+Минимальный ритуал:
 
 ```sh
-minisign -Vm gigastt-2.18.0-x86_64-unknown-linux-gnu.tar.gz -p gigastt.pub
-gh attestation verify gigastt-2.18.0-x86_64-unknown-linux-gnu.tar.gz \
+TAG=$(gh api repos/ekhodzitsky/gigastt/releases/latest -q .tag_name)  # e.g. v2.18.0
+VER=${TAG#v}
+minisign -Vm "gigastt-${VER}-x86_64-unknown-linux-gnu.tar.gz" -p gigastt.pub
+gh attestation verify "gigastt-${VER}-x86_64-unknown-linux-gnu.tar.gz" \
     --repo ekhodzitsky/gigastt
 ```
 
@@ -377,15 +328,15 @@ TAG=$(gh api repos/ekhodzitsky/gigastt/releases/latest -q .tag_name)   # e.g. v2
 VER=${TAG#v}
 ```
 
-Docker (обновление до выбранного пина — здесь `2.18.0`):
+Docker (обновление до `$VER` из блока выше):
 
 ```sh
-docker pull ghcr.io/ekhodzitsky/gigastt:2.18.0
+docker pull ghcr.io/ekhodzitsky/gigastt:${VER}
 docker stop --time 15 gigastt && docker rm gigastt
 docker run -d --name gigastt \
   -p 127.0.0.1:9876:9876 \
   -v gigastt-models:/home/gigastt/.gigastt/models \
-  ghcr.io/ekhodzitsky/gigastt:2.18.0
+  ghcr.io/ekhodzitsky/gigastt:${VER}
 ```
 
 `docker stop` шлёт `SIGTERM`; `--time 15` даёт окну дренажа
@@ -397,7 +348,7 @@ docker run -d --name gigastt \
 systemd / deb:
 
 ```sh
-sudo dpkg -i gigastt_2.18.0_amd64.deb
+sudo dpkg -i "gigastt_${VER}_amd64.deb"
 sudo systemctl restart gigastt
 journalctl -u gigastt -f    # expect a clean drain, no "Drain window expired"
 ```
@@ -448,14 +399,10 @@ curl -s http://127.0.0.1:9090/metrics | grep '^gigastt_pool_available'
 
 ## Частые ошибки
 
-- **OOM — контейнер или сервис убит.** Считайте **resident**, а не вторую
-  копию энкодера: ~46 МБ при `--pool-size 1`, ~66 МБ при дефолтном 2
-  (~20 МБ на дополнительный слот). `ps` RSS читает ~277 / ~510 МБ, потому
-  что считает mapped 215 МБ энкодера. На машине с 4 ГБ пул 2 для `rnnt` —
-  не проблема RAM; `--pool-min-size 1`
-  позволяет серверу подняться на деградированном пуле вместо падения при
-  нехватке памяти. Если Kubernetes сообщает `OOMKilled`, уменьшите пул или
-  поднимите лимит пода — подробности в
+- **OOM — контейнер или сервис убит.** Считайте resident (~46 / ~66 МБ при
+  пуле 1 / 2). `--pool-min-size 1` поднимает деградированный пул. Цифры и
+  OOMKilled:
+  [docs/benchmarks.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md),
   [docs/runbook.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/runbook.md).
 - **503 `timeout` под нагрузкой.** Все триплеты заняты, и вызывающий дождался
   конца `--pool-checkout-timeout-secs` (30 с): REST получает `503` +
