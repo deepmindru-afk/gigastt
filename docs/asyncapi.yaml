@@ -4,8 +4,10 @@ info:
   title: gigastt WebSocket API
   version: "1.0"
   description: |
-    Real-time speech-to-text WebSocket API powered by GigaAM v3 (rnnt head by default).
-    On-device Russian speech recognition via ONNX Runtime.
+    Live-partials WebSocket API powered by GigaAM v3 (rnnt head by default).
+    On-device Russian speech recognition via ONNX Runtime. Buffered/chunked
+    over an offline RNN-T: stride 0.8 s, max window 2.5 s, left context 1.5 s.
+    Streaming WER is not batch-equal; see docs/benchmarks.md.
 
     This document is the machine-readable schema. The human-readable protocol
     reference (field tables, error codes, close codes, examples) lives in

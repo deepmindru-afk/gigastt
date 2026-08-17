@@ -291,9 +291,7 @@ long calls transcribe fine — and `?codec=` / `?sample_rate=` work on
 `/v1/transcribe`, `/v1/transcribe/stream`, and `/v1/jobs` alike. Operators who
 want an explicit cap can start the server with `--max-audio-secs` (see the
 pitfall below); the whole-buffer paths (diarization, `channels=split`, and the
-G.722 / raw telephony codecs) keep a fixed ~30-minute safety ceiling regardless. A
-Deepgram-compatible `/v1/listen` endpoint that accepts the same telephony
-inputs is in progress.
+G.722 / raw telephony codecs) keep a fixed ~30-minute safety ceiling regardless.
 
 ## Verifying the result
 

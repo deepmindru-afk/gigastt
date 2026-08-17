@@ -1,8 +1,14 @@
 # Streaming over WebSocket
 
 Live, partial-results transcription: a microphone feed, a call leg, or a
-browser capture goes in as raw PCM16, and text comes out within about a
-second of speech. This chapter is the recipe book for that integration —
+browser capture goes in as raw PCM16, and incremental text comes out as you
+speak. First partial is typically **under two seconds** (TTFP p50 ~0.82 s
+far-field / ~1.65 s crowd under protocol 1.0) — not sub-200 ms. Streaming
+WER is **about 11–15 percentage points worse** than REST batch on the same
+files (truncated / dropped words). Use REST for files when accuracy is the
+goal; this chapter is for live partials. Full tables:
+[docs/benchmarks.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#streaming-measurement-protocol).
+This chapter is the recipe book for that integration —
 the field-by-field protocol reference stays in
 [docs/api.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/api.md#websocket--real-time-streaming)
 and the machine-readable schema in
@@ -11,11 +17,11 @@ we link to them instead of repeating them.
 
 ## Scenario
 
-You are building a real-time integration — live captions for a meeting
-tool, a voice bot on a phone line, or a "dictaphone with instant text"
-feature. Audio arrives continuously; users expect to watch the transcript
-grow while they speak, see each utterance finalized cleanly, and never lose
-trailing words when the stream ends. Some sessions run for hours, some
+You are building a live integration — captions for a meeting tool, a voice
+bot on a phone line, or a dictaphone that shows partials while you speak.
+Audio arrives continuously; users expect to watch the transcript grow,
+see each utterance finalized, and not lose trailing words on `stop`. Do
+not promise batch WER on this path. Some sessions run for hours, some
 setups capture two audio sources at once (mic + system audio), and the
 client must survive pool saturation and network drops without babysitting.
 
@@ -31,8 +37,9 @@ client must survive pool saturation and network drops without babysitting.
   ```
 
 - A WebSocket client stack for your language: `pip install websockets` for
-  the Python recipes, Node.js ≥ 22 (global `WebSocket`, no dependencies) for
-  the JavaScript one, Go 1.23+ for the SDK one.
+  the Python recipes, Node.js ≥ 20 for the JavaScript one (global `WebSocket`
+  on Node ≥ 22; the `ws` package is the fallback on 20–21), Go 1.23+ for the
+  SDK one.
 - A PCM16 mono source. For the copy-paste checks below, the repository
   ships a 4-second Russian speech fixture at exactly the right format
   (16 kHz mono Int16): `crates/gigastt/tests/fixtures/golos_00.wav`. For a
@@ -388,7 +395,8 @@ text. Stop sending frames entirely and the `idle_timeout` error with close
 
 **Confidence.** Every transcript segment carries an optional `confidence` —
 the duration-weighted mean of its `words[].confidence` (each word's is the
-mean softmax score over its BPE tokens). It is an average of softmax
+mean softmax score over the tokens that make up the word — char pieces on
+`rnnt` / `ml_ctc*`, BPE on `e2e_rnnt`). It is an average of softmax
 scores, **not a calibrated probability**, and it is omitted when the
 segment has no words. As starting thresholds to tune on your own data:
 highlight words below ~0.7 for human review, flag segments below ~0.8:
@@ -440,8 +448,9 @@ not tag sources, so label them client-side. The constraint to design around
 is the pool: each session holds one inference slot for its entire lifetime,
 so the default `--pool-size 2` fits exactly two channels and nothing else.
 Give the server headroom if other clients also connect — each extra slot
-costs roughly 0.4 GB RAM with the INT8 encoder (the server caps the pool to
-available RAM at load):
+costs about **20 MB resident** (the 215 MB encoder is mapped and shared;
+`ps` RSS overstates). The server still caps the pool to available RAM at
+load:
 
 ```sh
 gigastt serve --pool-size 4
@@ -550,11 +559,12 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-**Node.js** — no dependencies (global `WebSocket`, Node ≥ 22), same WAV
+**Node.js** — global `WebSocket` on Node ≥ 22 (no deps); Node 20–21 needs
+the `ws` package (what `@gigastt/client` uses). Same WAV
 file contract:
 
 ```js
-// stream_wav.mjs — stream a 16 kHz mono PCM16 WAV to gigastt (Node.js ≥ 22).
+// stream_wav.mjs — 16 kHz mono PCM16 → gigastt (Node ≥ 20; global WebSocket on ≥ 22).
 import { readFile } from "node:fs/promises";
 
 const [wavPath, server = "ws://127.0.0.1:9876/v1/ws"] = process.argv.slice(2);
@@ -707,14 +717,11 @@ and the field-level tables in
 | Socket closes 1008 exactly at the 1-hour mark | `--max-session-secs` cap; a `final` is flushed first, so just reconnect | Recipe 4; [troubleshooting](https://github.com/ekhodzitsky/gigastt/blob/main/docs/troubleshooting.md) |
 | Socket closes 1001 after ~5 min of silence | Idle timeout — no frames at all; stream quiet PCM to stay alive | Recipe 4; [troubleshooting](https://github.com/ekhodzitsky/gigastt/blob/main/docs/troubleshooting.md) |
 | Socket closes 1009 | A frame exceeded `--ws-frame-max-bytes` (default 512 KiB) — chunk smaller | Recipe 1; [api.md limits](https://github.com/ekhodzitsky/gigastt/blob/main/docs/api.md#session-and-frame-limits) |
-| Upgrade refused with HTTP 503 `{"code":"initializing"}` | Model still downloading/quantizing — poll `/ready`, don't restart | [troubleshooting](https://github.com/ekhodzitsky/gigastt/blob/main/docs/troubleshooting.md) |
+| Upgrade refused with HTTP 503 `{"code":"initializing"}` | Model still downloading — poll `/ready`, don't restart | [troubleshooting](https://github.com/ekhodzitsky/gigastt/blob/main/docs/troubleshooting.md) |
 | Browser app from another origin can't connect | Origin allowlist — loopback origins only by default; add `--allow-origin` | [docs/cli.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/cli.md) |
 | Finals arrive bare lowercase, no punctuation | Punctuation model not attached, or policy off; `e2e_rnnt` punctuates itself | Recipe 2; [troubleshooting](https://github.com/ekhodzitsky/gigastt/blob/main/docs/troubleshooting.md) |
 | `configure` has no effect | Sent after the first audio frame (`configure_too_late`) — send it right after `ready` | Recipe 1 |
 | No transcript at all | Three independent failure domains: server readiness, audio capture, language/head | [troubleshooting triage](https://github.com/ekhodzitsky/gigastt/blob/main/docs/troubleshooting.md#no-transcript-audio-capture-vs-stt-startup-vs-language-config) |
-
-A Deepgram-compatible WebSocket mode (a drop-in endpoint for Deepgram
-clients) is in progress; this chapter covers the native protocol only.
 
 ## Links
 

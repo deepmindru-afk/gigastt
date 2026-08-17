@@ -178,7 +178,8 @@ pub async fn ensure_model(model_dir: &str) -> Result<()> {
 }
 
 /// Ensure an appropriate model variant's files exist in `model_dir`,
-/// downloading from HuggingFace if missing.
+/// downloading if missing (GitHub Releases for default `rnnt` / `e2e_rnnt`
+/// INT8; HuggingFace for CTC heads).
 ///
 /// When `requested` is `Some(v)`, the function enforces that variant `v` is
 /// present, downloading it if it isn't (or if the dir holds a different variant).

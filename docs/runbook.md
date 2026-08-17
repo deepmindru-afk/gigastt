@@ -28,7 +28,7 @@ When the server receives `SIGTERM` (or the `run_with_shutdown` oneshot fires):
 
 ### Rollback: disable graceful drain
 
-If v0.9.0 rollout breaks WS clients, the runtime supports a tiered rollback:
+If a release breaks WS clients, the runtime supports a tiered rollback:
 
 1. **Shrink the drain window to 1 s** (effectively disabling the wait):
    ```sh
@@ -39,7 +39,8 @@ If v0.9.0 rollout breaks WS clients, the runtime supports a tiered rollback:
 
 2. **Disable the session cap independently** (see the section below).
 
-3. **Git revert** — v0.9.0's WS-lifecycle work lives in one PR and reverts cleanly. Only use if options 1-2 are insufficient; you'll need to re-cut the release.
+3. **Roll back the binary** to the previous release tag (do not invent an
+   in-tree revert of ancient WS-lifecycle work). Re-cut only if you must.
 
 ## Max session duration
 
@@ -158,10 +159,12 @@ To force a clean re-download, remove `~/.gigastt/models/` and re-run.
 
 ## Out-of-memory (OOM)
 
-RSS scales with `--pool-size` (each triplet owns its ONNX sessions) plus ORT's
-per-request scratch (a few minutes of 16 kHz audio allocates ~90+ MiB in the
-encoder by itself). A default pool of 2 with the INT8 encoder sits around
-~790 MiB resident (single session ~400 MiB).
+The 215 MB INT8 encoder is **memory-mapped and shared** across pool slots.
+Budget **resident** footprint (dirty + compressed pages): ~46 MB at
+`--pool-size 1`, ~66 MB at the default 2 (~20 MB per extra slot). `ps` RSS
+reads ~277 / ~510 MB because it counts the shared mapping — do not size
+cgroups off `ps` RSS. Per-request encoder scratch still grows with audio
+length (a few minutes of 16 kHz can add tens of MiB).
 
 **Reduce footprint**
 - Runtime is **INT8 only** (`gigastt download` / first `serve`).
@@ -191,9 +194,10 @@ Operator notes for pool sizing, SKUs, VAD, and reload. Full flag list:
 
 ### Pool size tradeoffs (RAM vs concurrency vs RTF)
 
-- Each extra pool slot loads **another full encoder copy** — typically
-  **hundreds of MiB** RSS (INT8 `rnnt` ≈ **+280…450 MiB** going from pool 1 → 2;
-  default pool=2 ≈ **~790 MiB** ready, pool=1 ≈ **~400 MiB**).
+- Each extra pool slot costs about **~20 MB resident** (the encoder mapping
+  is shared). Honest figures for INT8 `rnnt` on M1: pool-1 ≈ **46 MB
+  resident / 277 MB `ps` RSS**, pool-2 ≈ **66 MB / 510 MB**. Do not use the
+  old “~400 / ~790 MB per copy” arithmetic.
 - Pool > 1 also **splits encoder intra-op threads** across concurrent triplets.
   A **single** job on a busy multi-slot pool is therefore slower than the same
   job on pool=1 — typically about **+10–20% RTF** on a quiet serial workload
@@ -235,10 +239,10 @@ Clamped so at least one interactive triplet remains.
 
 `POST /v1/admin/reload` builds a **second** engine, then **swaps before warmup**
 so the warm peak is not forced to stack on the previous copy once in-flight
-work finishes. Peak RSS during the **build** can still approach about **+0.5×
-ready** (lab ≈ **+536 MiB** at **pool=1** INT8 `rnnt`). Edge boxes with almost
-no free RAM can OOM mid-build even when steady-state `pool=1` fits; keep
-headroom or restart the process instead.
+work finishes. The 215 MB encoder mapping is shared; ORT arenas and decoder
+state are not. Peak after mmap is **unmeasured** (do not quote the copy-era
++536 MiB figure). Edge boxes with almost no free RAM can still OOM mid-build;
+keep headroom or restart the process instead.
 
 **Soft reload** (`POST /v1/admin/reload?soft=true`): after swap, wait up to ~5 s
 for the previous engine's last in-flight holders to release, then warm — lowers
