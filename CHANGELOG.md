@@ -49,6 +49,8 @@ were released without a git tag, so their headings carry no compare link.
   cells quote resident+RSS and stream caveats; leftover copy-era
   ~350 MB / +536 MiB / invented `ml_ctc_large` per-slot RAM removed;
   privacy scoped to jobs/batch; no phantom `quantize` download phase.
+  Workbook intro lost the docs-inventory dump, gained a REST-vs-WS
+  chooser; RU section titles match the template.
 - Codecov patch target raised from 80% to 90%. Previously `#[ignore]`d
   HTTP handler tests now run on every PR.
 

@@ -53,49 +53,22 @@ minors.
 The [Russian version](../../ru/src/README.md) mirrors this book chapter by
 chapter.
 
-## Documentation map
+## Which API?
 
-Full inventory of the documentation in this repository: what each file is and
-where it lives.
-
-### References (canonical — never duplicated in the workbook)
-
-| File | Contents | Fate |
+| You have | Use | Do not use |
 |---|---|---|
-| [docs/api.md](../../../api.md) | HTTP / WebSocket / SSE API reference | stays |
-| [docs/asyncapi.yaml](../../../asyncapi.yaml) | AsyncAPI schema for the WS protocol | stays |
-| [docs/openapi.yaml](../../../openapi.yaml) | OpenAPI schema for the REST API | stays |
-| [docs/cli.md](../../../cli.md) | CLI reference (`serve`, `download`, `transcribe`, …) | stays |
-| [docs/architecture.md](../../../architecture.md) | Architecture overview | stays |
-| [docs/benchmarks.md](../../../benchmarks.md) | WER / RTF measurements | stays |
-| [docs/privacy.md](../../../privacy.md) | Privacy and data-flow statement | stays |
-| [docs/troubleshooting.md](../../../troubleshooting.md) | Symptom → cause → fix table | stays |
-| [docs/observability/](../../../observability/) | Prometheus alerts and Grafana dashboard assets | stays |
+| A file on disk, WER matters | REST `/v1/transcribe` or CLI `transcribe` — [01](01-getting-started.md), [02](02-cli-batch.md) | Live WebSocket (WER is ~11–15 pp worse) |
+| A folder / drop box | `transcribe-batch` / `watch` — [02](02-cli-batch.md) | One-shot `transcribe` in a loop |
+| A long file you cannot wait on | `/v1/jobs` (`--enable-jobs`) — [02](02-cli-batch.md) | A single blocking REST call without a timeout plan |
+| A microphone / call leg, partials while speaking | WebSocket `/v1/ws` — [04](04-streaming-ws.md) | REST; do not quote the 1000-row WER table for this path |
+| An OpenAI-compatible client | `/v1/audio/transcriptions` — [docs/api.md](../../../api.md) | Custom WS if the client only speaks multipart |
+| An in-process app (no server) | Bindings — [05](05-desktop-embedded.md) | Spawning `serve` unless you need crash isolation |
 
-### Guides (current)
+## More documentation
 
-| File | Contents | Fate |
-|---|---|---|
-| [docs/deployment.md](../../../deployment.md) | Reverse proxy, TLS, systemd, Docker | stays |
-| [docs/quickstarts.md](../../../quickstarts.md) | In-process embedding quickstarts (FFI bindings) | stays |
-| [docs/runbook.md](../../../runbook.md) | Operator runbook for production | stays |
-| [docs/self-hosted-runner.md](../../../self-hosted-runner.md) | Self-hosted CI runners for benchmarks | stays |
-| [docs/embedding-packaging.md](../../../embedding-packaging.md) | onnxruntime linking and packaging | stays |
-| [docs/verifying-releases.md](../../../verifying-releases.md) | Verifying release artifacts | stays |
-| [docs/ane-backend.md](../../../ane-backend.md) | ANE (Core ML) backend note — live `--features ane` code | stays |
-| [docs/candle-backend.md](../../../candle-backend.md) | Candle/Metal backend note — live `--features candle` code | stays |
-| [sdks/go/README.md](../../../../sdks/go/README.md) | Go WebSocket client SDK | stays |
-| [sdks/js/README.md](../../../../sdks/js/README.md) | TypeScript WebSocket client SDK | stays |
-
-### Historical (archived)
-
-Completed design/plan documents kept for archaeology in
-[`docs/archive/`](../../../archive/):
-
-| File | Contents | Fate |
-|---|---|---|
-| [docs/archive/candle-metal-backend-plan.md](../../../archive/candle-metal-backend-plan.md) | Candle/Metal backend implementation plan (completed) | archived |
-| [docs/archive/candle-metal-backend-design.md](../../../archive/candle-metal-backend-design.md) | Candle/Metal backend design (superseded by the shipped backend) | archived |
+The full map of references (API, CLI, benchmarks, runbook, backends) lives in
+[docs/README.md](../../../README.md). This book links out; it does not copy
+those pages.
 
 ## Rules for contributors
 
@@ -115,6 +88,7 @@ Completed design/plan documents kept for archaeology in
   formats), update the chapter, the book `SUMMARY.md`, and the canonical
   references in the same PR — and keep the docs-drift gate green:
   `python3 scripts/check-docs-drift.py` (advisory in CI; it compares CLI
-  flags, WS error codes, audio formats, mdBook TOCs, EN/RU parity,
-  relative links, OpenAPI/SECURITY/crate pins, and workbook version
-  currency + required recipe tokens against the code).
+  flags, WS error codes, audio formats, mdBook TOCs, EN/RU heading-count
+  parity, relative links, OpenAPI/SECURITY/crate pins, and workbook version
+  currency + required recipe tokens against the code). Translation freshness
+  is a review duty — the gate only counts headings.

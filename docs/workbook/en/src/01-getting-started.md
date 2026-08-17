@@ -17,7 +17,9 @@ you should not need any other document to get here.
 - **Network** (unless you follow the air-gapped recipe): reach `github.com`
   for the pre-quantized INT8 bundle (CTC heads use HuggingFace INT8).
 - **An audio file to transcribe** — WAV, M4A, MP3, OGG/Vorbis, OGG/Opus
-  (`.opus`), WebM/Opus, or FLAC. Any short recording of Russian speech works.
+  (`.opus`), WebM/Opus, or FLAC. The repo ships a 4 s Russian fixture:
+  `crates/gigastt/tests/fixtures/golos_00.wav`. Any short Russian recording
+  works. Files → this chapter / REST. Live partials → [Streaming](04-streaming-ws.md).
 - Only for `cargo install` (build from source): Rust 1.88+ and `protoc` on
   `PATH` (`brew install protobuf` / `apt install protobuf-compiler`).
 
@@ -268,7 +270,7 @@ ls ~/.gigastt/models/
 #   v3_rnnt_encoder_int8.onnx  v3_rnnt_decoder.onnx  v3_rnnt_joint.onnx  v3_vocab.txt  ...
 
 # 2. Offline transcription works (no server needed):
-gigastt transcribe recording.wav
+gigastt transcribe crates/gigastt/tests/fixtures/golos_00.wav
 #   → prints the recognized text on stdout
 
 # 3. The server comes up and reports the loaded head:
@@ -278,7 +280,7 @@ curl http://127.0.0.1:9876/health
 #   {"status":"ok","model":"gigaam-v3-rnnt","variant":"rnnt","version":"...","punctuation":true,"itn":true}
 
 # 4. REST transcription works:
-curl -F file=@recording.wav http://127.0.0.1:9876/v1/transcribe
+curl -F file=@crates/gigastt/tests/fixtures/golos_00.wav http://127.0.0.1:9876/v1/transcribe
 #   → {"text":"...","words":[...],"duration":N}
 ```
 
