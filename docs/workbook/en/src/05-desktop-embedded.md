@@ -17,7 +17,7 @@ transcript.
 | How | Engine linked into your app: SwiftPM `GigaSTT`, npm `gigastt`, PyPI `gigastt`, UniFFI bindings | Engine runs as a child process; your app talks WS/REST over a loopback port |
 | Interface | Native calls; typed errors (`throws` / exceptions / rejected promises) | Wire protocol (`/v1/ws`, REST `/v1/transcribe`, SSE) |
 | Deployment | One package install; no process supervision | Binary discovery on the user's machine, spawn, supervision, port selection |
-| Memory | Model + pool live inside your app (~350–400 MB RSS per pool session) | Model lives in the separate server process |
+| Memory | Model + pool live inside your app (~46 MB resident at pool 1 / ~66 MB at pool 2; `ps` RSS ~277 / ~510 MB counts the mapped encoder) | Model lives in the separate server process |
 | Concurrency | One engine/pool instance per app process | One server shared by several apps/clients |
 | Failure isolation | An engine crash takes the app down (and vice versa) | Server crashes are isolated; the app survives and can restart it |
 | Upgrades | Redeploy the app with the new engine | Upgrade the server binary independently of any client |
@@ -36,7 +36,7 @@ Rules of thumb:
 ## Prerequisites
 
 - **A model directory** — every path below assumes one. Fetch the
-  pre-quantized INT8 bundle once (~215 MB, no FP32 download, no on-device
+  pre-quantized INT8 bundle once (~225 MB lean install, no FP32 download, no on-device
   quantization):
 
   ```sh
@@ -78,7 +78,7 @@ linked — there is no separate runtime to bundle. Requires iOS 15 / macOS 13
        fatalError("bundle the model directory as a folder reference")
    }
 
-   // poolSize: 1 keeps RAM around ~350 MB, recommended on device.
+   // poolSize: 1 is the on-device default (~46 MB resident / ~277 MB ps RSS).
    let engine = try Engine(modelDir: modelDir, poolSize: 1)
 
    // Path is relative to the current working directory; absolute paths and
@@ -367,8 +367,9 @@ End-to-end checklist, whichever path you took:
   (any Russian speech file, e.g. a Golos sample).
 - **Model on disk**: `ls ~/.gigastt/models` shows the lean INT8 set
   (`v3_rnnt_encoder_int8.onnx` plus decoder/joiner/vocab).
-- **Memory**: RSS stays in the expected band — roughly 350–400 MB per pool
-  session; a `poolSize`/`pool-size` of 1 is the right default on-device.
+- **Memory**: resident stays in the expected band — ~46 MB at pool 1 / ~66 MB
+  at pool 2 (`ps` RSS ~277 / ~510 MB counts the mapped encoder); a
+  `poolSize`/`pool-size` of 1 is the right default on-device.
 - **Sidecar health**: `curl -s http://127.0.0.1:<port>/ready` returns
   `{"status":"ready",...}` and `/health` reports the `version` you gate on;
   SIGTERM shuts the process down within the drain window with a clean log

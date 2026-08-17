@@ -5,10 +5,10 @@
 
 use anyhow::Context;
 
-/// Approximate resident bytes a single pooled encoder triplet costs, as a
-/// multiple of the encoder file size on disk. Measured at ~1.9x the INT8
-/// encoder file (225 MB file → ~0.4 GB resident per extra pooled slot, dynamic
-/// INT8 graph, CPU EP, release). Used by [`cap_pool_size_for_ram`] to keep
+/// Conservative RAM-cap budget: a multiple of the encoder file size on disk.
+/// After mmap the measured extra slot is ~20 MB resident (not another encoder
+/// copy); this multiplier stays pessimistic so [`cap_pool_size_for_ram`] still
+/// clamps oversized `--pool-size` on small hosts. Used to keep
 /// `pool_size * encoder_file_bytes * this` under a fraction of total RAM.
 pub(crate) const ENCODER_RESIDENT_MULTIPLIER: u64 = 2;
 

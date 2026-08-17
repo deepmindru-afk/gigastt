@@ -36,8 +36,8 @@ minors.
    recipes for audio files. **Beginner · ~15–30 min**
 3. [Telephony & VoIP](03-telephony-voip.md) — G.711/G.722/Opus, PBX
    recordings, stereo split, and diarization. **Intermediate · ~20 min**
-4. [Streaming over WebSocket](04-streaming-ws.md) — real-time transcription
-   over WebSocket (partials, VAD endpointing, session caps). **Intermediate · ~30 min**
+4. [Streaming over WebSocket](04-streaming-ws.md) — live partials over
+   WebSocket (buffered RNN-T; VAD endpointing, session caps). **Intermediate · ~30 min**
 5. [Desktop & embedded](05-desktop-embedded.md) — Swift/SPM, sidecar,
    Electron, UniFFI. **Intermediate · ~30–60 min**
 6. [Deployment & ops](06-deployment-ops.md) — production deployment,

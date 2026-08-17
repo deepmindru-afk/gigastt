@@ -35,8 +35,8 @@
    **Новичок · ~15–30 мин**
 3. [Телефония и VoIP](03-telephony-voip.md) — G.711/G.722/Opus, АТС,
    stereo split и диаризация. **Средний · ~20 мин**
-4. [Стриминг по WebSocket](04-streaming-ws.md) — partials, VAD-эндпоинтинг,
-   session caps. **Средний · ~30 мин**
+4. [Стриминг по WebSocket](04-streaming-ws.md) — живые partials
+   (буферизованный RNN-T; VAD-эндпоинтинг, session caps). **Средний · ~30 мин**
 5. [Десктоп и встраивание](05-desktop-embedded.md) — Swift/SPM, sidecar,
    Electron, UniFFI. **Средний · ~30–60 мин**
 6. [Развёртывание и эксплуатация](06-deployment-ops.md) — прод, мониторинг,

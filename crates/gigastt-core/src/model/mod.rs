@@ -1,9 +1,11 @@
 //! Model download and management.
 //!
-//! Downloads GigaAM v3 RNN-T ONNX files from HuggingFace to `~/.gigastt/models/`.
-//! Two recognition heads are selectable via [`ModelVariant`]: the plain `rnnt`
+//! Downloads GigaAM v3 ONNX files to `~/.gigastt/models/`.
+//! Default `rnnt` / `e2e_rnnt` INT8 comes from GitHub Releases; `ml_ctc` /
+//! `ml_ctc_large` and optional sidecars come from HuggingFace.
+//! Recognition heads are selectable via [`ModelVariant`]: the plain `rnnt`
 //! head (default — lower WER, bare lowercase output) and the `e2e_rnnt` head
-//! (punctuation / casing / ITN baked in).
+//! (punctuation / casing / ITN baked in), plus the multilingual CTC heads.
 //!
 //! An optional `manifest.toml` in the model directory can override ONNX/vocab
 //! basenames and select the architecture for third-party packs (see

@@ -51,8 +51,9 @@ gigastt transcribe-batch calls/ transcripts/ \
 
 - `--format` — comma-separated list of `txt,json,md,srt,vtt`; one output file
   per format per input.
-- `--pool-size` — parallel workers; each costs ~0.4 GB RAM (INT8 encoder), so
-  scale with memory, not just cores (see the throughput recipe below).
+- `--pool-size` — parallel workers; the encoder is mapped and shared, so an
+  extra slot costs ~20 MB resident (not a second 215 MB copy). Scale with
+  cores and the conservative load-time RAM cap (see the throughput recipe).
 - `--retries` — extra attempts per file with a short backoff (200 ms, 400 ms,
   …). Default 0 for batch, 2 for watch.
 - `--move-to` — move each *successfully* transcribed source into the given
@@ -402,8 +403,8 @@ Full measurements, other hardware, and WER numbers:
 
 Budget memory before raising `--pool-size`:
 
-- Each worker loads its own encoder copy: **~0.4 GB resident** with the
-  INT8 encoder (the only runtime path). Default pool of 2 ≈ 790 MB RSS.
+- Extra workers share the mapped INT8 encoder: **~20 MB resident per extra
+  slot**. Default pool of 2 ≈ 66 MB resident / ~510 MB `ps` RSS.
 - The engine refuses to let the pool eat more than half of total RAM: an
   oversized `--pool-size` is **clamped with a warning** at load, so check the
   log instead of assuming you got the parallelism you asked for.
@@ -437,7 +438,9 @@ time gigastt transcribe-batch calls/ transcripts/ --pool-size 4 --move-to calls/
   for the transcripts). Keep source filenames unique.
 - **Expecting parallelism you did not get.** `--pool-size 16` on 8 GB RAM is
   silently clamped at load (warning logged). Check the startup log and size
-  the pool against ~0.4 GB resident per worker.
+  the pool against ~20 MB resident per extra slot. The load-time cap still
+  budgets a conservative `2 × encoder-file-size` per slot, so `--pool-size 16`
+  on 8 GB may still clamp even though resident would fit.
 - **`invalid audio` / 422 on an unsupported container.** AMR, MP4 video,
   or a corrupt upload fails decoding. Convert first
   (`ffmpeg -i in.amr -ar 16000 -ac 1 out.wav`) or, for raw telephony streams,
