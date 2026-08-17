@@ -104,7 +104,7 @@ guard let modelDir = Bundle.main.url(
     fatalError("bundle the model directory as a folder reference")
 }
 
-// poolSize: 1 keeps RAM around ~350 MB, recommended on device.
+// poolSize: 1 is the on-device default (~46 MB resident / ~277 MB ps RSS).
 let engine = try Engine(modelDir: modelDir, poolSize: 1)
 ```
 
@@ -117,10 +117,11 @@ let text = try engine.transcribeFile(path: "audio.wav")
 print(text)
 ```
 
-## Real-time streaming
+## Live streaming
 
 Feed little-endian mono PCM16 chunks at your capture sample rate. Audio is
-resampled to 16 kHz internally.
+resampled to 16 kHz internally. This is buffered/chunked over an offline
+RNN-T (not batch-equal WER; see [docs/benchmarks.md](../../docs/benchmarks.md#streaming-measurement-protocol)).
 
 ```swift
 let stream = try Stream(engine: engine)

@@ -6,10 +6,15 @@ gigastt exposes WebSocket (streaming), REST, and SSE on a single port (default `
 Machine-readable specs: [`docs/asyncapi.yaml`](asyncapi.yaml) (WebSocket) and
 [`docs/openapi.yaml`](openapi.yaml) (REST).
 
-## WebSocket — real-time streaming
+## WebSocket — streaming
 
-Connect to `ws://127.0.0.1:9876/v1/ws`, send PCM16 audio frames, receive transcription
-in real time. This section is the human-readable protocol reference; the
+Connect to `ws://127.0.0.1:9876/v1/ws`, send PCM16 audio frames, receive incremental
+partials. This is **buffered/chunked over an offline RNN-T**, not a native streaming
+AM. Encoder geometry (do not change without a new protocol version): stride
+**0.8 s**, max window **2.5 s**, left context **1.5 s**. The first decode cannot
+run before ~0.8 s of new audio. TTFP p50 is ~0.82–1.65 s (protocol 1.0);
+streaming WER is ~11–15 pp worse than REST batch on the same files. Measurement:
+[docs/benchmarks.md](benchmarks.md#streaming-measurement-protocol). This section is the human-readable protocol reference; the
 machine-readable schema (same fields, same error codes) lives in
 [`docs/asyncapi.yaml`](asyncapi.yaml). Field-level source of truth:
 `crates/gigastt-core/src/protocol/mod.rs`.
@@ -100,9 +105,9 @@ Each `words[]` entry:
 
 | Field | Type | Meaning |
 |---|---|---|
-| `word` | string | Recognized word (BPE tokens joined, raw decoder casing) |
+| `word` | string | Recognized word (char pieces on `rnnt` / `ml_ctc*`, BPE on `e2e_rnnt`; raw decoder casing) |
 | `start` / `end` | number | Word boundaries in seconds from the start of the stream |
-| `confidence` | number | Mean softmax confidence over the word's BPE tokens, 0.0–1.0. Real decoder output — use it instead of a hardcoded constant |
+| `confidence` | number | Mean softmax confidence over the tokens that make up the word, 0.0–1.0. Real decoder output — use it instead of a hardcoded constant |
 | `speaker` | integer | Zero-based speaker label; present only when diarization is active |
 
 **Transcript post-processing.** `partial` messages are always the raw decoder
@@ -249,9 +254,9 @@ so the idle timeout never trips. Reconnecting on the cap is also safe: the
 server flushes a `final` before closing, so nothing recognized is lost. See
 [troubleshooting](troubleshooting.md) for the failure scenarios these limits
 produce. Embedding the binary as a managed sidecar (spawn, readiness probing,
-version gating) is covered by the embedding guide (`docs/embedding.md`, in
-progress); the onnxruntime linking trade-offs are in
-[embedding-packaging](embedding-packaging.md).
+version gating) is in [quickstarts](quickstarts.md) and workbook
+[ch.5](workbook/en/src/05-desktop-embedded.md); the onnxruntime linking
+trade-offs are in [embedding-packaging](embedding-packaging.md).
 
 ## REST
 
@@ -268,7 +273,7 @@ progress); the onnxruntime linking trade-offs are in
 | `/v1/jobs/{id}` | DELETE | Cancel a queued or processing job |
 | `/v1/jobs/{id}/result` | GET | Fetch the finished transcription |
 | `/v1/jobs/{id}/events` | GET | SSE stream of progress / done / failed / cancelled |
-| `/v1/ws` | GET | WebSocket upgrade for real-time streaming |
+| `/v1/ws` | GET | WebSocket upgrade for live partials (buffered RNN-T; WER ≠ batch) |
 | `/v1/admin/reload` | POST | Hot-reload the inference engine from the boot recipe (loopback peers only — see [Admin reload](#admin-reload)) |
 | `/metrics` | GET | Prometheus metrics (enabled with `--metrics`). Served on the separate `--metrics-listen` port (default `127.0.0.1:9090`), not the main API port. |
 
@@ -366,13 +371,12 @@ recipe (model dir, pool sizes, punctuation / ITN / VAD / hotwords), **swaps**
 the live `Arc<Engine>`, then warms the new engine. In-flight requests keep the
 engine they started with; a failed rebuild leaves the previous model serving.
 
-**RAM:** peak during **build** can still approach about **+0.5× ready** (lab:
-**~+536 MiB** at `--pool-size 1`, INT8 `rnnt`) while the old engine is still
-live. Warmup runs after swap so it need not stack on the previous copy once
-in-flight work finishes. Soft mode: `POST /v1/admin/reload?soft=true` waits up
-to ~5 s for the old engine to drain before warming (`soft` / `soft_drained` in
-the JSON body). Ensure free memory before reload on edge hosts; otherwise
-restart. Operator notes: [runbook — Admin reload headroom](runbook.md#admin-reload-headroom).
+**RAM:** reload builds a second engine. The 215 MB encoder mapping is shared;
+ORT arenas and decoder state are not. Peak after mmap is **unmeasured** — do
+not quote the copy-era +536 MiB figure. Soft mode: `POST /v1/admin/reload?soft=true`
+waits up to ~5 s for the old engine to drain before warming (`soft` /
+`soft_drained` in the JSON body). On edge hosts keep headroom or restart.
+Operator notes: [runbook — Admin reload headroom](runbook.md#admin-reload-headroom).
 
 **Security:** the handler accepts **loopback peers only** (`403 loopback_only`
 otherwise), even when `--bind-all` or `--cors-allow-any` is enabled. Concurrent

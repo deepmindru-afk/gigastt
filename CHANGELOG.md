@@ -41,6 +41,14 @@ were released without a git tag, so their headings carry no compare link.
 
 ### Changed
 
+- Docs: hub + workbook state the live-WS WER Δ and TTFP (not batch-equal
+  “real-time”); RAM figures use mmap **resident** vs `ps` RSS
+  (~46 / ~66 MB resident at pool 1 / 2); default INT8 source is GitHub
+  Releases; `gigastt-core` README matches `Engine::load` /
+  `create_state(bool)` / `process_chunk(&[f32], …)`. Comparison-table
+  cells quote resident+RSS and stream caveats; leftover copy-era
+  ~350 MB / +536 MiB / invented `ml_ctc_large` per-slot RAM removed;
+  privacy scoped to jobs/batch; no phantom `quantize` download phase.
 - Codecov patch target raised from 80% to 90%. Previously `#[ignore]`d
   HTTP handler tests now run on every PR.
 

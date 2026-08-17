@@ -162,13 +162,14 @@ pub(crate) struct ServeArgs {
         )]
     pub(crate) endpoint_mode: String,
 
-    /// Number of concurrent inference sessions. Each session deserializes
-    /// its own encoder copy (~0.4 GB resident for the INT8 encoder). Default
-    /// 2 suits multi-connection / multi-user hosts; raise when RAM allows.
-    /// Edge / low-RAM: use `--pool-size 1` (~400 MB RSS, full cores for one
-    /// job). Pool > 1 costs extra RAM and can cost ~10–20% single-job RTF
-    /// because encoder threads are split across slots. The server auto-caps
-    /// by available RAM at load and logs a warning if it clamps.
+    /// Number of concurrent inference sessions. The INT8 encoder is
+    /// memory-mapped and shared; budget **resident** footprint (~46 MB at
+    /// `--pool-size 1`, ~66 MB at the default 2; ~20 MB per extra slot).
+    /// `ps` RSS is higher (~277 / ~510 MB) because it counts the mapping.
+    /// Edge / low-RAM: `--pool-size 1` (full cores for one job). Pool > 1
+    /// can cost ~10–20% single-job RTF because encoder threads split across
+    /// slots. CLI-only (no `GIGASTT_POOL_SIZE`). The server auto-caps by
+    /// available RAM at load and logs a warning if it clamps.
     #[arg(long, default_value_t = 2)]
     pub(crate) pool_size: usize,
 

@@ -75,7 +75,8 @@ Auto-detection rules (from `crates/gigastt-core/src/model/variant.rs`):
 curl -s http://127.0.0.1:9876/health
 # {"status":"ok","model":"gigaam-v3-e2e-rnnt","variant":"e2e_rnnt",...}
 curl -s http://127.0.0.1:9876/v1/models
-# .id / .name reflect the loaded head; .encoder reports int8 vs fp32
+# .id / .name reflect the loaded head; .encoder is int8 on the ORT path
+# (candle reports fp32 — FP32 safetensors, is_int8()==false)
 ```
 
 ### Readable text: punctuation, ITN, and hotwords
@@ -266,22 +267,29 @@ gigastt --offline transcribe sample.wav --model-dir /srv/gigastt-models
 
 ### Sizing the session pool (RAM)
 
-Every pool slot deserializes **its own encoder copy**, so RSS scales linearly
-with `--pool-size` (default 2 for multi-connection hosts). The engine budgets
-each slot at roughly `2 × encoder-file-size` resident (measured ~1.9× on the
-INT8 `rnnt` encoder, CPU provider, release build):
+The INT8 encoder is **memory-mapped and shared** across pool slots. Extra
+slots add decoder/joiner state and ORT arenas — not another encoder copy.
 
-| Head (as loaded) | Encoder file | ≈ RAM per pool slot | Default pool 2 |
+Measured on Apple M1 Pro, CPU INT8, release (resident = macOS `footprint`
+dirty+compressed; `ps` RSS counts the shared mapping — method in
+[docs/benchmarks.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md)):
+
+| Head (as loaded) | Encoder file | Resident pool 1 / 2 | `ps` RSS pool 1 / 2 |
 |---|---|---|---|
-| `rnnt` / `e2e_rnnt` INT8 | ~215 MB | ~0.4 GB | ~790 MB total RSS |
-| `ml_ctc` INT8 | ~225 MB | ~0.45 GB | ~0.9 GB |
-| `ml_ctc_large` INT8 | ~592 MB | ~1.2 GB | ~2.4 GB |
+| `rnnt` / `e2e_rnnt` INT8 | ~215 MB | ~46 / ~66 MB | ~277 / ~510 MB |
+| `ml_ctc` INT8 | ~225 MB | ~28 MB / — | ~261 MiB / — |
+| `ml_ctc_large` INT8 | ~592 MB | — | — |
 
-**Edge / low-RAM:** prefer `--pool-size 1` (~400 MB RSS). That also keeps
+Dashes mean **not re-measured** after mmap — do not invent `2 × file size`.
+The load-time RAM cap still budgets a conservative `2 × encoder-file-size`
+per slot, so an oversized `--pool-size` can clamp even when resident would
+fit.
+
+**Edge / low-RAM:** prefer `--pool-size 1` (~46 MB resident / ~277 MB `ps`
+RSS for `rnnt`). That also keeps
 encoder intra-op threads on a single job (auto threads = logical CPUs ÷ pool),
 so lone-job RTF is typically **~10–20% better** than pool=2 with the same
-cores. Keep the default 2 when you need two concurrent sessions and have the
-RAM.
+cores. Keep the default 2 when you need two concurrent sessions.
 
 **Encoder threads (CPU EP):** leave `--encoder-intra-threads` unset so the
 server spreads logical CPUs across the pool. Do **not** set `1` on multi-core
@@ -297,9 +305,10 @@ Two safety nets are built in:
 - **Degraded boot.** `--pool-min-size 1` (the default) lets the server start
   on a partially loaded pool instead of crashing when memory runs out mid-load.
 
-Rule of thumb: `RAM ≥ pool_size × per-slot + ~1 GB for the OS and request
-peaks`. On a 4 GB box that means `--pool-size 1` (edge) or at most 2 with the
-INT8 encoder — the same conclusion as the OOM pitfall in
+Rule of thumb: budget **resident** (~46 MB + ~20 MB per extra `rnnt` slot).
+On a 4 GB box, pool 2 is not a RAM problem for `rnnt`; keep pool 1 on edge
+for **RTF** (and until `ml_ctc_large` is measured). Size cgroup/pod limits
+above `ps` RSS — same OOM pitfall as
 [Deployment & ops](06-deployment-ops.md).
 
 **Verify:**
@@ -317,7 +326,7 @@ End-to-end smoke after any change in this chapter:
 ```sh
 ls ~/.gigastt/models/                  # the head's full file set, incl. *_int8.onnx + vocab
 gigastt transcribe sample.wav 2>&1 | grep 'transcribe complete'
-# encoder=<int8|fp32>/<cpu|coreml|cuda|ane|candle>, rtf well under 1.0
+# encoder=<int8|fp32>/<cpu|coreml|cuda|ane|candle> — fp32 only on candle, rtf well under 1.0
 curl -s http://127.0.0.1:9876/health   # "model"/"variant" match the head you picked
 curl -s http://127.0.0.1:9876/ready    # ready, pool_available >= 1
 ```
@@ -342,9 +351,11 @@ matter more than the stopwatch.
   (~225 MB) if the model dir is empty; `/health` answers `200` with
   `model:"loading"` while `/ready` stays `503 initializing`. Pre-seed with
   `gigastt download`, and gate clients on `/ready`, never on `/health`.
-- **OOM after switching to `ml_ctc_large`.** Each slot now costs ~1.2 GB.
-  Lower `--pool-size`, keep `--pool-min-size 1` so a tight host boots
-  degraded, and watch for the `Capping pool size` warning at startup.
+- **OOM after switching to `ml_ctc_large`.** Resident RAM after mmap is
+  **unmeasured** (encoder file ~592 MB; do not invent `2 × file size`). Prefer
+  `--pool-size 1` until measured. The load-time cap still budgets
+  `2 × encoder-file-size`, so the pool may clamp even when resident would fit.
+  Keep `--pool-min-size 1` so a tight host boots degraded.
 - **The CoreML build is no faster than CPU.** Look for `falling back to CPU
   execution provider` in the startup log — the warmup probe failed and the
   engine is (deliberately) running on CPU. The completion log's

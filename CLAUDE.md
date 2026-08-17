@@ -16,6 +16,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 cargo build                          # CPU-only debug build (default, any platform)
 cargo build --features coreml        # macOS ARM64 (CoreML / Neural Engine)
 cargo build --features cuda          # Linux x86_64 (CUDA 12+)
+cargo build --features ane           # macOS ARM64 native ANE (file mode)
+cargo build --features candle        # experimental Candle/Metal
 cargo build --release                # Release build (LTO, stripped)
 cargo test --workspace --lib --bins  # Run all unit tests, CPU (no model required)
 cargo test --workspace --lib --bins --features coreml  # Same tests with CoreML EP enabled (macOS)
@@ -62,7 +64,7 @@ The Dockerfile passes `--bind-all` so the server listens on `0.0.0.0` inside the
 crates/
   gigastt-core/src/       # Core library (inference engine, no server deps)
     lib.rs                # Public module exports
-    model/                # HuggingFace model download (streaming + SHA256 + atomic rename)
+    model/                # Model download (GitHub Releases INT8; HF for CTC / sidecars)
     inference/
       mod.rs              # Module wiring + shared constants
       engine/             # Engine: load, warmup, transcribe, streaming (split impl)
@@ -217,7 +219,7 @@ OpenSLR download that does not fit the CI cache budget, so these never run in CI
 ### Security
 - **Loopback bind by default.** `127.0.0.1` only; `--bind-all` / `GIGASTT_ALLOW_BIND_ANY=1` required for non-loopback.
 - **Origin allowlist.** Cross-origin callers denied by default; loopback origins always allowed. `--allow-origin` (repeatable) for explicit additions; `--cors-allow-any` for wildcard.
-- **Runtime limits configurable via CLI / env** (v0.7.0): `--idle-timeout-secs` (default 300), `--ws-frame-max-bytes` (512 KiB), `--body-limit-bytes` (50 MiB), `--pool-size` (2), `--max-session-secs` (3600), `--shutdown-drain-secs` (10).
+- **Runtime limits** via CLI / env: `--idle-timeout-secs` (default 300), `--ws-frame-max-bytes` (512 KiB), `--body-limit-bytes` (50 MiB), `--max-session-secs` (3600), `--shutdown-drain-secs` (10). `--pool-size` (default 2) is **CLI-only** (no `GIGASTT_POOL_SIZE`). RAM after mmap: ~46 MB resident / ~277 MB `ps` RSS at pool 1, ~66 / ~510 at pool 2.
 - **Per-IP rate limiting** (v0.8.0, opt-in): `--rate-limit-per-minute N` + `--rate-limit-burst` on `/v1/*` (`/health` exempt); HTTP 429 + `Retry-After` when exhausted.
 - **Pool saturation backpressure.** REST returns 503 + `Retry-After: 30`; WebSocket error includes `retry_after_ms: 30000`.
 - **SHA-256 verification + atomic rename** on both encoder/decoder/joiner model files and the optional speaker diarization model.

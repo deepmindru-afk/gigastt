@@ -433,7 +433,7 @@ Quick defaults; full knobs and numbers live in
 | Multilingual or max throughput | `ml_ctc` / `ml_ctc_large` for languages/speed — **not** for lower ready RSS |
 | Isolate long file jobs from WS | `--batch-pool-size N` **splits** `--pool-size` (not additive) |
 | Saturation policy | Long `--pool-checkout-timeout-secs` = queue; short = fail-fast 503 + `retry_after_ms` |
-| Hot reload on a small box | Keep ~**+0.5× ready** free RAM (~**+536 MiB** at pool=1) or restart instead |
+| Hot reload on a small box | Second engine during build (mapped encoder shared; peak unmeasured after mmap) — keep headroom or restart |
 
 ## Hardening checklist
 

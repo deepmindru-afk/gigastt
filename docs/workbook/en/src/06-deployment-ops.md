@@ -17,8 +17,9 @@ and is not repeated here.
 
 - gigastt installed (binary, package, or image) — see
   [Getting started](01-getting-started.md).
-- A Linux host with **4+ GB RAM**: the default `--pool-size 2` with the INT8
-  encoder sits at ~790 MiB RSS; leave headroom for the OS and request peaks.
+- A Linux host with **4+ GB RAM** is the usual production floor (OS + request
+  peaks). The process itself is ~66 MB resident / ~510 MB `ps` RSS at the
+  default `--pool-size 2` (INT8 `rnnt`; the 215 MB encoder is mapped).
 - For the systemd path: systemd 241 or newer (any modern distro, including
   Astra Linux, RED OS, ALT) and root access.
 - For the Docker path: Docker 20.10+; the NVIDIA Container Toolkit only for
@@ -438,9 +439,11 @@ recipes: [CLI and batch processing](02-cli-batch.md); CLI check:
 
 ## Common pitfalls
 
-- **OOM — container or service killed.** RSS scales with `--pool-size`: the
-  INT8 encoder is ~400 MiB per triplet, ~790 MiB at the default pool of 2.
-  On a 4 GB box keep `--pool-size` at 1–2; `--pool-min-size 1`
+- **OOM — container or service killed.** Budget **resident**, not a second
+  encoder copy: ~46 MB at `--pool-size 1`, ~66 MB at the default 2
+  (~20 MB per extra slot). `ps` RSS reads ~277 / ~510 MB because it counts
+  the mapped 215 MB encoder. On a 4 GB box pool 2 is not a RAM problem for
+  `rnnt`; `--pool-min-size 1`
   lets the server boot on a degraded pool instead of crashing when memory is
   tight. If Kubernetes reports `OOMKilled`, lower the pool or raise the pod
   limit — details in

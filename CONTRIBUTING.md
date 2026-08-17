@@ -6,6 +6,8 @@
 cargo build                            # CPU debug build
 cargo build --features coreml          # macOS ARM64 with CoreML
 cargo build --features cuda            # Linux x86_64 with CUDA 12+
+cargo build --features ane             # macOS ARM64 native ANE (file mode)
+cargo build --features candle          # experimental Candle/Metal
 cargo build -p gigastt-ffi             # C-ABI FFI layer (Android / mobile)
 
 cargo test --workspace --lib --bins    # unit tests (no model needed)

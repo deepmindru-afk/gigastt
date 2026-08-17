@@ -9,12 +9,15 @@ you should not need any other document to get here.
 
 ## Prerequisites
 
-- **Disk:** ~250 MB for the lean INT8 install (the only runtime path).
-- **RAM:** ~800 MB free at the default `--pool-size 2` (~400 MB per session).
+- **Disk:** ~225 MB model; plan **~250–400 MB** with the binary (optional
+  punct/VAD side models extra).
+- **RAM:** ~66 MB resident at the default `--pool-size 2` (~510 MB `ps` RSS —
+  it counts the memory-mapped 215 MB encoder). Use `--pool-size 1` on small
+  machines (~46 MB resident / ~277 MB `ps` RSS).
 - **Network** (unless you follow the air-gapped recipe): reach `github.com`
   for the pre-quantized INT8 bundle (CTC heads use HuggingFace INT8).
-- **An audio file to transcribe** — WAV, M4A, MP3, OGG, or FLAC. Any short
-  recording of Russian speech works.
+- **An audio file to transcribe** — WAV, M4A, MP3, OGG/Vorbis, OGG/Opus
+  (`.opus`), WebM/Opus, or FLAC. Any short recording of Russian speech works.
 - Only for `cargo install` (build from source): Rust 1.88+ and `protoc` on
   `PATH` (`brew install protobuf` / `apt install protobuf-compiler`).
 
@@ -299,9 +302,12 @@ curl -F file=@recording.wav http://127.0.0.1:9876/v1/transcribe
   not, use `gigastt download`; in a fully closed contour use
   the air-gapped bundle. Check `~/.gigastt/models/` permissions on disk
   errors.
-- **OOM or heavy swap on startup** — each pool session loads its own encoder
-  copy (~400 MB resident with INT8); the default `--pool-size 2` peaks around
-  790 MB. On small machines run with `--pool-size 1`.
+- **OOM or heavy swap on startup** — the INT8 encoder is memory-mapped and
+  shared (~46 MB resident / ~277 MB `ps` RSS at `--pool-size 1`, ~66 / ~510
+  at the default 2; ~20 MB resident per extra slot). On small machines or
+  tight cgroup limits run with `--pool-size 1`. The load-time cap still
+  budgets a conservative `2 × encoder-file-size` per slot, so an oversized
+  pool can clamp even when resident would fit.
 
 The full symptom → cause → fix table lives in
 [docs/troubleshooting.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/troubleshooting.md).

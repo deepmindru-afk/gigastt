@@ -106,8 +106,8 @@ const DEFAULT_POOL_SIZE: usize = 2;
 /// ```ignore
 /// let engine = Engine::load("~/.gigastt/models")?;
 /// let mut guard = engine.pool.checkout().await?;
-/// let text = engine.transcribe_file("audio.wav", &mut guard)?;
-/// // guard is returned to the pool on drop
+/// let result = engine.transcribe_file("audio.wav", &mut guard)?;
+/// // result.text; guard is returned to the pool on drop
 /// ```
 ///
 /// For streaming recognition, use [`create_state`](Engine::create_state) +

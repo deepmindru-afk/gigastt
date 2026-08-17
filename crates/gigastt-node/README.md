@@ -2,7 +2,7 @@
 
 Node.js binding for [gigastt](https://github.com/ekhodzitsky/gigastt) — on-device Russian speech-to-text (**GigaAM v3**) — built with [napi-rs](https://napi.rs).
 
-Wraps the synchronous `gigastt-core` engine: models are **side-loaded** (no HTTP download) and inference runs on a libuv worker thread via napi's `AsyncTask`, so calls return **Promises** and never block the event loop. Errors are thrown JS `Error`s and objects are garbage-collected (no manual free). onnxruntime is statically linked, so the `.node` addon is self-contained.
+Wraps the synchronous `gigastt-core` engine: models are **side-loaded** (no HTTP download) and inference runs on a libuv worker thread via napi's `AsyncTask`, so calls return **Promises** and never block the event loop. Errors are thrown JS `Error`s and objects are garbage-collected (no manual free). onnxruntime is statically linked, so the `.node` addon is self-contained. `package.json` `engines.node` is `>=18` (napi); the separate `@gigastt/client` WS SDK requires **Node ≥ 20**.
 
 ## In-process (this package) vs sidecar server
 
@@ -15,7 +15,7 @@ talking to it over WebSocket/REST. Pick consciously:
 | Deployment | Single `npm install` — one prebuilt binary fetched by postinstall | Binary discovery on the user's machine, spawn, supervision, port selection |
 | Interface | Plain JS calls; errors are thrown `Error`s | Wire protocol over a loopback port (`/v1/ws`, REST, SSE) |
 | Versioning | App and engine are one artifact, shipped together | App must gate on the discovered server's version |
-| Memory | Model + pool live in your app's process (budget ~400 MB RSS per pool session) | Model lives in the separate server process |
+| Memory | Model + pool live in your app's process (~46 MB resident at pool 1 / ~66 MB at pool 2; `ps` RSS ~277 / ~510 MB counts the mapped encoder) | Model lives in the separate server process |
 | Concurrency | One engine/pool instance per app process | One server shared by several apps/clients |
 | Failure isolation | An engine crash takes the app down (and vice versa) | Server crashes are isolated; the app survives and can restart it |
 | Upgrades | Redeploy the app | Upgrade the server independently of any client |

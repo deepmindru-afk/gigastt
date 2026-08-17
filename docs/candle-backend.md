@@ -10,6 +10,8 @@ It is **additive and opt-in** — the default build is unchanged and still uses 
 ## Status
 
 - Targets the default **`rnnt`** head (char vocab). FP32 (no quantization yet).
+  `Engine::is_int8()` and `/v1/models` `.encoder` report **fp32** even when
+  INT8 ONNX files sit on disk — the Candle loader uses safetensors.
 - **Byte-for-byte parity with the ort backend** is verified at every stage on the Golos
   fixtures: encoder `max_abs_diff ≈ 4e-6`, decoder (LSTM) `≈ 1e-6`, joiner `≈ 3e-6`, and
   whole-file + streaming transcripts are **identical** to ort.

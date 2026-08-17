@@ -1,86 +1,98 @@
 # gigastt-core
 
-Core inference engine for [gigastt](https://github.com/ekhodzitsky/gigastt) — Russian speech recognition powered by GigaAM v3 via ONNX Runtime. No server dependencies, no tokio runtime requirement for inference — embed directly into any Rust application.
+Core inference engine for [gigastt](https://github.com/ekhodzitsky/gigastt) — Russian (and optional multilingual) speech recognition powered by GigaAM v3 via ONNX Runtime. No server dependencies; no tokio runtime required for inference itself — embed it in any Rust application.
+
+Runtime is **INT8 only**. Default `rnnt` / `e2e_rnnt` files come from GitHub Releases; `ml_ctc` / `ml_ctc_large` and optional sidecars come from HuggingFace.
 
 ## Usage
 
 ```toml
 [dependencies]
-gigastt-core = "2.10"
+gigastt-core = "2.18"
 ```
 
 ```rust,ignore
 use gigastt_core::inference::Engine;
 use gigastt_core::model;
 
-// Download model on first run (~225 MB INT8)
+// Download the lean INT8 bundle on first run (~225 MB, GitHub Releases)
 let model_dir = model::default_model_dir();
-model::ensure_model(&model_dir, false, |p| {
-    println!("Downloading: {:.0}%", p.percent());
-}).await?;
+model::ensure_model(&model_dir).await?;
 
-// Load engine (pool_size controls concurrent sessions)
-let engine = Engine::load(&model_dir, 1)?;
+// Default pool size is 2; use load_with_pool_size for 1 on edge hosts
+let engine = Engine::load(&model_dir)?;
+// let engine = Engine::load_with_pool_size(&model_dir, 1)?;
 
-// Transcribe a file
 let mut guard = engine.pool.checkout().await?;
-let text = engine.transcribe_file("recording.wav", &mut guard)?;
-println!("{text}");
+let result = engine.transcribe_file("recording.wav", &mut guard)?;
+println!("{}", result.text);
 // guard is returned to the pool on drop
 ```
 
 ### Streaming recognition
 
+`process_chunk` takes **16 kHz mono `f32` samples**, not PCM16 bytes. Convert
+or resample before the call (the server does that on the WebSocket path).
+
 ```rust,ignore
 use gigastt_core::inference::Engine;
 
-let engine = Engine::load(&model_dir, 1)?;
+let engine = Engine::load(&model_dir)?;
 let mut guard = engine.pool.checkout().await?;
-let mut state = engine.create_state(&mut guard, false)?;
+let mut state = engine.create_state(false);
 
-// Feed PCM16 chunks (16 kHz mono)
-let segments = engine.process_chunk(&mut guard, &mut state, &pcm16_bytes, 16000)?;
+// samples: &[f32], 16 kHz mono, any chunk length
+let segments = engine.process_chunk(&samples, &mut state, &mut guard)?;
 for seg in &segments {
-    println!("[partial] {}", seg.text);
+    println!("[{}] {}", if seg.is_final { "final" } else { "partial" }, seg.text);
 }
 
-// Flush remaining audio
-let final_segments = engine.flush_state(&mut guard, &mut state)?;
+if let Some(tail) = engine.flush_state(&mut state) {
+    println!("[final] {}", tail.text);
+}
 ```
+
+Live WebSocket WER is **not** batch-equal — buffered offline RNN-T, not a
+native streaming AM. Numbers and protocol:
+[docs/benchmarks.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#streaming-measurement-protocol).
 
 ## Features
 
-Defaults (`diarization`, `net`, `async-pool`, `file-decode`) make the engine work out of the box. For a lean embedded build that side-loads models and feeds raw PCM, disable defaults:
+Defaults (`diarization`, `net`, `async-pool`, `file-decode`, `quantize`) make
+the engine work out of the box. For a lean embedded build that side-loads
+INT8 models and feeds raw PCM, disable defaults:
 
 ```toml
-gigastt-core = { version = "2.3", default-features = false }
+gigastt-core = { version = "2.18", default-features = false }
 ```
 
-That drops `tokio`, `reqwest`/HTTP, and `symphonia` from the dependency graph. Opt features back in as needed.
+That drops `tokio`, `reqwest`/HTTP, `symphonia`, and the quantizer (`protoc`)
+from the dependency graph. Opt features back in as needed.
 
 | Feature | Default | Description |
 |---|---|---|
 | `net` | on | HTTP model download (`reqwest` + async fs); off → side-loaded models only |
 | `async-pool` | on | async `Pool::checkout`; off → synchronous `checkout_blocking` only (no tokio runtime) |
-| `file-decode` | on | file transcription via `symphonia` (WAV/MP3/M4A/OGG/FLAC); off → raw-PCM streaming only |
+| `file-decode` | on | file transcription via `symphonia` (WAV/MP3/M4A/OGG/FLAC/Opus); off → raw-PCM streaming only |
 | `diarization` | on | speaker identification via polyvoice |
+| `quantize` | on | packaging-only INT8 rebuild from a local FP32 ONNX (`protoc` required) |
 | `ort-load-dynamic` | off | link a system/vendored onnxruntime instead of the build-time download |
-| `coreml` / `cuda` / `nnapi` | off | hardware acceleration (`coreml` / `cuda` are mutually exclusive) |
+| `coreml` / `cuda` / `nnapi` | off | ORT execution providers (`coreml` / `cuda` are mutually exclusive) |
+| `ane` / `candle` | off | non-ORT backends (Apple Neural Engine `.mlpackage` / Candle+Metal) |
 
 ## What's included
 
-- **Inference engine** — ONNX Runtime session pool, Conformer encoder, RNN-T decoder + joiner
+- **Inference engine** — ONNX Runtime session pool, Conformer encoder, RNN-T decoder + joiner (or greedy CTC on the multilingual heads)
 - **Mel spectrogram** — 64 bins, FFT=320, hop=160, HTK scale
-- **BPE tokenizer** — 1025 tokens with automatic punctuation
-- **Audio loading** — WAV, M4A, MP3, OGG, FLAC via symphonia; resampling via rubato
-- **Model download** — streaming from HuggingFace with SHA-256 verification + atomic rename
-- **INT8 quantization** — native Rust quantizer, auto-detected at runtime
+- **Tokenizer** — char vocab 34 (`rnnt`), BPE 1025 (`e2e_rnnt`), multilingual char 71 (`ml_ctc` / `ml_ctc_large`)
+- **Audio loading** — WAV, M4A, MP3, OGG, FLAC, Opus via symphonia; resampling via rubato
+- **Model download** — streaming fetch with SHA-256 verification + atomic rename (Releases for default INT8; HuggingFace for CTC / sidecars)
 - **Protocol types** — `ClientMessage`, `ServerMessage`, `TranscriptSegment` for WebSocket/REST
 
 ## Requirements
 
-- Rust 1.85+ (edition 2024)
-- `protoc` on PATH (`brew install protobuf` / `apt install protobuf-compiler`)
+- Rust 1.88+ (edition 2024)
+- `protoc` on PATH only when the `quantize` feature is on (`brew install protobuf` / `apt install protobuf-compiler`)
 
 ## License
 

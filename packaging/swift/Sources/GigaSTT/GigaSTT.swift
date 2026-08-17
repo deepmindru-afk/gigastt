@@ -119,7 +119,7 @@ public final class Engine {
     /// Load the ONNX models from `modelDir` with an explicit session pool size.
     ///
     /// Each pooled session loads the full encoder, so RAM scales with
-    /// `poolSize`. On iOS prefer `poolSize: 1` (~350 MB).
+    /// `poolSize`. On iOS prefer `poolSize: 1` (~46 MB resident / ~277 MB `ps` RSS).
     public convenience init(modelDir: String, poolSize: Int) throws {
         try self.init(modelDir: modelDir, poolSize: Optional(poolSize))
     }
