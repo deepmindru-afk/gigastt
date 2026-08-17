@@ -9,7 +9,9 @@ use crate::vad::VadConfig;
 #[test]
 fn test_engine_config_getters_and_builders() {
     let (engine, _tmp) = test_support::rnnt_engine();
-    assert!(engine.is_int8());
+    // Candle ignores the INT8 ONNX encoder and loads FP32 safetensors, so
+    // `Engine::load` reports `is_int8() == false` under that feature.
+    assert_eq!(engine.is_int8(), !cfg!(feature = "candle"));
     assert_eq!(engine.variant(), ModelVariant::Rnnt);
     assert_eq!(engine.vocab_size(), 2);
     assert!(!engine.has_punctuator());

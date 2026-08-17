@@ -164,6 +164,23 @@ jobs:
           print("OK: objc2 is isolated")
           PY
 
+  benchmark-pytest:
+    runs-on: ubuntu-latest
+    name: Benchmark harness tests
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test deps
+        run: python -m pip install pytest websockets
+      - name: Run benchmark unit tests
+        working-directory: benchmark
+        run: |
+          python -m pytest tests/test_streaming.py tests/test_latency.py \
+            tests/test_benchmark.py tests/test_common.py tests/test_histograms.py \
+            tests/test_cache.py -q --tb=short
+
   clippy:
     runs-on: ubuntu-latest
     name: Clippy

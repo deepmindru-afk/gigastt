@@ -32,11 +32,13 @@ from runners import (
     GigasttMlCtcLargeRunner,
     GigasttMlCtcRunner,
     GigasttRunner,
+    GigasttStreamRunner,
     TOneRunner,
     VoskRunner,
     Vosk054Runner,
     WhisperCppRunner,
 )
+from streaming import paired_delta
 
 
 PROFILE_PATH = "benchmark.prof"
@@ -44,6 +46,7 @@ PROGRESS_INTERVAL = 10
 
 ALL_RUNNERS = [
     GigasttRunner,
+    GigasttStreamRunner,
     GigasttMlCtcRunner,
     GigasttMlCtcLargeRunner,
     WhisperCppRunner,
@@ -53,6 +56,8 @@ ALL_RUNNERS = [
     Vosk054Runner,
     TOneRunner,
 ]
+
+STREAM_RUNNER_NAMES = {"gigastt-stream"}
 
 
 def run_benchmark(
@@ -231,13 +236,43 @@ def print_histograms(results: list[dict]):
                 )
 
 
+def _stream_vs_batch(results: list[dict]) -> Optional[dict]:
+    by_name = {r["name"]: r for r in results}
+    batch = by_name.get("gigastt")
+    stream = by_name.get("gigastt-stream")
+    if batch is None or stream is None:
+        return None
+    return paired_delta(batch.get("details") or [], stream.get("details") or [])
+
+
+def print_stream_delta(delta: dict) -> None:
+    print("\n--- Streaming vs batch (gigastt) ---")
+    print(
+        f"  paired={delta['paired']}  "
+        f"WER_batch={delta['wer_batch']:.2f}%  "
+        f"WER_stream={delta['wer_stream']:.2f}%  "
+        f"Δ={delta['delta_pp']:+.2f} pp  "
+        f"95% CI [{delta['ci_low']:.2f}, {delta['ci_high']:.2f}]"
+    )
+    print("  Δ = WER_stream − WER_batch on the same files (positive ⇒ streaming costs accuracy).")
+    print("  Stream RTF in the table above is paced wall-clock, not compute.")
+
+
 def _parse_args(argv=None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Cross-ASR benchmark")
     parser.add_argument("--max-samples", type=int, default=int(os.environ.get("GIGASTT_BENCHMARK_MAX_SAMPLES", "100")),
                         help="Maximum samples to process (0 = unlimited)")
     parser.add_argument("--output", type=str, default="results.json", help="Output JSON path")
     parser.add_argument("--runners", type=str, default="all",
-                        help="Comma-separated list: gigastt,whisper_cpp,faster_whisper,vosk (or 'all')")
+                        help="Comma-separated list: gigastt,gigastt-stream,whisper_cpp,faster_whisper,vosk (or 'all')")
+    parser.add_argument(
+        "--mode",
+        type=str,
+        choices=("batch", "stream", "both"),
+        default="batch",
+        help="batch = REST (default); stream = gigastt WebSocket only; "
+        "both = REST + WS and print Δ = WER_stream − WER_batch",
+    )
     parser.add_argument("--dataset", type=str, default=os.environ.get("GIGASTT_BENCHMARK_DATASET", "golos_crowd"),
                         help="Dataset manifest name (e.g. golos_crowd, golos_farfield)")
     parser.add_argument(
@@ -291,11 +326,22 @@ def _main(args: Optional[argparse.Namespace] = None):
     for runner_or_cls in ALL_RUNNERS:
         r = runner_or_cls() if isinstance(runner_or_cls, type) else runner_or_cls
         normalized = r.name.replace(".", "_").replace("-", "_")
-        if "all" in requested or normalized in requested or r.name in requested:
-            if r.is_available():
-                active_runners.append(r)
-            else:
-                print(f"Skipping {r.name} (not available)")
+        is_stream = r.name in STREAM_RUNNER_NAMES
+        if args.mode == "batch" and is_stream:
+            continue
+        if args.mode == "stream" and not is_stream:
+            continue
+        selected = "all" in requested or normalized in requested or r.name in requested
+        if args.mode == "stream" and is_stream:
+            selected = True
+        if args.mode == "both" and is_stream:
+            selected = True
+        if not selected:
+            continue
+        if r.is_available():
+            active_runners.append(r)
+        else:
+            print(f"Skipping {r.name} (not available)")
 
     if not active_runners:
         print("No runners available. Install dependencies:")
@@ -312,6 +358,9 @@ def _main(args: Optional[argparse.Namespace] = None):
 
     print_results_table(results)
     print_histograms(results)
+    stream_vs_batch = _stream_vs_batch(results)
+    if stream_vs_batch is not None:
+        print_stream_delta(stream_vs_batch)
     if cache.enabled:
         total_cached = sum(r.get("cached_hits", 0) for r in results)
         print(f"Total cache hits: {total_cached}")
@@ -320,12 +369,15 @@ def _main(args: Optional[argparse.Namespace] = None):
     total_failures = sum(r["failures"] for r in results)
     output = {
         "dataset": args.dataset,
+        "mode": args.mode,
         "manifest_samples": len(manifest) + skipped_empty_refs,
         "skipped_empty_refs": skipped_empty_refs,
         "total_failures": total_failures,
         "runners": results,
         "metadata": collect_repro_metadata(active_runners, dataset_name=args.dataset),
     }
+    if stream_vs_batch is not None:
+        output["stream_vs_batch"] = stream_vs_batch
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump(output, f, ensure_ascii=False, indent=2)
     print(f"\nResults written to {args.output}")
