@@ -32,6 +32,13 @@ were released without a git tag, so their headings carry no compare link.
   `cache-gc`), job HTTP handlers, `RealJobExecutor`, engine file/bytes/
   channels/cancel wrappers, and `transcribe` batch helpers.
 
+### Fixed
+
+- Candle/Metal CI: mock-engine getter test no longer asserts `is_int8()`
+  (the candle loader reports FP32 safetensors even when the on-disk
+  layout uses INT8 ONNX filenames). This is what kept `Build (Candle/Metal)`
+  red on `main` after the mock-engine coverage merge.
+
 ### Changed
 
 - Codecov patch target raised from 80% to 90%. Previously `#[ignore]`d
