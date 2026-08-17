@@ -267,49 +267,13 @@ gigastt --offline transcribe sample.wav --model-dir /srv/gigastt-models
 
 ### Sizing the session pool (RAM)
 
-The INT8 encoder is **memory-mapped and shared** across pool slots. Extra
-slots add decoder/joiner state and ORT arenas — not another encoder copy.
-
-Measured on Apple M1 Pro, CPU INT8, release (resident = macOS `footprint`
-dirty+compressed; `ps` RSS counts the shared mapping — method in
-[docs/benchmarks.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md)):
-
-| Head (as loaded) | Encoder file | Resident pool 1 / 2 | `ps` RSS pool 1 / 2 |
-|---|---|---|---|
-| `rnnt` / `e2e_rnnt` INT8 | ~215 MB | ~46 / ~66 MB | ~277 / ~510 MB |
-| `ml_ctc` INT8 | ~225 MB | ~28 MB / — | ~261 MiB / — |
-| `ml_ctc_large` INT8 | ~592 MB | — | — |
-
-Dashes mean **not re-measured** after mmap — do not invent `2 × file size`.
-The load-time RAM cap still budgets a conservative `2 × encoder-file-size`
-per slot, so an oversized `--pool-size` can clamp even when resident would
-fit.
-
-**Edge / low-RAM:** prefer `--pool-size 1` (~46 MB resident / ~277 MB `ps`
-RSS for `rnnt`). That also keeps
-encoder intra-op threads on a single job (auto threads = logical CPUs ÷ pool),
-so lone-job RTF is typically **~10–20% better** than pool=2 with the same
-cores. Keep the default 2 when you need two concurrent sessions.
-
-**Encoder threads (CPU EP):** leave `--encoder-intra-threads` unset so the
-server spreads logical CPUs across the pool. Do **not** set `1` on multi-core
-hosts unless debugging — it is about **~3× slower** than auto. Explicit `1`
-still passes through for debug.
-
-Two safety nets are built in:
-
-- **RAM auto-cap.** At load, the requested pool is clamped so the pooled
-  encoders stay under half of total RAM — a `Capping pool size N -> M` warning
-  is logged when it fires. The cap never raises your request, and never goes
-  below 1.
-- **Degraded boot.** `--pool-min-size 1` (the default) lets the server start
-  on a partially loaded pool instead of crashing when memory runs out mid-load.
-
-Rule of thumb: budget **resident** (~46 MB + ~20 MB per extra `rnnt` slot).
-On a 4 GB box, pool 2 is not a RAM problem for `rnnt`; keep pool 1 on edge
-for **RTF** (and until `ml_ctc_large` is measured). Size cgroup/pod limits
-above `ps` RSS — same OOM pitfall as
-[Deployment & ops](06-deployment-ops.md).
+The INT8 encoder is **memory-mapped and shared**. Extra slots add
+decoder/joiner state and ORT arenas — not another encoder copy.
+Process RAM: ~46 / ~66 MB resident at pool 1 / 2 (~277 / ~510 MB `ps`
+RSS); extra slot ~20 MB. `--pool-size 1` is an RTF / edge choice, not a
+RAM necessity. Load still budgets `2 × encoder-file-size` per slot.
+Figures:
+[docs/benchmarks.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md).
 
 **Verify:**
 

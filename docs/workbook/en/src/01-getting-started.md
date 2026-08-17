@@ -11,9 +11,9 @@ you should not need any other document to get here.
 
 - **Disk:** ~225 MB model; plan **~250–400 MB** with the binary (optional
   punct/VAD side models extra).
-- **RAM:** ~66 MB resident at the default `--pool-size 2` (~510 MB `ps` RSS —
-  it counts the memory-mapped 215 MB encoder). Use `--pool-size 1` on small
-  machines (~46 MB resident / ~277 MB `ps` RSS).
+- **RAM:** ~46 / ~66 MB resident at `--pool-size` 1 / 2 (~277 / ~510 MB
+  `ps` RSS). Method:
+  [docs/benchmarks.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md).
 - **Network** (unless you follow the air-gapped recipe): reach `github.com`
   for the pre-quantized INT8 bundle (CTC heads use HuggingFace INT8).
 - **An audio file to transcribe** — WAV, M4A, MP3, OGG/Vorbis, OGG/Opus
@@ -304,12 +304,9 @@ curl -F file=@crates/gigastt/tests/fixtures/golos_00.wav http://127.0.0.1:9876/v
   not, use `gigastt download`; in a fully closed contour use
   the air-gapped bundle. Check `~/.gigastt/models/` permissions on disk
   errors.
-- **OOM or heavy swap on startup** — the INT8 encoder is memory-mapped and
-  shared (~46 MB resident / ~277 MB `ps` RSS at `--pool-size 1`, ~66 / ~510
-  at the default 2; ~20 MB resident per extra slot). On small machines or
-  tight cgroup limits run with `--pool-size 1`. The load-time cap still
-  budgets a conservative `2 × encoder-file-size` per slot, so an oversized
-  pool can clamp even when resident would fit.
+- **OOM or heavy swap on startup** — use `--pool-size 1` on small machines.
+  RAM figures:
+  [docs/benchmarks.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md).
 
 The full symptom → cause → fix table lives in
 [docs/troubleshooting.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/troubleshooting.md).
