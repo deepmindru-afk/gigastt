@@ -742,24 +742,11 @@ jobs:
           if [ "$rc" -ne 0 ]; then
             if echo "$out" | grep -q 'no matching package named `gigastt-quantize`'; then
               echo "note: gigastt-quantize not yet on crates.io — core dry-run skipped until first release"
-            elif echo "$out" | grep -Eq 'git dependenc|does not have a version `0\.18'; then
-              echo "note: polyvoice 0.18 is git-pinned until crates.io publish — core dry-run skipped"
             else
               exit "$rc"
             fi
           fi
-          set +e
-          out=$(cargo publish --dry-run -p gigastt --locked --no-verify 2>&1)
-          rc=$?
-          set -e
-          echo "$out"
-          if [ "$rc" -ne 0 ]; then
-            if echo "$out" | grep -Eq 'git dependenc|does not have a version `0\.18|no matching package named `polyvoice`'; then
-              echo "note: polyvoice 0.18 is git-pinned until crates.io publish — gigastt dry-run skipped"
-            else
-              exit "$rc"
-            fi
-          fi
+          cargo publish --dry-run -p gigastt --locked --no-verify
 
   msrv:
     runs-on: ubuntu-latest
