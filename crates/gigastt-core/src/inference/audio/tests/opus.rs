@@ -276,8 +276,10 @@ fn test_decode_audio_bytes_opus_ogg_matches_ffmpeg_reference() {
     let reference_pcm = include_bytes!("../../../../tests/fixtures/opus/opus_tone_ffmpeg.pcm");
     let ours = decode_audio_bytes(ogg).expect("OGG/Opus must decode");
     let reference: Vec<f32> = reference_pcm
-        .chunks_exact(2)
-        .map(|c| f32::from(i16::from_le_bytes([c[0], c[1]])) / 32768.0)
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|c| f32::from(i16::from_le_bytes(*c)) / 32768.0)
         .collect();
     // 3 s of tone at 16 kHz; the untrimmed pre-skip on our side and the
     // resampler's FIR delay shift the exact count by a few hundred.
@@ -304,8 +306,10 @@ fn test_decode_audio_bytes_opus_code3_multiframe_matches_ffmpeg_reference() {
     let reference_pcm = include_bytes!("../../../../tests/fixtures/opus/opus_tone_60ms_ffmpeg.pcm");
     let ours = decode_audio_bytes(ogg).expect("multi-frame OGG/Opus must decode");
     let reference: Vec<f32> = reference_pcm
-        .chunks_exact(2)
-        .map(|c| f32::from(i16::from_le_bytes([c[0], c[1]])) / 32768.0)
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|c| f32::from(i16::from_le_bytes(*c)) / 32768.0)
         .collect();
     assert!(
         ours.len() > 46_000 && ours.len() < 50_000,
@@ -332,8 +336,10 @@ fn test_decode_audio_bytes_webm_opus_live_matches_ffmpeg_reference() {
         include_bytes!("../../../../tests/fixtures/opus/opus_tone_webm_live_ffmpeg.pcm");
     let ours = decode_audio_bytes(webm).expect("live WebM/Opus must decode");
     let reference: Vec<f32> = reference_pcm
-        .chunks_exact(2)
-        .map(|c| f32::from(i16::from_le_bytes([c[0], c[1]])) / 32768.0)
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|c| f32::from(i16::from_le_bytes(*c)) / 32768.0)
         .collect();
     assert!(
         ours.len() > 46_000 && ours.len() < 50_000,

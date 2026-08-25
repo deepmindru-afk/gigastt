@@ -277,7 +277,7 @@ async fn test_parse_multipart_full_form() {
                     });
                     (StatusCode::OK, Json(v)).into_response()
                 }
-                Err(resp) => resp,
+                Err(resp) => *resp,
             }
         }),
     );
@@ -332,7 +332,7 @@ async fn test_parse_multipart_missing_file() {
         post(|multipart: Multipart| async move {
             match parse_openai_multipart(multipart).await {
                 Ok(_) => StatusCode::OK.into_response(),
-                Err(resp) => resp,
+                Err(resp) => *resp,
             }
         }),
     );
@@ -370,7 +370,7 @@ async fn test_parse_multipart_invalid_format() {
         post(|multipart: Multipart| async move {
             match parse_openai_multipart(multipart).await {
                 Ok(_) => StatusCode::OK.into_response(),
-                Err(resp) => resp,
+                Err(resp) => *resp,
             }
         }),
     );
@@ -414,7 +414,7 @@ async fn test_parse_multipart_empty_file() {
         post(|multipart: Multipart| async move {
             match parse_openai_multipart(multipart).await {
                 Ok(_) => StatusCode::OK.into_response(),
-                Err(resp) => resp,
+                Err(resp) => *resp,
             }
         }),
     );
