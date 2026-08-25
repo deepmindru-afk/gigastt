@@ -43,8 +43,3 @@ wildcards = "deny"
 unknown-git = "deny"
 unknown-registry = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
-allow-git = [
-    # polyvoice 0.18 is tagged but not published (release gate failed on
-    # Linux polyvoice-kernels). Drop this once 0.18.0 is on crates.io.
-    "https://github.com/ekhodzitsky/polyvoice",
-]
