@@ -565,8 +565,10 @@ fn test_quantize_model_conv_chain() {
         .raw_data
         .as_deref()
         .unwrap()
-        .chunks_exact(8)
-        .map(|c| i64::from_le_bytes(c.try_into().unwrap()))
+        .as_chunks::<8>()
+        .0
+        .iter()
+        .map(|c| i64::from_le_bytes(*c))
         .collect();
     assert_eq!(shape_vals, vec![1, c_out, 1]);
 }

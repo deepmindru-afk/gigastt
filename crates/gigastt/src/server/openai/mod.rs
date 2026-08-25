@@ -273,26 +273,26 @@ pub use sse::{OpenAITranscriptDelta, OpenAITranscriptDone};
 /// Parse an OpenAI-style multipart body into a typed request.
 pub async fn parse_openai_multipart(
     mut multipart: Multipart,
-) -> Result<OpenAITranscriptionRequest, Response> {
+) -> Result<OpenAITranscriptionRequest, Box<Response>> {
     let mut file: Option<Bytes> = None;
     let mut options = OpenAITranscriptionOptions::default();
 
     while let Some(field) = multipart.next_field().await.map_err(|e| {
         tracing::error!("OpenAI multipart parse failed: {e:#}");
-        openai_error(
+        Box::new(openai_error(
             StatusCode::BAD_REQUEST,
             "Invalid multipart body",
             "invalid_multipart",
-        )
+        ))
     })? {
         let name = field.name().unwrap_or("").to_string();
         let data = field.bytes().await.map_err(|e| {
             tracing::error!("OpenAI multipart field read failed: {e:#}");
-            openai_error(
+            Box::new(openai_error(
                 StatusCode::BAD_REQUEST,
                 "Invalid multipart body",
                 "invalid_multipart",
-            )
+            ))
         })?;
         if name == "file" {
             file = Some(data);
@@ -308,31 +308,31 @@ pub async fn parse_openai_multipart(
             } else {
                 "invalid_multipart"
             };
-            return Err(openai_error(StatusCode::BAD_REQUEST, &msg, code));
+            return Err(Box::new(openai_error(StatusCode::BAD_REQUEST, &msg, code)));
         }
     }
 
     if let Err(msg) = finalize_openai_options(&mut options) {
-        return Err(openai_error(
+        return Err(Box::new(openai_error(
             StatusCode::BAD_REQUEST,
             &msg,
             "invalid_stream_options",
-        ));
+        )));
     }
 
     let file = file.ok_or_else(|| {
-        openai_error(
+        Box::new(openai_error(
             StatusCode::BAD_REQUEST,
             "Missing required form field: file",
             "missing_file",
-        )
+        ))
     })?;
     if file.is_empty() {
-        return Err(openai_error(
+        return Err(Box::new(openai_error(
             StatusCode::BAD_REQUEST,
             "Empty request body",
             "empty_body",
-        ));
+        )));
     }
 
     Ok(OpenAITranscriptionRequest { file, options })

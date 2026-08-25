@@ -140,8 +140,10 @@ fn read_f32(path: &Path) -> Vec<f32> {
     let bytes = fs::read(path).expect("read f32 file");
     assert_eq!(bytes.len() % 4, 0, "f32 file length not a multiple of 4");
     bytes
-        .chunks_exact(4)
-        .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|c| f32::from_le_bytes(*c))
         .collect()
 }
 

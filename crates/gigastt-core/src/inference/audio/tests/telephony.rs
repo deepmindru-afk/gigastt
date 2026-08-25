@@ -220,8 +220,10 @@ fn test_decode_audio_bytes_g722_wav_ffmpeg_fixture_matches_reference() {
     let reference_pcm = include_bytes!("../../../../tests/fixtures/telephony/g722_tone_ffmpeg.pcm");
     let ours = decode_audio_bytes(wav).expect("ffmpeg G.722 WAV must decode");
     let reference: Vec<f32> = reference_pcm
-        .chunks_exact(2)
-        .map(|c| f32::from(i16::from_le_bytes([c[0], c[1]])) / 32768.0)
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|c| f32::from(i16::from_le_bytes(*c)) / 32768.0)
         .collect();
     assert_eq!(
         ours.len(),
