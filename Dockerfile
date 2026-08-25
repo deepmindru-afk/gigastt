@@ -6,11 +6,11 @@
 # Pinned to the workspace MSRV (`rust-version` in Cargo.toml) so the image
 # build doubles as an MSRV check; bump both together. `--locked` keeps the
 # image on the audited Cargo.lock graph — a fresh resolve could pull deps
-# with a newer MSRV (exactly how ort rc.12 silently raised the floor to 1.88).
+# with a newer MSRV (polyvoice 0.18 raised the floor to 1.94).
 # trixie (not bookworm): ort's prebuilt onnxruntime statics are compiled with
 # gcc >= 13 and reference `__cxa_call_terminate` (CXXABI_1.3.15), which
 # bookworm's libstdc++ 12 lacks — the final link fails there.
-FROM rust:1.88-trixie AS builder
+FROM rust:1.94-trixie AS builder
 
 # `prost-build` (via build.rs) requires `protoc` at compile time; without it
 # the build aborts with "prost-build failed to compile gigastt-quantize proto/onnx.proto".

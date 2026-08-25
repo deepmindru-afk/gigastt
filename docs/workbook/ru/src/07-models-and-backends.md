@@ -22,7 +22,7 @@ gigastt уже работает с головой `rnnt` по умолчанию
   [Начало работы](01-getting-started.md).
 - Диск: **~250–400 МБ** свободно для lean INT8-установки (единственный
   runtime-путь; опциональные punct/VAD — отдельно).
-- Для сборки нестандартного бэкенда из исходников: Rust 1.88+ и `protoc` в
+- Для сборки нестандартного бэкенда из исходников: Rust 1.94+ и `protoc` в
   `PATH` (требования сборки:
   [docs/architecture.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/architecture.md)).
 

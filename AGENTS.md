@@ -38,7 +38,7 @@ packaging tool that needs a local FP32 ONNX as source (not a runtime path).
 
 ## Technology Stack
 
-- **Language**: Rust 2024 edition, stable toolchain (1.88+)
+- **Language**: Rust 2024 edition, stable toolchain (1.94+)
 - **ONNX Runtime**: `ort` pinned to exactly `2.0.0-rc.13`
 - **Async runtime**: tokio (full features)
 - **HTTP + WebSocket server**: axum 0.8 (`ws`, `multipart`)
@@ -73,7 +73,7 @@ this means `--features diarization` is redundant, and opting *out* is the meanin
 
 ## Build Requirements
 
-- Rust 1.88+ (stable)
+- Rust 1.94+ (stable)
 - `protoc` (Protocol Buffers compiler) on `PATH` — required by `build.rs` which
   regenerates ONNX protobuf types via `prost-build`
   - macOS: `brew install protobuf`
