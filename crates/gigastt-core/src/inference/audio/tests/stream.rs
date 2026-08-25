@@ -9,8 +9,10 @@ fn fixture_tone_pcm() -> Vec<i16> {
     let wav = include_bytes!("../../../../tests/fixtures/telephony/tone_src.wav");
     let data = crate::inference::audio::telephony::find_riff_chunk(wav, b"data")
         .expect("fixture data chunk");
-    data.chunks_exact(2)
-        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+    data.as_chunks::<2>()
+        .0
+        .iter()
+        .map(|b| i16::from_le_bytes(*b))
         .collect()
 }
 

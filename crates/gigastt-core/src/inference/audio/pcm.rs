@@ -45,8 +45,8 @@ pub fn parse_pcm16_with_carry_into(data: &[u8], pending: &mut Option<u8>, out: &
         }
     } else {
         out.reserve(data.len() / 2);
-        for chunk in data.chunks_exact(2) {
-            out.push(i16::from_le_bytes([chunk[0], chunk[1]]) as f32 / 32768.0);
+        for chunk in data.as_chunks::<2>().0 {
+            out.push(i16::from_le_bytes(*chunk) as f32 / 32768.0);
         }
     }
 }

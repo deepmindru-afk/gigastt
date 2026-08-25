@@ -98,7 +98,8 @@ pub async fn submit_job(
                 "retry_after_ms": pool_retry_after_ms(&limits),
             })),
         )
-            .into_response());
+            .into_response()
+            .into());
     }
     let split_channels = params.channels.as_deref() == Some("split");
     let request_diarization = params.diarization == Some(true);
