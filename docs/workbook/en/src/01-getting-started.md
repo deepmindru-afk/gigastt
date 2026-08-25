@@ -20,7 +20,7 @@ you should not need any other document to get here.
   (`.opus`), WebM/Opus, or FLAC. The repo ships a 4 s Russian fixture:
   `crates/gigastt/tests/fixtures/golos_00.wav`. Any short Russian recording
   works. Files → this chapter / REST. Live partials → [Streaming](04-streaming-ws.md).
-- Only for `cargo install` (build from source): Rust 1.88+ and `protoc` on
+- Only for `cargo install` (build from source): Rust 1.94+ and `protoc` on
   `PATH` (`brew install protobuf` / `apt install protobuf-compiler`).
 
 Pick **one** recipe below — macOS, Linux, Windows, Docker, or air-gapped — then
@@ -79,7 +79,7 @@ sudo install -m 0755 gigastt /usr/local/bin/gigastt
 `aarch64-unknown-linux-gnu`. Homebrew on Linux x86_64 — `brew install
 gigastt` after the tap from the macOS recipe — works too.)
 
-**Option B — cargo** (any platform, needs Rust 1.88+ and `protoc`):
+**Option B — cargo** (any platform, needs Rust 1.94+ and `protoc`):
 
 ```sh
 sudo apt install protobuf-compiler   # Debian/Ubuntu; skip if protoc exists

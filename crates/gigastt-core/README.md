@@ -91,7 +91,7 @@ from the dependency graph. Opt features back in as needed.
 
 ## Requirements
 
-- Rust 1.88+ (edition 2024)
+- Rust 1.94+ (edition 2024)
 - `protoc` on PATH only when the `quantize` feature is on (`brew install protobuf` / `apt install protobuf-compiler`)
 
 ## License

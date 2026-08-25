@@ -22,7 +22,7 @@ this chapter links into them. Flags are checked against `gigastt <command>
   [Getting started](01-getting-started.md).
 - Disk: **~250–400 MB** free for the lean INT8 install (the only runtime path;
   optional punct/VAD side models extra).
-- For building a non-default backend from source: Rust 1.88+ and `protoc` on
+- For building a non-default backend from source: Rust 1.94+ and `protoc` on
   `PATH` (build requirements:
   [docs/architecture.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/architecture.md)).
 

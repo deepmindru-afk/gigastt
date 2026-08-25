@@ -92,7 +92,9 @@ audio-codec = { version = "0.3", default-features = false, optional = true }
 opus-rs = { version = "0.1", optional = true }
 bytes = "1"
 gigastt-quantize = { version = "2.18.0", path = "../gigastt-quantize", optional = true }
-polyvoice = { version = "0.14.0", features = ["onnx"], optional = true }
+# 0.18.0 is tagged but not on crates.io yet (polyvoice release gate failed
+# compiling Linux kernels). Revisit when 0.18.0 is published.
+polyvoice = { git = "https://github.com/ekhodzitsky/polyvoice", tag = "v0.18.0", features = ["onnx"], optional = true }
 parking_lot = "0.12"
 libc = "0.2"
 tar = { version = "0.4", optional = true }
