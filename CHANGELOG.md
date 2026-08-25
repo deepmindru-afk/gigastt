@@ -12,11 +12,9 @@ were released without a git tag, so their headings carry no compare link.
 
 ### Changed
 
-- **polyvoice 0.14.0 → 0.18.0** via git tag `v0.18.0` (not on crates.io:
-  the 0.18 release gate failed compiling Linux `polyvoice-kernels`).
-  Diarization still uses `features = ["onnx"]` with `FbankOnnxExtractor` /
-  `LegacyPipeline` / CPU `ExecutionProvider`. **MSRV 1.88 → 1.94**
-  (`rten-simd`).
+- **polyvoice 0.14.0 → 0.18.0** from crates.io (`features = ["onnx"]`).
+  Diarization still uses `FbankOnnxExtractor` / `LegacyPipeline` /
+  CPU `ExecutionProvider`. **MSRV 1.88 → 1.94** (`rten-simd`).
 
 ### Added
 
