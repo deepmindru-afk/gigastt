@@ -742,22 +742,32 @@ jobs:
           if [ "$rc" -ne 0 ]; then
             if echo "$out" | grep -q 'no matching package named `gigastt-quantize`'; then
               echo "note: gigastt-quantize not yet on crates.io — core dry-run skipped until first release"
+            elif echo "$out" | grep -Eq 'git dependenc|does not have a version `0\.18'; then
+              echo "note: polyvoice 0.18 is git-pinned until crates.io publish — core dry-run skipped"
             else
               exit "$rc"
             fi
           fi
-          cargo publish --dry-run -p gigastt --locked --no-verify
+          set +e
+          out=$(cargo publish --dry-run -p gigastt --locked --no-verify 2>&1)
+          rc=$?
+          set -e
+          echo "$out"
+          if [ "$rc" -ne 0 ]; then
+            if echo "$out" | grep -Eq 'git dependenc|does not have a version `0\.18|no matching package named `polyvoice`'; then
+              echo "note: polyvoice 0.18 is git-pinned until crates.io publish — gigastt dry-run skipped"
+            else
+              exit "$rc"
+            fi
+          fi
 
   msrv:
     runs-on: ubuntu-latest
-    name: MSRV (1.88)
+    name: MSRV (1.94)
     steps:
       - uses: actions/checkout@v7
-      # MSRV floor: edition 2024 needs >=1.85, is_multiple_of needs >=1.87,
-      # ort 2.0.0-rc.12 declares rust-version 1.88. NB: a warm cargo cache can
-      # mask a too-new dependency MSRV here — the ort 1.88 floor was only
-      # caught by the cold-registry Docker build, while this job stayed green.
-      - uses: dtolnay/rust-toolchain@1.88
+      # MSRV floor: polyvoice 0.18 (rten-simd) declares rust-version 1.94.
+      - uses: dtolnay/rust-toolchain@1.94
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - uses: Swatinem/rust-cache@v2
