@@ -21,7 +21,7 @@ GigaAM v3, транскрибировать первый аудиофайл — 
   фикстура: `crates/gigastt/tests/fixtures/golos_00.wav`. Подойдёт любая
   короткая русская запись. Файлы → эта глава / REST. Живые partials →
   [Стриминг](04-streaming-ws.md).
-- Только для `cargo install` (сборка из исходников): Rust 1.88+ и `protoc` в
+- Только для `cargo install` (сборка из исходников): Rust 1.94+ и `protoc` в
   `PATH` (`brew install protobuf` / `apt install protobuf-compiler`).
 
 Выберите **один** рецепт ниже — macOS, Linux, Windows, Docker или замкнутый контур, —
@@ -80,7 +80,7 @@ sudo install -m 0755 gigastt /usr/local/bin/gigastt
 `aarch64-unknown-linux-gnu`. Homebrew на Linux x86_64 — `brew install
 gigastt` после tap из рецепта для macOS — тоже работает.)
 
-**Вариант B — cargo** (любая платформа, нужны Rust 1.88+ и `protoc`):
+**Вариант B — cargo** (любая платформа, нужны Rust 1.94+ и `protoc`):
 
 ```sh
 sudo apt install protobuf-compiler   # Debian/Ubuntu; пропустите, если protoc есть

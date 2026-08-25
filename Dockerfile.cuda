@@ -15,7 +15,7 @@ FROM nvidia/cuda:12.6.3-devel-ubuntu24.04 AS builder
 # bump both together. `--locked` rationale — see Dockerfile.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends curl build-essential pkg-config libssl-dev protobuf-compiler && \
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.88.0 && \
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.94.0 && \
     rm -rf /var/lib/apt/lists/*
 
 ENV PATH="/root/.cargo/bin:${PATH}"
