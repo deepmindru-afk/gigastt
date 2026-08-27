@@ -17,7 +17,7 @@ a half-copied file.
 
 - gigastt installed and the model downloaded (`gigastt download`) — see
   [Getting started](01-getting-started.md).
-- A folder of audio files: WAV, MP3, M4A, OGG, FLAC (subfolders are scanned
+- A folder of audio files: WAV, MP3, M4A, OGG, FLAC, WebM (subfolders are scanned
   recursively).
 - Nothing else: `transcribe`, `transcribe-batch`, and `watch` are offline
   commands — no server, no network.
@@ -67,7 +67,7 @@ Reading the run report. Each file logs a line, and the run ends with a
 summary:
 
 ```text
-INFO gigastt::batch: done /calls/alpha.wav processed=1 failed=0
+INFO gigastt::batch: done /calls/alpha.wav processed=1
 WARN gigastt::batch: failed /calls/broken.mp3 error=invalid audio: Unsupported audio format: ...
 INFO gigastt: batch finished processed=12 failed=1 skipped=0
 ```
@@ -154,7 +154,7 @@ mkdir -p "$OUT" "$DONE" "$FAILED"
 
 # Requeue previous failures for another attempt.
 find "$FAILED" -maxdepth 1 -type f \
-  \( -name '*.wav' -o -name '*.mp3' -o -name '*.m4a' -o -name '*.ogg' -o -name '*.flac' \) \
+  \( -name '*.wav' -o -name '*.mp3' -o -name '*.m4a' -o -name '*.ogg' -o -name '*.flac' -o -name '*.webm' \) \
   -exec mv -n {} "$INBOX/" \;
 
 gigastt transcribe-batch "$INBOX" "$OUT" --format txt,json --move-to "$DONE"
@@ -164,7 +164,7 @@ rc=$?
 # level failed all retries — collect it for inspection and future requeue.
 if [ "$rc" -eq 1 ]; then
   find "$INBOX" -maxdepth 1 -type f \
-    \( -name '*.wav' -o -name '*.mp3' -o -name '*.m4a' -o -name '*.ogg' -o -name '*.flac' \) \
+    \( -name '*.wav' -o -name '*.mp3' -o -name '*.m4a' -o -name '*.ogg' -o -name '*.flac' -o -name '*.webm' \) \
     -exec mv -n {} "$FAILED/" \;
   echo "some files failed — collected in $FAILED" >&2
 fi
@@ -360,7 +360,7 @@ container is sniffed from content, so single-file transcription works as-is:
 gigastt transcribe voice.opus
 ```
 
-But the batch/watch walkers scan by extension (`wav,mp3,m4a,ogg,flac`) and
+But the batch/watch walkers scan by extension (`wav,mp3,m4a,ogg,flac,webm`) and
 **do not pick up `.opus` files**. Rename them to `.ogg` before sweeping —
 the content is already an OGG container, so a plain rename suffices:
 

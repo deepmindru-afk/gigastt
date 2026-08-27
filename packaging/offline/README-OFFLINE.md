@@ -16,13 +16,14 @@ models/punct/                        RUPunct punctuation/casing restorer (INT8 +
 systemd/gigastt.service              hardened systemd unit (systemd 241-compatible)
 systemd/gigastt.env                  environment overrides example (all defaults commented)
 install.sh                           offline installer (verifies checksums, installs everything)
-SHA256SUMS.txt                       SHA-256 of every payload file (checked by install.sh)
+SHA256SUMS.txt                       SHA-256 of every binary/model payload file (checked by install.sh)
 LICENSE / README.md / CHANGELOG.md
 ```
 
 ## Quick start
 
 ```sh
+mkdir -p gigastt-offline
 tar xf gigastt-<version>-offline-<target>.tar.gz -C gigastt-offline
 cd gigastt-offline
 sudo ./install.sh
@@ -37,7 +38,7 @@ Transcribe a file to verify the full pipeline:
 gigastt transcribe sample.wav            # add --model-dir /usr/share/gigastt/models if running uninstalled
 ```
 
-`install.sh` options: `--prefix`, `--model-root`, `--no-systemd`, `--user`
+`install.sh` options: `--prefix`, `--model-root`, `--systemd`, `--no-systemd`, `--user`
 (run `./install.sh --help`). Without systemd it prints the manual
 `gigastt serve` command instead of installing a unit.
 
@@ -58,8 +59,9 @@ minisign -Vm gigastt-<version>-offline-<target>.tar.gz -p gigastt.pub
 gh attestation verify gigastt-<version>-offline-<target>.tar.gz --repo ekhodzitsky/gigastt
 ```
 
-Inside the bundle, `install.sh` re-verifies every payload file against
-`SHA256SUMS.txt` before copying anything (corruption check).
+Inside the bundle, `install.sh` re-verifies every binary/model payload file
+(`bin/` + `models/`) against `SHA256SUMS.txt` before copying anything
+(corruption check).
 
 ## Installed layout
 

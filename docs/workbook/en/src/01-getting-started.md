@@ -193,8 +193,7 @@ curl -fLO "https://github.com/ekhodzitsky/gigastt/releases/download/${TAG}/gigas
 sha256sum -c "gigastt-${VER}-offline-x86_64-unknown-linux-gnu.tar.gz.sha256"
 
 # On the target machine:
-tar xf "gigastt-${VER}-offline-x86_64-unknown-linux-gnu.tar.gz"
-cd "gigastt-${VER}-offline-x86_64-unknown-linux-gnu"
+mkdir gigastt-offline && tar xf "gigastt-${VER}-offline-x86_64-unknown-linux-gnu.tar.gz" -C gigastt-offline && cd gigastt-offline
 sudo ./install.sh                      # verifies SHA256SUMS, installs binary + model + unit
 sudo systemctl enable --now gigastt
 ```
@@ -228,7 +227,7 @@ model directory is used as-is (auto-detect), and a fresh install defaults to
 |---|---|---|---|
 | `rnnt` (default) | Russian | Bare lowercase from the acoustic model; casing + punctuation restored by an auto-downloaded RuPunct pass, digits by ITN | Default: lowest WER on Russian speech |
 | `e2e_rnnt` | Russian | Punctuation / casing / ITN baked into the acoustic model | You want one self-contained model with no post-processing passes |
-| `ml_ctc` | ru/en/kk/ky/uz | Bare lowercase, no restoration passes | Mixed Russian/English (or kk/ky/uz) speech; ~1.5× RTF vs `rnnt` (ready RSS ≈ `rnnt`) |
+| `ml_ctc` | ru/en/kk/ky/uz | Bare lowercase, no restoration passes | Mixed Russian/English (or kk/ky/uz) speech; faster than `rnnt` (RTF ~0.032 vs ~0.043; ready RSS ≈ `rnnt`) |
 | `ml_ctc_large` | ru/en/kk/ky/uz | Bare lowercase, no restoration passes | Multilingual speech where accuracy matters more than footprint (600M encoder) |
 
 The `ml_ctc*` heads download pre-quantized INT8 directly, so there is no
@@ -257,7 +256,7 @@ Runtime is **INT8 only** — there is no FP32 download or FP32 engine path.
 
 If you skip a manual download, the first `serve` does it for you. The port binds
 immediately; `/health` answers `200` with `"model":"loading"` and `/ready`
-returns `503 {"reason":"initializing"}` until the model is usable, so clients
+returns `503 {"status":"not_ready","reason":"initializing"}` until the model is usable, so clients
 should gate on `/ready`, never on the process being alive.
 
 ## Verifying the result

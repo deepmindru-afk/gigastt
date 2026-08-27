@@ -6,21 +6,23 @@ your threat model.
 
 ## 1. SHA-256 checksums (every release)
 
-`SHA256SUMS.txt` lists the expected digest for every `*.tar.gz`. This
-protects against corruption in flight but **not** against a compromised
-GitHub release (an attacker with release access could publish matching
-checksums alongside tampered binaries).
+`SHA256SUMS.txt` lists the expected digest for every `*.tar.gz` and
+`*.deb`. This protects against corruption in flight but **not** against a
+compromised GitHub release (an attacker with release access could publish
+matching checksums alongside tampered binaries).
 
 ```sh
 gh release download v2.18.0 -R ekhodzitsky/gigastt \
     -p 'gigastt-*.tar.gz' -p 'SHA256SUMS.txt'
-shasum -a 256 -c SHA256SUMS.txt
+# SHA256SUMS.txt also lists the .deb packages — filter to what you downloaded
+# (on GNU coreutils, `sha256sum -c --ignore-missing SHA256SUMS.txt` works too)
+grep '\.tar\.gz$' SHA256SUMS.txt | shasum -a 256 -c -
 ```
 
 ## 2. minisign signatures
 
-When the maintainer's minisign key is loaded in CI, every tarball +
-`SHA256SUMS.txt` + SBOM gets a detached `.minisig` signature. This
+When the maintainer's minisign key is loaded in CI, every tarball and `.deb`
+package + `SHA256SUMS.txt` + SBOM gets a detached `.minisig` signature. This
 protects against a compromised release (the attacker would also need
 the minisign private key).
 

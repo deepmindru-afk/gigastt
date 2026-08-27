@@ -365,7 +365,7 @@ jq -r '.duration' transcripts/episode.json    # JSON parses and has fields
 gigastt transcribe voice.opus
 ```
 
-Но обходчики batch/watch сканируют по расширению (`wav,mp3,m4a,ogg,flac`) и
+Но обходчики batch/watch сканируют по расширению (`wav,mp3,m4a,ogg,flac,webm`) и
 **не подхватывают `.opus`-файлы**. Переименуйте их в `.ogg` перед прогоном —
 содержимое уже является OGG-контейнером, поэтому достаточно простого
 переименования:

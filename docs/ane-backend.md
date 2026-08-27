@@ -17,13 +17,14 @@ It is **additive and opt-in** — the default build is unchanged and still uses 
 
 - **macOS ARM64 (Apple Silicon) only.** The backend links Apple's Core ML
   framework; on every other target the `ane` feature degrades to the `ort` path.
-- Targets the default **`rnnt`** head (char vocab). An `e2e_rnnt` model
-  transparently falls back to the `ort` encoder (the ANE backend is rnnt-only,
-  mirroring `candle`).
-- **File-mode** backend: the encoder window is padded up to the nearest fixed
-  bucket and run on the ANE. **Streaming and short windows below the fill floor
-  fall back to the CPU/`ort` encoder** — they work without crashing but get no
-  ANE speedup (this is intentional; see [Behavior](#behavior)).
+- Targets the default **`rnnt`** head (char vocab). `e2e_rnnt` and the
+  multilingual `ml_ctc` / `ml_ctc_large` models transparently fall back to
+  the `ort` encoder (the ANE backend is rnnt-only, mirroring `candle`).
+- **Bucketed pad-up** backend: the encoder window is padded up to the nearest
+  fixed bucket and run on the ANE — in file mode (fill floor 0.5) **and in
+  streaming** (zero fill floor, so the ≤ 2.5 s streaming window pads into
+  bucket 512 and also runs on the ANE). The CPU/`ort` fallback remains only
+  for windows outside the bucket ladder (see [Behavior](#behavior)).
 - `ane` is **mutually exclusive** with `coreml` (the ort CoreML EP), `cuda`,
   `nnapi`, and `candle` (a `compile_error!` fires if combined). Auxiliary models
   (VAD, punctuation) continue to run on the CPU `ort` path.
@@ -69,8 +70,9 @@ gigastt download --ane
 (e.g. with a different bucket ladder), run on macOS ARM64:
 
 ```sh
-uv run --python 3.13 \
+uv run --python 3.12 \
     --with torch --with coremltools --with gigaam --with soundfile --with scikit-learn \
+    --with "numpy<2" \
     python scripts/convert_gigaam_ane.py
 ```
 
@@ -109,21 +111,25 @@ pointing at the conversion / `gigastt download --ane` step.
   fill (less pad-up waste / lower divergence) than routing those clips up to 768;
   768 now covers `(512, 768]`. All buckets clear the ~288-mel ANE-residency floor,
   so each stays resident on the Neural Engine.
-- **Streaming falls back to CPU.** The streaming window is capped at 2.5 s
-  (≤ 250 mel frames), which is below the 256-frame floor of the smallest (512)
-  bucket, so **every streaming window takes the `ort` fallback**. Streaming works exactly as
-  on the default build — no crash, no ANE benefit. ANE is a file-mode
-  accelerator.
+- **Streaming runs on the ANE too.** Since v2.14.2 the streaming encoder call
+  uses a zero fill floor (`STREAMING_FILL_FLOOR = 0.0`, vs the file-mode 0.5),
+  so the ≤ 2.5 s streaming window (≤ 250 mel frames) pads up to bucket 512 and
+  executes on the ANE — trading pad-up waste for lower latency. The `ort`
+  fallback remains only for windows outside the bucket ladder.
 - **Over-max windows.** Files longer than the largest bucket use gigastt's
-  existing 24 s windowed chunking; any window outside the bucket range falls back
-  to `ort` (no silent truncation).
+  windowed chunking — 30 s windows on the ANE backend (each full chunk nearly
+  fills bucket 3000, recovering pad-up waste), 24 s on `ort`; any window
+  outside the bucket range falls back to `ort` (no silent truncation).
 
 ## Performance & accuracy (honest numbers)
 
-Measured on an Apple M1 Pro at the v2.5.0 ship gate (`rnnt` head, Golos clips) —
-these are the numbers carried in the v2.5.0 CHANGELOG entry and `specs/todo.md`.
-An earlier revision of this section quoted a pre-ship measurement round
-(≈ 3.7× e2e, ~230× encoder); it is superseded by the shipped figures below.
+Measured on an Apple M1 Pro at the v2.5.0 ship gate (`rnnt` head, Golos clips).
+The v2.5.0 CHANGELOG entry carries the rounded figures (≈ 10× warm e2e, encoder
+~15×, WER ≈ 1.11%); the precise numbers quoted below (112 RTFx warm,
+23.6 ms / 369 ms per window) come from the ship-gate measurement notes in
+`specs/todo.md`, not from the CHANGELOG. An earlier revision of this section
+quoted a pre-ship measurement round (≈ 3.7× e2e, ~230× encoder); it is
+superseded by the shipped figures below.
 
 - **Warm end-to-end ≈ 10× over the `ort` CPU build** (≈ 112 RTFx warm),
   **decode-bound**: the ANE cuts the encoder to ≈ 23.6 ms from ≈ 369 ms per
@@ -139,13 +145,15 @@ An earlier revision of this section quoted a pre-ship measurement round
 
 ## Confirming the ANE path is engaged
 
-- **Startup log:** `gigastt serve --features ane` on a `rnnt` model logs
+- **Startup log:** in a `--features ane` build, `gigastt serve` on a `rnnt`
+  model logs
   `ANE encoder backend active (Core ML / Apple Neural Engine, macOS ARM64): …`.
   On an `e2e_rnnt` model it instead logs that the head is not `rnnt` and the ort
   encoder is used.
 - **Per-window debug log:** at `--log-level debug` the encoder logs
-  `ANE encoder path (bucketed pad-up)` (with the chosen bucket) for file-mode
-  windows, and `ANE encoder path (ort fallback: no bucket within fill-floor)`
-  for streaming / sub-floor windows.
+  `ANE encoder path (bucketed pad-up)` (with the chosen bucket) for windows that
+  pad into a bucket — file-mode and streaming alike — and
+  `ANE encoder path (ort fallback: no bucket within fill-floor)` for windows
+  outside the bucket ladder / below the file-mode fill floor.
 - **RTFx:** a file transcription completing well above real time (with the
   decode loop, not the encoder, as the bottleneck) confirms the ANE path.

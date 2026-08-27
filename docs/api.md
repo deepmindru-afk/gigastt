@@ -215,7 +215,7 @@ frame). The same enum is declared in [`docs/asyncapi.yaml`](asyncapi.yaml).
 | 1001 Going Away | Graceful shutdown drain (SIGTERM), `idle_timeout`, or keepalive ping timeout. A `final` is flushed first on shutdown |
 | 1008 Policy Violation | `max_session_duration_exceeded`, `policy_violation` |
 | 1009 Message Too Big | A frame exceeded `--ws-frame-max-bytes` |
-| 1006 Abnormal Closure | Never sent by the server — the client observes it when an established socket drops with no close frame (process killed, crash, middlebox). Do not confuse it with an *upgrade refusal*: while the model is still loading, `/v1/ws` answers HTTP 503 `{"code":"initializing"}` before any socket exists — poll `/ready` and retry later instead of killing the process. If the port listens but even `/health` fails, suspect an orphaned process holding the port — see [troubleshooting](troubleshooting.md) |
+| 1006 Abnormal Closure | Never sent by the server — the client observes it when an established socket drops with no close frame (process killed, crash, middlebox). Do not confuse it with an *upgrade refusal*: while the model is still loading, `/v1/ws` answers HTTP 503 `{"code":"initializing"}` before any socket exists — poll `/ready` and retry later instead of killing the process; during graceful-shutdown drain the upgrade is likewise refused with HTTP 503 `{"code":"shutting_down"}`, which is final — do not retry, the server is exiting. If the port listens but even `/health` fails, suspect an orphaned process holding the port — see [troubleshooting](troubleshooting.md) |
 
 ### Session lifecycle: `/health` vs `/ready`
 
@@ -465,7 +465,7 @@ them in.
 `/v1/transcribe` accepts the following query parameters:
 
 - `channels` (optional, string) — use `split` to transcribe the left and right channels
-  as separate speakers (`speaker_0`, `speaker_1`). Defaults to mono mix.
+  as separate speakers (integer labels `0` and `1`). Defaults to mono mix.
 - `diarization` (optional, boolean) — set to `true` to request polyvoice speaker
   diarization. The mutual-exclusion check with `channels=split` treats `diarization=true`
   as an explicit request; returns `400` with code `conflicting_modes` if both are set.
@@ -483,7 +483,7 @@ impossible combination fails fast instead of holding a triplet:
 - `vad` (boolean) — turn the VAD file path on/off for this request.
   `409 vad_not_loaded` if the server was started without `--vad`.
 - `hotwords` (string) — comma-separated phrases to bias the decoder toward.
-  `409 too_many_hotwords` above 64 phrases, `409 hotword_phrase_too_long` above
+  `400 too_many_hotwords` above 64 phrases, `400 hotword_phrase_too_long` above
   64 characters in one phrase. The `rnnt` and `e2e_rnnt` heads bias their greedy
   transducer decode directly; the `ml_ctc` / `ml_ctc_large` heads switch to a
   prefix beam search when a glossary is present, since a per-frame argmax has no
@@ -523,7 +523,8 @@ missing. Live WebSocket sessions do not carry this notice: `ready` advertises
 requesting an unavailable capability is a graceful no-op there.
 
 When either channel split or diarization produces speaker labels, each word object
-includes a `speaker` integer:
+includes a `speaker` integer (zero-based `Option<u32>`); the `srt`/`vtt` exports
+render a speaker change as a `[SPEAKER_0]`-style prefix on the cue:
 
 ```json
 {
@@ -687,7 +688,7 @@ not accepted. There is no default duration limit — the file decodes and
 transcribes in bounded overlapping windows, so peak memory stays roughly
 constant regardless of length, and a multi-hour recording transcribes fine.
 The remaining practical ceiling is the upload body limit (`--body-limit-bytes`,
-default 50 MiB ≈ 26 min of 16 kHz mono WAV); raise it for larger single files.
+default 50 MiB ≈ 27 min of 16 kHz mono WAV); raise it for larger single files.
 
 Operators who want an explicit duration limit can start the server with
 `--max-audio-secs <N>` (env `GIGASTT_MAX_AUDIO_SECS`, default `0` = unlimited);
@@ -722,8 +723,8 @@ mid-job.
 | 409 | `variant_not_loaded` | `?variant=` names a head this engine does not have loaded |
 | 409 | `vad_not_loaded` | `?vad=true` but the server was started without `--vad` |
 | 409 | `punctuation_not_available` | `?punctuation=true` but no punctuation model is loaded |
-| 409 | `too_many_hotwords` | More than 64 phrases in `?hotwords=` |
-| 409 | `hotword_phrase_too_long` | A `?hotwords=` phrase exceeds 64 characters |
+| 400 | `too_many_hotwords` | More than 64 phrases in `?hotwords=` |
+| 400 | `hotword_phrase_too_long` | A `?hotwords=` phrase exceeds 64 characters |
 | 413 | `payload_too_large` | Body exceeds `--body-limit-bytes` (default 50 MiB) |
 | 413 | `audio_too_long` | Audio exceeds `--max-audio-secs` (opt-in, env `GIGASTT_MAX_AUDIO_SECS`, default unlimited), or a whole-buffer path (diarization/`channels=split`/telephony) hit its ~30-minute safety ceiling |
 | 422 | `invalid_audio` | Audio could not be decoded (unsupported/corrupt format) |
@@ -733,6 +734,7 @@ mid-job.
 | 503 | `timeout` | All inference sessions busy; `Retry-After` + `retry_after_ms` |
 | 503 | `pool_closed` | Server is shutting down, pool closed to new checkouts |
 | 503 | `cancelled` | The run was aborted cooperatively — client disconnect, `DELETE /v1/jobs/{id}`, or shutdown |
+| 504 | `inference_timeout` | A single run exceeded `--inference-timeout-secs` (default 600). No `Retry-After`: the slot was free, the run itself timed out, so retrying the same payload would time out again |
 
 ```
 HTTP/1.1 503 Service Unavailable

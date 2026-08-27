@@ -10,7 +10,7 @@ goal; this chapter is for live partials. Full tables:
 [docs/benchmarks.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#streaming-measurement-protocol).
 This chapter is the recipe book for that integration —
 the field-by-field protocol reference stays in
-[docs/api.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/api.md#websocket--real-time-streaming)
+[docs/api.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/api.md#websocket--streaming)
 and the machine-readable schema in
 [docs/asyncapi.yaml](https://github.com/ekhodzitsky/gigastt/blob/main/docs/asyncapi.yaml);
 we link to them instead of repeating them.
@@ -726,7 +726,7 @@ and the field-level tables in
 ## Links
 
 - Reference (canonical, not duplicated here):
-  [docs/api.md — WebSocket protocol](https://github.com/ekhodzitsky/gigastt/blob/main/docs/api.md#websocket--real-time-streaming),
+  [docs/api.md — WebSocket protocol](https://github.com/ekhodzitsky/gigastt/blob/main/docs/api.md#websocket--streaming),
   [docs/asyncapi.yaml](https://github.com/ekhodzitsky/gigastt/blob/main/docs/asyncapi.yaml),
   [docs/troubleshooting.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/troubleshooting.md),
   [docs/cli.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/cli.md)

@@ -6,7 +6,7 @@
 частые ошибки → ссылки**.
 
 Это **поваренная книга, а не справочник**. Канонические справочники остаются в
-[`docs/`](../../../) — книга ссылается на них, а не дублирует.
+[`docs/`](https://github.com/ekhodzitsky/gigastt/tree/main/docs) — книга ссылается на них, а не дублирует.
 
 **Документировано против gigastt 2.18.x.** В install-скриптах предпочитайте
 резолв latest-тега (`gh api …/releases/latest`), а не устаревшие миноры.
@@ -60,13 +60,13 @@
 | Папка / drop box | `transcribe-batch` / `watch` — [02](02-cli-batch.md) | `transcribe` в цикле |
 | Длинный файл, нельзя ждать | `/v1/jobs` (`--enable-jobs`) — [02](02-cli-batch.md) | Один блокирующий REST без плана по таймауту |
 | Микрофон / нога звонка, partials во время речи | WebSocket `/v1/ws` — [04](04-streaming-ws.md) | REST; не цитируйте 1000-рядную таблицу WER для этого пути |
-| Клиент под OpenAI | `/v1/audio/transcriptions` — [docs/api.md](../../../api.md) | Свой WS, если клиент умеет только multipart |
+| Клиент под OpenAI | `/v1/audio/transcriptions` — [docs/api.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/api.md) | Свой WS, если клиент умеет только multipart |
 | Приложение in-process (без сервера) | Биндинги — [05](05-desktop-embedded.md) | `serve`, если не нужна изоляция падений |
 
 ## Остальная документация
 
 Полная карта справочников (API, CLI, бенчмарки, runbook, бэкенды) —
-[docs/README.md](../../../README.md). Книга ссылается наружу и не копирует
+[docs/README.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/README.md). Книга ссылается наружу и не копирует
 эти страницы.
 
 ## Правила для контрибьюторов

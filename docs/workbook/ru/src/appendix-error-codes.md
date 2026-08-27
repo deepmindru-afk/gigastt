@@ -31,7 +31,7 @@
 | 409 | `job_not_cancellable` | Cancel на terminal job | Игнорируйте / считайте done |
 | 409 | `reload_in_progress` | Параллельные admin reload | Подождите и повторите — [06](06-deployment-ops.md) |
 | 409 | `punctuation_not_available` | Force `punctuation=true` без модели | Установите punct / `auto` — [07](07-models-and-backends.md) |
-| 413 | `payload_too_large` | Тело > `--body-limit-bytes` | Поднимите лимит или jobs — [02](02-cli-batch.md) |
+| 413 | `payload_too_large` | Тело > `--body-limit-bytes` | Поднимите лимит или jobs — [02](02-cli-batch.md), [06](06-deployment-ops.md) |
 | 422 | `invalid_audio` | Битый/неподдерживаемый контейнер | Таблица форматов — [03](03-telephony-voip.md) |
 | 422 | `transcription_error` | Decode ok, inference failed | Логи; INT8 на месте — [07](07-models-and-backends.md) |
 | 429 | `rate_limited` | Bucket по IP пуст | `Retry-After`; лимиты / `--trust-proxy` — [06](06-deployment-ops.md) |
@@ -48,7 +48,7 @@
 |---|---|---|---|
 | `timeout` | не открылась | Checkout пула | Ждите `retry_after_ms` — [04](04-streaming-ws.md) |
 | `pool_closed` | ends | Drain | Reconnect после апгрейда — [06](06-deployment-ops.md) |
-| `idle_timeout` | ends (1001) | Нет фреймов | Шлите PCM (тишина ок) — [04](04-streaming-ws.md) |
+| `idle_timeout` | ends (1001) | Нет фреймов за `--idle-timeout-secs` | Шлите PCM (тишина ок) — [04](04-streaming-ws.md) |
 | `max_session_duration_exceeded` | ends (1008) | `--max-session-secs` | Reconnect; `final` уже сброшен — [04](04-streaming-ws.md) |
 | `policy_violation` | ends (1008) | Спам пустыми фреймами | Не шлите empty binaries |
 | `inference_timeout` | ends | Инференс чанка слишком долгий | Короче аудио / timeout |

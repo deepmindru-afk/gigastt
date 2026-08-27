@@ -13,9 +13,9 @@ gigastt [OPTIONS] <COMMAND>
 Options:
   --log-level <LEVEL>    Log level [default: info]
   --offline              Air-gapped mode (env: GIGASTT_OFFLINE=1): refuse every
-                         network fetch — model download, punctuation/VAD
-                         auto-fetch — with an error naming the missing file
-                         instead of a connect timeout
+                         network fetch — model download, punctuation /
+                         diarization / VAD auto-fetch — with an error naming
+                         the missing file instead of a connect timeout
 
 Commands:
   serve        Start STT server
@@ -24,7 +24,8 @@ Commands:
   transcribe-batch  Transcribe every audio file in a directory (offline)
   watch        Watch a directory and transcribe new/changed audio files
   quantize     Quantize encoder to INT8 (always available since v0.9.0)
-  cache-gc     Prune stale ORT optimized graphs; optional content-hash dedupe
+  cache-gc     Prune stale ORT optimized graphs and stale CoreML compiled-model
+               caches; optional content-hash dedupe
 
 gigastt serve [OPTIONS]
   --port <PORT>             Listen port [default: 9876]
@@ -36,7 +37,8 @@ gigastt serve [OPTIONS]
                             punctuation/casing/ITN. ml_ctc / ml_ctc_large are the GigaAM
                             Multilingual charwise-CTC heads (220M / 600M encoder,
                             ru/en/kk/ky/uz, bare lowercase). ml_ctc is a speed SKU
-                            (~1.5× RTF vs rnnt), not a lean-RAM SKU (ready RSS ≈ rnnt).
+                            (~1.3× faster than rnnt, RTF 0.032 vs 0.043), not a
+                            lean-RAM SKU (ready RSS ≈ rnnt).
                             Env: GIGASTT_MODEL_VARIANT.
   --punctuation <MODE>      Restore punctuation/casing on output: auto | on | off
                             [default: auto = on for rnnt, off for e2e_rnnt].
@@ -223,8 +225,6 @@ gigastt transcribe [OPTIONS] <FILE>
                               [default: 500]. Env: GIGASTT_VAD_MIN_SILENCE_MS.
   --vad-model-dir <DIR>       Silero VAD model directory [default: ~/.gigastt/models/vad].
                               Env: GIGASTT_VAD_MODEL_DIR.
-  --endpoint-mode <MODE>      WS utterance end: auto|assistant|manual [default: auto].
-                              Env: GIGASTT_ENDPOINT_MODE. Cap never emits final.
   --encoder-intra-threads <N>  Intra-op threads for the encoder session (CPU build
                               only). Unset: logical CPUs (single triplet). Avoid
                               `1` on multi-core (~3× slower than auto); explicit
@@ -288,7 +288,7 @@ gigastt transcribe-batch [OPTIONS] <INPUT_DIR> <OUTPUT_DIR>
   --word-timestamps           Include per-word timestamps in Markdown output
   Also accepts the recognition flags of `transcribe`: --hotwords-file,
   --hotwords-default, --hotwords-boost, --vad, --vad-threshold,
-  --vad-min-silence-ms, --vad-model-dir, --endpoint-mode, --encoder-intra-threads.
+  --vad-min-silence-ms, --vad-model-dir, --encoder-intra-threads.
   Exit codes: 0 = all files done · 1 = at least one file failed · 130 = interrupted
   (Ctrl-C finishes in-flight files, skips the rest).
 
@@ -327,6 +327,10 @@ gigastt cache-gc [OPTIONS]
 
   Removes optimized_cache/*_optimized.{ort,onnx} graphs that no installed head
   can load, keeping the graph for the preferred encoder of every head whose
-  weights are present in the directory (INT8 preferred).
-  Safe on accuracy: leftovers are pure disk waste from FP32 runs or head switches.
+  weights are present in the directory (INT8 preferred). Also prunes stale
+  CoreML compiled-model caches under coreml_cache/: keeps only the current
+  ort-<minor>/ version dir, removes dirs left by other ONNX Runtime builds
+  and legacy unversioned hash dirs.
+  Safe on accuracy: leftovers are pure disk waste from FP32 runs, head
+  switches, or ONNX Runtime upgrades.
 ```
