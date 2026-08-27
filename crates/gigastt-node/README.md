@@ -60,7 +60,7 @@ console.log((await s.flush()).map((seg) => seg.text));
 ```sh
 cd crates/gigastt-node
 npm install                 # installs @napi-rs/cli
-npm run build               # napi build --release -> index.js + index.d.ts + *.node
+npm run build               # napi build --platform --release -> index.js + index.d.ts + *.node
 GIGASTT_MODEL_DIR=~/.gigastt/models npm run smoke   # transcribes the golos_00.wav fixture
 ```
 

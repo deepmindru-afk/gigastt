@@ -101,7 +101,7 @@ within one window, so a hung run no longer wedges a slot until restart.
 - `--batch-pool-size N` — **split** N of those triplets for long REST file jobs
   so they can't starve interactive WebSocket / SSE (default 0 = shared pool).
   Not additive — total loaded sessions stay at `--pool-size` (see
-  [batch_pool_size splits the pool](#batchpoolsize-splits-the-pool-not-additive)).
+  [batch_pool_size splits the pool](#batch_pool_size-splits-the-pool-not-additive)).
 - `--pool-checkout-timeout-secs` — how long callers wait before backpressure
   (long = queue, short = fail-fast 503).
 - `--inference-timeout-secs` — per-run ceiling; `0` disables.
@@ -300,7 +300,7 @@ restoration is skipped.
 
 `gigastt_http_requests_total{path="/v1/ws",status="503"}` with code `shutting_down` in the body is the signal that upgrades are being rejected because shutdown was already in flight. Usually correlated with `terminationGracePeriodSeconds` being shorter than `shutdown_drain_secs`.
 
-(Counter for cancelled-WS by reason is tracked separately — see `specs/prod-readiness-v1.0.md`.)
+(A counter for cancelled-WS by reason is not exported today; track cancellations via server logs instead.)
 
 ## On-call triage checklist
 

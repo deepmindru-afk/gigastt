@@ -54,7 +54,7 @@ comment:
 
 ignore:
   - "**/tests/**"
-  - "crates/gigastt-core/src/onnx_proto.rs" # prost-generated ONNX protobuf types
+  - "crates/gigastt-quantize/src/onnx_proto.rs" # prost-generated ONNX protobuf types
   # Native addons / bindgen stubs are exercised outside cargo llvm-cov
   # (npm vitest for node; uniffi-bindgen is a thin CLI wrapper). Counting
   # them in the Rust report permanently dilutes the badge without adding

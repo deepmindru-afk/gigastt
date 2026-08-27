@@ -29,8 +29,10 @@ cargo run -p gigastt-uniffi --bin uniffi-bindgen -- generate --library "$LIB" --
 ```
 
 Generated bindings are build artifacts (`bindings/` is git-ignored). Python
-wheels are published (`pip install gigastt`). SwiftPM xcframework and Android
-AAR packaging is still in progress.
+wheels are published (`pip install gigastt`). A SwiftPM package already ships
+via the C-ABI `gigastt-ffi` xcframework (`packaging/swift/Package.swift`,
+attached to GitHub releases); the UniFFI-based Swift package and the Android
+AAR are still in progress.
 
 ## Python (quickstart, verified)
 

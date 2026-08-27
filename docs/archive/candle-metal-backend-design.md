@@ -1,5 +1,10 @@
 # Candle/Metal Inference Backend — Design
 
+> **Historical record — superseded.** This is the pre-implementation design for
+> the Candle/Metal backend. The backend shipped (v2.4.0); the authoritative user
+> documentation is [`docs/candle-backend.md`](../candle-backend.md). Where this
+> document and the shipped code disagree, the code and the user guide win.
+
 **Status:** approved (conversational brainstorming, 2026-06-23)
 **Owner:** ekhodzitsky
 

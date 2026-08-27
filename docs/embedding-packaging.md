@@ -60,6 +60,6 @@ ORT_DYLIB_PATH=/opt/onnxruntime/lib/libonnxruntime.so ./your-app
 | Build-time network | Fetches onnxruntime (checksummed) | None (vendor it yourself) |
 | Best for | All bindings, CPU EP, simplest distribution | Air-gapped builds, size control, dynamic EP variants |
 
-For the prebuilt bindings (npm, PyPI wheel, AAR, xcframework) gigastt ships, the
+For the prebuilt bindings (npm, PyPI wheel, xcframework) gigastt ships, the
 static default is used — each package is self-contained. `load-dynamic` is the
 escape hatch for the cases above, not the default integration path.

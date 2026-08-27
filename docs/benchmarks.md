@@ -2,12 +2,19 @@
 
 Honest, reproducible comparison of gigastt against current Russian-ASR engines.
 Measured on an **Apple M1, CPU** execution provider (INT8 / greedy where applicable),
-1000 samples per domain, failures counted as 100% WER, 95% bootstrap confidence
+1000-sample manifests per domain (992 scored on `golos_crowd_1k` after dropping empty
+references), failures counted as 100% WER, 95% bootstrap confidence
 intervals. Competitor numbers come from the committed artifacts in
 [`benchmark/results_full/`](../benchmark/results_full/); the **gigastt** rows are the
-v2.3 default **`rnnt`** head, re-measured through the *same* Python harness, manifests,
-and normalization as the competitors — so they are like-for-like. Methodology and
-dataset prep are in [`benchmark/README.md`](../benchmark/README.md).
+default **`rnnt`** head (since v2.3), re-measured through the *same* Python harness,
+manifests, and normalization as the competitors — so they are like-for-like. Methodology
+and dataset prep are in [`benchmark/README.md`](../benchmark/README.md).
+
+> **Provenance (gigastt rows).** The committed `results_full/*_gigastt*.json` artifacts
+> are the pre-v2.3 `e2e_rnnt` run (gigastt 2.0.13, 2026-06; normalized WER 8.60 / 5.90 /
+> 19.28 / 11.35 across the four domains — the `e2e_rnnt` numbers quoted further down).
+> The `rnnt` re-measurement behind the headline gigastt rows (3.55 / 4.08 / 18.50 /
+> 10.91) is **not committed** to `results_full/`; the competitor rows are.
 
 > **Contamination caveat.** GigaAM v3 (gigastt) is a SberDevices model whose training is
 > dominated by Golos, and OpenSTT-style corpora are common in Russian ASR training mixes.
@@ -191,6 +198,11 @@ apostrophe variants are folded, so Uzbek `oʻ` / `gʻ` (U+02BB) and the model's 
 *Full-set upper bounds (all utterances, incl. the digit-format mismatch): 600M — kk 11.35 /
 ky 12.50 / uz 14.04; 220M — kk 12.14 / ky 13.88 / uz 17.06.*
 
+*Provenance: the committed `results_full/fleurs_{kk,ky,uz}_gigastt_ml_ctc*.json` artifacts
+were scored with the older normalizer and do not reproduce these numbers (e.g. uz 600M
+reads 19.85 there vs 9.21 here); the digit-free / apostrophe-folded recompute via
+[`scripts/wer_unicode.py`](../scripts/wer_unicode.py) is not committed.*
+
 Across all five supported languages the 600M head lands at **4.4–9.2% clean-read WER**
 (Russian 4.44 · English 4.63 · Kazakh 6.52 · Kyrgyz 7.39 · Uzbek 9.21) — a genuinely strong
 multilingual result. Same caveat as above: FLEURS overlaps common multilingual ASR training
@@ -236,6 +248,9 @@ OS reclaims those clean pages under pressure. **`ps` RSS** — what
 because it counts the shared model mapping per mapping. The server's own
 `memory_after_load rss_mb=` startup log samples before the mapping is touched
 and reads only ~55 / ~83 MB — a known under-read, not a number to quote. The
+committed `benchmark/results_footprint_gigastt.json` predates the memory-mapped
+encoder: its cold-start (0.94 s) still matches the table, but its ~1501 MB peak
+RSS is the pre-mmap figure and contradicts the rows above — do not quote it. The
 pre-v2.3 default was `--pool-size 4`; v2.3 lowered it to 2 plus a RAM-aware
 auto-cap.
 
@@ -367,7 +382,11 @@ protocol above.
 
 **Apple M1 reference (same protocol, `--pool-size 1`).** For orientation while
 Pi hardware is pending: the same harness on the M1 development machine, per
-head. Filled from `benchmark/results_edge_m1.json`; **not** a Pi prediction.
+head. RTF and TTFP are from the committed `benchmark/results_edge_m1.json`
+(gigastt 2.16.0); RAM and cold-start come from a 2026-08-04 re-measurement
+after the memory-mapped ORT-cache change and are **not** in that artifact —
+it is pre-mmap (it reads ~1.0 s cold start, ~747 MB RSS@ready). **Not** a Pi
+prediction.
 
 | Head | RTF | Peak RSS | Cold-start | TTFP |
 |---|---|---|---|---|
@@ -412,8 +431,11 @@ lighter head — a single encoder-only session, no decoder/joiner pair.
 
 ## Headline single-engine metrics
 
-All gigastt numbers are the v2.3 default **`rnnt`** head (INT8), measured through the
-cross-engine Python harness so they line up with the table above.
+All gigastt numbers are the default **`rnnt`** head (since v2.3; INT8), measured through the
+cross-engine Python harness so they line up with the table above. As noted in the
+provenance note up top, this `rnnt` re-measurement is not committed to
+`benchmark/results_full/` — the committed gigastt artifacts there are the older
+`e2e_rnnt` run.
 
 | Metric | Value |
 |---|---|

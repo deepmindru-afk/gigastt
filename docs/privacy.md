@@ -37,9 +37,11 @@ model download (ASR heads, and optionally punctuation / VAD / speaker models):
   features are first enabled.
 - Each file is SHA-256 verified before use and written atomically to disk.
 - After the initial download, gigastt operates fully offline.
-- Audited: the HTTP client (`reqwest`) is referenced from exactly one module —
-  the model downloader (`gigastt-core/src/model/`) — and every fetch in
-  that module funnels through a single download function. No other runtime
+- Audited: the HTTP client (`reqwest`) is referenced from exactly one runtime
+  module — the model downloader (`gigastt-core/src/model/`) — and every fetch
+  in that module funnels through a single download function. (The server
+  crate's e2e tests also use `reqwest`, but as a dev-dependency that is never
+  compiled into the shipped binary.) No other runtime
   code path opens outbound connections. `GIGASTT_OFFLINE=1` (or `--offline`)
   turns even that path into a fast, instructive error for air-gapped hosts.
 
@@ -58,7 +60,8 @@ onnxruntime); see [architecture.md](architecture.md).
 - Binding to a non-loopback address requires an explicit opt-in:
   `--bind-all` flag or `GIGASTT_ALLOW_BIND_ANY=1` environment variable.
 - Cross-origin requests are denied by default; the origin allowlist is empty
-  unless `--allow-origin` or `--cors-allow-any` is passed.
+  unless `--allow-origin` or `--cors-allow-any` is passed. Loopback origins
+  (`localhost`, `127.0.0.1`, `::1`) are always allowed regardless.
 
 ## Prometheus metrics
 

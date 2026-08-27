@@ -126,7 +126,7 @@ ready → audio → stop → final session.
 The package manifest (`package.json`) is release-ready:
 `npm publish --access public` from this directory (runs `prepublishOnly` →
 `npm run build`). Versioning follows the monorepo release process; publishing
-is done by a human during the release, **not** from CI in this change.
+is done by a human during the release, **not** from CI.
 
 ## License
 

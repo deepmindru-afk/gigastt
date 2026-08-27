@@ -18,10 +18,23 @@ target/
 .omx/
 .claude/
 
-# Tests never compiled in --release
-tests/
-benches/
-missions/
+# Research, benchmarks, tooling & packaging not needed by the Docker build
+benchmark/
+roadmap/
+examples/
+fuzz/
+scripts/
+sdks/
+packaging/
+ffi/
+Formula/
+train/
+.agents/
+.gstack/
+.kimi/
+.grok/
+.githooks/
+.cargo/
 
 # Docs & specs
 docs/

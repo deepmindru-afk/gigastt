@@ -82,7 +82,7 @@ Description: GigaAM v3 INT8 speech-recognition model data for gigastt
  .
  With this package installed, gigastt starts with no network access —
  suitable for air-gapped deployments. Ships the same SHA-256-verified
- files as the offline tarball and \`gigastt download --prequantized\`.
+ files as the offline tarball and \`gigastt download\`.
 EOF
 
 # md5sums enable `dpkg --verify` on the installed payload.

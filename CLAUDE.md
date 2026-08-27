@@ -94,8 +94,8 @@ crates/
     main.rs               # CLI (clap): serve, download, transcribe, quantize
     server/
       mod.rs              # axum router: HTTP + WebSocket on single port, origin middleware, graceful drain
-      http/               # REST handlers: health, models, transcribe, SSE, export, jobs_api, admin
-      rate_limit.rs       # In-tree per-IP token-bucket rate limiter (dashmap-backed)
+      http/               # REST handlers: health (incl. GET /v1/models), transcribe, stream (SSE), openai_api, export, jobs_api, admin
+      rate_limit.rs       # In-tree per-IP token-bucket rate limiter (parking_lot Mutex + HashMap)
       metrics.rs          # In-tree Prometheus text encoder (counters + histograms)
 ```
 
