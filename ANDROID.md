@@ -242,7 +242,7 @@ Tips to reduce binary size:
 
 ## Current Limitations
 
-1. **Server code is excluded from FFI** — The FFI build only exposes `gigastt_core::inference::Engine`. The WebSocket server, REST handlers, and rate limiting live only in the server binary (`cargo build --bin gigastt`). The FFI depends on `gigastt-core` with `default-features = false, features = ["file-decode"]`, so the `tokio` runtime, the `reqwest`/HTTP download stack, and the async session pool are compiled out — the FFI uses synchronous `checkout_blocking` and side-loaded models.
+1. **Server code is excluded from FFI** — The FFI build only exposes `gigastt_core::inference::Engine`. The WebSocket server, REST handlers, and rate limiting live only in the server binary (`cargo build --bin gigastt`). The FFI depends on `gigastt-core` with `default-features = false, features = ["file-decode", "quantize"]`, so the `tokio` runtime, the `reqwest`/HTTP download stack, and the async session pool are compiled out — the FFI uses synchronous `checkout_blocking` and side-loaded models.
 
 2. **Synchronous transcription only** — `gigastt_transcribe_file` blocks the calling thread while inference runs. Call it from a Kotlin coroutine (`withContext(Dispatchers.IO)`) so the UI thread stays responsive.
 
@@ -296,7 +296,10 @@ This is safe — inference still works, just on CPU.
   default, or `v3_e2e_rnnt_encoder_int8.onnx` for the e2e head). There is no
   FP32 fallback.
 - Reduce pool size to 1 via `Engine::load_with_pool_size(dir, 1)` or
-  `gigastt_engine_new_with_pool_size` (Android default pool is already 1).
+  `gigastt_engine_new_with_pool_size(dir, 1)`. Note that `gigastt_engine_new`
+  uses pool size 2 on every platform, Android included; the pool only drops
+  below the requested size when the RAM cap (`cap_pool_size_for_ram`) clamps
+  it at load.
 - Close other apps before testing on low-RAM devices.
 
 ---

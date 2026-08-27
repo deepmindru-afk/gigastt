@@ -86,7 +86,7 @@ sherpa-onnx zipformer-streaming ~150–320 ms (local); Vosk ~100–300 ms (local
 Parakeet/Canary ~80–480 ms (GPU, lookahead-dependent); cloud (Deepgram/Soniox/Yandex
 SpeechKit/SaluteSpeech) ~100–400 ms + network; whisper.cpp / faster-whisper are offline (seconds,
 not natively streaming). gigastt's measured strengths are local-only operation, small INT8
-footprint (210 MB), RTF on batch, and Russian accuracy (far-field lead; Vosk leads clean speech) —
+footprint (210 MB at the time of writing; the current prequantized INT8 bundle is ~225 MB), RTF on batch, and Russian accuracy (far-field lead; Vosk leads clean speech) —
 streaming latency is not a demonstrated advantage, and streaming quality currently regresses.
 
 ## Caveats
@@ -94,12 +94,13 @@ streaming latency is not a demonstrated advantage, and streaming quality current
 - Smoke: ONE 4 s clip, 4 repeats per EP — not statistically representative.
 - `partial_response_lag_ms` is an upper-bounded approximation, under-estimated when compute ≥
   `chunk_ms`; the server `encoder_inference` log is the authoritative per-chunk compute source.
-- README / public wording intentionally untouched here (roadmap task 02). The streaming-quality
-  problem was filed as roadmap task 16 (see update below).
+- README / public positioning wording intentionally untouched here. The streaming-quality
+  problem was fixed the same day in the sliding-context-window commit (see update below).
 
 ## Update (2026-06-13) — streaming-quality fix landed
 
-Roadmap task 16 is fixed (commit `8daa9a9`): the streaming path now decodes on a **sliding
+The streaming-quality problem is fixed (commit `8daa9a9`, "fix(inference): decode streaming on a
+sliding context window"): the streaming path now decodes on a **sliding
 context window** — accumulate audio and re-run the encoder on the whole retained (≤5 s) window
 each chunk (fresh decoder state), then slide + dedup on endpoint/cap. Verified by model-gated
 integration tests (`crates/gigastt-core/tests/streaming_quality.rs`: streaming ≈ batch on
@@ -118,21 +119,24 @@ every 100 ms chunk costs ~432–712 ms of encoder time on CPU — **~4–7× slo
 near the 5 s window cap. So on the CPU EP the streaming path now transcribes correctly but
 **cannot keep up with a live real-time stream** (it falls behind / accumulates backpressure).
 Mitigations (not yet done): CoreML/GPU EP, re-decoding less often than every chunk (e.g. every
-~250–500 ms of new audio), and/or a smaller context window — filed as roadmap task 17.
+~250–500 ms of new audio), and/or a smaller context window — the stride-decode change below
+(commit `3c120a1`) addresses the middle one.
 
-**Implication for positioning (task 02):** streaming is now **accurate** and — after task 17 (below)
+**Implication for public positioning:** streaming is now **accurate** and — after the
+stride-decode change (below)
 — **real-time on CPU**. "sub-200ms" remains unsupported for end-to-end TTFP (TTFP is dominated by
 word position in the stream + compute, ~0.8 s on this clip).
 
-## Update (2026-06-13) — streaming real-time perf (task 17)
+## Update (2026-06-13) — streaming real-time perf (stride decode)
 
-Task 17 (commit `3c120a1`) removed the compute tradeoff above: the encoder no longer re-runs on
+The stride-decode change (commit `3c120a1`, "perf(inference): stride streaming decodes to keep
+real-time on CPU") removed the compute tradeoff above: the encoder no longer re-runs on
 every ~100 ms chunk. A decode **stride** re-runs it only after ~0.8 s of new audio (or at the window
 cap), then resets; `finish_stream` decodes the sub-stride remainder at end-of-stream (Stop/EOF) so
 batching never drops trailing words (wired into the WS stop handler and the SSE flush). Re-measured
 (CPU EP, INT8, release, `golos_00`, fast-feed + drain-to-close):
 
-| metric | task 16 (re-decode every chunk) | task 17 (stride) |
+| metric | sliding window (re-decode every chunk) | stride |
 |---|---|---|
 | decode calls / clip | 27 | **5** |
 | encoder time sum | 10.7 s | 1.94 s |

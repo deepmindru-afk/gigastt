@@ -5,8 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-A few early versions (0.3.0, 0.4.0–0.4.2, 0.9.6, 2.0.0–2.0.2, 2.2.1, 2.9.0, 2.14.1)
+A few versions (0.3.0, 0.4.0–0.4.2, 0.9.6, 2.0.0–2.0.2, 2.2.0–2.2.1, 2.9.0, 2.14.1)
 were released without a git tag, so their headings carry no compare link.
+Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
+(0.1.2, tagged the same day, was yanked from crates.io as well), so 0.1.0 and
+0.1.1 have no changelog entries of their own.
 
 ## [Unreleased]
 
@@ -1478,6 +1481,18 @@ See [`docs/benchmarks.md`](docs/benchmarks.md).
   module-level class registry to avoid import-time side effects, and the
   `gigastt` runner cache config uses a documented schema-version constant.
 
+## [2.2.0] - 2026-06-17
+
+Version bump on `main` only — never tagged and never published to crates.io;
+the changes rolled into 2.2.1 and shipped in [2.3.0], the next published
+release (v2.3.0, 2026-06-20). Its feature set — dedicated batch pool
+(`--batch-pool-size`), per-request inference timeout
+(`--inference-timeout-secs`), degraded pool boot (`--pool-min-size`), SSE
+per-variant error codes + `inference_panic`, metrics on a separate loopback
+listener, WebSocket keepalive, Intel-Mac release-target removal, polyvoice
+0.6.8 → 0.7.0, and the INT8 per-output-channel quantize fix — is documented
+under [2.3.0].
+
 ## [2.1.0] - 2026-06-14
 
 A large correctness + honesty pass (a full project audit), an honest cross-ASR
@@ -2549,7 +2564,7 @@ _Release candidate for v0.9.0 — bundles five P0 fixes plus two supporting item
 - `Engine::load()`, `Engine::process_chunk()`, and `Engine::transcribe_file()` return `Result<T, GigasttError>` instead of `anyhow::Result<T>`.
 - All public structs/enums are `#[non_exhaustive]` — external struct literal construction requires constructor methods.
 
-## [0.2.0] - 2026-04-06
+## [0.2.0] - 2026-04-10
 
 ### Added
 
@@ -2568,7 +2583,7 @@ _Release candidate for v0.9.0 — bundles five P0 fixes plus two supporting item
 - Audio pipeline: accept 48kHz from WebSocket clients, resample to 16kHz internally.
 - Encoder output shape handling: channels-first `[1, 768, T]` format.
 
-## [0.1.2] - 2026-04-01
+## [0.1.2] - 2026-04-09
 
 ### Added
 
@@ -2586,13 +2601,6 @@ _Release candidate for v0.9.0 — bundles five P0 fixes plus two supporting item
 [2.18.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.17.0...v2.18.0
 [2.17.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.16.0...v2.17.0
 [2.16.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.15.0...v2.16.0
-[2.0.9]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.8...v2.0.9
-[2.0.8]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.7...v2.0.8
-[2.0.7]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.6...v2.0.7
-[2.0.6]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.5...v2.0.6
-[2.0.5]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.4...v2.0.5
-[2.0.4]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.3...v2.0.4
-[0.9.5]: https://github.com/ekhodzitsky/gigastt/compare/v0.9.4...v0.9.5
 [2.15.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.14.4...v2.15.0
 [2.14.4]: https://github.com/ekhodzitsky/gigastt/compare/v2.14.3...v2.14.4
 [2.14.3]: https://github.com/ekhodzitsky/gigastt/compare/v2.14.2...v2.14.3
@@ -2617,11 +2625,18 @@ _Release candidate for v0.9.0 — bundles five P0 fixes plus two supporting item
 [2.0.12]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.11...v2.0.12
 [2.0.11]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.10...v2.0.11
 [2.0.10]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.9...v2.0.10
+[2.0.9]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.8...v2.0.9
+[2.0.8]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.7...v2.0.8
+[2.0.7]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.6...v2.0.7
+[2.0.6]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.5...v2.0.6
+[2.0.5]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.4...v2.0.5
+[2.0.4]: https://github.com/ekhodzitsky/gigastt/compare/v2.0.3...v2.0.4
 [2.0.3]: https://github.com/ekhodzitsky/gigastt/compare/v1.0.2...v2.0.3
 [1.0.2]: https://github.com/ekhodzitsky/gigastt/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/ekhodzitsky/gigastt/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/ekhodzitsky/gigastt/compare/v0.10.0...v1.0.0
 [0.10.0]: https://github.com/ekhodzitsky/gigastt/compare/v0.9.5...v0.10.0
+[0.9.5]: https://github.com/ekhodzitsky/gigastt/compare/v0.9.4...v0.9.5
 [0.9.4]: https://github.com/ekhodzitsky/gigastt/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/ekhodzitsky/gigastt/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/ekhodzitsky/gigastt/compare/v0.9.1...v0.9.2

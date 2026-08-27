@@ -1,7 +1,8 @@
 ---
-# Prometheus alerting rules for gigastt operators.
-# Apply with: kubectl apply -f alerts.yml  (or load via your Prometheus operator)
-# Requires gigastt >= 0.8.0 with --metrics enabled.
+# Prometheus alerting rules for gigastt operators (plain rules file, not a
+# PrometheusRule CRD). Load it via `rule_files` in prometheus.yml, or mount it
+# into a ConfigMap and reference it from your Prometheus/PrometheusRule setup.
+# Requires gigastt >= 1.0.0 with --metrics enabled.
 
 groups:
   - name: gigastt
@@ -26,7 +27,7 @@ groups:
 
       # Fire when the inference session pool has been fully exhausted for 1 minute.
       # gigastt_pool_available is emitted when --metrics is enabled
-      # (introduced alongside the pool-saturation backpressure in v0.6.0).
+      # (introduced alongside the pool-saturation backpressure in v1.0.0).
       - alert: GigasttPoolExhaustion
         expr: gigastt_pool_available == 0
         for: 1m

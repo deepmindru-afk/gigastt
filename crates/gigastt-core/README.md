@@ -2,7 +2,7 @@
 
 Core inference engine for [gigastt](https://github.com/ekhodzitsky/gigastt) — Russian (and optional multilingual) speech recognition powered by GigaAM v3 via ONNX Runtime. No server dependencies; no tokio runtime required for inference itself — embed it in any Rust application.
 
-Runtime is **INT8 only**. Default `rnnt` / `e2e_rnnt` files come from GitHub Releases; `ml_ctc` / `ml_ctc_large` and optional sidecars come from HuggingFace.
+Runtime is **INT8 only**. Default `rnnt` / `e2e_rnnt` files come from GitHub Releases; `ml_ctc` / `ml_ctc_large` come from HuggingFace, as do the optional speaker-embedding and punctuation sidecars — the Silero VAD sidecar comes from GitHub (`snakers4/silero-vad`).
 
 ## Usage
 
@@ -19,7 +19,7 @@ use gigastt_core::model;
 let model_dir = model::default_model_dir();
 model::ensure_model(&model_dir).await?;
 
-// Default pool size is 2; use load_with_pool_size for 1 on edge hosts
+// Default pool size is 2 (1 on Android); use load_with_pool_size to override
 let engine = Engine::load(&model_dir)?;
 // let engine = Engine::load_with_pool_size(&model_dir, 1)?;
 
@@ -73,7 +73,7 @@ from the dependency graph. Opt features back in as needed.
 |---|---|---|
 | `net` | on | HTTP model download (`reqwest` + async fs); off → side-loaded models only |
 | `async-pool` | on | async `Pool::checkout`; off → synchronous `checkout_blocking` only (no tokio runtime) |
-| `file-decode` | on | file transcription via `symphonia` (WAV/MP3/M4A/OGG/FLAC/Opus); off → raw-PCM streaming only |
+| `file-decode` | on | file transcription via `symphonia` (WAV/MP3/M4A/OGG/FLAC/Opus, WebM/MKV, telephony G.711/G.722); off → raw-PCM streaming only |
 | `diarization` | on | speaker identification via polyvoice |
 | `quantize` | on | packaging-only INT8 rebuild from a local FP32 ONNX (`protoc` required) |
 | `ort-load-dynamic` | off | link a system/vendored onnxruntime instead of the build-time download |
@@ -85,7 +85,7 @@ from the dependency graph. Opt features back in as needed.
 - **Inference engine** — ONNX Runtime session pool, Conformer encoder, RNN-T decoder + joiner (or greedy CTC on the multilingual heads)
 - **Mel spectrogram** — 64 bins, FFT=320, hop=160, HTK scale
 - **Tokenizer** — char vocab 34 (`rnnt`), BPE 1025 (`e2e_rnnt`), multilingual char 71 (`ml_ctc` / `ml_ctc_large`)
-- **Audio loading** — WAV, M4A, MP3, OGG, FLAC, Opus via symphonia; resampling via rubato
+- **Audio loading** — WAV, M4A, MP3, OGG, FLAC, Opus, WebM/MKV, telephony G.711/G.722 via symphonia; resampling via rubato
 - **Model download** — streaming fetch with SHA-256 verification + atomic rename (Releases for default INT8; HuggingFace for CTC / sidecars)
 - **Protocol types** — `ClientMessage`, `ServerMessage`, `TranscriptSegment` for WebSocket/REST
 

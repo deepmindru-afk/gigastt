@@ -137,7 +137,7 @@ ready → audio → final session.
 The module path is `github.com/ekhodzitsky/gigastt/sdks/go`. Releases are cut
 from the monorepo with subdirectory tags of the form `sdks/go/vX.Y.Z` (Go
 modules convention). Publishing is part of the human release process and is
-**not** performed from CI in this change.
+**not** performed from CI.
 
 ## License
 

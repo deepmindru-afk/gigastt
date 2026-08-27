@@ -1,5 +1,11 @@
 # Candle/Metal Inference Backend Implementation Plan
 
+> **Historical record — work completed, superseded.** This was the
+> implementation plan for the Candle/Metal backend; the backend shipped (v2.4.0)
+> and is documented in [`docs/candle-backend.md`](../candle-backend.md). Kept
+> for the decision history; where it disagrees with the shipped code, the code
+> and the user guide win.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add an optional `--features candle` GigaAM v3 inference backend (Candle + Metal) behind the PR #115 runtime seam, without changing the default ONNX Runtime path.

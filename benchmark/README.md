@@ -4,13 +4,21 @@ Reproducible benchmark comparing **gigastt** against popular open-source ASR eng
 
 ## Supported Engines
 
+The table below covers the runners registered in `benchmark.py` (`ALL_RUNNERS`) plus
+`gigastt-coreml`, which is wired by `benchmark_footprint.py` only.
+
 | Engine | Backend | Language | Installation |
 |--------|---------|----------|--------------|
-| gigastt | ONNX Runtime / Rust | Russian | Built from source or `cargo install` |
+| gigastt | ONNX Runtime / Rust | Russian (default `rnnt` head; `e2e_rnnt` optional) | Built from source or `cargo install` |
+| gigastt-stream | Same engine over `/v1/ws` | Russian | Same binary; `--mode stream` / `--mode both` |
+| gigastt-ml-ctc / gigastt-ml-ctc-large | ONNX Runtime / Rust | ru/en/kk/ky/uz | `--model-variant ml_ctc` / `ml_ctc_large` |
+| gigastt-coreml | CoreML / Neural Engine build | Russian | Apple Silicon only; footprint/latency script, not the WER table |
 | whisper.cpp | GGML / C++ | Multilingual | Auto-downloaded on first run |
 | faster-whisper | CTranslate2 / Python | Multilingual | `pip install faster-whisper` |
+| faster-whisper-turbo | CTranslate2 / Python (large-v3-turbo) | Multilingual | `pip install faster-whisper` |
 | Vosk 0.42 | Kaldi / C++ | Russian | `pip install vosk` (model auto-downloaded) |
 | Vosk 0.54 | Zipformer2 / sherpa-onnx | Russian | `pip install sherpa-onnx` (model auto-downloaded) |
+| t-one | Streaming CTC / PyTorch | Russian | `uv pip install "git+https://github.com/voicekit-team/T-one.git" miniaudio` |
 
 ## Metrics
 
@@ -35,7 +43,7 @@ WER is unchanged by this switch: whisper.cpp still uses the same `large-v3` Russ
 
 WER is computed after symmetric text normalization so that Russian number words and Arabic digits become comparable tokens. The same pipeline is applied to the reference and the hypothesis for every engine; there are no per-engine branches.
 
-**Caveat — the benefit of normalization is not engine-neutral.** Although the *same* function runs on reference and hypothesis with no per-engine branches, the words-to-digits ITN and the anglicism map can only fire on hypotheses that contain Arabic digits or Latin tokens. Engines that emit digits/Latin (gigastt, whisper) get a large WER reduction from normalization; a word-only engine like Vosk gets none (and even loses a little). Measured on `golos_crowd_1k`, recomputed from the committed `results_full/*.json` (not a new run):
+**Caveat — the benefit of normalization is not engine-neutral.** *(Historical: the gigastt numbers in this block were measured with the `e2e_rnnt` head, pre-v2.3; the current default `rnnt` head reaches 3.55% clean-read WER — see the root README.)* Although the *same* function runs on reference and hypothesis with no per-engine branches, the words-to-digits ITN and the anglicism map can only fire on hypotheses that contain Arabic digits or Latin tokens. Engines that emit digits/Latin (gigastt, whisper) get a large WER reduction from normalization; a word-only engine like Vosk gets none (and even loses a little). Measured on `golos_crowd_1k`, recomputed from the committed `results_full/*.json` (not a new run):
 
 | Engine | naive WER | ITN WER | Δ |
 |---|---|---|---|
@@ -85,7 +93,7 @@ The Rust CI harness in `crates/gigastt/tests/benchmark.rs` uses a simpler digit-
 
 ### Dataset contamination
 
-GigaAM v3 is a SberDevices model whose fine-tuning is dominated by Golos, and Common Voice / OpenSTT-style corpora are commonly part of Russian ASR training mixes. The Golos / OpenSTT / Common Voice slices used here therefore very likely overlap GigaAM v3's training distribution, so the in-domain WER should be read as a **best-case upper bound**, not a WER on unseen data. Golos ships an official train/test split (distribution overlap, not row-level leakage); the renormalized matrix below still shows Vosk ahead on clean read speech.
+GigaAM v3 is a SberDevices model whose fine-tuning is dominated by Golos, and Common Voice / OpenSTT-style corpora are commonly part of Russian ASR training mixes. The Golos / OpenSTT / Common Voice slices used here therefore very likely overlap GigaAM v3's training distribution, so the in-domain WER should be read as a **best-case upper bound**, not a WER on unseen data. Golos ships an official train/test split (distribution overlap, not row-level leakage); the renormalized matrix below — measured with the `e2e_rnnt` head against **Vosk 0.42** — still shows Vosk ahead on clean read speech. With the current `rnnt` head, clean read is instead a **statistical tie** against Vosk 0.54 (3.55% vs 2.97%, overlapping 95% CIs — see the root README).
 
 ## Quick Start
 
@@ -158,8 +166,14 @@ docker run -v ~/.gigastt/models:/root/.gigastt/models:ro \
            -v ~/.gigastt/benchmarks:/root/.gigastt/benchmarks:ro \
            -v $(pwd)/benchmark/results:/workspace/benchmark/results \
            gigastt-benchmark \
-           --max-samples 100 --runners all
+           --max-samples 100 --runners all \
+           --output /workspace/benchmark/results/results.json
 ```
+
+> **whisper.cpp note:** the image builds and installs only `whisper-cli`; the
+> runner uses server mode (`whisper-server`). Inside the container the first
+> run therefore rebuilds whisper.cpp from source into `/tmp/whisper.cpp`
+> before benchmarking.
 
 Or use Docker Compose:
 
@@ -213,7 +227,8 @@ python benchmark.py --dataset tone_webinars --runners faster_whisper --max-sampl
   --output results_full/tone_webinars_faster_whisper.json
 ```
 
-`results_full/` is gitignored (large per-sample JSON); published WER/CI/RTF live in
+`results_full/` is gitignored for new artifacts (large per-sample JSON); ~50
+historical result files are committed. Published WER/CI/RTF live in
 `docs/benchmarks.md`. Re-run and compare if you need local artifacts.
 
 ### Golos crowd
@@ -396,6 +411,8 @@ If the external dataset is missing, the benchmark falls back to the bundled fixt
 
 ## Renormalized WER results
 
+*(Historical: every gigastt row below is the `e2e_rnnt` head, pre-v2.3. The current default is the `rnnt` head — 3.55% clean read on `golos_crowd_1k`; see the root README and [`docs/benchmarks.md`](../docs/benchmarks.md).)*
+
 Existing result files were recomputed with the new symmetric words-to-digits normalization (`benchmark/recompute_wer.py`). The full 4×4 matrix below now includes the previously missing `openstt_calls` and `openstt_youtube` pairs, generated with the new normalization.
 
 | Dataset | Engine | Old WER | Old CI | New WER | New CI | Δ WER |
@@ -419,7 +436,7 @@ Existing result files were recomputed with the new symmetric words-to-digits nor
 
 ### Residual errors
 
-On `golos_crowd_1k` gigastt reaches 8.60% WER after renormalization (down from 10.77%) — the flagship number used in the README (1000 samples, 95% CI [7.51%, 9.66%]). The residual errors are dominated by:
+On `golos_crowd_1k` gigastt reaches 8.60% WER after renormalization (down from 10.77%) — the flagship README number *at the time*, measured on the `e2e_rnnt` head (1000 samples, 95% CI [7.51%, 9.66%]). The current README flagship is **3.55%** on the default `rnnt` head. The residual errors are dominated by:
 
 - **Foreign brand / artist / product names** output in original Latin spelling by gigastt (and whisper) while the reference uses Russian transliteration, e.g. "Fashion TV" vs "фэшн ти ви", "Okko" vs "окко", "Bon Jovi" vs "бона джови". Roughly 45–50% of remaining error tokens fall in this category.
 - **Real ASR errors or partial hypotheses**, including mis-heard words, substitutions, and truncated outputs on long digit strings. About half of the residual errors are genuine recognition mistakes rather than normalization mismatches.
@@ -434,7 +451,10 @@ No further normalization rules were added specifically to tailor results to giga
 
 ```json
 {
-  "manifest_samples": 100,
+  "dataset": "golos_crowd_1k",
+  "mode": "batch",
+  "manifest_samples": 1008,
+  "skipped_empty_refs": 8,
   "total_failures": 0,
   "runners": [
     {
@@ -445,9 +465,17 @@ No further normalization rules were added specifically to tailor results to giga
       "wer": 11.40,
       "ci_low": 10.9,
       "ci_high": 11.9,
-      "rtf": 0.045,
       "total_errors": 57,
       "total_ref_words": 500,
+      "naive_wer": 12.10,
+      "naive_ci_low": 11.6,
+      "naive_ci_high": 12.6,
+      "naive_total_errors": 60,
+      "naive_total_ref_words": 500,
+      "naive_delta": -0.70,
+      "total_audio_sec": 350.0,
+      "total_proc_sec": 15.75,
+      "rtf": 0.045,
       "details": [
         {
           "file": "00001.wav",
@@ -456,22 +484,41 @@ No further normalization rules were added specifically to tailor results to giga
           "wer": 0.0,
           "errors": 0,
           "ref_words": 5,
+          "naive_wer": 0.0,
+          "naive_errors": 0,
+          "naive_ref_words": 5,
           "audio_sec": 3.5,
           "proc_sec": 0.15,
           "failed": false,
           "cached": true
         }
-      ]
+      ],
+      "histograms": {
+        "audio_duration": [ { "bucket": "0-5s", "samples": 45, "...": "..." } ],
+        "ref_words": [ { "bucket": "1-5 words", "samples": 60, "...": "..." } ],
+        "wer": [ { "bucket": "0%", "samples": 30, "...": "..." } ]
+      }
     }
   ],
+  "stream_vs_batch": {
+    "paired": 100,
+    "wer_batch": 11.40,
+    "wer_stream": 11.62,
+    "delta_pp": 0.22,
+    "ci_low": -0.35,
+    "ci_high": 0.81
+  },
   "metadata": {
     "collected_at": "2026-06-12T14:32:00+00:00",
-    "host": { "cpu": "...", "ram_bytes": ..., "os": "...", "python_version": "..." },
+    "host": { "cpu": "...", "ram_bytes": "...", "os": "...", "python_version": "..." },
     "dataset": { "name": "golos", "source": "...", "license": "...", "manifest_path": "..." },
-    "engines": [ { "name": "gigastt", "version": "...", "model_sha256": "..." }, ... ]
+    "engines": [ { "name": "gigastt", "version": "...", "model_sha256": "..." } ]
   }
 }
 ```
+
+`stream_vs_batch` is present only on `--mode both` runs (WER_stream −
+WER_batch on paired files, bootstrap 95% CI).
 
 ## Histograms
 
@@ -480,7 +527,7 @@ Each runner result includes WER breakdown histograms in `runners[*].histograms`:
 | Dimension | Buckets | What it tells you |
 |---|---|---|
 | `audio_duration` | `0-5s`, `5-15s`, `15-30s`, `30s+` | WER by clip length — reveals whether the engine struggles with long-form audio. |
-| `ref_words` | `1-5`, `6-15`, `16-30`, `30+` | WER by utterance complexity — short commands vs. long sentences. |
+| `ref_words` | `1-5 words`, `6-15 words`, `16-30 words`, `30+ words` | WER by utterance complexity — short commands vs. long sentences. |
 | `wer` | `0%`, `1-10%`, `10-20%`, `20-50%`, `50-100%`, `100%+` | Distribution of per-sample WER — shows how many samples are perfect, how many are catastrophic. |
 
 Each bucket contains:

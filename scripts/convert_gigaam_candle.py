@@ -34,6 +34,7 @@ Naming facts (verified against the on-disk ONNX):
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -42,7 +43,8 @@ import onnx
 from onnx import numpy_helper
 from safetensors.numpy import load_file, save_file
 
-MODELS_DIR = Path("/Users/ekhodzitsky/.gigastt/models")
+# Default model cache, overridable via GIGASTT_MODELS_DIR.
+MODELS_DIR = Path(os.environ.get("GIGASTT_MODELS_DIR", Path.home() / ".gigastt" / "models"))
 ONNX_PATH = MODELS_DIR / "v3_rnnt_encoder.onnx"
 DECODER_ONNX_PATH = MODELS_DIR / "v3_rnnt_decoder.onnx"
 JOINER_ONNX_PATH = MODELS_DIR / "v3_rnnt_joint.onnx"

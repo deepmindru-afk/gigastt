@@ -41,7 +41,7 @@ gigastt is a **6-crate** Cargo workspace:
 | [`gigastt-uniffi`](../crates/gigastt-uniffi) | lib (cdylib) | UniFFI bindings (Python wheels / Swift / Kotlin path) |
 | [`gigastt-node`](../crates/gigastt-node) | lib (cdylib) | napi-rs Node.js / Electron binding |
 
-Embed inference in any Rust project with `gigastt-core = "2.18"`. For a lean embedded build, disable defaults (`default-features = false`) to drop `tokio` / `reqwest` / `symphonia` / polyvoice; opt capabilities back in via the `net`, `async-pool`, `file-decode`, and `diarization` features.
+Embed inference in any Rust project with `gigastt-core = "2.18"`. For a lean embedded build, disable defaults (`default-features = false`) to drop `tokio` / `reqwest` / `symphonia` / polyvoice; opt capabilities back in via the `net`, `async-pool`, `file-decode`, `diarization`, and `quantize` features (`quantize` is packaging-only — the INT8 quantizer, not a runtime path).
 
 Server surfaces (single process, one primary port unless metrics is enabled):
 
@@ -49,6 +49,8 @@ Server surfaces (single process, one primary port unless metrics is enabled):
 |---|---|---|
 | Liveness / readiness | `GET /health`, `GET /ready` | Bootstrap answers while the model loads |
 | REST / SSE | `POST /v1/transcribe`, `/v1/transcribe/stream` | File upload |
+| Models | `GET /v1/models` | Available model variants |
+| OpenAI-compatible | `POST /v1/audio/transcriptions` | multipart `file` + `model` → `{"text":…}` |
 | WebSocket | `GET /v1/ws` | Streaming partials/finals |
 | Jobs | `/v1/jobs…` | Only when `--enable-jobs` |
 | Admin | `POST /v1/admin/reload` | **Loopback peers only** |
@@ -59,7 +61,7 @@ Server surfaces (single process, one primary port unless metrics is enabled):
 [**GigaAM v3**](https://huggingface.co/istupakov/gigaam-v3-onnx) by
 [SberDevices](https://github.com/salute-developers/GigaAM) — RNN-T (Conformer encoder +
 LSTM decoder + joiner), 16-layer 768-dim encoder (240M params); the vocab depends on the
-head (`rnnt` 34-token char — the v2.3 default — or `e2e_rnnt` 1025-token BPE), 16 kHz
+head (`rnnt` 34-token char — the default since v2.3 — or `e2e_rnnt` 1025-token BPE), 16 kHz
 mono input, MIT licensed. Default install is lean INT8 (~225 MB total: encoder
 ~215 MB + decoder/joiner/vocab) via `gigastt download` / first `serve` from
 **GitHub Releases**. Runtime loads INT8 only — there is no FP32 download or
@@ -108,7 +110,8 @@ crashes.
 
 ## INT8 quantization
 
-Native-Rust quantization (always compiled). The encoder shrinks ~3.9× and runs as true
+Native-Rust quantization (compiled by default via the `quantize` feature;
+`--no-default-features` builds drop it). The encoder shrinks ~3.9× and runs as true
 INT8 integer compute (`DynamicQuantizeLinear` + `MatMulInteger`/`ConvInteger`), so the CPU
 EP executes fast integer kernels instead of dequantizing the weights back to float — RTF
 well below 1.0 on CPU — with negligible WER change. Runtime always loads the lean

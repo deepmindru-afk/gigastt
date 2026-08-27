@@ -29,8 +29,6 @@ class Gigastt < Formula
       url "https://github.com/ekhodzitsky/gigastt/releases/download/v2.18.0/gigastt-2.18.0-x86_64-unknown-linux-gnu.tar.gz"
       sha256 "7814ea335f8aefb935ae75ba21c105ea81394c48e3c5ee31f9e7dd502a70dfee"
     elsif Hardware::CPU.arm?
-      # sha256 is a placeholder; .github/workflows/homebrew.yml overwrites it
-      # from SHA256SUMS.txt after the first release carrying this target.
       url "https://github.com/ekhodzitsky/gigastt/releases/download/v2.18.0/gigastt-2.18.0-aarch64-unknown-linux-gnu.tar.gz"
       sha256 "9c971dbb8bf54d8e552525402b1de47b4bc4fca710c3e9e53dfb298aba2d0f05"
     end

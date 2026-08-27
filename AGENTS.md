@@ -21,7 +21,7 @@ exposes:
 - **REST** (`/v1/transcribe`) — file upload, full JSON response
 - **SSE** (`/v1/transcribe/stream`) — file upload, streaming Server-Sent Events
 - **OpenAI-compatible** (`/v1/audio/transcriptions`) — multipart `file` + `model` → `{"text":"..."}`
-- **CLI** — `serve`, `download`, `transcribe`, `quantize` commands
+- **CLI** — `serve`, `download`, `transcribe`, `transcribe-batch`, `watch`, `cache-gc`, `quantize` commands
 
 The product path is **INT8 only** (~225 MB prequantized bundle from Releases):
 `serve` / `download` / engine load never use FP32. `gigastt quantize` remains a
@@ -47,10 +47,10 @@ packaging tool that needs a local FP32 ONNX as source (not a runtime path).
 - **Logging**: tracing + tracing-subscriber (env-filter)
 - **Error handling**: anyhow (internal), `GigasttError` (public API)
 - **Audio decoding**: symphonia (AAC, MP3, OGG, FLAC, WAV, PCM)
-- **Audio resampling**: rubato 0.16
+- **Audio resampling**: rubato 5
 - **FFT**: rustfft 6
 - **Protobuf**: prost 0.14 + prost-build 0.14 (build-time)
-- **Rate limiting**: in-tree token-bucket (dashmap-backed)
+- **Rate limiting**: in-tree token-bucket (parking_lot Mutex + HashMap)
 - **Metrics**: in-tree Prometheus text encoder (optional `--metrics` flag)
 
 ### Execution providers (compile-time features)
@@ -213,7 +213,8 @@ crates/
     main.rs               # CLI (clap): serve, download, transcribe, quantize
     server/
       mod.rs              # axum router, origin middleware, graceful shutdown
-      http/                # REST handlers: health, models, transcribe, export, jobs_api, admin
+      http/                # REST handlers: health (incl. GET /v1/models), transcribe, stream (SSE),
+                           #   openai_api, export, jobs_api, admin
       rate_limit.rs       # In-tree per-IP token-bucket rate limiter
       metrics.rs          # In-tree Prometheus text encoder
   gigastt/tests/
@@ -362,7 +363,8 @@ This guarantees that a regression like a broken `cargo test` cannot reach `main`
     and batch transcription; when disabled the routes are not registered and return 404
   - `--jobs-ttl-secs` (default 3600) — TTL for finished/failed/cancelled jobs in the store
   - `--jobs-max` (default 100) — max jobs kept in memory; `POST /v1/jobs` returns 429 when full
-  - `--jobs-retry` (default 3) — max retries for a job on `inference_timeout` or panic
+  - `--jobs-retry` (default 3) — max retries for a job on panic; an
+    `inference_timeout` is deterministic and is never retried
 - **Per-IP rate limiting** (opt-in, off by default): `--rate-limit-per-minute N`
   enables token-bucket limiter on `/v1/*`; `/health` is exempt. Returns HTTP 429
   + `Retry-After` when exhausted.
@@ -372,8 +374,13 @@ This guarantees that a regression like a broken `cargo test` cannot reach `main`
   `.partial`, verifies hash, then atomically renames. Corrupt downloads are
   removed, not promoted.
 - **Internal errors sanitized** — no path or model leakage to clients.
-- **Prometheus `/metrics`** (opt-in via `--metrics`): exposes
-  `gigastt_http_requests_total` and `gigastt_http_request_duration_seconds`.
+- **Prometheus `/metrics`** (opt-in via `--metrics`): 12 metric families —
+  HTTP (`gigastt_http_requests_total`, `gigastt_http_request_duration_seconds`),
+  pool gauges/counters (`gigastt_pool_available`, `gigastt_pool_waiters`,
+  `gigastt_pool_timeouts_total`, batch-pool twins, checkout duration),
+  `gigastt_ws_active_connections`, inference duration and
+  `gigastt_inference_timeouts_total`, rate-limit rejections.
+  Operational detail: [docs/runbook.md](docs/runbook.md).
   Served on a separate loopback listener (default `127.0.0.1:9090`, override
   via `--metrics-listen` / `GIGASTT_METRICS_LISTEN`) — not the main API port,
   and therefore off the CORS allowlist and the per-IP rate limiter.
@@ -509,6 +516,8 @@ RUST_LOG=gigastt=debug cargo run -- serve
 - The `quantize` Cargo feature enables `crates/gigastt-quantize` (on by default
   for the server binary). Lean embedders may disable it and side-load INT8 only.
 - Model download logic is in `crates/gigastt-core/src/model/`. If you change HF repo or file
-  names, update `MODEL_CHECKSUMS` and the cache key in `.github/workflows/ci.yml`.
+  names, update the per-head checksum tables (`RNNT_CHECKSUMS`, `E2E_RNNT_CHECKSUMS`,
+  `ML_CTC_CHECKSUMS`, `ML_CTC_LARGE_CHECKSUMS` in `model/variant.rs`) and the cache key in
+  `.github/workflows/ci.yml`.
 - The project uses English for all code comments, documentation, and commit
   messages.

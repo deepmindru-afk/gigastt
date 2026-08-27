@@ -1,9 +1,14 @@
 # Self-Hosted GitHub Actions Runner for Benchmarks
 
-The default GitHub-hosted runners (`ubuntu-latest`, `macos-latest`) run on generic CPUs and do not expose:
+GitHub-hosted runners cover correctness CI — the `macos-14` image even runs on
+Apple Silicon, which is why the release workflow builds the CoreML binary there
+(`.github/workflows/release.yml`). What they do not give you is stable,
+representative hardware for performance work:
 
-- **Apple Silicon Neural Engine** (CoreML) — macOS ARM64
-- **NVIDIA GPUs** (CUDA) — Linux x86_64
+- **macOS** — hosted runners are shared, variably loaded VMs; RTF (real-time
+  factor) timings fluctuate run to run, so CoreML / Neural Engine speedups
+  cannot be measured meaningfully there.
+- **Linux** — hosted runners have no NVIDIA GPU, so CUDA builds cannot run at all.
 
 For accurate RTF (real-time factor) measurements you need self-hosted runners on your actual target hardware.
 
@@ -56,7 +61,7 @@ brew install python@3.12
 # gigastt model cache (one-time)
 git clone https://github.com/ekhodzitsky/gigastt /tmp/gigastt-setup
 cd /tmp/gigastt-setup
-cargo build --release -p gigastt
+cargo build --release -p gigastt --features coreml
 ./target/release/gigastt download
 ```
 

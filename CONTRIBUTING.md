@@ -55,6 +55,8 @@ source of truth, and out-of-band uploads break SHA-pinned clients (e.g. Murmur).
    It must produce:
    - `gigastt-x.y.z-aarch64-apple-darwin.tar.gz`
    - `gigastt-x.y.z-x86_64-unknown-linux-gnu.tar.gz`
+   - `gigastt-x.y.z-aarch64-unknown-linux-gnu.tar.gz`
+   - `gigastt-x.y.z-x86_64-pc-windows-msvc.tar.gz`
    - `SHA256SUMS.txt`
    - Per-asset `*.sha256` files
 

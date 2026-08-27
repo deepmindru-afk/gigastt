@@ -28,7 +28,10 @@ python3 benchmark/dual_constraint_bench.py \
 - **Stretch (ml_ctc):** long40 BEST in **[0.015, 0.020]**
 - **Primary:** BEST is the stretch/competitive scalar; MEAN must not regress vs freeze on competitive path
 
-## Wins on this branch
+## What moved between the freeze and post snapshots
+
+Point-in-time comparison: both snapshots were captured on 2026-08-10 (see
+`date_utc` in each JSON); this is a freeze-vs-post delta, not a running tally.
 
 1. Sparse HTK mel filterbank
 2. Full-core auto encoder threads (`logical_cpus / pool_slots`)

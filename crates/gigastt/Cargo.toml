@@ -36,8 +36,9 @@ No cloud APIs, no telemetry.
 .
 The model is not in this package: install the gigastt-model-int8 data
 package (offline), or let gigastt download it from HuggingFace on first
-start. Configuration: /etc/gigastt/gigastt.env; service: gigastt.service
-(not auto-enabled)."""
+start — for the latter, comment out GIGASTT_OFFLINE=1 in
+/etc/gigastt/gigastt.env first. Configuration: /etc/gigastt/gigastt.env;
+service: gigastt.service (not auto-enabled)."""
 assets = [
     ["target/release/gigastt", "usr/bin/gigastt", "755"],
     ["../../packaging/systemd/gigastt.service", "lib/systemd/system/gigastt.service", "644"],
