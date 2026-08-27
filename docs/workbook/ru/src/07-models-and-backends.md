@@ -176,7 +176,7 @@ cargo build --release --features nnapi     # Android / ARM64
 
 Исключительность проверяется на этапе компиляции: `coreml` и `cuda` взаимно
 исключают друг друга; `ane` конфликтует с `coreml`/`cuda`/`nnapi`/`candle`;
-`candle` конфликтует с `coreml`/`cuda`. На плохой комбинации срабатывает
+`candle` конфликтует с `coreml`/`cuda`/`nnapi`. На плохой комбинации срабатывает
 `compile_error!`.
 
 Поведение в рантайме, о котором стоит знать:

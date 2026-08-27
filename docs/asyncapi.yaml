@@ -493,10 +493,9 @@ components:
           minimum: 0.0
           maximum: 1.0
           example: 0.97
-          description: Mean softmax confidence over the word's BPE tokens (0.0–1.0)
+          description: Mean softmax confidence over the word's tokens (0.0–1.0)
         speaker:
           type: integer
-          nullable: true
           example: 0
           description: >-
             Zero-based speaker label from diarization; omitted when diarization

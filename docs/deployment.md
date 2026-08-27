@@ -49,6 +49,11 @@ export CADDY_BASIC_AUTH_HASH='$2a$14$...'
 
 # Run Caddy
 caddy run
+
+# Run gigastt with the browser-facing origin allowlisted — the proxy
+# forwards the Origin header unchanged, and gigastt denies unknown
+# cross-origin Origins with 403 origin_denied:
+gigastt serve --allow-origin https://stt.example.com
 ```
 
 **Why this works:**
@@ -57,7 +62,7 @@ caddy run
 - `reverse_proxy` upgrades WebSocket connections without extra config
 - `h2c` (HTTP/2 Cleartext) to gigastt; browser talks h1/h2 to Caddy
 - `basic_auth` protects both REST and WebSocket
-- Loopback Origin (`http://127.0.0.1:9876`) is always allowed at the server; browser request goes to `https://stt.example.com` so no CORS issues
+- Browsers send `Origin: https://stt.example.com` and the proxy passes it through, so that origin must be in gigastt's `--allow-origin` list (see [Origin header and CORS](#origin-header-and-cors)) — or strip the `Origin` header at the proxy
 
 ## nginx
 
@@ -130,6 +135,13 @@ htpasswd -c /etc/nginx/.htpasswd admin
 # Enter password
 sudo chmod 644 /etc/nginx/.htpasswd
 sudo nginx -t && sudo systemctl reload nginx
+
+# Run gigastt with the browser-facing origin allowlisted — nginx forwards
+# the Origin header unchanged, and gigastt denies unknown cross-origin
+# Origins with 403 origin_denied:
+gigastt serve --allow-origin https://stt.example.com
+# Alternative: strip the header at the proxy instead of allowlisting it —
+# add `proxy_set_header Origin "";` to the location block above.
 ```
 
 **Why these settings:**
@@ -146,14 +158,20 @@ When `--rate-limit-per-minute` is enabled, gigastt reads the peer IP from `X-For
 
 Both recipes above **overwrite** the header with the proxy's view of the TCP peer (`$remote_addr` in nginx, `{remote_host}` in Caddy) — never `$proxy_add_x_forwarded_for` or the default Caddy behaviour, which concatenate. Copy the snippets verbatim unless you know you need per-hop tracing.
 
-If you deploy without a proxy (not recommended for public exposure), leave `--rate-limit-per-minute 0` (default). The server-level semaphore (`MAX_CONCURRENT_CONNECTIONS = 4`) is your only limit; it prevents exhaustion but will not keep a single attacker from reconnecting as fast as the kernel allows.
+If you deploy without a proxy (not recommended for public exposure), leave `--rate-limit-per-minute 0` (default). The real concurrency limits are then `--pool-size` (concurrent inference sessions) plus the body / WS-frame size caps (`--body-limit-bytes`, `--ws-frame-max-bytes`); they prevent resource exhaustion but will not keep a single attacker from reconnecting as fast as the kernel allows.
 
 ## Origin header and CORS
 
-When a browser at `https://stt.example.com` makes a request through the proxy, it sets `Origin: https://stt.example.com`.
+When a browser at `https://stt.example.com` makes a request through the proxy, it sets `Origin: https://stt.example.com`. Neither Caddy nor nginx strips or rewrites the `Origin` header, so gigastt's origin middleware sees it and returns `403 {"code":"origin_denied"}` unless that origin is allowlisted.
 
-**Default (no action needed):**
-Loopback Origins (`http://127.0.0.1:*`, `http://[::1]:*`, `http://localhost:*`) are always allowed. A missing `Origin` header (curl, native SDK) is allowed. Opaque `Origin: null` (sandboxed iframe / `data:` document) is **denied**. Since your browser talks to the proxy (not directly to the server), you don't need to add the origin to gigastt.
+**Action needed when serving a browser app through the proxy:** pass the browser-facing origin explicitly (as both recipes above do):
+```sh
+gigastt serve --allow-origin https://stt.example.com
+```
+or strip the header at the proxy (e.g. `proxy_set_header Origin "";` in nginx) so requests arrive Origin-less and are treated like curl / native SDK calls.
+
+**When no action is needed:**
+Loopback Origins (`http://127.0.0.1:*`, `http://[::1]:*`, `http://localhost:*`) are always allowed, and a missing `Origin` header (curl, native SDK, header stripped at the proxy) is allowed. Opaque `Origin: null` (sandboxed iframe / `data:` document) is **denied**.
 
 **If you want to talk directly to gigastt** (same machine, `http://localhost:9876`):
 ```sh
@@ -306,7 +324,7 @@ If you observe clients hanging past the cap or not receiving `Final` on deploy, 
 ## Lean INT8-only install
 
 Production inference needs only the **pre-quantized INT8 set** for one head —
-about **~220 MB** on disk for default `rnnt`. The engine **requires**
+about **~225 MB** on disk for default `rnnt`. The engine **requires**
 `*_encoder_int8.onnx` (or the CTC INT8 basename); FP32-only trees are not
 loadable. There is no FP32 download path for runtime.
 
@@ -385,7 +403,7 @@ builds.
 
 ## Upgrading from 2.0.x / 2.1.x
 
-**The default recognition head changed.** Fresh installs from 2.2.0+ default to
+**The default recognition head changed.** Fresh installs from 2.3.0+ default to
 the lower-WER `rnnt` head (bare lowercase from the acoustic model, then casing +
 punctuation restored by a **separate** RUPunct model, and digits by an ITN pass —
 both `auto`-on for `rnnt`). Older releases shipped only the `e2e_rnnt` head,

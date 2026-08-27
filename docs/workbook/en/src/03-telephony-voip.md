@@ -237,9 +237,9 @@ audio are not repaired — de-jitter or re-capture if the transcript has holes.
 
 ### A folder of recordings (batch)
 
-`gigastt transcribe-batch` scans files with `wav`, `mp3`, `m4a`, `ogg`, and
-`flac` extensions — which covers G.711/G.722 WAV and OGG/Opus (`.ogg`) out of
-the box:
+`gigastt transcribe-batch` scans files with `wav`, `mp3`, `m4a`, `ogg`,
+`flac`, and `webm` extensions — which covers G.711/G.722 WAV and OGG/Opus
+(`.ogg`) out of the box:
 
 ```sh
 gigastt transcribe-batch recordings/ out/ --format txt,json
@@ -371,7 +371,7 @@ fixtures pass, the problem is the file, not the server — go back to Step 0.
   the canonical format table and all query parameters.
 - [docs/cli.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/cli.md) —
   `transcribe`, `transcribe-batch`, and `watch` flag reference.
-- [crates/gigastt-core/src/inference/audio.rs](https://github.com/ekhodzitsky/gigastt/blob/main/crates/gigastt-core/src/inference/audio.rs) —
+- [crates/gigastt-core/src/inference/audio/](https://github.com/ekhodzitsky/gigastt/tree/main/crates/gigastt-core/src/inference/audio) —
   decoder internals (G.722 sniffing, the Opus path, dual-mono detection).
 - [Telephony and Opus test fixtures](https://github.com/ekhodzitsky/gigastt/tree/main/crates/gigastt/tests/fixtures)
   with their generators

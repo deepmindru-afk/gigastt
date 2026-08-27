@@ -84,10 +84,10 @@ curl -s http://127.0.0.1:9876/health
 
 ### Air-gapped / offline installation
 
-Core ASR for the default `rnnt` head is a **lean INT8-only** set (~220 MB):
+Core ASR for the default `rnnt` head is a **lean INT8-only** set (~225 MB):
 `v3_rnnt_encoder_int8.onnx`, `v3_rnnt_decoder.onnx`, `v3_rnnt_joint.onnx`,
 `v3_vocab.txt`. Prefer `gigastt download`. Full operator detail:
-[deployment.md — Lean INT8-only install](../../../deployment.md#lean-int8-only-install)
+[deployment.md — Lean INT8-only install](https://github.com/ekhodzitsky/gigastt/blob/main/docs/deployment.md#lean-int8-only-install)
 (canonical English).
 
 
@@ -119,8 +119,7 @@ gh attestation verify "gigastt-${VER}-offline-x86_64-unknown-linux-gnu.tar.gz" \
 On the target host:
 
 ```sh
-tar xf "gigastt-${VER}-offline-x86_64-unknown-linux-gnu.tar.gz"
-cd "gigastt-${VER}-offline"
+mkdir gigastt-offline && tar xf "gigastt-${VER}-offline-x86_64-unknown-linux-gnu.tar.gz" -C gigastt-offline && cd gigastt-offline
 sudo ./install.sh    # verifies SHA256SUMS.txt, then installs binary + models + unit
 sudo systemctl enable --now gigastt
 ```

@@ -14,7 +14,7 @@
 - [ ] Проверить checksums (`sha256sum -c`) и при желании
       [docs/verifying-releases.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/verifying-releases.md)
 - [ ] Если нужна **диаризация**, отдельно заберите `wespeaker_resnet34.onnx`
-      (не всегда в lean offline-бандле) и скопируйте в model dir —
+      (не входит в lean offline-бандл) и скопируйте в model dir —
       либо смиритесь с mono без `speaker`
 - [ ] Если нужен **Silero VAD** offline — так же заранее заберите VAD-модель
       (`--vad` иначе полезет в сеть)

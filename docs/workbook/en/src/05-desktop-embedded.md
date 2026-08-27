@@ -212,7 +212,7 @@ gracefully.
    for up to `--shutdown-drain-secs` (default 10), flushing a `final` and
    closing WS clients with code 1001. Escalate to SIGKILL only after the drain
    window. Track the child pid and terminate it when your app exits — an
-   orphaned sidecar holds ~1 GB RSS and the port.
+   orphaned sidecar holds ~510 MB `ps` RSS (at the default `--pool-size 2`) and the port.
 
 Verify:
 
@@ -394,10 +394,9 @@ End-to-end checklist, whichever path you took:
   background queue/actor (Swift) and serialize access; never transcribe on the
   main thread. In Node the calls already run on the libuv pool — just `await`
   them.
-- **Readiness timeouts on the first run (sidecar).** A plain
-  `gigastt download` leaves a ~2-minute on-device INT8 quantization pass to the
-  first `serve`, and the punctuation model fetches lazily on first start — a
-  client with a 10–30 s boot timeout gives up too early. Fix: pre-stage with
+- **Readiness timeouts on the first run (sidecar).** The punctuation model
+  fetches lazily on first start — a client with a 10–30 s boot timeout gives
+  up too early. Fix: pre-stage with
   `gigastt download`, keep the readiness timeout generous, and
   branch on the `/ready` `reason` instead of killing the process.
 - **Killing the server on 503.** During model load the port is bound by the

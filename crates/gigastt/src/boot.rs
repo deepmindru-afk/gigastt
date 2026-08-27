@@ -53,17 +53,19 @@ pub fn log_rss() {
 ///
 /// ANE is rnnt-only and macOS-only: it engages only when the resolved head is
 /// `rnnt` (mirroring [`gigastt_core::production_factory`]'s variant gate); an
-/// `e2e_rnnt` model transparently stays on the ort encoder. When engaged it
-/// serves file-mode transcription by padding the mel window up to a fixed
-/// bucket; streaming / short windows below the fill floor fall back to the
-/// CPU/ort encoder (no ANE benefit, no crash).
+/// `e2e_rnnt` (or multilingual CTC) model transparently stays on the ort
+/// encoder. When engaged, encoder windows pad up to a fixed bucket and run on
+/// the ANE in both file mode (50% fill floor) and streaming (zero fill floor,
+/// so short streaming windows pad into the smallest bucket); only windows
+/// outside the bucket ladder fall back to the CPU/ort encoder.
 #[cfg(feature = "ane")]
 pub fn log_ane_backend(resolved: ModelVariant) {
     if resolved == ModelVariant::Rnnt {
         tracing::info!(
             "ANE encoder backend active (Core ML / Apple Neural Engine, macOS ARM64): \
-             file-mode transcription pads up to fixed buckets; streaming / short windows \
-             below the fill floor fall back to the CPU/ort encoder"
+             encoder windows pad up to fixed buckets and run on the ANE (file mode: 50% \
+             fill floor; streaming: zero floor, pads into the smallest bucket); only \
+             windows outside the bucket ladder fall back to the CPU/ort encoder"
         );
     } else {
         tracing::info!(

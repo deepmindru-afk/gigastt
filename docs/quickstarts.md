@@ -111,7 +111,11 @@ s.processChunk(pcm16, 16000u).forEach { println(it.text) }
 - errors: `ModelNotFound`, `InvalidAudio`, `PoolExhausted`, `Inference`, `InvalidArgument`
 
 (Method/field casing follows each language's idiom — `transcribe_file`/`start_s`
-in Python, `transcribeFile`/`startS` in Node/Swift/Kotlin.)
+in Python, `transcribeFile`/`startS` in Node/Kotlin. Swift diverges from this
+summary in two places: `transcribeFile(path:)` returns plain `String` — the C
+ABI yields text, not a JSON transcript — and its `Word` struct uses the
+engine's serde field names verbatim: `word` / `start` / `end` / `confidence` /
+`speaker`.)
 
 ## Availability
 
@@ -119,7 +123,7 @@ in Python, `transcribeFile`/`startS` in Node/Swift/Kotlin.)
 |---|---|---|
 | Python | `gigastt` (PyPI) | published — `pip install gigastt` |
 | Node | `gigastt` (npm) | published — `npm install gigastt` |
-| Swift | SwiftPM (xcframework) | packaging in progress |
+| Swift | SwiftPM (xcframework) | published — mirror repo [ekhodzitsky/gigastt-swift](https://github.com/ekhodzitsky/gigastt-swift), xcframework asset attached to releases |
 | Kotlin | Maven (AAR) | packaging in progress |
 
 Packages are self-contained (onnxruntime is statically linked — see

@@ -14,7 +14,8 @@ Detailed install recipes live in [Getting started](01-getting-started.md) and
 - [ ] Verify checksums (`sha256sum -c`) and optional
       [docs/verifying-releases.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/verifying-releases.md)
 - [ ] If you need **speaker diarization**, also fetch `wespeaker_resnet34.onnx`
-      (not always in the lean offline bundle) on a connected host and copy it
+      (never part of the lean offline bundle — it ships only the `rnnt` head
+      plus the punctuation model) on a connected host and copy it
       into the model dir later — or accept mono transcripts without labels
 - [ ] If you need **Silero VAD** on the air-gapped host, fetch the VAD model the
       same way (`--vad` would otherwise try the network)

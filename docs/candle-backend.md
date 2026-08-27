@@ -12,12 +12,14 @@ It is **additive and opt-in** — the default build is unchanged and still uses 
 - Targets the default **`rnnt`** head (char vocab). FP32 (no quantization yet).
   `Engine::is_int8()` and `/v1/models` `.encoder` report **fp32** even when
   INT8 ONNX files sit on disk — the Candle loader uses safetensors.
+  With a non-rnnt head (`e2e_rnnt`, `ml_ctc`/`ml_ctc_large`) the build transparently
+  falls back to the `ort` backend, even when compiled with `--features candle`.
 - **Byte-for-byte parity with the ort backend** is verified at every stage on the Golos
   fixtures: encoder `max_abs_diff ≈ 4e-6`, decoder (LSTM) `≈ 1e-6`, joiner `≈ 3e-6`, and
   whole-file + streaming transcripts are **identical** to ort.
 - Experimental: only validated on Apple Silicon with short clips so far. Metal stability on
   very long audio / specific GPUs is not yet characterized.
-- `candle` is mutually exclusive with `coreml`/`cuda` (compile-time error if combined).
+- `candle` is mutually exclusive with `coreml`/`cuda`/`nnapi` (compile-time error if combined).
   Auxiliary models (VAD, punctuation) continue to run on the CPU `ort` path.
 
 ## 1. Convert the model weights
@@ -31,7 +33,8 @@ uv run --python 3.13 --with onnx --with numpy --with safetensors \
     python scripts/convert_gigaam_candle.py
 ```
 
-This writes, next to the ONNX models:
+The converter reads from `~/.gigastt/models/` by default; point it elsewhere with the
+`GIGASTT_MODELS_DIR` environment variable. This writes, next to the ONNX models:
 
 ```
 ~/.gigastt/models/candle/encoder.safetensors
@@ -60,7 +63,7 @@ otherwise identical to the default build.
 
 ## Notes on packaging
 
-The implementation compiles against **upstream `candle` 0.9** with no API changes, so
+The implementation compiles against **upstream `candle` 0.11** with no API changes, so
 publishing remains possible. (RustASR — the source of the vendored conformer encoder — uses a
 candle fork carrying extra Metal-kernel patches; those differ only at the runtime/kernel
 level, not the Rust API. If a Metal stability issue surfaces on specific hardware or long

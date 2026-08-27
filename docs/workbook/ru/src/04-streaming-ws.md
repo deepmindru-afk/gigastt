@@ -9,7 +9,7 @@ REST batch на тех же файлах (обрезанные / потерян�
 где важна точность, берите REST; эта глава — про живые partial'ы. Таблицы:
 [docs/benchmarks.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md#streaming-measurement-protocol).
 Эта глава — книга рецептов для такой интеграции. Пофилдовый справочник протокола остаётся в
-[docs/api.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/api.md#websocket--real-time-streaming),
+[docs/api.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/api.md#websocket--streaming),
 машиночитаемая схема — в
 [docs/asyncapi.yaml](https://github.com/ekhodzitsky/gigastt/blob/main/docs/asyncapi.yaml);
 мы ссылаемся на них, а не повторяем.
@@ -232,7 +232,7 @@ Client                            Server
 никогда не сохраняем.
 
 `final` срабатывает при завершении фразы (`speech_final: true`, опционально
-`endpoint_reason`). **Кто владеет эндпоинтингом** (с 2.18.0):
+`endpoint_reason`). **Кто владеет эндпоинтингом:**
 
 | Флаги сервера | Кто завершает фразу | Кноб |
 |---|---|---|
@@ -244,9 +244,8 @@ Client                            Server
 Окно энкодера ~2.5 с **не** закрывает реплику: коммитит стабильный префикс и шлёт `partial` (раньше `final` с cap ломал Ирину).
 
 С VAD можно поднять порог тишины, чтобы естественные паузы не рвали фразы
-посередине (до 2.18.0 blank-run всё равно срабатывал ~на 600 мс даже при
-`--vad`). Окно ~2.5 с только сдвигает контекст и шлёт `partial`, не `final`.
-`final` — по VAD/blank/`stop` (рецепт 3) и перед закрытием сервером (рецепт 4).
+посередине. `final` — по VAD/blank/`stop` (рецепт 3) и перед закрытием
+сервером (рецепт 4).
 
 ```sh
 # Голосовой ассистент (Ирина)
@@ -256,11 +255,18 @@ gigastt serve --vad --vad-min-silence-ms 1200 --endpoint-mode assistant
 gigastt serve --vad --vad-min-silence-ms 900
 ```
 
-Сессионные переопределения комбинируются тем же `configure` (финалы; partial
-сырые). `punctuation: true` без модели — no-op:
+Сессионные переопределения (до первого аудиофрейма):
 
 ```json
-{"type":"configure","sample_rate":16000,"endpoint_mode":"assistant","min_silence_ms":1200,"punctuation":false,"itn":false}
+{"type":"configure","sample_rate":16000,"endpoint_mode":"assistant","min_silence_ms":1200}
+```
+
+Переопределения постобработки комбинируются тем же сообщением `configure`
+(только финалы; partial всегда остаются сырыми). `punctuation: true` на
+сервере без модели — корректный no-op, а не ошибка:
+
+```json
+{"type": "configure", "sample_rate": 16000, "punctuation": false, "itn": false}
 ```
 
 **Проверка:** скажите «привет как дела» с короткими паузами. Превью
@@ -723,7 +729,7 @@ python3 stream_wav.py crates/gigastt/tests/fixtures/golos_00.wav
 ## Ссылки
 
 - Справочники (канонические, здесь не дублируются):
-  [docs/api.md — протокол WebSocket](https://github.com/ekhodzitsky/gigastt/blob/main/docs/api.md#websocket--real-time-streaming),
+  [docs/api.md — протокол WebSocket](https://github.com/ekhodzitsky/gigastt/blob/main/docs/api.md#websocket--streaming),
   [docs/asyncapi.yaml](https://github.com/ekhodzitsky/gigastt/blob/main/docs/asyncapi.yaml),
   [docs/troubleshooting.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/troubleshooting.md),
   [docs/cli.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/cli.md)

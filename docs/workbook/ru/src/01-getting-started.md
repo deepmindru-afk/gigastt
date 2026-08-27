@@ -195,8 +195,7 @@ curl -fLO "https://github.com/ekhodzitsky/gigastt/releases/download/${TAG}/gigas
 sha256sum -c "gigastt-${VER}-offline-x86_64-unknown-linux-gnu.tar.gz.sha256"
 
 # На целевой машине:
-tar xf "gigastt-${VER}-offline-x86_64-unknown-linux-gnu.tar.gz"
-cd "gigastt-${VER}-offline-x86_64-unknown-linux-gnu"
+mkdir gigastt-offline && tar xf "gigastt-${VER}-offline-x86_64-unknown-linux-gnu.tar.gz" -C gigastt-offline && cd gigastt-offline
 sudo ./install.sh                      # проверяет SHA256SUMS, ставит бинарник + модель + unit
 sudo systemctl enable --now gigastt
 ```

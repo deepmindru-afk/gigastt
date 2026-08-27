@@ -6,7 +6,7 @@ follows the same shape: **scenario → prerequisites → recipe → verifying th
 result → common pitfalls → links**.
 
 This book is a **cookbook, not a reference**. The canonical references stay in
-[`docs/`](../../../) — the workbook links to them instead of duplicating them.
+[`docs/`](https://github.com/ekhodzitsky/gigastt/tree/main/docs) — the workbook links to them instead of duplicating them.
 
 **Documented against gigastt 2.18.x.** Prefer resolving the latest release tag
 in install scripts (`gh api …/releases/latest`) rather than hard-coding older
@@ -61,13 +61,13 @@ chapter.
 | A folder / drop box | `transcribe-batch` / `watch` — [02](02-cli-batch.md) | One-shot `transcribe` in a loop |
 | A long file you cannot wait on | `/v1/jobs` (`--enable-jobs`) — [02](02-cli-batch.md) | A single blocking REST call without a timeout plan |
 | A microphone / call leg, partials while speaking | WebSocket `/v1/ws` — [04](04-streaming-ws.md) | REST; do not quote the 1000-row WER table for this path |
-| An OpenAI-compatible client | `/v1/audio/transcriptions` — [docs/api.md](../../../api.md) | Custom WS if the client only speaks multipart |
+| An OpenAI-compatible client | `/v1/audio/transcriptions` — [docs/api.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/api.md) | Custom WS if the client only speaks multipart |
 | An in-process app (no server) | Bindings — [05](05-desktop-embedded.md) | Spawning `serve` unless you need crash isolation |
 
 ## More documentation
 
 The full map of references (API, CLI, benchmarks, runbook, backends) lives in
-[docs/README.md](../../../README.md). This book links out; it does not copy
+[docs/README.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/README.md). This book links out; it does not copy
 those pages.
 
 ## Rules for contributors

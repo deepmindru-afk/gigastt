@@ -241,7 +241,7 @@ pcma (alaw), g722»).
 ### Папка записей (пакетная обработка)
 
 `gigastt transcribe-batch` сканирует файлы с расширениями `wav`, `mp3`, `m4a`,
-`ogg` и `flac` — это покрывает G.711/G.722 WAV и OGG/Opus (`.ogg`) из
+`ogg`, `flac` и `webm` — это покрывает G.711/G.722 WAV и OGG/Opus (`.ogg`) из
 коробки:
 
 ```sh
@@ -379,7 +379,7 @@ curl -s -X POST http://127.0.0.1:9876/v1/transcribe \
   каноническая таблица форматов и все query-параметры.
 - [docs/cli.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/cli.md) —
   справочник флагов `transcribe`, `transcribe-batch` и `watch`.
-- [crates/gigastt-core/src/inference/audio.rs](https://github.com/ekhodzitsky/gigastt/blob/main/crates/gigastt-core/src/inference/audio.rs) —
+- [crates/gigastt-core/src/inference/audio/](https://github.com/ekhodzitsky/gigastt/tree/main/crates/gigastt-core/src/inference/audio) —
   внутреннее устройство декодеров (сниффинг G.722, путь Opus, детект
   dual-mono).
 - [Телефонные и Opus-фикстуры](https://github.com/ekhodzitsky/gigastt/tree/main/crates/gigastt/tests/fixtures)

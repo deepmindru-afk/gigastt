@@ -90,7 +90,7 @@ curl -s http://127.0.0.1:9876/health
 Для головы `rnnt` достаточно **lean INT8-набора** (~220 МБ):
 `v3_rnnt_encoder_int8.onnx`, `v3_rnnt_decoder.onnx`, `v3_rnnt_joint.onnx`,
 `v3_vocab.txt`. Рекомендуется `gigastt download`. Подробности:
-[deployment.md — Lean INT8-only install](../../../deployment.md#lean-int8-only-install).
+[deployment.md — Lean INT8-only install](https://github.com/ekhodzitsky/gigastt/blob/main/docs/deployment.md#lean-int8-only-install).
 
 
 Для хостов без доступа в интернет каждый релиз публикует самодостаточный
@@ -121,8 +121,7 @@ gh attestation verify "gigastt-${VER}-offline-x86_64-unknown-linux-gnu.tar.gz" \
 На целевом хосте:
 
 ```sh
-tar xf "gigastt-${VER}-offline-x86_64-unknown-linux-gnu.tar.gz"
-cd "gigastt-${VER}-offline"
+mkdir gigastt-offline && tar xf "gigastt-${VER}-offline-x86_64-unknown-linux-gnu.tar.gz" -C gigastt-offline && cd gigastt-offline
 sudo ./install.sh    # verifies SHA256SUMS.txt, then installs binary + models + unit
 sudo systemctl enable --now gigastt
 ```

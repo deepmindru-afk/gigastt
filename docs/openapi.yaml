@@ -97,9 +97,10 @@ paths:
         head actually loaded and the effective punctuation / ITN policy.
         Suitable for load balancer health checks and Docker `HEALTHCHECK`.
 
-        During the first-run model download + INT8 quantization the listener is
-        already bound and answers here with `model: "loading"` (so probes never
-        see connection-refused); gate *readiness* on `GET /ready` instead.
+        During the first-run model download (prequantized INT8 bundle) the
+        listener is already bound and answers here with `model: "loading"` (so
+        probes never see connection-refused); gate *readiness* on `GET /ready`
+        instead.
       operationId: healthCheck
       responses:
         "200":
@@ -393,16 +394,20 @@ paths:
                   - word: "привет"
                     start: 0.5
                     end: 0.8
+                    confidence: 0.97
                     speaker: 0
                   - word: "как"
                     start: 0.9
                     end: 1.0
+                    confidence: 0.95
                     speaker: 1
                   - word: "дела"
                     start: 1.1
                     end: 1.4
+                    confidence: 0.92
                     speaker: 0
                 duration: 2.5
+                confidence: 0.95
             text/plain:
               schema:
                 type: string
@@ -505,6 +510,15 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "413":
           $ref: "#/components/responses/PayloadTooLarge"
+        "422":
+          description: Audio could not be decoded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: "Failed to decode audio file. Check format (WAV, MP3, M4A, OGG, FLAC supported)."
+                code: invalid_audio
         "429":
           $ref: "#/components/responses/TooManyRequests"
         "503":
@@ -676,10 +690,64 @@ paths:
       operationId: submitJob
       parameters:
         - $ref: "#/components/parameters/Format"
+        - name: download
+          in: query
+          required: false
+          schema:
+            type: string
+          description: |
+            Filename for the `Content-Disposition: attachment` header on the
+            finished result. If the value is empty, the server uses
+            `transcript.<ext>`.
+        - name: max_chars_per_line
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Maximum characters per subtitle line (SRT/VTT). 0 = unlimited.
+        - name: max_words_per_line
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Maximum words per subtitle line (SRT/VTT). 0 = unlimited.
         - $ref: "#/components/parameters/WordTimestamps"
         - $ref: "#/components/parameters/Segments"
+        - name: variant
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [rnnt, e2e_rnnt, ml_ctc, ml_ctc_large]
+          description: |
+            Forward-compatibility guard naming the recognition head the request
+            expects. A single-model server can't switch heads, so any value
+            other than the loaded variant returns `409 variant_not_loaded`;
+            matching or absent proceeds.
         - $ref: "#/components/parameters/Channels"
         - $ref: "#/components/parameters/Diarization"
+        - name: codec
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pcmu, pcma, g722, ulaw, alaw]
+          description: >-
+            Declare the upload body as a raw headerless telephony stream (RTP
+            dump, Asterisk Monitor raw) instead of sniffing a container:
+            `pcmu` (alias `ulaw`), `pcma` (alias `alaw`), or `g722`. Requires
+            `sample_rate`; unknown values return 400 `unsupported_codec`.
+        - name: sample_rate
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: >-
+            Sample rate (Hz) of a raw `codec` upload — mandatory when `codec`
+            is set (typical telephony: 8000; missing or out-of-range values
+            return 400 `invalid_sample_rate`). G.722 always decodes to its
+            native 16 kHz; both 8000 (the SDP clock-rate convention) and 16000
+            are accepted for it.
         - $ref: "#/components/parameters/Punctuation"
         - $ref: "#/components/parameters/Itn"
         - $ref: "#/components/parameters/Vad"
@@ -874,7 +942,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [reloaded, variant, encoder]
+                required: [reloaded, variant, encoder, soft, soft_drained]
                 properties:
                   reloaded:
                     type: boolean
@@ -890,10 +958,28 @@ paths:
                       non-ORT backends (e.g. candle).
                     enum: [int8, fp32]
                     example: int8
+                  soft:
+                    type: boolean
+                    example: false
+                    description: >-
+                      Echoes the `?soft=` request flag: a soft reload swaps the
+                      new engine in before warmup, then waits briefly for the
+                      previous engine's in-flight holders to release so warmup
+                      does not stack on a still-resident old engine.
+                  soft_drained:
+                    type: boolean
+                    example: true
+                    description: >-
+                      Whether the previous engine was fully released before
+                      warmup. Always `true` when `soft` is `false` (no drain is
+                      attempted); with `?soft=true` it is `false` if in-flight
+                      sessions still held the old engine after the 5 s wait.
               example:
                 reloaded: true
                 variant: rnnt
                 encoder: int8
+                soft: false
+                soft_drained: true
         "403":
           description: Caller is not on loopback
           content:
@@ -991,7 +1077,8 @@ components:
         Per-request hotword phrases, comma-separated (`сбер,тинькофф`).
         Absent keeps the engine boot glossary; present with an empty value
         forces biasing off; non-empty replaces the glossary for this request
-        only (capped at 64 phrases / 64 chars each).
+        only (capped at 64 phrases / 64 chars each — over the cap the request
+        fails with 400 `too_many_hotwords` / `hotword_phrase_too_long`).
     HotwordsBoost:
       name: hotwords_boost
       in: query
@@ -1022,7 +1109,7 @@ components:
           description: >-
             Stable identifier of the head actually loaded
             (`gigaam-v3-rnnt`, `gigaam-v3-e2e-rnnt`, `gigaam-multilingual-ctc`, or `gigaam-multilingual-large-ctc`). During first-run model
-            download / quantization the bootstrap responder reports `loading`.
+            download (prequantized INT8 bundle) the bootstrap responder reports `loading`.
         variant:
           type: string
           enum: [rnnt, e2e_rnnt, ml_ctc, ml_ctc_large]
@@ -1171,6 +1258,19 @@ components:
           format: double
           example: 2.5
           description: Audio duration in seconds
+        confidence:
+          type: number
+          format: float
+          minimum: 0.0
+          maximum: 1.0
+          example: 0.95
+          description: |
+            Mean confidence across all words (duration-weighted average of
+            `words[].confidence`): an average of per-word softmax scores, not a
+            calibrated transcript probability. Omitted when no words were
+            decoded.
+        diarization:
+          $ref: "#/components/schemas/DiarizationNotice"
         segments:
           type: array
           items:
@@ -1217,12 +1317,49 @@ components:
             Zero-based speaker index. Present only when the segment came from
             channel split (`channels=split`) or polyvoice diarization.
 
+    DiarizationNotice:
+      type: object
+      required:
+        - status
+        - reason
+        - message
+      description: |
+        Capability notice attached to a transcription response when
+        `diarization=true` was requested but produced no speaker labels.
+        Absent when diarization was not requested or succeeded.
+      properties:
+        status:
+          type: string
+          enum: [unavailable]
+          example: unavailable
+          description: Always `unavailable` — the notice only appears when diarization did not label speakers
+        reason:
+          type: string
+          enum: [duration_ceiling, no_speaker_model, pipeline_error]
+          example: no_speaker_model
+          description: Machine-readable cause
+        message:
+          type: string
+          example: "diarization was requested but no speaker model is loaded"
+          description: Human-readable, non-sensitive explanation
+        input_seconds:
+          type: number
+          format: double
+          example: 2400.0
+          description: Length of the submitted audio in seconds — present only for the `duration_ceiling` reason
+        ceiling_seconds:
+          type: number
+          format: double
+          example: 1800.0
+          description: The clusterer's single-pass ceiling in seconds — present only for the `duration_ceiling` reason
+
     WordInfo:
       type: object
       required:
         - word
         - start
         - end
+        - confidence
       properties:
         word:
           type: string
@@ -1238,6 +1375,13 @@ components:
           format: double
           example: 0.8
           description: Word end time in seconds
+        confidence:
+          type: number
+          format: float
+          minimum: 0.0
+          maximum: 1.0
+          example: 0.97
+          description: Softmax confidence score (0.0–1.0), averaged over the word's constituent tokens
         speaker:
           type: integer
           description: Zero-based speaker index (only present when channel split or diarization produced speaker labels)
