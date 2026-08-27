@@ -1,7 +1,7 @@
 # gigastt v1.0 — production-readiness TODO
 
 > **Completed milestone — historical record.** This review covered the road to v1.0,
-> which shipped long ago (current release: 2.17.0). It is kept because the V1-NN
+> which shipped long ago (current release: 2.18.0). It is kept because the V1-NN
 > indices referenced elsewhere resolve here. There is no standing local task
 > queue; for what is released, read `CHANGELOG.md`.
 
@@ -82,12 +82,14 @@ since 2026-06-01 — the fuzz companion job's `audio_decode` target crashes on a
 upstream `symphonia-metadata 0.6.0` panic (`ape.rs:226`), 39 consecutive red
 runs; the soak job itself is green. Tracked as `specs/todo.md` item 33.
 
-**Still genuinely open at HEAD (updated 2026-07-10):** V1-50 (multi-model
-`manifest.toml`), `specs/todo.md` item 26 (async `/v1/jobs`), and the ANE
-follow-ups 28–32. Closed since the 2026-07-09 line: SUS-07 (Miri/TSAN, PR #137),
+**Still genuinely open at HEAD (updated 2026-08-14):** only the ANE follow-ups
+29–32 in `specs/todo.md` remain open. Closed since the 2026-07-10 line: V1-50
+(multi-model `manifest.toml`, #207, v2.14.2), `specs/todo.md` item 26 (async
+`/v1/jobs`, PR #146, v2.10.0), and ANE item 28 (bucket-aligned chunking, #209,
+v2.14.2). Closed since the 2026-07-09 line: SUS-07 (Miri/TSAN, PR #137),
 TODO-19 (model hot-reload, PR #134), and `specs/todo.md` items 23 (PR #132),
-24 (PR #136), 25 (PR #131), 27 (voodoo2serg/recognition#1) — released across
-v2.6.0 / v2.7.0.
+24 (PR #136; per-request hotwords landed later in v2.14.2, #208), 25 (PR #131),
+27 (voodoo2serg/recognition#1) — released across v2.6.0 / v2.7.0.
 
 ## v2.1.0 reconciliation (2026-06-17) — authoritative
 
@@ -183,10 +185,10 @@ v2.6.0 / v2.7.0.
 |---|-------|-------------|
 | V1-18 | ✅ v2.3.0 | Closed by PR #78 — see the v2.5.0 reconciliation above. |
 | V1-48 | ✅ v2.3.0 | Closed by PR #81 (Silero v5 VAD) — see the v2.5.0 reconciliation above. |
-| V1-50 | OPEN | Model filenames hardcoded; no `manifest.toml` for new models (e.g. GigaAM v4). |
+| V1-50 | ✅ closed v2.14.2 | Optional per-directory model pack manifest `manifest.toml` (`ModelManifest`, #207) — new models no longer need hardcoded filenames. |
 | SUS-07 | ✅ | Nightly Miri + TSAN job (`.github/workflows/miri.yml`, PR #137) — see below. |
 | TODO-18 | ✅ obsolete v2.4.0 | `ort_err()` removed by the runtime abstraction (PR #115). |
-| TODO-19 | OPEN | No hot-reload admin endpoint; INT8/model reload still needs a restart. |
+| TODO-19 | ✅ closed (superseded row) | This row predates the reconciliation above: model hot-reload shipped as loopback-only `POST /v1/admin/reload` (PR #134, v2.7.0). |
 | TODO-CUDA | partial | GHCR `:cuda` image since v2.4.0; matrix tarball still intentionally absent (broken GH toolchain). |
 
 ## Progress snapshot (2026-04-20) — priority-sorted
@@ -242,7 +244,7 @@ v2.6.0 / v2.7.0.
 | P2.5 | V1-37 | No server-side WebSocket ping timer (proxies drop idle connections silently) | ✅ v2.1.0 (server ping every 30 s, close after 2 missed pongs) |
 | P2.6 | V1-42 | Only 15 Golos fixtures (not statistically significant for WER gating) | ✅ v2.0.8 (external 9 994-sample set + `DATA_LICENSE`/`NOTICE` provenance; 15 bundled fixtures kept) |
 | P2.7 | V1-46 | `Engine::warmup()` missing (first-request cold start, CoreML compile) | ✅ v2.0.14 (warmup + CoreML runtime probe/fallback, issue #42) |
-| P2.8 | V1-50 | Multi-model support via `manifest.toml` (blocks GigaAM v4 without code change) | ⏳ open |
+| P2.8 | V1-50 | Multi-model support via `manifest.toml` (blocks GigaAM v4 without code change) | ✅ v2.14.2 (#207 — optional per-directory `manifest.toml`; hardcoded filenames remain the default) |
 | P2.9 | V1-35 | SSE error-code parity with WebSocket (single `inference_error` hides variants) | ✅ v2.1.0 (per-variant `GigasttError::code()` over SSE + distinct `inference_panic`) |
 | P2.10 | V1-48 | VAD endpointing (noise breaks blank-run endpointing today) | ✅ v2.3.0 (PR #81 — opt-in Silero v5 VAD: silence skipping + streaming endpointing) |
 | P2.11 | V1-40 | Pin `tokio`/`serde` minor versions + dry-run check (supply-chain hygiene) | ✅ (by design: Dependabot + CI `--locked` + `publish --dry-run --locked`; no minor-pinning) |

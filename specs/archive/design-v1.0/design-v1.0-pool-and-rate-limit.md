@@ -233,5 +233,5 @@ Total ≈ 7–10 h; single PR day.
 - `Cargo.toml:62` — `tower_governor 0.7` (`per_millisecond` available).
 - `Cargo.lock` — `async-channel` not present; transitive pieces are.
 - `specs/prod-readiness-v1.0.md` — V1-06, V1-07, V1-21.
-- `specs/design-v1.0-ws-lifecycle.md` — graceful shutdown plan (consumes
-  `pool.close()`).
+- `specs/archive/design-v1.0/design-v1.0-ws-lifecycle.md` — graceful shutdown
+  plan (consumes `pool.close()`).

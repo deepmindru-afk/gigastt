@@ -22,9 +22,9 @@ Type: `code` | `docs` | `ops-tooling`.
 |----|------|------|--------|--------------------|--------|
 | **TTX-01** | **`ensure` / model presence accepts INT8-only (prequantized) set** — serve/transcribe/download must not require FP32 encoder when INT8+dec+joint+vocab are complete | code | T-026 | Avoids **~844 MB** FP32 download / enables lean install | **done** |
 | **TTX-02** | **Document lean install** = `v3_rnnt_encoder_int8.onnx` + decoder + joint + vocab (~220 MB class); offline errors name those files | docs | T-001 | Disk SKU; unblocked by TTX-01 | **done** |
-| **TTX-03** | **Edge / low-RAM: default or profile `pool-size 1`** (docs + optional serve profile / auto later) | code+docs | T-009 | **−280…450 MiB** RSS vs pool=2 | **done** (docs+CLI help; default stays 2) |
+| **TTX-03** | **Edge / low-RAM: default or profile `pool-size 1`** (docs + optional serve profile / auto later) | code+docs | T-009 | **−280…450 MiB** RSS vs pool=2[^ram-pre-mmap] | **done** (docs+CLI help; default stays 2) |
 | **TTX-04** | **Encoder threads: never recommend/default `1` on multi-core**; help text + edge guide (threads=1 only explicit debug) | docs (+ guard if any path forces 1) | T-044 | Avoids RTF **×3…3.65** regression | **done** |
-| **TTX-05** | Prefer **`download --prequantized`** (or default lean path) once ensure accepts INT8-only | code+docs | T-001/T-026 | Lean download UX | **done** (default lean; `--fp32` opt-in) |
+| **TTX-05** | Prefer **`download --prequantized`** (or default lean path) once ensure accepts INT8-only | code+docs | T-001/T-026 | Lean download UX | **done** (default lean). Note: the `--fp32` opt-in mentioned at the time no longer exists — the runtime is INT8-only; `gigastt quantize` remains as a packaging tool for a local FP32 source |
 
 ### P1 — next (disk / RAM / speed productization)
 
@@ -37,7 +37,7 @@ Type: `code` | `docs` | `ops-tooling`.
 | **TTX-10** | **Long-form speech-region path** (Silero segments + word merge; fallback fixed chunks) — productize or document client-side stitch | code or docs | T-016/T-045 | Peak **−100…−190 MiB** @64–128 s; J≥0.94 | **done** (`--vad` + empty-region fallback + docs) |
 | **TTX-11** | **SKU docs: `ml_ctc` = speed (~1.5× RTF), not lean-RAM** | docs | T-120 | RTF **0.023** vs rnnt **0.034**; ready RSS ≈ rnnt | **done** |
 | **TTX-12** | **Docs: pool>1 costs RAM and ~+10–20% single-job RTF** (thread split) | docs | T-009/T-117 | Operators pick concurrency knowingly | **done** |
-| **TTX-13** | **Docs: admin reload needs ~+0.5× ready free RAM** (pool=1 ≈ **+536 MiB** peak) | docs | T-054 | Prevent edge OOM on reload | **done** |
+| **TTX-13** | **Docs: admin reload needs ~+0.5× ready free RAM** (pool=1 ≈ **+536 MiB** peak)[^ram-pre-mmap] | docs | T-054 | Prevent edge OOM on reload | **done** |
 | **TTX-14** | **Docs: pool checkout timeout** = queue vs fail-fast **503** + `retry_after_ms` | docs | T-121 | Ops tuning | **done** |
 | **TTX-15** | **Docs: `batch_pool_size` splits pool** (no extra idle triplets) | docs | T-085 | Avoid config myth | **done** |
 | **TTX-16** | Optional **`--profile edge`** bundling pool=1, sane threads, vad-on-long, optional ml_ctc note | code+docs | T-011 + above | One switch for weak hosts | **done** (`--profile edge` → pool=1 + vad when unset) |
@@ -99,11 +99,17 @@ TTX-17 cgroup (Linux) when packaging containers
 | T-048 | --vad silence-rich RTF **×~2.6** |
 | T-045/T-016 | Silero stitch peak **−115…−192 MiB**, J≥0.94 |
 | T-027 | speaker file **+~39 MiB** ready |
-| T-054 | reload peak **+536 MiB** |
+| T-054 | reload peak **+536 MiB**[^ram-pre-mmap] |
 | T-120 | ml_ctc RTF **0.023** vs rnnt **0.034**; ready ≈ rnnt |
 | T-117 | pool=2 serial RTF **~+18%** |
 
 Full tables: `specs/research/RESULTS.md`. Method: `specs/research/METHOD.md`.
+
+[^ram-pre-mmap]: RAM figures are from the pre-mmap copy era (measured
+2026-07-26/27). Since v2.17.0 (2026-08-10) the optimized encoder cache is a
+memory-mapped ORT flatbuffer shared by all sessions, collapsing per-slot RAM
+(~650 MB → ~60 MB physical at pool 2 on the reference M1); see `CHANGELOG.md`
+and the current figures in `AGENTS.md`.
 
 ---
 
@@ -123,7 +129,7 @@ Full tables: `specs/research/RESULTS.md`. Method: `specs/research/METHOD.md`.
 | 2026-07-27 | Lazy speaker: probe at boot; ONNX on first diarization request |
 | 2026-07-27 | Operator docs: VAD, pool/RTF tradeoffs, reload headroom, ml_ctc speed SKU, checkout timeout, batch split, punct tax |
 | 2026-07-27 | Lean install docs: minimum INT8+dec+joint+vocab file set (~220 MB); offline errors point at lean paths |
-| 2026-07-27 | Download / empty-dir ensure default to lean prequantized INT8; `--fp32` for HuggingFace FP32 + quantize |
+| 2026-07-27 | Download / empty-dir ensure default to lean prequantized INT8; an `--fp32` opt-in was planned at the time but no longer exists — the runtime is INT8-only (FP32 only as `gigastt quantize` source) |
 | 2026-07-27 | Long-form: document speech-region vs fixed-window paths; empty VAD regions fall back to full/chunked decode |
 | 2026-07-27 | Pool RAM clamp reads Linux cgroup `memory.max` / v1 limit (min with host RAM) |
 | 2026-07-27 | Soft reload: swap before warm; `?soft=true` waits for old engine drain |

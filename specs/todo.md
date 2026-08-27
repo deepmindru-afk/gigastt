@@ -1,5 +1,11 @@
 # gigastt — critique follow-ups (TODO)
 
+> **Superseded — historical record.** Every v0.5.0 critique item below is
+> closed, and the shipped state is far past this list (2.18.0 as of
+> 2026-08-14). Kept for the audit trail: the status rows double as the
+> record of when each item landed. For what is actually released, read
+> `CHANGELOG.md`. There is no standing local task queue.
+
 Outstanding issues from the v0.5.0 critique. Items already resolved
 (native Rust quantization, Python script removal, client examples
 trimmed to Go/Python/Kotlin/Bun) are intentionally excluded.
@@ -30,7 +36,7 @@ lives in `specs/plan.md`.
 | 8. Origin-check covers REST | P1 | ✅ v0.6.0 (middleware before routing) |
 | 9. `--bind-all` guard | P1 | ✅ v0.6.0 (CLI + Dockerfiles) |
 | 10. Docker bake-model option | P1 | ✅ v0.7.0 (`GIGASTT_BAKE_MODEL=1` build arg) |
-| 11. `/v1/ws` canonical path | P2 | ✅ v0.7.0 (`/ws` kept as deprecated alias) |
+| 11. `/v1/ws` canonical path | P2 | ✅ v0.7.0 (`/ws` kept as deprecated alias; the alias has since been removed — only `/v1/ws` routes today) |
 | 12. `/v1/models.capabilities` | P2 | ✅ v0.7.0 (capabilities payload) |
 | 13. `handle_ws_inner` split | P2 | ✅ v0.6.1 (three frame handlers + e2e test) |
 | 14. `cargo deny` + SBOM | P2 | ✅ v0.9.0 (CycloneDX SBOM + SLSA provenance + minisign signatures in `release.yml`) |
@@ -94,7 +100,7 @@ standing local task queue beyond this historical record:
 
 Lab notes: `specs/research/` (local). Do not re-run frozen R0 without new variables.
 
-## Next-up: v1.0 plan
+## Next-up: v1.0 plan — shipped (v1.0.0, 2026-05-06)
 
 All new findings from the 2026-04-18 review are catalogued in
 [`specs/prod-readiness-v1.0.md`](prod-readiness-v1.0.md). Highlights:
@@ -269,7 +275,7 @@ All new findings from the 2026-04-18 review are catalogued in
 - Fix: track `ort` release notes; when Send is implemented, delete
   the helper and let `?` propagate natively.
 
-- **Status: ✅ closed v2.4.0** — the helper was removed wholesale by the runtime abstraction (PR #115); only a doc-comment mention survives in `punctuation.rs`.
+- **Status: ✅ closed v2.4.0** — the helper was removed wholesale by the runtime abstraction (PR #115); no references remain.
 
 ### 19. Model reload requires restart
 - No hot-swap of the INT8 encoder if it is created after server
@@ -341,6 +347,10 @@ long-file + upgrade docs). Deferred:
   decode loop + DoS surface) and actual `variant` switching (single-model
   engine → needs the multi-model `manifest.toml` work, V1-50). SSE/WS are
   unaffected — they never run the punctuation/ITN passes.
+- **Follow-up landed (v2.14.2):** both deferred pieces shipped — per-request
+  hotwords via `?hotwords=` / `?hotwords_boost=` on `POST /v1/transcribe`
+  (#208, `crates/gigastt/src/server/http/export.rs`) and the multi-model
+  `manifest.toml` (V1-50, #207).
 
 ### 25. No per-request RTF signal; silent FP32 fallback (P2)
 - `transcribe` logs nothing about timing, and a missing INT8 encoder
@@ -413,6 +423,10 @@ Open follow-ups (all opt-in, ANE-path only, lower priority):
   encoder activation caveat (the reason the window is 24 s — use a backend-aware
   30 s window only if an ort memory regression is measured). NOT worth doing
   standalone; the gain is zero until exercised on long files.
+- **Status: ✅ closed v2.14.2 (PR #209)** — backend-aware window selection:
+  the ANE path chunks at 30 s (`CHUNK_WINDOW_SAMPLES_ANE`,
+  `crates/gigastt-core/src/inference/windows.rs`), filling bucket 3000 at
+  ~99.97 %; ort/EP paths keep the 24 s window to bound peak activation memory.
 
 ### 29. Streaming on ANE (P3)
 - Streaming windows (≤2.5 s, below the fill floor) fall back to the CPU/ort
@@ -443,7 +457,8 @@ Open follow-ups (all opt-in, ANE-path only, lower priority):
 
 ## Trace of what IS resolved (for completeness)
 
-- **Native Rust INT8 quantization** — `src/quantize.rs`, CLI
-  `gigastt quantize`, auto-quantize on `serve`/`download`
-  via `--features quantize`. Python script removed.
+- **Native Rust INT8 quantization** — `crates/gigastt-quantize/`, CLI
+  `gigastt quantize` (packaging tool over a local FP32 source). Python
+  script removed. The auto-quantize on `serve`/`download` no longer
+  exists — the runtime is INT8-only.
 - **Client examples** trimmed to Go / Python / Kotlin / Bun (TS).

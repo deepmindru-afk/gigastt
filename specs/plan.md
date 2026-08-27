@@ -1,8 +1,8 @@
 # gigastt — fix-rollout plan
 
 > **Superseded — historical record.** This plan covers the v0.5 → v2.5 rollout and
-> stops at Phase 10 (2026-07-09). The shipped state is far past it (2.17.0 as of
-> 2026-08-13), and the carry-over list below is stale: several items marked open
+> stops at Phase 10 (2026-07-09). The shipped state is far past it (2.18.0 as of
+> 2026-08-14), and the carry-over list below is stale: several items marked open
 > here have since landed. For what is actually released, read `CHANGELOG.md`.
 > There is no standing local task queue.
 
@@ -28,7 +28,7 @@ bullet.
 | 9 | v2.4.x | runtime abstraction seam (PR #115), Candle/Metal backend, GHCR Docker images (+cuda) |
 | 10 | v2.5.x | native ANE (Core ML) encoder backend + published bucket packages (`download --ane`) |
 
-**Carry-over remaining (2026-07-09):** item 19 (hot-reload model) and the CUDA release-matrix tarball (partial — GHCR `:cuda` image ships since v2.4.0). Items 15 (v2.3.0) and 16 (v0.9.0) shipped; item 18 is obsolete (`ort_err()` removed by the v2.4.0 runtime abstraction).
+**Carry-over (2026-07-09):** the CUDA release-matrix tarball only (partial — GHCR `:cuda` image ships since v2.4.0). Item 19 (hot-reload model) has since shipped (PR #134, v2.7.0); items 15 (v2.3.0) and 16 (v0.9.0) shipped; item 18 is obsolete (`ort_err()` removed by the v2.4.0 runtime abstraction).
 
 ## Phase 0 — stop the bleeding (1 day)
 
@@ -43,7 +43,7 @@ SHA-pinned download 404).
   (a) bump `Cargo.toml`, (b) update `CHANGELOG`, (c) `git tag -s`,
   (d) push tag → wait for release workflow green,
   (e) `cargo publish --dry-run`, (f) `cargo publish`.
-- **Deliverable:** `v0.5.1` tag cut through the new pipeline. CI
+- **Deliverable:** `v0.5.2` tag cut through the new pipeline. CI
   green. `SHA256SUMS.txt` published. Murmur can revert its
   manual-upload workaround.
 
@@ -72,9 +72,9 @@ invite broader adoption.
 
 **Goal:** make the server deployable without a fork.
 
-- **Item 6** — CLI + env + TOML config parsing. One struct,
-  three layers (`clap` → `envy` → `toml`). Precedence:
-  flag > env > file > default. Document in `docs/config.md`.
+- **Item 6** — CLI + env config parsing (`clap` + `GIGASTT_*` env vars).
+  Precedence: flag > env > default. (The planned TOML config layer and
+  its `docs/config.md` were cancelled — CLI + env only.)
 - **Item 7** — `metrics` feature flag. `GET /metrics` behind
   `--metrics` (bind on same port, disabled by default). Standard
   RED metrics + per-stage timings + pool depth gauge.
@@ -83,7 +83,11 @@ invite broader adoption.
   (`gigastt:0.7.0`, `gigastt:0.7.0-model`).
 - **Item 19** — `POST /v1/admin/reload` (loopback-only).
 - **Deliverable:** `v0.7.0`. Sample systemd unit + Caddy config
-  land under `docs/deployment/`.
+  land under `packaging/systemd/` and `docs/deployment.md`.
+
+> Reconciled: items 6 and 10 shipped in v0.7.0 as planned; item 7
+> (`/metrics`) slipped to v0.8.0; item 19 (admin reload) landed much
+> later, in v2.7.0 (PR #134).
 
 ## Phase 3 — API surface polish (≈3 days)
 
@@ -99,6 +103,10 @@ with for v1.0 without deprecation cycles immediately after.
 - **Deliverable:** `v0.8.0`. `docs/asyncapi.yaml` updated to
   reflect `/v1/ws` and `capabilities` field.
 
+> Reconciled: item 13 shipped early (v0.6.1), items 11 and 12 shipped in
+> v0.7.0, item 20 in v0.8.0. The `/ws` alias this phase kept as deprecated
+> has since been removed entirely — only `/v1/ws` routes today.
+
 ## Phase 4 — supply chain & benchmarks (≈3 days)
 
 **Goal:** auditability for privacy-conscious adopters.
@@ -112,6 +120,10 @@ with for v1.0 without deprecation cycles immediately after.
   `--rate-limit` (per remote IP).
 - **Deliverable:** `v0.9.0`. Every release tarball accompanied by
   `bom.cdx.json`, `SHA256SUMS.txt`, and `benchmark.json`.
+
+> Reconciled: item 17 (per-IP rate limit) shipped early, in v0.8.0; item 14
+> landed across v0.7.0 (`cargo deny`) and v0.9.0 (SBOM); item 15 (WER
+> histograms) shipped in v2.3.0.
 
 ## Phase 5 — observability + security hardening (≈1 week, post-critique)
 
@@ -180,8 +192,8 @@ parallel with merge gate; V1-08, V1-09, V1-10 independent.
   release matrix.
 
 **Deliverable:** `v1.0.0`. WS protocol (`1.0`) and REST surface
-declared stable. Deprecation policy documented under
-`docs/compatibility.md`. Tag requires:
+declared stable. Deprecation policy documented in the "API versioning &
+backward compatibility" section of `AGENTS.md`. Tag requires:
 
 1. All P0 (V1-01 … V1-10) closed with linked test evidence.
 2. ≥ 80 % of P1 items closed; remainder listed as known issues in
