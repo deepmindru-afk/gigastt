@@ -33,6 +33,10 @@ ws.onmessage = async (event) => {
   if (msg.type === "ready") {
     console.log(`Connected: ${msg.model} @ ${msg.sample_rate}Hz\n`);
 
+    // The session default is 48000 Hz; our WAV is 16 kHz PCM16, so declare the
+    // real rate before the first audio frame (otherwise audio plays back 3x slow).
+    ws.send(JSON.stringify({ type: "configure", sample_rate: 16000 }));
+
     // Send PCM16 in chunks
     for (let offset = 0; offset < pcm.byteLength; offset += CHUNK_BYTES) {
       ws.send(pcm.slice(offset, offset + CHUNK_BYTES));
