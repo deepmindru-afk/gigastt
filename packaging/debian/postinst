@@ -2,7 +2,8 @@
 # postinst for the gigastt deb — create the service account and refresh
 # systemd. The service is intentionally NOT enabled or started here: the
 # model data package (gigastt-model-int8) or an online model download must be
-# in place first, and a 800 MB-resident service should be a deliberate
+# in place first, and a ~66 MB-resident service (pool 2, see
+# docs/benchmarks.md) should be a deliberate
 # `systemctl enable --now gigastt` decision by the admin.
 set -e
 
@@ -21,7 +22,8 @@ case "$1" in
 
 gigastt installed. Next steps:
   1. Install the model data package (offline):  dpkg -i gigastt-model-int8_*_all.deb
-     …or let gigastt download the model on first start (needs network).
+     …or let gigastt download the model on first start (needs network; first
+     comment out GIGASTT_OFFLINE=1 in /etc/gigastt/gigastt.env).
   2. systemctl enable --now gigastt
   3. curl http://127.0.0.1:9876/health
 
