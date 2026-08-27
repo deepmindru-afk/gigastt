@@ -1,12 +1,22 @@
 #!/usr/bin/env python3
 """Docs drift gate: fail when documentation drifts away from the code.
 
-Ten axes, all stdlib-only (no third-party deps, no network):
+Twelve axes, all stdlib-only (no third-party deps, no network):
 
   1. CLI flags/envs: every clap flag + GIGASTT_* env in the CLI sources
      (crates/gigastt/src/{main,serve,serve/bind,transcribe_cmd}.rs) is
      documented in docs/cli.md, and cli.md names no flag/env that does not
      exist (intentional exceptions live in scripts/check-docs-drift.allowlist).
+  1b. CLI flag scoping: a `--flag` documented under a `gigastt <subcommand>`
+      section of cli.md must exist on that subcommand's clap struct (flattened
+      arg structs and top-level global flags included). Axis 1 matches tokens
+      globally, so it cannot catch a serve-only flag documented under
+      `gigastt transcribe` — this one fails on it.
+  1c. CLI defaults: a `[default: X]` marker in cli.md must match the clap
+      `default_value` / `default_value_t` literal for the flag in that
+      section (UPPER_CASE constants are resolved from the CLI sources;
+      non-literal expressions like `model::default_model_dir()` are skipped).
+      A missing marker is never a failure — only a value mismatch is.
   2. WS error codes: the enum in docs/asyncapi.yaml == the table in docs/api.md
      == the codes emitted under crates/gigastt/src/server/ws/ (plus allowlisted
      doc-only entries).
@@ -184,6 +194,252 @@ def check_cli(allow: dict[str, dict[str, str]]) -> list[str]:
     for env in sorted(doc_envs - envs - phantom_envs):
         failures.append(f"cli.md: {env} is not a GIGASTT_* env var read by CLI sources")
     return failures
+
+
+# --- 1b/1c: per-subcommand scoping + defaults ------------------------------
+
+# Section headers inside cli.md: `gigastt serve [OPTIONS]`, `gigastt
+# transcribe-batch [OPTIONS] <…>`, and the top-level `gigastt [OPTIONS]
+# <COMMAND>` (no subcommand group). Example invocations are indented, so a
+# column-0 anchor is enough.
+SECTION_HEADER_RE = re.compile(r"^gigastt(?:[ \t]+([a-z][a-z0-9-]*))?[^\n]*$", re.M)
+FLATTEN_RE = re.compile(r"#\[command\(flatten\)\]\s*(?:pub(?:\([^)]*\))?\s+)?\w+\s*:\s*(\w+)")
+DEFAULT_VALUE_RE = re.compile(r'default_value\s*=\s*"([^"]*)"')
+DEFAULT_VALUE_T_RE = re.compile(r"default_value_t\s*=\s*([^\s,]+)")
+CONST_DEF_RE = re.compile(r'\bconst\s+([A-Z][A-Z0-9_]*)\s*:[^=;]+=\s*("[^"]*"|-?\d+|true|false)\s*;')
+DOC_DEFAULT_RE = re.compile(r"\[default:\s*([^\]]+)\]")
+# A flag *definition* line in cli.md: the flag opens the line (small indent,
+# optional short alias). Prose mentions like "stay at --pool-size)" are
+# mid-line and must not start a defaults window — otherwise a mention swallows
+# the next flag's `[default: …]` marker and misfires.
+DEF_TOKEN_RE = re.compile(r"(?m)^[ \t]{0,6}(?:-[a-zA-Z],[ \t]*)?--([a-z0-9][a-z0-9-]*)")
+
+
+def _code_skeleton(src: str) -> str:
+    """Same-length copy of `src` with line comments and string-literal
+    contents blanked to spaces. Structural scans (brace matching, variant
+    headers) run on this so braces inside comments/strings cannot confuse
+    them; attribute parsing runs on the original text — indices are
+    preserved, so spans map 1:1."""
+    out = list(src)
+    i, n = 0, len(src)
+    while i < n:
+        if src[i] == "/" and i + 1 < n and src[i + 1] == "/":
+            j = src.find("\n", i)
+            j = n if j == -1 else j
+            for k in range(i, j):
+                out[k] = " "
+            i = j
+        elif src[i] == '"':
+            out[i] = " "
+            i += 1
+            while i < n and src[i] != '"':
+                if src[i] == "\\":
+                    out[i] = " "
+                    i += 1
+                if i < n and src[i] != "\n":
+                    out[i] = " "
+                i += 1
+            if i < n:
+                out[i] = " "
+                i += 1
+        else:
+            i += 1
+    return "".join(out)
+
+
+def _brace_span(skel: str, open_idx: int) -> tuple[int, int] | None:
+    """(start, end) of the text inside the braces opened at skel[open_idx]."""
+    depth = 0
+    for i in range(open_idx, len(skel)):
+        if skel[i] == "{":
+            depth += 1
+        elif skel[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return open_idx + 1, i
+    return None
+
+
+def collect_clap_items() -> tuple[dict[str, str], dict[str, str]]:
+    """Struct name → body and Commands variant name → body (original text).
+
+    Tuple variants such as `Serve(ServeArgs)` are resolved to the referenced
+    struct body; inline variants (`Download { … }`) keep their own body.
+    """
+    sources: list[tuple[str, str]] = []
+    for path in CLI_SOURCES:
+        if path.exists():
+            src = path.read_text(encoding="utf-8")
+            sources.append((src, _code_skeleton(src)))
+
+    structs: dict[str, str] = {}
+    for src, skel in sources:
+        for m in re.finditer(r"\bstruct\s+(\w+)\s*\{", skel):
+            span = _brace_span(skel, skel.index("{", m.end() - 1))
+            if span:
+                structs[m.group(1)] = src[span[0]:span[1]]
+
+    variants: dict[str, str] = {}
+    for src, skel in sources:
+        em = re.search(r"\benum\s+Commands\s*\{", skel)
+        if not em:
+            continue
+        span = _brace_span(skel, skel.index("{", em.end() - 1))
+        if not span:
+            continue
+        base, ebody = span[0], skel[span[0]:span[1]]
+        for vm in re.finditer(r"(?m)^[ \t]*(\w+)[ \t]*([({])", ebody):
+            name, kind = vm.group(1), vm.group(2)
+            if kind == "(":
+                tm = re.match(r"\s*(\w+)\s*\)", ebody[vm.end():])
+                if tm and tm.group(1) in structs:
+                    variants[name] = structs[tm.group(1)]
+            else:
+                vspan = _brace_span(ebody, vm.end() - 1)
+                if vspan:
+                    variants[name] = src[base + vspan[0]:base + vspan[1]]
+    return structs, variants
+
+
+def flags_in_body(body: str, structs: dict[str, str], _depth: int = 0) -> dict[str, str]:
+    """Long-flag name → raw `#[arg(…)]` attrs for one struct/variant body,
+    following `#[command(flatten)]` references into other structs."""
+    flags: dict[str, str] = {}
+    if _depth > 4:
+        return flags
+    for attrs, field in ARG_RE.findall(body):
+        if "long" not in attrs:
+            continue
+        m = LONG_NAME_RE.search(attrs)
+        flags[m.group(1) if m else field.replace("_", "-")] = attrs
+    for ty in FLATTEN_RE.findall(body):
+        sub = structs.get(ty)
+        if sub is not None:
+            flags.update(flags_in_body(sub, structs, _depth + 1))
+    return flags
+
+
+def cli_md_sections(doc: str) -> list[tuple[str, str]]:
+    """Split cli.md into (`subcommand`, section text); top-level is `gigastt`."""
+    headers = list(SECTION_HEADER_RE.finditer(doc))
+    sections = []
+    for i, m in enumerate(headers):
+        end = headers[i + 1].start() if i + 1 < len(headers) else len(doc)
+        sections.append((m.group(1) or "gigastt", doc[m.start():end]))
+    return sections
+
+
+def _variant_name(section: str) -> str:
+    """cli.md section → Commands variant: transcribe-batch → TranscribeBatch."""
+    return "".join(part.capitalize() for part in section.split("-"))
+
+
+def _section_flags(
+    name: str,
+    structs: dict[str, str],
+    variants: dict[str, str],
+    global_flags: dict[str, str],
+) -> dict[str, str] | None:
+    """flag → attrs allowed in one cli.md section, or None when the section
+    has no matching Commands variant."""
+    if name == "gigastt":
+        return dict(global_flags)
+    body = variants.get(_variant_name(name))
+    if body is None:
+        return None
+    allowed = flags_in_body(body, structs)
+    allowed.update(global_flags)
+    return allowed
+
+
+def check_cli_sections(allow: dict[str, dict[str, str]]) -> list[str]:
+    structs, variants = collect_clap_items()
+    global_flags = flags_in_body(structs.get("Cli", ""), structs)
+    phantom = set(allow.get("section-flags-phantom-ok", {}))
+    doc = CLI_MD.read_text(encoding="utf-8")
+
+    failures: list[str] = []
+    for name, text in cli_md_sections(doc):
+        allowed = _section_flags(name, structs, variants, global_flags)
+        if allowed is None:
+            failures.append(
+                f"cli.md: section `gigastt {name}` has no matching Commands variant in CLI sources"
+            )
+            continue
+        for flag in sorted(set(CLI_FLAG_TOKEN_RE.findall(text)) - set(allowed) - phantom):
+            failures.append(
+                f"cli.md: --{flag} is documented under `gigastt {name}` but that "
+                "subcommand has no such clap flag (wrong section or stale flag?)"
+            )
+    return failures
+
+
+def collect_consts() -> dict[str, str]:
+    """Literal `const NAME: … = <literal>;` definitions in the CLI sources."""
+    consts: dict[str, str] = {}
+    for path in CLI_SOURCES:
+        if not path.exists():
+            continue
+        for m in CONST_DEF_RE.finditer(path.read_text(encoding="utf-8")):
+            value = m.group(2)
+            consts[m.group(1)] = value.strip('"') if value.startswith('"') else value
+    return consts
+
+
+def _resolve_default(attrs: str, consts: dict[str, str]) -> str | None:
+    """The literal clap prints as `[default: …]`, or None when the default is
+    not safely comparable (no default, function call, enum path, unresolved
+    constant) — ambiguity skips the flag rather than failing falsely."""
+    m = DEFAULT_VALUE_RE.search(attrs)
+    if m:
+        return m.group(1)
+    m = DEFAULT_VALUE_T_RE.search(attrs)
+    if not m:
+        return None
+    expr = m.group(1).strip()
+    if re.fullmatch(r"-?\d+|true|false", expr):
+        return expr
+    if re.fullmatch(r"(?:\w+::)*[A-Z][A-Z0-9_]*", expr):
+        return consts.get(expr.rsplit("::", 1)[-1])
+    return None
+
+
+def _normalize_doc_default(raw: str) -> str:
+    """The literal part of a `[default: …]` marker. Docs append a human
+    reading after the literal (`[default: 524288 = 512 KiB]`, `[default:
+    auto = on for rnnt, …]`); clap prints only the part before ` = `."""
+    return re.sub(r"\s+", " ", raw).strip().split(" = ", 1)[0].strip()
+
+
+def check_cli_defaults() -> list[str]:
+    structs, variants = collect_clap_items()
+    consts = collect_consts()
+    global_flags = flags_in_body(structs.get("Cli", ""), structs)
+    doc = CLI_MD.read_text(encoding="utf-8")
+
+    failures: set[str] = set()
+    for name, text in cli_md_sections(doc):
+        allowed = _section_flags(name, structs, variants, global_flags)
+        if allowed is None:
+            continue  # reported by check_cli_sections
+        tokens = list(DEF_TOKEN_RE.finditer(text))
+        for i, tok in enumerate(tokens):
+            attrs = allowed.get(tok.group(1))
+            if attrs is None:
+                continue  # phantom in this section — the scoping check reports it
+            code_default = _resolve_default(attrs, consts)
+            if code_default is None:
+                continue
+            end = tokens[i + 1].start() if i + 1 < len(tokens) else len(text)
+            for dm in DOC_DEFAULT_RE.finditer(text[tok.start():end]):
+                doc_default = _normalize_doc_default(dm.group(1))
+                if doc_default != code_default:
+                    failures.add(
+                        f"cli.md: --{tok.group(1)} under `gigastt {name}` documents "
+                        f"[default: {doc_default}] but the clap default is {code_default}"
+                    )
+    return sorted(failures)
 
 
 # ---------------------------------------------------------------------------
@@ -370,10 +626,11 @@ LINK_RE = re.compile(r"!?\[[^\]]*\]\((<[^>]+>|[^)\s]+)(?:\s+\"[^\"]*\")?\)")
 
 def github_slug(heading: str) -> str:
     """GitHub-style anchor slug: strip markup, lowercase, drop punctuation,
-    spaces become hyphens. Unicode letters (e.g. Cyrillic) are kept."""
+    spaces become hyphens. Unicode letters (e.g. Cyrillic) are kept, and
+    underscores are preserved (GitHub does not strip them)."""
     text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", heading)  # [text](url) -> text
     text = re.sub(r"<[^>]+>", "", text)  # inline HTML
-    text = text.replace("`", "").replace("*", "").replace("_", "")
+    text = text.replace("`", "").replace("*", "")
     text = text.strip().lower()
     text = re.sub(r"[^\w\s-]", "", text, flags=re.UNICODE)
     return re.sub(r"\s", "-", text)
@@ -661,6 +918,8 @@ def main() -> int:
 
     results: list[tuple[str, list[str]]] = []
     results.append(("CLI flags/envs (cli.md == CLI sources)", check_cli(allow)))
+    results.append(("CLI flag scoping (cli.md sections == clap structs)", check_cli_sections(allow)))
+    results.append(("CLI defaults (cli.md [default: …] == clap)", check_cli_defaults()))
     results.append(("WS error codes (asyncapi.yaml == api.md == ws/)", check_ws_error_codes(allow)))
     results.append(("audio formats (api.md/cli.md == audio.rs marker)", check_formats()))
     results.append(("mdBook SUMMARY + build", check_workbook(args.skip_mdbook)))
