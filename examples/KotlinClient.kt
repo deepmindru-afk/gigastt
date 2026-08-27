@@ -4,8 +4,10 @@
 //   implementation("com.squareup.okhttp3:okhttp:4.12.0")
 //   implementation("org.json:json:20240303")
 //
-// Compile and run:
-//   kotlinc KotlinClient.kt -include-runtime -d client.jar
+// Compile and run (kotlinc needs the dependencies on the classpath; point -cp
+// at the okhttp3 / org.json jars, e.g. from Gradle's cache or Maven):
+//   kotlinc -cp "okhttp-4.12.0.jar:okio-jvm-3.6.0.jar:kotlin-stdlib.jar:json-20240303.jar" \
+//     KotlinClient.kt -include-runtime -d client.jar
 //   java -jar client.jar <audio.wav> [ws://host:port]
 
 import okhttp3.*
@@ -47,6 +49,10 @@ fun main(args: Array<String>) {
             when (msg.getString("type")) {
                 "ready" -> {
                     print("Connected: ${msg.optString("model")} @ ${msg.optInt("sample_rate")}Hz\n\n")
+                    // The session default is 48000 Hz; our WAV is 16 kHz PCM16, so
+                    // declare the real rate before the first audio frame (otherwise
+                    // audio plays back 3x slow).
+                    ws.send("""{"type":"configure","sample_rate":16000}""")
                     // Send audio once ready is received
                     pcm.toList().chunked(CHUNK_BYTES).forEach { chunk ->
                         ws.send(okio.ByteString.of(*chunk.toByteArray()))

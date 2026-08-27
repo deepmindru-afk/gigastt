@@ -97,6 +97,14 @@ func main() {
 
 	// Wait for ready, then send audio
 	// gorilla/websocket is synchronous; send after connection is established
+
+	// The session default is 48000 Hz; our WAV is 16 kHz PCM16, so declare the
+	// real rate before the first audio frame (otherwise audio plays back 3x slow).
+	configure, _ := json.Marshal(map[string]any{"type": "configure", "sample_rate": 16000})
+	if err := conn.WriteMessage(websocket.TextMessage, configure); err != nil {
+		log.Fatalf("send configure: %v", err)
+	}
+
 	for offset := 0; offset < len(pcm); offset += chunkBytes {
 		end := offset + chunkBytes
 		if end > len(pcm) {

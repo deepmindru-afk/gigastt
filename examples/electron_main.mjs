@@ -9,7 +9,7 @@
 //
 // Prerequisites:
 //   npm install gigastt electron
-//   gigastt download --prequantized   # INT8 bundle -> ~/.gigastt/models
+//   gigastt download   # prequantized INT8 bundle -> ~/.gigastt/models
 //
 // This is a teaching file, not a runnable app: renderer-side audio capture is
 // sketched in comments at the bottom. The same Engine/Stream calls are exercised
@@ -23,9 +23,10 @@ import gigastt from 'gigastt';
 const { Engine, Stream } = gigastt;
 
 // The model directory is side-loaded, not bundled: fetch the pre-quantized
-// INT8 bundle once (`gigastt download --prequantized`, ~215 MB) or ship the
-// directory inside your installer. Keep it OUT of the asar archive — native
-// code memory-maps the weights, which asar's virtual filesystem does not support.
+// INT8 bundle once (`gigastt download`, ~215 MB — downloads are INT8-only) or
+// ship the directory inside your installer. Keep it OUT of the asar archive —
+// native code memory-maps the weights, which asar's virtual filesystem does
+// not support.
 const modelDir =
   process.env.GIGASTT_MODEL_DIR || path.join(os.homedir(), '.gigastt', 'models');
 

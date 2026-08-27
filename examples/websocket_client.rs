@@ -1,8 +1,14 @@
 //! WebSocket client that connects to a running gigastt server and streams audio.
 //!
+//! Reference snippet: the top-level `examples/` directory is not wired into
+//! Cargo, so `cargo run --example websocket_client` does not work. To build it,
+//! copy this file into a scratch crate (`cargo new ws-client`) with `anyhow`,
+//! `futures-util`, `serde_json`, `tokio` (full), `tokio-tungstenite`, and
+//! `tracing-subscriber` in `Cargo.toml`, or drop it under `crates/gigastt/examples/`.
+//!
 //! Usage:
 //!   1. Start server: cargo run -- serve
-//!   2. Run client:   cargo run --example websocket_client -- path/to/audio.wav
+//!   2. Run client:   cargo run -- path/to/audio.wav   (from the scratch crate)
 
 use anyhow::Result;
 use futures_util::{SinkExt, StreamExt};
@@ -13,7 +19,7 @@ async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
     let path = std::env::args().nth(1).unwrap_or_else(|| {
-        eprintln!("Usage: cargo run --example websocket_client -- <audio-file>");
+        eprintln!("Usage: websocket_client <16kHz-mono-PCM16.wav>");
         std::process::exit(1);
     });
 
@@ -33,8 +39,20 @@ async fn main() -> Result<()> {
         );
     }
 
-    // Read audio file as raw bytes and send in 32KB chunks
-    let audio_data = std::fs::read(&path)?;
+    // The session default is 48000 Hz; our WAV is 16 kHz PCM16, so declare the
+    // real rate before the first audio frame (otherwise audio plays back 3x slow).
+    sink.send(Message::Text(
+        serde_json::to_string(&serde_json::json!({"type": "configure", "sample_rate": 16000}))
+            .unwrap()
+            .into(),
+    ))
+    .await?;
+
+    // Strip the 44-byte WAV header: the WebSocket stream expects raw PCM16,
+    // not a RIFF container (the other examples do the same).
+    const WAV_HEADER_BYTES: usize = 44;
+    let file_data = std::fs::read(&path)?;
+    let audio_data = file_data.get(WAV_HEADER_BYTES..).unwrap_or(&[]);
     println!("Sending {} bytes of audio...", audio_data.len());
     for chunk in audio_data.chunks(32 * 1024) {
         sink.send(Message::Binary(chunk.to_vec().into())).await?;

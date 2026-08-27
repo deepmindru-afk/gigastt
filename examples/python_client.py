@@ -3,7 +3,6 @@
 
 import asyncio
 import json
-import struct
 import sys
 import wave
 
@@ -14,43 +13,16 @@ except ImportError:
     sys.exit(1)
 
 
-async def transcribe(wav_path: str, server: str = "ws://127.0.0.1:9876/v1/ws"):
-    async with websockets.connect(server) as ws:
-        # Wait for ready
-        msg = json.loads(await ws.recv())
-        assert msg["type"] == "ready", f"Expected ready, got {msg}"
-        print(f"Connected: {msg['model']} @ {msg['sample_rate']}Hz")
-
-        # Read WAV
-        with wave.open(wav_path, "rb") as wf:
-            assert wf.getnchannels() == 1, "Expected mono audio"
-            assert wf.getsampwidth() == 2, "Expected 16-bit audio"
-            rate = wf.getframerate()
-            frames = wf.readframes(wf.getnframes())
-
-        if rate != 16000:
-            print(f"Warning: audio is {rate}Hz, server expects 16000Hz")
-
-        # Send audio in chunks (0.5s each)
-        chunk_samples = 8000  # 0.5s at 16kHz
-        chunk_bytes = chunk_samples * 2
-        for i in range(0, len(frames), chunk_bytes):
-            await ws.send(frames[i : i + chunk_bytes])
-            await asyncio.sleep(0.05)  # Small delay between chunks
-
-        # Signal end of audio and close
-        await ws.send(json.dumps({"type": "stop"}))
-        await ws.close()
-
-        # Print results (collect during streaming)
-        print("Done.")
-
-
 async def stream_and_print(wav_path: str, server: str = "ws://127.0.0.1:9876/v1/ws"):
     async with websockets.connect(server) as ws:
         msg = json.loads(await ws.recv())
         assert msg["type"] == "ready", f"Expected ready, got {msg}"
         print(f"Connected: {msg['model']} @ {msg['sample_rate']}Hz\n")
+
+        # The session default is 48000 Hz; our WAV is 16 kHz PCM16, so declare
+        # the real rate before the first audio frame (otherwise audio plays
+        # back 3x slow).
+        await ws.send(json.dumps({"type": "configure", "sample_rate": 16000}))
 
         # Start receiver task
         async def receiver():
