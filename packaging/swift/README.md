@@ -5,15 +5,20 @@ ONNX Runtime. No cloud APIs, no network calls at inference time, full privacy.
 
 This package wraps the gigastt C ABI in a safe Swift interface. The native code
 ships as a prebuilt `GigasttFFI.xcframework` (iOS device `arm64` + simulator
-`arm64`/`x86_64` + macOS `arm64`), with ONNX Runtime statically linked into
-each slice — there is no separate runtime to bundle.
+`arm64`/`x86_64` + macOS `arm64`). ONNX Runtime is statically linked into the
+arm64 slices — there is no separate runtime to bundle there; the
+x86_64-simulator slice is built with a deferred link instead (`-l onnxruntime`
+is resolved at the consumer's app link, see
+`.github/workflows/ios-xcframework.yml`).
 
 The package is published in two places: in the engine monorepo
 (`packaging/swift`, for local path dependencies and development) and in the
 [ekhodzitsky/gigastt-swift](https://github.com/ekhodzitsky/gigastt-swift)
-mirror — the canonical remote install source, tagged with engine releases
-(SwiftPM requires `Package.swift` at the repository root, so the monorepo
-subdirectory cannot be consumed via URL).
+mirror — the canonical remote install source. Mirror tags trail engine
+releases (they are pushed per xcframework release, not for every engine tag),
+so pin `from:` to a version that exists as a tag in the mirror (SwiftPM
+requires `Package.swift` at the repository root, so the monorepo subdirectory
+cannot be consumed via URL).
 
 ## Requirements
 
