@@ -214,8 +214,8 @@ impl Engine {
     }
 
     /// Set the max retained streaming encoder window in seconds (default 2.5).
-    /// The value is clamped to the supported range (see
-    /// [`super::super::windows::stream_max_window_samples`]). Longer windows
+    /// The value is clamped to the supported range (2.4–30 s; see
+    /// [`Engine::stream_max_window_samples`]). Longer windows
     /// improve streaming WER on phrases that previously slid at the cap, at a
     /// linear per-stride encoder-cost increase.
     pub fn with_stream_max_window_secs(mut self, secs: f64) -> Self {
