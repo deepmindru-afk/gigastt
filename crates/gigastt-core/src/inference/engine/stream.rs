@@ -105,8 +105,9 @@ impl Engine {
         // (an isolated ~100ms chunk decodes to garbage). Re-decoding is the cost,
         // so we only decode once STREAM_DECODE_STRIDE_SAMPLES of NEW audio have
         // arrived (or the window hit its cap) — this keeps the engine real-time.
-        // The window is bounded by STREAM_MAX_WINDOW_SAMPLES; on endpoint or cap
-        // we finalize the tail and slide, retaining STREAM_LEFT_CONTEXT_SAMPLES.
+        // The window is bounded by `self.stream_max_window_samples` (default
+        // 2.5s, configurable at serve time); on endpoint or cap we finalize the
+        // tail and slide, retaining STREAM_LEFT_CONTEXT_SAMPLES.
         state.audio_buffer.extend_from_slice(samples);
         state.pending_samples += samples.len();
 
@@ -125,7 +126,7 @@ impl Engine {
             }
         }
 
-        let over_cap = state.audio_buffer.len() >= STREAM_MAX_WINDOW_SAMPLES;
+        let over_cap = state.audio_buffer.len() >= self.stream_max_window_samples;
         // Stride gate on NEW audio since the last decode (not since the last
         // slide): otherwise a non-finalizing partial would leave the counter
         // high and decode on every subsequent chunk. A VAD endpoint overrides
@@ -177,6 +178,12 @@ impl Engine {
         if over_cap {
             // Encoder cost bound: commit live words so they are not lost when
             // the window slides, but do **not** end the utterance.
+            let live = state.assembler.live_word_count();
+            tracing::debug!(
+                committed = live,
+                window_samples = state.audio_buffer.len(),
+                "stream window cap: committed stable prefix, sliding"
+            );
             state.assembler.commit_live();
             Self::slide_streaming_window(state);
             if state.assembler.is_empty() {
@@ -268,11 +275,23 @@ impl Engine {
         // window does not re-emit committed words.
         let window_start_s = frame_offset as f64 * SECONDS_PER_FRAME;
         let context_boundary_s = window_start_s + state.context_samples as f64 / 16000.0;
+        let decoded = all_words.len();
         #[cfg_attr(not(feature = "diarization"), allow(unused_mut))]
         let mut tail: Vec<WordInfo> = all_words
             .into_iter()
             .filter(|w| w.start + f64::EPSILON >= context_boundary_s)
             .collect();
+
+        // Per-pass visibility for stream-vs-file divergence analysis:
+        // decoded = full window hypothesis, suppressed = dropped context words,
+        // replaced = previous live tail this hypothesis overwrites.
+        tracing::debug!(
+            decoded,
+            suppressed = decoded - tail.len(),
+            replaced = state.assembler.live_word_count(),
+            live = tail.len(),
+            "stream decode window"
+        );
 
         #[cfg(feature = "diarization")]
         if let Some(dia) = state.diarization_state.as_mut()

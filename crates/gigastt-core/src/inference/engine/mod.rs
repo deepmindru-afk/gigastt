@@ -154,6 +154,12 @@ pub struct Engine {
     /// Default streaming utterance-end policy for new sessions. Overridable
     /// per session via WS `configure.endpoint_mode`.
     endpoint_mode: EndpointMode,
+    /// Max retained streaming encoder window (samples @16kHz) before the window
+    /// commits a stable prefix and slides. Defaults to
+    /// [`STREAM_MAX_WINDOW_SAMPLES`] (2.5 s); overridden at serve time via
+    /// [`Engine::with_stream_max_window_secs`]. Longer windows improve WER on
+    /// long phrases at a linear per-stride encoder-cost increase.
+    stream_max_window_samples: usize,
     /// Whether the INT8 quantized encoder is in use.
     int8: bool,
     /// True when pooled encoder sessions run on the ANE fixed-shape pad-up path.

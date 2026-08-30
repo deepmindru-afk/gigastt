@@ -72,9 +72,9 @@ Sent immediately after the WebSocket handshake, before any audio is accepted.
 
 Both carry the same `TranscriptSegment` payload; `final` means the utterance is
 complete (true endpointing: VAD silence, decoder blank-run without VAD, or
-`stop`/shutdown). The ~2.5 s encoder window **never** produces `final` — it
-commits a stable prefix as a non-final `partial` so long monologues stay one
-utterance for voice assistants.
+`stop`/shutdown). The encoder window (2.5 s by default; `--stream-max-window-secs`)
+**never** produces `final` — it commits a stable prefix as a non-final `partial`
+so long monologues stay one utterance for voice assistants.
 
 ```json
 {

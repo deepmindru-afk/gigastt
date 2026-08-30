@@ -6,17 +6,40 @@
 
 use super::audio::WindowSpec;
 
-/// Max streaming encoder window before sliding (samples @16kHz, 2.5s).
+/// Default max streaming encoder window before sliding (samples @16kHz, 2.5s).
+/// Configurable at serve time via `--stream-max-window-secs` (see
+/// [`stream_max_window_samples`]); the engine stores the resolved value.
 /// Re-decoding the whole window each stride gives the offline Conformer left
 /// context; this cap bounds the per-stride encoder cost. With the 1.5s retained
 /// left context and the 0.8s stride, a 2.5s window keeps the steady-state
 /// re-encode overlap near ~3x (vs ~6.25x at a 5s window) — roughly half the
-/// streaming encoder work — while retaining enough left context that streaming
-/// quality stays on par with batch (covered by the `streaming_quality` tests).
+/// streaming encoder work. Short utterances stay on par with batch (ordered-WER
+/// `streaming_quality` tests); phrases longer than the window can degrade
+/// (stream-vs-file gap measured in docs/benchmarks.md) — raising the window is
+/// the mitigation, at a linear encoder-cost increase per stride.
 ///
 /// Hitting the cap **commits a stable prefix** and slides; it does **not** emit
 /// a speech-final `final` (that would mean "utterance complete" to assistants).
 pub(crate) const STREAM_MAX_WINDOW_SAMPLES: usize = 16000 * 5 / 2;
+/// Bounds for the configurable streaming window (seconds). The floor keeps the
+/// window larger than the retained left context plus one decode stride (a
+/// smaller cap would slide almost immediately and re-commit degenerate tails);
+/// the ceiling matches the Conformer's useful-context limit used for file
+/// chunking (see `CHUNK_THRESHOLD_SAMPLES`).
+pub(crate) const MIN_STREAM_WINDOW_SECS: f64 = 2.4;
+pub(crate) const MAX_STREAM_WINDOW_SECS: f64 = 30.0;
+
+/// Resolve a user-requested streaming window length (seconds) to samples
+/// @16kHz, clamped to [`MIN_STREAM_WINDOW_SECS`]..=[`MAX_STREAM_WINDOW_SECS`].
+/// Non-finite input falls back to the default. Pure so the clamping policy is
+/// unit-testable without a loaded model.
+pub(crate) fn stream_max_window_samples(secs: f64) -> usize {
+    if !secs.is_finite() {
+        return STREAM_MAX_WINDOW_SAMPLES;
+    }
+    let clamped = secs.clamp(MIN_STREAM_WINDOW_SECS, MAX_STREAM_WINDOW_SECS);
+    (clamped * 16000.0).round() as usize
+}
 /// Left-context audio retained across a streaming finalize/slide (samples @16kHz,
 /// ~1.5s) so the next window keeps acoustic context instead of restarting cold.
 pub(crate) const STREAM_LEFT_CONTEXT_SAMPLES: usize = 16000 * 3 / 2;
@@ -117,6 +140,24 @@ mod tests {
                 assert!(!spec.is_single_pass(CHUNK_THRESHOLD_SAMPLES + 1));
             }
         }
+    }
+
+    #[test]
+    fn test_stream_max_window_samples_clamps() {
+        // Default token resolves to the legacy 2.5 s constant.
+        assert_eq!(stream_max_window_samples(2.5), STREAM_MAX_WINDOW_SAMPLES);
+        // Floor: must exceed left context (1.5 s) + one stride (0.8 s).
+        assert_eq!(
+            stream_max_window_samples(0.5),
+            (MIN_STREAM_WINDOW_SECS * 16000.0) as usize
+        );
+        // Ceiling: Conformer useful-context limit.
+        assert_eq!(
+            stream_max_window_samples(120.0),
+            (MAX_STREAM_WINDOW_SECS * 16000.0) as usize
+        );
+        // In-range values pass through.
+        assert_eq!(stream_max_window_samples(7.5), 16000 * 15 / 2);
     }
 
     #[test]
