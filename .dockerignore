@@ -18,8 +18,8 @@ target/
 .omx/
 .claude/
 
-# Research, benchmarks, tooling & packaging not needed by the Docker build
-benchmark/
+# Research, tooling & packaging not needed by the Docker build
+# (benchmark/ stays in the context: benchmark/Dockerfile COPYs it)
 roadmap/
 examples/
 fuzz/
