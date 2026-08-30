@@ -394,6 +394,12 @@ impl TranscriptAssembler {
     pub fn is_empty(&self) -> bool {
         self.committed_text.is_empty() && self.text.is_empty()
     }
+
+    /// Number of words in the live (uncommitted) tail — used for
+    /// decoded/suppressed/replaced/committed streaming diagnostics.
+    pub(crate) fn live_word_count(&self) -> usize {
+        self.words.len()
+    }
 }
 
 /// Probe a freshly-built state; on failure, rebuild it once and re-probe.

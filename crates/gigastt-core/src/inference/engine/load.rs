@@ -154,6 +154,7 @@ impl Engine {
             vad: None,
             vad_config: crate::vad::VadConfig::default(),
             endpoint_mode: EndpointMode::Auto,
+            stream_max_window_samples: STREAM_MAX_WINDOW_SAMPLES,
             int8,
             ane_encoder,
             #[cfg(feature = "diarization")]

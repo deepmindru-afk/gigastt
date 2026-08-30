@@ -30,6 +30,75 @@ fn norm_words(s: &str) -> HashSet<String> {
         .collect()
 }
 
+/// Ordered, lowercased alphanumeric word sequence — unlike [`norm_words`]
+/// (a set), this preserves order and duplicates, which is what a WER-style
+/// comparison needs (a set-overlap check cannot see transpositions, dropped
+/// duplicates, or repeated words).
+fn word_seq(s: &str) -> Vec<String> {
+    s.split_whitespace()
+        .map(|w| {
+            w.chars()
+                .filter(|c| c.is_alphanumeric())
+                .collect::<String>()
+                .to_lowercase()
+        })
+        .filter(|w| !w.is_empty())
+        .collect()
+}
+
+/// Levenshtein edit distance between two word sequences (ordered).
+fn word_edit_distance(a: &[String], b: &[String]) -> usize {
+    let mut prev: Vec<usize> = (0..=b.len()).collect();
+    let mut cur = vec![0usize; b.len() + 1];
+    for (i, wa) in a.iter().enumerate() {
+        cur[0] = i + 1;
+        for (j, wb) in b.iter().enumerate() {
+            let sub = prev[j] + usize::from(wa != wb);
+            cur[j + 1] = (prev[j + 1] + 1).min(cur[j] + 1).min(sub);
+        }
+        std::mem::swap(&mut prev, &mut cur);
+    }
+    prev[b.len()]
+}
+
+/// Corpus WER: total edits over total reference words (not a mean of per-clip
+/// WERs, which would over-weight short clips).
+fn corpus_wer(pairs: &[(Vec<String>, Vec<String>)]) -> f64 {
+    let edits: usize = pairs.iter().map(|(r, h)| word_edit_distance(r, h)).sum();
+    let words: usize = pairs.iter().map(|(r, _)| r.len()).sum();
+    if words == 0 {
+        0.0
+    } else {
+        edits as f64 / words as f64
+    }
+}
+
+/// Stream one clip in 100 ms chunks and return the committed transcript
+/// (final segments in order + the closing flush), mirroring how clients
+/// concatenate `/v1/ws` output.
+fn stream_clip(engine: &Engine, fixture: &str) -> String {
+    let mut triplet = engine.pool.checkout_blocking().expect("checkout triplet");
+    let samples = decode_audio_file(fixture).expect("decode fixture");
+    let mut state = engine.create_state(false);
+    let mut committed: Vec<String> = Vec::new();
+    for chunk in samples.chunks(1600) {
+        for seg in engine
+            .process_chunk(chunk, &mut state, &mut triplet)
+            .expect("process_chunk")
+        {
+            if seg.is_final && !seg.text.trim().is_empty() {
+                committed.push(seg.text);
+            }
+        }
+    }
+    if let Some(seg) = engine.finish_stream(&mut state, &mut triplet)
+        && !seg.text.trim().is_empty()
+    {
+        committed.push(seg.text);
+    }
+    committed.join(" ").trim().to_string()
+}
+
 #[test]
 #[ignore = "requires the GigaAM model (~225 MB INT8) at ~/.gigastt/models"]
 fn streaming_transcript_matches_batch() {
@@ -94,9 +163,10 @@ fn streaming_transcript_matches_batch() {
     );
 }
 
-/// Audio longer than the 5 s streaming window must keep transcribing across the
-/// window slide (left-context carry + dedup), not collapse or stall. Feeds three
-/// concatenated copies of the fixture (~12 s) so the window cap forces slides.
+/// Audio longer than the streaming window (2.5 s by default) must keep
+/// transcribing across the window slide (left-context carry + dedup), not
+/// collapse or stall. Feeds three concatenated copies of the fixture (~12 s)
+/// so the window cap forces several slides.
 #[test]
 #[ignore = "requires the GigaAM model (~225 MB INT8) at ~/.gigastt/models"]
 fn streaming_long_audio_slides_window() {
@@ -112,7 +182,7 @@ fn streaming_long_audio_slides_window() {
     let one = decode_audio_file(fixture).expect("decode fixture");
     let mut samples = Vec::new();
     for _ in 0..3 {
-        samples.extend_from_slice(&one); // ~12 s > 5 s window → forces slides
+        samples.extend_from_slice(&one); // ~12 s > 2.5 s window → forces slides
     }
 
     let mut state = engine.create_state(false);
@@ -171,7 +241,7 @@ fn streaming_word_timestamps_not_inflated() {
     let one = decode_audio_file(fixture).expect("decode fixture");
     let mut samples = Vec::new();
     for _ in 0..3 {
-        samples.extend_from_slice(&one); // ~12 s > 5 s window → forces slides
+        samples.extend_from_slice(&one); // ~12 s > 2.5 s window → forces slides
     }
     let audio_dur_s = samples.len() as f64 / 16000.0;
 
@@ -210,5 +280,91 @@ fn streaming_word_timestamps_not_inflated() {
         max_end_s <= audio_dur_s * 1.5,
         "word end {max_end_s:.2}s far exceeds audio duration {audio_dur_s:.2}s \
          — streaming timestamp inflation regressed"
+    );
+}
+
+/// Sequence-aware stream-vs-file guard over several labelled fixtures
+/// (replaces set-overlap as the quality signal: order and duplicates count).
+///
+/// Streams the first 10 Golos fixtures (100 ms chunks) twice — with the
+/// default 2.5 s window and with a raised 7.5 s window — and asserts against
+/// the manifest references:
+///
+/// - default window: corpus streaming WER stays under 15% absolute (a real
+///   regression like the historical single-token collapse lands far above
+///   that), and
+/// - raised window: corpus streaming WER stays within +5 pp of corpus batch
+///   WER — the configurable window must close the long-phrase stream-vs-file
+///   gap (`--stream-max-window-secs`).
+///
+/// Calibration (2026-08-30, INT8 `rnnt`, first 10 Golos fixtures, 47 ref
+/// words): batch 0.000; streaming 0.106 at 2.5 s and 0.021 at 7.5 s — the
+/// default-window gap is real on these short clips, so parity is asserted at
+/// the raised window, not at the default.
+#[test]
+#[ignore = "requires the GigaAM model (~225 MB INT8) at ~/.gigastt/models"]
+fn streaming_wer_tracks_file_on_labelled_fixtures() {
+    let model_dir = default_model_dir();
+    let manifest_path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../gigastt/tests/fixtures/manifest.json"
+    );
+    let manifest: Vec<serde_json::Value> =
+        serde_json::from_str(&std::fs::read_to_string(manifest_path).expect("read manifest"))
+            .expect("parse manifest");
+
+    let engine = Engine::load(&model_dir).expect("load engine");
+    let wide_engine = Engine::load(&model_dir)
+        .expect("load engine")
+        .with_stream_max_window_secs(7.5);
+    let mut batch_pairs: Vec<(Vec<String>, Vec<String>)> = Vec::new();
+    let mut stream_pairs: Vec<(Vec<String>, Vec<String>)> = Vec::new();
+    let mut wide_pairs: Vec<(Vec<String>, Vec<String>)> = Vec::new();
+
+    for entry in manifest.iter().take(10) {
+        let filename = entry["filename"].as_str().expect("manifest filename");
+        let reference = entry["reference"].as_str().expect("manifest reference");
+        let fixture = format!(
+            "{}/../gigastt/tests/fixtures/{filename}",
+            env!("CARGO_MANIFEST_DIR")
+        );
+
+        let mut triplet = engine.pool.checkout_blocking().expect("checkout triplet");
+        let batch_text = engine
+            .transcribe_file(&fixture, &mut triplet)
+            .expect("batch transcribe")
+            .text;
+        let streaming_text = stream_clip(&engine, &fixture);
+        let wide_text = stream_clip(&wide_engine, &fixture);
+
+        let reference = word_seq(reference);
+        let batch_edits = word_edit_distance(&reference, &word_seq(&batch_text));
+        let stream_edits = word_edit_distance(&reference, &word_seq(&streaming_text));
+        let wide_edits = word_edit_distance(&reference, &word_seq(&wide_text));
+        eprintln!(
+            "{filename}: ref={} words, batch edits={batch_edits}, stream(2.5s) edits={stream_edits}, stream(7.5s) edits={wide_edits}\n  \
+             batch:          {batch_text:?}\n  streaming 2.5s: {streaming_text:?}\n  streaming 7.5s: {wide_text:?}",
+            reference.len()
+        );
+        batch_pairs.push((reference.clone(), word_seq(&batch_text)));
+        stream_pairs.push((reference.clone(), word_seq(&streaming_text)));
+        wide_pairs.push((reference, word_seq(&wide_text)));
+    }
+
+    let batch_wer = corpus_wer(&batch_pairs);
+    let stream_wer = corpus_wer(&stream_pairs);
+    let wide_wer = corpus_wer(&wide_pairs);
+    eprintln!(
+        "corpus WER: batch={batch_wer:.4} streaming(2.5s)={stream_wer:.4} streaming(7.5s)={wide_wer:.4}"
+    );
+
+    assert!(
+        stream_wer < 0.15,
+        "streaming corpus WER {stream_wer:.4} regressed past 15% at the default window"
+    );
+    assert!(
+        wide_wer <= batch_wer + 0.05,
+        "raised-window streaming WER {wide_wer:.4} diverges from batch {batch_wer:.4} by more than 5 pp \
+         — --stream-max-window-secs no longer closes the stream-vs-file gap"
     );
 }

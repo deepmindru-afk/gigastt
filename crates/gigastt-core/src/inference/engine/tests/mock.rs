@@ -681,6 +681,31 @@ fn test_process_chunk_window_cap_emits_partial_not_final() {
 }
 
 #[test]
+fn test_process_chunk_configured_window_defers_cap() {
+    // With the window cap raised to 7.5 s, a 2.5 s chunk must NOT trigger the
+    // cap path: no stable-prefix commit, no slide (context stays zero).
+    let (engine, _tmp) = blank_run_engine_window_cap();
+    let engine = engine.with_stream_max_window_secs(7.5);
+    let mut guard = engine.pool.checkout_blocking().expect("checkout");
+    let mut state = engine.create_state(false);
+    state.vad_endpointer = Some(crate::vad::VadEndpointer::new(
+        &crate::vad::VadConfig::default(),
+    ));
+    let chunk = vec![0.0f32; 16000 * 5 / 2];
+    let segs = engine
+        .process_chunk(&chunk, &mut state, &mut guard)
+        .expect("mock decode must not error");
+    assert_eq!(segs.len(), 1, "stride decode still surfaces a partial");
+    assert!(!segs[0].is_final);
+    assert_eq!(segs[0].text, "hi");
+    assert_eq!(
+        state.context_samples, 0,
+        "no slide may happen below the configured cap"
+    );
+    assert_eq!(state.window_start_samples, 0);
+}
+
+#[test]
 fn test_process_chunk_assistant_mode_ignores_blank_without_vad() {
     let (engine, _tmp) = blank_run_engine();
     let mut guard = engine.pool.checkout_blocking().expect("checkout");

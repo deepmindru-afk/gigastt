@@ -74,6 +74,11 @@ gigastt serve [OPTIONS]
                             Env: GIGASTT_VAD_MODEL_DIR.
   --endpoint-mode <MODE>    WS utterance end: auto|assistant|manual [default: auto].
                             Env: GIGASTT_ENDPOINT_MODE. Window cap never emits final.
+  --stream-max-window-secs <N>  Max retained streaming encoder window (seconds)
+                            [default: 2.5], clamped to 2.4–30. Longer windows
+                            (e.g. 7.5) improve WER on phrases longer than the
+                            window, at a linear per-stride encoder-cost increase.
+                            Env: GIGASTT_STREAM_MAX_WINDOW_SECS.
   --profile <P>             Deploy profile: default | edge [default: default].
                             edge applies --pool-size 1 and --vad when those
                             flags are left at defaults. Env: GIGASTT_PROFILE.

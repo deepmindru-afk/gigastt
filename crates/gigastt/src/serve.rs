@@ -162,6 +162,14 @@ pub(crate) struct ServeArgs {
         )]
     pub(crate) endpoint_mode: String,
 
+    /// Max retained streaming encoder window in seconds (WebSocket / SSE).
+    /// Re-decoding the whole window every 0.8 s stride bounds WER on phrases
+    /// longer than the window: raising this (e.g. 7.5) improves long-phrase
+    /// streaming WER at a linear per-stride encoder-cost increase. Clamped to
+    /// 2.4–30. Env: GIGASTT_STREAM_MAX_WINDOW_SECS.
+    #[arg(long, env = "GIGASTT_STREAM_MAX_WINDOW_SECS", default_value_t = 2.5)]
+    pub(crate) stream_max_window_secs: f64,
+
     /// Number of concurrent inference sessions. The INT8 encoder is
     /// memory-mapped and shared; budget **resident** footprint (~46 MB at
     /// `--pool-size 1`, ~66 MB at the default 2; ~20 MB per extra slot).
@@ -415,6 +423,7 @@ pub(crate) async fn run_serve(
         quantize: false,
         skip_quantize: true,
         endpoint_mode: Some(args.endpoint_mode),
+        stream_max_window_secs: Some(args.stream_max_window_secs),
     };
     let build_engine: server::EngineBuilder = {
         let recipe = recipe.clone();

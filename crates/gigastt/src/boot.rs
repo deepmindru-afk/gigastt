@@ -115,6 +115,10 @@ pub struct EngineRecipe {
     /// Optional endpoint-mode token (`auto` / `assistant` / …). `None` leaves
     /// the engine default (offline paths). Serve always sets this.
     pub endpoint_mode: Option<String>,
+    /// Optional streaming window cap in seconds. `None` leaves the engine
+    /// default (2.5 s); serve always sets this. Offline paths ignore it (they
+    /// use file transcription, not the streaming window).
+    pub stream_max_window_secs: Option<f64>,
 }
 
 impl EngineRecipe {
@@ -157,6 +161,7 @@ impl EngineRecipe {
             quantize: false,
             skip_quantize: true,
             endpoint_mode: None,
+            stream_max_window_secs: None,
         }
     }
 
@@ -226,6 +231,9 @@ impl EngineRecipe {
             let mode = inference::EndpointMode::parse_token(token)
                 .unwrap_or(inference::EndpointMode::Auto);
             engine = engine.with_endpoint_mode(mode);
+        }
+        if let Some(secs) = self.stream_max_window_secs {
+            engine = engine.with_stream_max_window_secs(secs);
         }
         if let Some(pairs) = hotwords {
             engine = engine.with_hotwords(

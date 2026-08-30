@@ -213,6 +213,28 @@ impl Engine {
         self
     }
 
+    /// Set the max retained streaming encoder window in seconds (default 2.5).
+    /// The value is clamped to the supported range (see
+    /// [`super::super::windows::stream_max_window_samples`]). Longer windows
+    /// improve streaming WER on phrases that previously slid at the cap, at a
+    /// linear per-stride encoder-cost increase.
+    pub fn with_stream_max_window_secs(mut self, secs: f64) -> Self {
+        let samples = crate::inference::windows::stream_max_window_samples(secs);
+        if samples != (secs * 16000.0).round() as usize {
+            tracing::warn!(
+                "stream max window {secs}s clamped to {:.1}s",
+                samples as f64 / 16000.0
+            );
+        }
+        self.stream_max_window_samples = samples;
+        self
+    }
+
+    /// Resolved max streaming encoder window (samples @16kHz).
+    pub fn stream_max_window_samples(&self) -> usize {
+        self.stream_max_window_samples
+    }
+
     /// Size of the BPE vocabulary the loaded tokenizer covers. Exposed so the
     /// REST `/v1/models` handler can report the real value instead of a
     /// hardcoded literal that would drift if the upstream model rev changes.

@@ -13,6 +13,21 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 
 ## [Unreleased]
 
+### Added
+
+- **Configurable streaming window** (`--stream-max-window-secs`, env
+  `GIGASTT_STREAM_MAX_WINDOW_SECS`, default 2.5 unchanged, clamped to
+  2.4–30). Longer windows (e.g. 7.5 s) improve WER on phrases longer than
+  the retained window, at a linear per-stride encoder-cost increase.
+- **Sequence-aware streaming quality guard.** New model-gated test
+  `streaming_wer_tracks_file_on_labelled_fixtures` computes ordered corpus
+  WER (not set overlap) over 10 labelled Golos fixtures: an absolute
+  regression bound at the default 2.5 s window and stream-vs-file parity
+  within +5 pp at a raised 7.5 s window.
+- **Streaming decode tracing**: per-pass `debug!` events report decoded /
+  suppressed / replaced / live word counts, and the window-cap commit logs
+  how many words entered the stable prefix.
+
 ### Changed
 
 - **polyvoice 0.14.0 → 0.18.0** from crates.io (`features = ["onnx"]`).
