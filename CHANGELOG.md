@@ -13,6 +13,21 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 
 ## [Unreleased]
 
+### Fixed
+
+- **Publish dry-run after a version bump.** `gigastt-quantize` is on
+  crates.io (so the old "no matching package" exception never fired), but
+  `cargo publish --dry-run` for `gigastt-core` / `gigastt` still cannot
+  resolve the just-bumped workspace version until that crate is actually
+  published. The job now accepts that version-select miss as well.
+
+### Changed
+
+- **audio-codec 0.3 → 0.4.** Telephony G.711/G.722 decode uses the
+  heap-free `decode_into` / `encode_into` API (`Decoder`/`Encoder` are
+  traits; the allocating `decode`/`encode` helpers need the `std`
+  feature, which we keep off so we do not pull a second Opus).
+
 ## [2.19.0] - 2026-08-31
 
 ### Added

@@ -726,27 +726,39 @@ jobs:
       # (at real release time quantize then core are published first).
       # --no-verify still exercises `cargo package` (manifest, metadata,
       # file inclusion); the compile itself is covered by the build/test jobs.
+      #
+      # After a workspace version bump, cargo also fails to *select* a version
+      # (quantize/core already exist on crates.io, just not at this version).
+      # Accept only that packaging-order miss.
       - run: |
           set -euo pipefail
-          # New workspace crate: full dry-run (compile + package).
-          cargo publish --dry-run -p gigastt-quantize --locked
-          # core depends on gigastt-quantize via path. Until quantize is on
-          # crates.io (first release after this lands), `cargo publish` cannot
-          # resolve it from the registry. Accept that transitional error;
-          # anything else is a real packaging break.
-          set +e
-          out=$(cargo publish --dry-run -p gigastt-core --locked --no-verify 2>&1)
-          rc=$?
-          set -e
-          echo "$out"
-          if [ "$rc" -ne 0 ]; then
-            if echo "$out" | grep -q 'no matching package named `gigastt-quantize`'; then
-              echo "note: gigastt-quantize not yet on crates.io — core dry-run skipped until first release"
-            else
-              exit "$rc"
+
+          unpublished_workspace_dep() {
+            grep -Eq 'no matching package named `gigastt-(quantize|core)`|failed to select a version for the requirement `gigastt-(quantize|core)`'
+          }
+
+          dry_run() {
+            local pkg="$1"
+            shift
+            set +e
+            local out rc
+            out=$(cargo publish --dry-run -p "$pkg" --locked "$@" 2>&1)
+            rc=$?
+            set -e
+            printf '%s\n' "$out"
+            if [ "$rc" -eq 0 ]; then
+              return 0
             fi
-          fi
-          cargo publish --dry-run -p gigastt --locked --no-verify
+            if printf '%s\n' "$out" | unpublished_workspace_dep; then
+              echo "note: $pkg dry-run skipped — workspace dependency not yet on crates.io at this version"
+              return 0
+            fi
+            exit "$rc"
+          }
+
+          cargo publish --dry-run -p gigastt-quantize --locked
+          dry_run gigastt-core --no-verify
+          dry_run gigastt --no-verify
 
   msrv:
     runs-on: ubuntu-latest
