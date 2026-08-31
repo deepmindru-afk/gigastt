@@ -90,6 +90,33 @@ fn test_transcript_assembler_commit_live_preserves_prefix_across_set_words() {
 }
 
 #[test]
+fn test_transcript_assembler_commit_prefix_partial_commit_keeps_tail_live() {
+    let mut asm = TranscriptAssembler::new();
+    asm.set_words(vec![
+        WordInfo::new("a", 0.0, 0.5, 0.9, None),
+        WordInfo::new("b", 0.5, 1.0, 0.9, None),
+        WordInfo::new("c", 1.0, 1.5, 0.9, None),
+    ]);
+    assert_eq!(asm.commit_prefix(2), 2);
+    // Committed prefix + still-live tail both surface in partials.
+    let p = asm.partial(1.0);
+    assert_eq!(p.text, "a b c");
+    assert_eq!(asm.live_word_count(), 1);
+    assert_eq!(asm.committed_coverage_end(), Some(1.0));
+    // A re-decode may still revise the live tail; the committed prefix ("a b")
+    // stays put.
+    asm.set_words(vec![WordInfo::new("cee", 1.0, 1.6, 0.9, None)]);
+    assert_eq!(asm.partial(1.1).text, "a b cee");
+    // Committing more than live is clamped; zero is a no-op.
+    assert_eq!(asm.commit_prefix(0), 0);
+    assert_eq!(asm.commit_prefix(42), 1);
+    let fin = asm.finalize(2.0);
+    assert_eq!(fin.text, "a b cee");
+    assert!(asm.is_empty());
+    assert_eq!(asm.committed_coverage_end(), None);
+}
+
+#[test]
 fn test_endpoint_mode_parse_token() {
     assert_eq!(EndpointMode::parse_token("auto"), Some(EndpointMode::Auto));
     assert_eq!(

@@ -235,6 +235,22 @@ impl Engine {
         self.stream_max_window_samples
     }
 
+    /// Enable stable-prefix commits at the streaming window cap: instead of
+    /// committing the whole live tail when the window slides, only the prefix
+    /// that two consecutive window hypotheses agree on becomes stable (minus a
+    /// 0.5 s commit horizon at the window edge); the rest of the tail stays
+    /// revisable by later decodes. Bounds long-phrase WER loss at slide
+    /// boundaries without widening the window. Off by default.
+    pub fn with_stream_stable_prefix(mut self, enabled: bool) -> Self {
+        self.stream_stable_prefix = enabled;
+        self
+    }
+
+    /// Whether stable-prefix commits are enabled.
+    pub fn has_stream_stable_prefix(&self) -> bool {
+        self.stream_stable_prefix
+    }
+
     /// Size of the BPE vocabulary the loaded tokenizer covers. Exposed so the
     /// REST `/v1/models` handler can report the real value instead of a
     /// hardcoded literal that would drift if the upstream model rev changes.

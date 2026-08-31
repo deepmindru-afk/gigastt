@@ -48,6 +48,17 @@ pub(crate) const STREAM_LEFT_CONTEXT_SAMPLES: usize = 16000 * 3 / 2;
 /// Re-decoding the window is the dominant streaming cost, so the stride keeps
 /// the engine real-time; `finish_stream` decodes the sub-stride remainder at EOF.
 pub(crate) const STREAM_DECODE_STRIDE_SAMPLES: usize = 16000 * 4 / 5;
+/// Commit horizon for stable-prefix slides (seconds): words decoded from the
+/// last stretch of the window are not committed even when consecutive
+/// hypotheses agree on them — near the buffer edge a word may still be
+/// mid-formation, decoded from incomplete audio (the edge truncates it, and
+/// two consecutive truncated decodes agree with each other). 1.0 s covers the
+/// observed edge-truncation window.
+pub(crate) const STREAM_COMMIT_HORIZON_SECS: f64 = 1.0;
+/// Consecutive cap hits with zero hypothesis agreement after which the whole
+/// live tail is committed anyway, so a pathological stream cannot grow the
+/// retained buffer (and its per-chunk encoder cost) without bound.
+pub(crate) const STREAM_CAP_STREAK_MAX: usize = 3;
 
 /// File-transcription chunking threshold (samples @16kHz, 30s). Inputs at or
 /// below this length take the single-pass path unchanged; longer inputs are

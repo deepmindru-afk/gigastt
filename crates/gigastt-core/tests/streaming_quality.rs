@@ -286,13 +286,16 @@ fn streaming_word_timestamps_not_inflated() {
 /// Sequence-aware stream-vs-file guard over several labelled fixtures
 /// (replaces set-overlap as the quality signal: order and duplicates count).
 ///
-/// Streams the first 10 Golos fixtures (100 ms chunks) twice — with the
-/// default 2.5 s window and with a raised 7.5 s window — and asserts against
-/// the manifest references:
+/// Streams the first 10 Golos fixtures (100 ms chunks) under three configs —
+/// 2.5 s window with stable-prefix off (legacy mode), raised 7.5 s window
+/// (legacy mode), and 2.5 s with stable-prefix commits (the default) — and
+/// asserts against the manifest references:
 ///
-/// - default window: corpus streaming WER stays under 15% absolute (a real
-///   regression like the historical single-token collapse lands far above
-///   that), and
+/// - legacy default window: corpus streaming WER stays under 15% absolute (a
+///   real regression like the historical single-token collapse lands far above
+///   that),
+/// - stable-prefix at the default window: must not cost accuracy — corpus WER
+///   no worse than the plain 2.5 s pass + 2 pp, and
 /// - raised window: corpus streaming WER stays within +5 pp of corpus batch
 ///   WER — the configurable window must close the long-phrase stream-vs-file
 ///   gap (`--stream-max-window-secs`).
@@ -313,13 +316,22 @@ fn streaming_wer_tracks_file_on_labelled_fixtures() {
         serde_json::from_str(&std::fs::read_to_string(manifest_path).expect("read manifest"))
             .expect("parse manifest");
 
-    let engine = Engine::load(&model_dir).expect("load engine");
+    // Stable-prefix is the engine default; the baseline and wide runs pin the
+    // legacy mode off so the gate keeps measuring both behaviours.
+    let engine = Engine::load(&model_dir)
+        .expect("load engine")
+        .with_stream_stable_prefix(false);
     let wide_engine = Engine::load(&model_dir)
         .expect("load engine")
-        .with_stream_max_window_secs(7.5);
+        .with_stream_max_window_secs(7.5)
+        .with_stream_stable_prefix(false);
+    let stable_engine = Engine::load(&model_dir)
+        .expect("load engine")
+        .with_stream_stable_prefix(true);
     let mut batch_pairs: Vec<(Vec<String>, Vec<String>)> = Vec::new();
     let mut stream_pairs: Vec<(Vec<String>, Vec<String>)> = Vec::new();
     let mut wide_pairs: Vec<(Vec<String>, Vec<String>)> = Vec::new();
+    let mut stable_pairs: Vec<(Vec<String>, Vec<String>)> = Vec::new();
 
     for entry in manifest.iter().take(10) {
         let filename = entry["filename"].as_str().expect("manifest filename");
@@ -336,31 +348,39 @@ fn streaming_wer_tracks_file_on_labelled_fixtures() {
             .text;
         let streaming_text = stream_clip(&engine, &fixture);
         let wide_text = stream_clip(&wide_engine, &fixture);
+        let stable_text = stream_clip(&stable_engine, &fixture);
 
         let reference = word_seq(reference);
         let batch_edits = word_edit_distance(&reference, &word_seq(&batch_text));
         let stream_edits = word_edit_distance(&reference, &word_seq(&streaming_text));
         let wide_edits = word_edit_distance(&reference, &word_seq(&wide_text));
+        let stable_edits = word_edit_distance(&reference, &word_seq(&stable_text));
         eprintln!(
-            "{filename}: ref={} words, batch edits={batch_edits}, stream(2.5s) edits={stream_edits}, stream(7.5s) edits={wide_edits}\n  \
-             batch:          {batch_text:?}\n  streaming 2.5s: {streaming_text:?}\n  streaming 7.5s: {wide_text:?}",
+            "{filename}: ref={} words, batch={batch_edits}, 2.5s={stream_edits}, 7.5s={wide_edits}, 2.5s+stable={stable_edits}\n  \
+             batch:           {batch_text:?}\n  streaming 2.5s:  {streaming_text:?}\n  streaming 7.5s:  {wide_text:?}\n  stream 2.5s+sp:  {stable_text:?}",
             reference.len()
         );
         batch_pairs.push((reference.clone(), word_seq(&batch_text)));
         stream_pairs.push((reference.clone(), word_seq(&streaming_text)));
-        wide_pairs.push((reference, word_seq(&wide_text)));
+        wide_pairs.push((reference.clone(), word_seq(&wide_text)));
+        stable_pairs.push((reference, word_seq(&stable_text)));
     }
 
     let batch_wer = corpus_wer(&batch_pairs);
     let stream_wer = corpus_wer(&stream_pairs);
     let wide_wer = corpus_wer(&wide_pairs);
+    let stable_wer = corpus_wer(&stable_pairs);
     eprintln!(
-        "corpus WER: batch={batch_wer:.4} streaming(2.5s)={stream_wer:.4} streaming(7.5s)={wide_wer:.4}"
+        "corpus WER: batch={batch_wer:.4} 2.5s={stream_wer:.4} 7.5s={wide_wer:.4} 2.5s+stable={stable_wer:.4}"
     );
 
     assert!(
         stream_wer < 0.15,
         "streaming corpus WER {stream_wer:.4} regressed past 15% at the default window"
+    );
+    assert!(
+        stable_wer <= stream_wer + 0.02,
+        "stable-prefix WER {stable_wer:.4} worse than plain {stream_wer:.4} at the default window"
     );
     assert!(
         wide_wer <= batch_wer + 0.05,

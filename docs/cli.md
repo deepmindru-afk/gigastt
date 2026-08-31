@@ -79,6 +79,12 @@ gigastt serve [OPTIONS]
                             (e.g. 7.5) improve WER on phrases longer than the
                             window, at a linear per-stride encoder-cost increase.
                             Env: GIGASTT_STREAM_MAX_WINDOW_SECS.
+  --stream-stable-prefix    Commit only hypothesis-stable prefixes at the window
+                            cap (two consecutive decodes must agree, edge words
+                            wait): fewer lost/replaced words at slide boundaries
+                            without widening the window [default: true].
+                            Opt out with --stream-stable-prefix=false.
+                            Env: GIGASTT_STREAM_STABLE_PREFIX.
   --profile <P>             Deploy profile: default | edge [default: default].
                             edge applies --pool-size 1 and --vad when those
                             flags are left at defaults. Env: GIGASTT_PROFILE.

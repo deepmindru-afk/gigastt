@@ -27,6 +27,15 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 - **Streaming decode tracing**: per-pass `debug!` events report decoded /
   suppressed / replaced / live word counts, and the window-cap commit logs
   how many words entered the stable prefix.
+- **Stable-prefix commits** (`--stream-stable-prefix`, env
+  `GIGASTT_STREAM_STABLE_PREFIX`, default on — opt out with
+  `--stream-stable-prefix=false`): at the
+  window cap, only the prefix two consecutive window hypotheses agree on
+  enters the stable prefix (edge words inside a 1.0 s horizon wait; a
+  3-strike streak bounds pathological buffers); the slide anchors on the
+  committed coverage end and never starts the window mid-word. On 10 labelled
+  Golos fixtures (INT8 `rnnt`): corpus stream WER 10.6% → 2.1% at the
+  default 2.5 s window (batch 0.0, 7.5 s window 2.1).
 
 ### Changed
 

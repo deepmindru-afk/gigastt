@@ -562,7 +562,10 @@ fn test_process_chunk_blank_endpoint_ignored_with_vad() {
 /// Mock engine whose encoder input shape matches a full 2.5 s window
 /// (STREAM_MAX_WINDOW_SAMPLES → 249 mel frames), so we can hit `over_cap`
 /// in a single `process_chunk` without multi-stride buffering.
-fn blank_run_engine_window_cap() -> (Engine, tempfile::TempDir) {
+/// `checked_encoder = false` skips the encoder's input-shape check, for tests
+/// whose window legitimately grows past the cap (stable-prefix no-commit
+/// waits).
+fn blank_run_engine_window_cap_mode(checked_encoder: bool) -> (Engine, tempfile::TempDir) {
     let tmp = tempfile::tempdir().expect("tempdir");
     let dir = tmp.path();
     std::fs::write(dir.join("v3_rnnt_encoder_int8.onnx"), b"").unwrap();
@@ -574,21 +577,27 @@ fn blank_run_engine_window_cap() -> (Engine, tempfile::TempDir) {
     const MEL_FRAMES: usize = 249;
     const ENC_LEN: usize = 16;
 
-    let mut sessions: HashMap<String, Arc<MockSession>> = HashMap::new();
-    sessions.insert(
-        "v3_rnnt_encoder_int8".into(),
-        Arc::new(MockSession::new(
+    let encoder_outputs = || {
+        vec![
+            Tensor::new(
+                Shape::new(vec![1, ENC_DIM, ENC_LEN]),
+                TensorData::F32(vec![0.0; ENC_DIM * ENC_LEN]),
+            )
+            .unwrap(),
+            Tensor::new(Shape::new(vec![1]), TensorData::I64(vec![ENC_LEN as i64])).unwrap(),
+        ]
+    };
+    let encoder = if checked_encoder {
+        MockSession::new(
             vec![Shape::new(vec![1, 64, MEL_FRAMES]), Shape::new(vec![1])],
-            vec![
-                Tensor::new(
-                    Shape::new(vec![1, ENC_DIM, ENC_LEN]),
-                    TensorData::F32(vec![0.0; ENC_DIM * ENC_LEN]),
-                )
-                .unwrap(),
-                Tensor::new(Shape::new(vec![1]), TensorData::I64(vec![ENC_LEN as i64])).unwrap(),
-            ],
-        )),
-    );
+            encoder_outputs(),
+        )
+    } else {
+        MockSession::unconstrained(encoder_outputs())
+    };
+
+    let mut sessions: HashMap<String, Arc<MockSession>> = HashMap::new();
+    sessions.insert("v3_rnnt_encoder_int8".into(), Arc::new(encoder));
     sessions.insert(
         "v3_rnnt_decoder".into(),
         Arc::new(MockSession::new(
@@ -644,6 +653,12 @@ fn blank_run_engine_window_cap() -> (Engine, tempfile::TempDir) {
     let engine = Engine::load_with_factory(dir, None, 1, 1, 0, factory, 1)
         .expect("engine should load with mock runtime");
     (engine, tmp)
+}
+
+/// Shape-checked variant (legacy behavior): the encoder accepts exactly the
+/// 249-frame 2.5 s window.
+fn blank_run_engine_window_cap() -> (Engine, tempfile::TempDir) {
+    blank_run_engine_window_cap_mode(true)
 }
 
 #[test]
@@ -751,4 +766,144 @@ fn test_flush_state_marks_stop_endpoint_reason() {
     assert!(seg.speech_final);
     assert_eq!(seg.endpoint_reason, Some(EndpointReason::Stop));
     assert_eq!(seg.text, "bye");
+}
+
+// ---------------------------------------------------------------------------
+// Stable-prefix commit / anchored slide geometry (pure, no sessions needed)
+// ---------------------------------------------------------------------------
+
+fn bare_state(
+    words: Vec<WordInfo>,
+    window_start: usize,
+    buf_len: usize,
+    ctx: usize,
+) -> crate::inference::StreamingState {
+    crate::inference::StreamingState {
+        decoder: crate::inference::DecoderState::new(1),
+        audio_buffer: vec![0.0; buf_len],
+        assembler: {
+            let mut a = crate::inference::TranscriptAssembler::new();
+            a.set_words(words);
+            a
+        },
+        window_start_samples: window_start,
+        context_samples: ctx,
+        pending_samples: 0,
+        resampler: None,
+        mel_fft_input: Vec::new(),
+        mel_power: Vec::new(),
+        mel_output: Vec::new(),
+        resample_output_buf: Vec::new(),
+        vad_endpointer: None,
+        punctuation: None,
+        itn: None,
+        endpoint_mode: EndpointMode::Auto,
+        agreed_prefix: 0,
+        cap_streak: 0,
+        #[cfg(feature = "diarization")]
+        diarization_state: None,
+    }
+}
+
+fn w(word: &str, start: f64, end: f64) -> WordInfo {
+    WordInfo::new(word, start, end, 0.9, None)
+}
+
+#[test]
+fn test_cap_commit_stable_prefix_commits_agreed_prefix_within_horizon() {
+    // 3 live words, hypotheses agree on the first 2; edge at 2.5 s, horizon
+    // 1.0 s → words ending by 1.5 s are committable.
+    let mut st = bare_state(
+        vec![w("a", 0.0, 0.5), w("b", 0.5, 1.0), w("c", 1.4, 1.7)],
+        0,
+        16000 * 5 / 2,
+        0,
+    );
+    st.agreed_prefix = 2;
+    let n = Engine::cap_commit_stable_prefix(&mut st);
+    assert_eq!(n, 2);
+    assert_eq!(st.assembler.committed_coverage_end(), Some(1.0));
+    assert_eq!(st.assembler.live_word_count(), 1);
+    assert_eq!(st.cap_streak, 0);
+}
+
+#[test]
+fn test_cap_commit_stable_prefix_horizon_blocks_edge_word() {
+    // Full agreement, but the last word ends at 2.0 s — inside the 1.0 s
+    // horizon of the 2.5 s edge — so only the first word commits.
+    let mut st = bare_state(
+        vec![w("a", 0.0, 0.5), w("b", 1.6, 2.0)],
+        0,
+        16000 * 5 / 2,
+        0,
+    );
+    st.agreed_prefix = 2;
+    let n = Engine::cap_commit_stable_prefix(&mut st);
+    assert_eq!(n, 1, "edge word inside the commit horizon must wait");
+    assert_eq!(st.assembler.live_word_count(), 1);
+}
+
+#[test]
+fn test_cap_commit_stable_prefix_streak_forces_prehorizon_commit() {
+    // No agreement three times in a row: the third hit force-commits the
+    // pre-horizon prefix to bound the buffer (horizon still respected).
+    let mut st = bare_state(
+        vec![w("a", 0.0, 0.5), w("b", 1.6, 2.0)],
+        0,
+        16000 * 5 / 2,
+        0,
+    );
+    st.agreed_prefix = 0;
+    assert_eq!(Engine::cap_commit_stable_prefix(&mut st), 0);
+    assert_eq!(st.cap_streak, 1);
+    assert_eq!(Engine::cap_commit_stable_prefix(&mut st), 0);
+    assert_eq!(st.cap_streak, 2);
+    assert_eq!(
+        Engine::cap_commit_stable_prefix(&mut st),
+        1,
+        "third disagreement commits the pre-horizon prefix"
+    );
+    assert_eq!(st.cap_streak, 0);
+    assert_eq!(st.assembler.committed_coverage_end(), Some(0.5));
+}
+
+#[test]
+fn test_slide_anchored_keeps_left_context_and_boundary() {
+    // Committed coverage ends at 2.0 s in a 4 s window starting at 0:
+    // retained start = 0.5 s, suppression boundary at 2.0 s (1.5 s context).
+    let mut st = bare_state(vec![], 0, 16000 * 4, 0);
+    st.assembler
+        .set_words(vec![w("a", 1.0, 1.5), w("b", 1.5, 2.0)]);
+    st.assembler.commit_prefix(2);
+    Engine::slide_streaming_window_anchored(&mut st, None);
+    assert_eq!(st.window_start_samples, 8000);
+    assert_eq!(st.audio_buffer.len(), 16000 * 4 - 8000);
+    assert_eq!(st.context_samples, 24000);
+}
+
+#[test]
+fn test_slide_anchored_snaps_to_first_live_word() {
+    // Committed coverage ends at 4.0 s, but the first still-live word is a
+    // long straddler starting at 2.0 s (before the 4.0 − 1.5 s = 2.5 s
+    // anchor): the window must start at the word start, not mid-word.
+    let mut st = bare_state(vec![w("c", 2.0, 4.2)], 16000, 16000 * 3, 16000);
+    st.assembler.set_words(vec![]);
+    st.assembler
+        .set_words(vec![w("a", 3.0, 3.5), w("b", 3.5, 4.0), w("c", 2.0, 4.2)]);
+    st.assembler.commit_prefix(2);
+    st.assembler.set_words(vec![w("c", 2.0, 4.2)]);
+    Engine::slide_streaming_window_anchored(&mut st, Some(2.0));
+    // boundary = 4.0 s → 64000; anchor would be 64000 − 24000 = 40000, but
+    // the straddler starts at 2.0 s (32000) → snap to 32000.
+    assert_eq!(st.window_start_samples, 32000);
+    assert_eq!(st.context_samples, 64000 - 32000);
+}
+
+#[test]
+fn test_slide_anchored_no_anchor_is_noop() {
+    let mut st = bare_state(vec![w("a", 0.0, 0.5)], 0, 16000 * 3, 0);
+    Engine::slide_streaming_window_anchored(&mut st, None);
+    assert_eq!(st.window_start_samples, 0);
+    assert_eq!(st.audio_buffer.len(), 16000 * 3);
+    assert_eq!(st.context_samples, 0);
 }

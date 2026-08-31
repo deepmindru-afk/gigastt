@@ -170,6 +170,14 @@ pub(crate) struct ServeArgs {
     #[arg(long, env = "GIGASTT_STREAM_MAX_WINDOW_SECS", default_value_t = 2.5)]
     pub(crate) stream_max_window_secs: f64,
 
+    /// Stable-prefix commits at the streaming window cap: only the prefix two
+    /// consecutive window hypotheses agree on becomes stable; the rest stays
+    /// revisable. Reduces long-phrase streaming WER loss at slide boundaries
+    /// without widening the window. Default on; opt out with
+    /// `--stream-stable-prefix=false`. Env: GIGASTT_STREAM_STABLE_PREFIX.
+    #[arg(long, env = "GIGASTT_STREAM_STABLE_PREFIX", default_value_t = true)]
+    pub(crate) stream_stable_prefix: bool,
+
     /// Number of concurrent inference sessions. The INT8 encoder is
     /// memory-mapped and shared; budget **resident** footprint (~46 MB at
     /// `--pool-size 1`, ~66 MB at the default 2; ~20 MB per extra slot).
@@ -424,6 +432,7 @@ pub(crate) async fn run_serve(
         skip_quantize: true,
         endpoint_mode: Some(args.endpoint_mode),
         stream_max_window_secs: Some(args.stream_max_window_secs),
+        stream_stable_prefix: args.stream_stable_prefix,
     };
     let build_engine: server::EngineBuilder = {
         let recipe = recipe.clone();
