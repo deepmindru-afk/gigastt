@@ -48,7 +48,7 @@ fn test_telephony_codec_validate_sample_rate() {
 fn test_decode_telephony_raw_pcmu_roundtrip() {
     let source = test_tone_8k(8000);
     let mut encoder = audio_codec::pcmu::PcmuEncoder::new();
-    let encoded = audio_codec::Encoder::encode(&mut encoder, &source);
+    let encoded = encode_telephony(&mut encoder, &source);
     assert_eq!(encoded.len(), source.len(), "G.711 is one byte per sample");
     let decoded = decode_telephony_raw(&encoded, TelephonyCodec::Pcmu, 8000).unwrap();
     // Resampled 8k → 16k: roughly double, minus the FIR delay slack.
@@ -87,7 +87,7 @@ fn test_decode_telephony_raw_pcmu_roundtrip() {
 fn test_decode_telephony_raw_pcma_roundtrip() {
     let source = test_tone_8k(8000);
     let mut encoder = audio_codec::pcma::PcmaEncoder::new();
-    let encoded = audio_codec::Encoder::encode(&mut encoder, &source);
+    let encoded = encode_telephony(&mut encoder, &source);
     let decoded = decode_telephony_raw(&encoded, TelephonyCodec::Pcma, 8000).unwrap();
     assert!(decoded.len() > 12_000 && decoded.len() <= 16_000);
     assert!(decoded.iter().all(|s| s.is_finite()));
@@ -100,7 +100,7 @@ fn test_decode_telephony_raw_g722_roundtrip() {
         .map(|i| ((i as f32 * 0.03).sin() * 10000.0) as i16)
         .collect();
     let mut encoder = audio_codec::g722::G722Encoder::new();
-    let encoded = audio_codec::Encoder::encode(&mut encoder, &source);
+    let encoded = encode_telephony(&mut encoder, &source);
     assert_eq!(encoded.len(), source.len() / 2, "64 kbit/s over 16 kHz");
     let decoded = decode_telephony_raw(&encoded, TelephonyCodec::G722, 8000).unwrap();
     assert_eq!(decoded.len(), source.len(), "G.722 stays at native 16 kHz");
@@ -131,7 +131,7 @@ fn test_decode_audio_bytes_g711_alaw_wav() {
     // this pins the de-facto support so it cannot silently regress.
     let source = test_tone_8k(8000);
     let mut encoder = audio_codec::pcma::PcmaEncoder::new();
-    let encoded = audio_codec::Encoder::encode(&mut encoder, &source);
+    let encoded = encode_telephony(&mut encoder, &source);
     let wav = make_compressed_wav(0x0006, 8000, 8000, &encoded);
     let decoded = decode_audio_bytes(&wav).unwrap();
     assert!(
@@ -148,7 +148,7 @@ fn test_decode_audio_bytes_g711_mulaw_wav() {
     // G.711 μ-law in WAV (tag 0x0007), same symphonia PCM path.
     let source = test_tone_8k(8000);
     let mut encoder = audio_codec::pcmu::PcmuEncoder::new();
-    let encoded = audio_codec::Encoder::encode(&mut encoder, &source);
+    let encoded = encode_telephony(&mut encoder, &source);
     let wav = make_compressed_wav(0x0007, 8000, 8000, &encoded);
     let decoded = decode_audio_bytes(&wav).unwrap();
     assert!(
@@ -167,7 +167,7 @@ fn test_decode_audio_bytes_g722_wav_fallback() {
         .map(|i| ((i as f32 * 0.03).sin() * 10000.0) as i16)
         .collect();
     let mut encoder = audio_codec::g722::G722Encoder::new();
-    let encoded = audio_codec::Encoder::encode(&mut encoder, &source);
+    let encoded = encode_telephony(&mut encoder, &source);
     for tag in [0x0064u16, 0x028F] {
         let wav = make_compressed_wav(tag, 16000, 8000, &encoded);
         let decoded = decode_audio_bytes(&wav).unwrap_or_else(|e| {
@@ -198,7 +198,7 @@ fn test_try_decode_g722_wav_malformed_inputs() {
     );
     // Truncated data payload must decode the bytes present, not panic.
     let mut enc = audio_codec::g722::G722Encoder::new();
-    let encoded = audio_codec::Encoder::encode(&mut enc, &[0i16; 320]);
+    let encoded = encode_telephony(&mut enc, &[0i16; 320]);
     let mut wav = make_compressed_wav(0x0064, 16000, 8000, &encoded);
     wav.truncate(wav.len() - 3);
     let result = try_decode_g722_wav(&wav, None);
