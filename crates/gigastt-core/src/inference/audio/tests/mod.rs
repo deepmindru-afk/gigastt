@@ -3,6 +3,31 @@
 
 pub(super) use super::*;
 
+use audio_codec::{Decoder, Encoder};
+
+/// `audio-codec` 0.4 keeps allocating `encode`/`decode` behind the `std`
+/// feature. Tests drive the heap-free `*_into` API with a sized scratch
+/// buffer so we can keep `default-features = false` (no bundled Opus).
+fn encode_telephony<E: Encoder>(encoder: &mut E, samples: &[i16]) -> Vec<u8> {
+    let n = encoder.max_encode_bytes(samples.len());
+    let mut out = vec![0u8; n];
+    let written = encoder
+        .encode_into(samples, &mut out)
+        .unwrap_or_else(|e| panic!("test encode failed: {e}"));
+    out.truncate(written);
+    out
+}
+
+fn decode_telephony_pcm<D: Decoder>(decoder: &mut D, data: &[u8]) -> Vec<i16> {
+    let n = decoder.max_decode_samples(data.len());
+    let mut pcm = vec![0i16; n];
+    let written = decoder
+        .decode_into(data, &mut pcm)
+        .unwrap_or_else(|e| panic!("test decode failed: {e}"));
+    pcm.truncate(written);
+    pcm
+}
+
 pub(super) fn make_wav_bytes(samples: &[i16], sample_rate: u32) -> Vec<u8> {
     let data_size = (samples.len() * 2) as u32;
     let file_size = 36 + data_size;
