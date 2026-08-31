@@ -4,6 +4,8 @@
 use anyhow::Context;
 #[cfg(feature = "file-decode")]
 use anyhow::Result;
+#[cfg(feature = "file-decode")]
+use audio_codec::Decoder;
 
 #[cfg(feature = "file-decode")]
 use super::resample::{RESAMPLE_STAGING_FRAMES, ResampleTo16k, SampleRate};
@@ -136,13 +138,30 @@ pub(crate) fn try_decode_g722_wav(
         return Some(Err(audio_too_long_err(num_samples, 16000, limit_secs)));
     }
     let mut decoder = audio_codec::g722::G722Decoder::new();
-    let pcm = audio_codec::Decoder::decode(&mut decoder, payload);
+    let pcm = match decode_pcm(&mut decoder, payload) {
+        Ok(p) => p,
+        Err(e) => return Some(Err(e)),
+    };
     tracing::info!(
         "Decoded G.722 WAV: {} samples at 16000Hz ({:.1}s)",
         pcm.len(),
         pcm.len() as f64 / 16000.0
     );
     Some(Ok(pcm.iter().map(|&s| f32::from(s) / 32768.0).collect()))
+}
+
+/// `audio-codec` 0.4 keeps the allocating `Decoder::decode` helper behind the
+/// `std` feature. We ship `default-features = false` (drops the bundled Opus),
+/// so production decode uses the always-on `decode_into` API.
+#[cfg(feature = "file-decode")]
+fn decode_pcm<D: Decoder>(decoder: &mut D, data: &[u8]) -> Result<Vec<i16>> {
+    let n = decoder.max_decode_samples(data.len());
+    let mut pcm = vec![0i16; n];
+    let written = decoder
+        .decode_into(data, &mut pcm)
+        .map_err(|e| anyhow::anyhow!("telephony decode failed: {e}"))?;
+    pcm.truncate(written);
+    Ok(pcm)
 }
 
 /// Headerless telephony codecs accepted for raw uploads (`?codec=` on REST,
@@ -211,21 +230,15 @@ pub fn decode_telephony_raw(
     let (pcm, rate) = match codec {
         TelephonyCodec::Pcmu => {
             let mut decoder = audio_codec::pcmu::PcmuDecoder::new();
-            (
-                audio_codec::Decoder::decode(&mut decoder, data),
-                sample_rate,
-            )
+            (decode_pcm(&mut decoder, data)?, sample_rate)
         }
         TelephonyCodec::Pcma => {
             let mut decoder = audio_codec::pcma::PcmaDecoder::new();
-            (
-                audio_codec::Decoder::decode(&mut decoder, data),
-                sample_rate,
-            )
+            (decode_pcm(&mut decoder, data)?, sample_rate)
         }
         TelephonyCodec::G722 => {
             let mut decoder = audio_codec::g722::G722Decoder::new();
-            (audio_codec::Decoder::decode(&mut decoder, data), 16000)
+            (decode_pcm(&mut decoder, data)?, 16000)
         }
     };
     let (max_samples, limit_secs) = resolve_budget(Some(WHOLE_BUFFER_MAX_AUDIO_SECS), rate);

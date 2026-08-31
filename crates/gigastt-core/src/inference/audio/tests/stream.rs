@@ -317,9 +317,9 @@ fn test_telephony_raw_streaming_matches_whole_buffer_resample() {
         pcm.len()
     );
     let mut encoder = audio_codec::pcmu::PcmuEncoder::new();
-    let encoded = audio_codec::Encoder::encode(&mut encoder, &pcm);
+    let encoded = encode_telephony(&mut encoder, &pcm);
     let mut decoder = audio_codec::pcmu::PcmuDecoder::new();
-    let round_tripped = audio_codec::Decoder::decode(&mut decoder, &encoded);
+    let round_tripped = decode_telephony_pcm(&mut decoder, &encoded);
     let at_source: Vec<f32> = round_tripped
         .iter()
         .map(|&s| f32::from(s) / 32768.0)
