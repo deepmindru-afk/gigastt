@@ -734,7 +734,11 @@ jobs:
           set -euo pipefail
 
           unpublished_workspace_dep() {
-            grep -Eq 'no matching package named `gigastt-(quantize|core)`|failed to select a version for the requirement `gigastt-(quantize|core)`'
+            # Cargo prints `gigastt-quantize = "^2.19.0"` (name, space, version)
+            # not a closing backtick right after the crate name — do not require
+            # one. Strip ANSI so CARGO_TERM_COLOR=always cannot hide the match.
+            sed $'s/\x1b\\[[0-9;]*[mK]//g' | grep -Eq \
+              'no matching package named `gigastt-(quantize|core)`|failed to select a version for the requirement `gigastt-(quantize|core)'
           }
 
           dry_run() {
