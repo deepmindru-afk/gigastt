@@ -148,6 +148,14 @@ pub struct StreamingState {
     pub itn: Option<bool>,
     /// Per-session utterance-end policy (from engine boot or WS `configure`).
     pub endpoint_mode: EndpointMode,
+    /// Length of the longest text-equal prefix shared by the previous live tail
+    /// and the latest window hypothesis — how much of the tail is stable enough
+    /// to commit at the window cap. Updated by `decode_window` on every pass.
+    pub agreed_prefix: usize,
+    /// Consecutive window-cap hits with zero hypothesis agreement. A bounded
+    /// streak forces a full-tail commit so a pathological stream cannot grow
+    /// the retained buffer without bound.
+    pub cap_streak: usize,
     /// Diarization state (present only when diarization is enabled).
     #[cfg(feature = "diarization")]
     pub diarization_state: Option<StreamingDiarizationState>,
@@ -327,6 +335,49 @@ impl TranscriptAssembler {
         self.committed_text.push_str(&self.text);
         self.committed_words.append(&mut self.words);
         self.text.clear();
+    }
+
+    /// The live (uncommitted) tail words, most recent window hypothesis.
+    pub(crate) fn live_words(&self) -> &[WordInfo] {
+        &self.words
+    }
+
+    /// Absolute end time (seconds) of the last committed word — the coverage
+    /// boundary of the stable prefix. `None` when nothing is committed.
+    pub(crate) fn committed_coverage_end(&self) -> Option<f64> {
+        self.committed_words.last().map(|w| w.end)
+    }
+
+    /// The last committed word (stable-prefix boundary), if any.
+    pub(crate) fn committed_last(&self) -> Option<&WordInfo> {
+        self.committed_words.last()
+    }
+
+    /// Move only the first `n` live words into the committed prefix
+    /// (stable-prefix commit): words two consecutive window decodes agreed on.
+    /// The rest of the tail stays live and revisable by the next decode.
+    /// Returns how many words were committed.
+    pub fn commit_prefix(&mut self, n: usize) -> usize {
+        let n = n.min(self.words.len());
+        if n == 0 {
+            return 0;
+        }
+        let rest = self.words.split_off(n);
+        for w in &self.words {
+            if !self.committed_text.is_empty() {
+                self.committed_text.push(' ');
+            }
+            self.committed_text.push_str(&w.word);
+        }
+        self.committed_words.append(&mut self.words);
+        self.words = rest;
+        self.text = self
+            .words
+            .iter()
+            .map(|w| w.word.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
+        n
     }
 
     /// Full utterance text (committed prefix + live tail).

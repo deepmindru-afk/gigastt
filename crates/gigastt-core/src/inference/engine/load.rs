@@ -155,6 +155,11 @@ impl Engine {
             vad_config: crate::vad::VadConfig::default(),
             endpoint_mode: EndpointMode::Auto,
             stream_max_window_samples: STREAM_MAX_WINDOW_SAMPLES,
+            // Default on: stable-prefix commits cut long-phrase streaming WER
+            // loss at slide boundaries (10.6% → 2.1% corpus WER on 10 labelled
+            // Golos fixtures at the default 2.5 s window) with no measurable
+            // TTFP or encoder-cost change.
+            stream_stable_prefix: true,
             int8,
             ane_encoder,
             #[cfg(feature = "diarization")]

@@ -119,6 +119,9 @@ pub struct EngineRecipe {
     /// default (2.5 s); serve always sets this. Offline paths ignore it (they
     /// use file transcription, not the streaming window).
     pub stream_max_window_secs: Option<f64>,
+    /// Stable-prefix commits at the window cap (serve flag; engine default is
+    /// on, offline recipes leave it off — they never slide a streaming window).
+    pub stream_stable_prefix: bool,
 }
 
 impl EngineRecipe {
@@ -162,6 +165,7 @@ impl EngineRecipe {
             skip_quantize: true,
             endpoint_mode: None,
             stream_max_window_secs: None,
+            stream_stable_prefix: false,
         }
     }
 
@@ -235,6 +239,7 @@ impl EngineRecipe {
         if let Some(secs) = self.stream_max_window_secs {
             engine = engine.with_stream_max_window_secs(secs);
         }
+        engine = engine.with_stream_stable_prefix(self.stream_stable_prefix);
         if let Some(pairs) = hotwords {
             engine = engine.with_hotwords(
                 &pairs,

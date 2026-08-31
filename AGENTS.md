@@ -432,6 +432,7 @@ reference: [`docs/cli.md`](docs/cli.md) (enforced by `scripts/check-docs-drift.p
 | `GIGASTT_MAX_AUDIO_SECS` | `--max-audio-secs` | 0 (unlimited) |
 | `GIGASTT_ENDPOINT_MODE` | `--endpoint-mode` | auto |
 | `GIGASTT_STREAM_MAX_WINDOW_SECS` | `--stream-max-window-secs` | 2.5 |
+| `GIGASTT_STREAM_STABLE_PREFIX` | `--stream-stable-prefix` | true |
 | `GIGASTT_PROFILE` | `--profile` (`default` / `edge`) | default |
 | `GIGASTT_DOWNLOAD_PROGRESS` | `download --progress` | human |
 | `GIGASTT_METRICS` | `--metrics` | false |

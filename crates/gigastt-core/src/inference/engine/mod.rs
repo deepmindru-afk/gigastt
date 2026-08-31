@@ -32,8 +32,8 @@ use super::types::{
     TranscribeRequest, TranscribeResult, TranscribeSource, merge_channel_results,
 };
 use super::windows::{
-    STREAM_DECODE_STRIDE_SAMPLES, STREAM_LEFT_CONTEXT_SAMPLES, STREAM_MAX_WINDOW_SAMPLES,
-    window_spec,
+    STREAM_CAP_STREAK_MAX, STREAM_COMMIT_HORIZON_SECS, STREAM_DECODE_STRIDE_SAMPLES,
+    STREAM_LEFT_CONTEXT_SAMPLES, STREAM_MAX_WINDOW_SAMPLES, window_spec,
 };
 use super::{ENCODER_SUBSAMPLING, HOP_LENGTH, N_FFT, N_MELS, SECONDS_PER_FRAME, now_timestamp};
 
@@ -162,6 +162,11 @@ pub struct Engine {
     stream_max_window_samples: usize,
     /// Whether the INT8 quantized encoder is in use.
     int8: bool,
+    /// Stable-prefix commit at the streaming window cap: when true, only the
+    /// prefix two consecutive window hypotheses agree on (minus a commit
+    /// horizon at the window edge) enters the stable prefix; the rest stays
+    /// revisable. When false (default), the cap commits the whole live tail.
+    stream_stable_prefix: bool,
     /// True when pooled encoder sessions run on the ANE fixed-shape pad-up path.
     /// Selects the 30s long-form chunk window (vs 24s for ort). Derived from
     /// the loaded encoder session at boot, not from compile-time features alone,

@@ -271,7 +271,10 @@ Streaming is **buffered/chunked over an offline RNN-T**, not a native streaming 
 Encoder geometry (do not change without a new protocol version): stride **0.8 s**,
 max window **2.5 s** by default (configurable via `--stream-max-window-secs`,
 clamped to 2.4–30; longer windows improve long-phrase WER at a linear per-stride
-encoder-cost increase), left context **1.5 s**. The first decode cannot run before
+encoder-cost increase), left context **1.5 s**. Slide commits are
+hypothesis-stable by default (`--stream-stable-prefix`, opt out with
+`--stream-stable-prefix=false`; see cli.md). The first decode
+cannot run before
 ~0.8 s of new audio, so end-to-end TTFP cannot honestly be “sub-200 ms” on this path.
 
 **Client (canonical, `STREAM_PROTOCOL_VERSION = 1.0`):**
