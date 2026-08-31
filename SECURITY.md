@@ -4,9 +4,9 @@
 
 | Version | Supported |
 |---------|-----------|
-| 2.18.x  | Yes (current)  |
-| 2.17.x  | Yes (previous) |
-| < 2.17  | No             |
+| 2.19.x  | Yes (current)  |
+| 2.18.x  | Yes (previous) |
+| < 2.18  | No             |
 
 ## Reporting a Vulnerability
 
