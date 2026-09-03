@@ -1,5 +1,7 @@
 //! Header-only duration probe — no audio packet is decoded.
 
+use std::io::{Seek as _, SeekFrom};
+
 use anyhow::{Context, Result};
 use bytes::Bytes;
 use symphonia::core::formats::probe::Hint;
@@ -8,13 +10,14 @@ use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 
 use super::super::MAX_SAMPLE_RATE;
+use super::super::wave;
 use super::BytesMediaSource;
 
 /// Read an audio container's declared duration (seconds) from its header
 /// WITHOUT decoding a single audio packet.
 ///
-/// Runs only symphonia's format probe and reads the default audio track's
-/// declared frame count and sample rate — an O(header) read, not the O(T)
+/// WAVE files go through ryf's header probe; other containers use
+/// symphonia's format probe. Both are an O(header) read, not the O(T)
 /// decode `decode_audio_bytes_shared` performs. Returns:
 /// - `Ok(Some(secs))` when the container declares a positive frame count and a
 ///   plausible sample rate (WAV, FLAC, M4A, and OGG usually do);
@@ -32,6 +35,9 @@ use super::BytesMediaSource;
 /// { true }
 /// ```
 pub fn probe_duration_bytes(data: Bytes) -> Result<Option<f64>> {
+    if ryf::sniff_wav(data.as_ref()) {
+        return wave::probe_duration(data.as_ref());
+    }
     let source = BytesMediaSource::new(data);
     let mss = MediaSourceStream::new(Box::new(source), Default::default());
     probe_duration_inner(mss, Hint::new())
@@ -41,8 +47,18 @@ pub fn probe_duration_bytes(data: Bytes) -> Result<Option<f64>> {
 /// its header without decoding. Seeds the probe hint from the extension exactly
 /// as [`decode_audio_file`](super::decode_audio_file) does.
 pub fn probe_duration_file(path: &str) -> Result<Option<f64>> {
-    let file =
+    let mut file =
         std::fs::File::open(path).with_context(|| format!("Failed to open audio file: {path}"))?;
+    let mut prefix = [0u8; 40];
+    let n = std::io::Read::read(&mut file, &mut prefix)
+        .with_context(|| format!("Failed to read audio file: {path}"))?;
+    if ryf::sniff_wav(&prefix[..n]) {
+        file.seek(SeekFrom::Start(0))
+            .with_context(|| format!("Failed to read audio file: {path}"))?;
+        return wave::probe_duration_file(file);
+    }
+    file.seek(SeekFrom::Start(0))
+        .with_context(|| format!("Failed to read audio file: {path}"))?;
     let mss = MediaSourceStream::new(Box::new(file), Default::default());
     let mut hint = Hint::new();
     if let Some(ext) = std::path::Path::new(path)

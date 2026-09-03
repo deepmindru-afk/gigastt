@@ -1,4 +1,5 @@
-//! Container decode (symphonia paths), channel mix, and dual-mono detection.
+//! Container decode (WAVE via ryf, other formats via symphonia), channel mix,
+//! and dual-mono detection.
 
 #[cfg(feature = "file-decode")]
 use anyhow::Result;

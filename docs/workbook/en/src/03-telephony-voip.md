@@ -9,7 +9,7 @@ pulled from RTP captures, and the odd Telegram voice note — and you want
 transcripts without manually converting every file.
 
 gigastt decodes most telephony formats natively: G.711 A-law/μ-law in WAV,
-G.722 in WAV (both registered format tags), OGG/Opus, and headerless raw
+G.722 in WAV (tags `0x0064` / `0x0065` / `0x028F`), OGG/Opus, and headerless raw
 streams via an explicit codec hint. This chapter gets you from "a folder of
 weird files" to working transcripts, including per-channel speaker split for
 stereo recordings.
@@ -40,14 +40,14 @@ Match the output against this table:
 | ffprobe / `file` says | What it is | What to do |
 |---|---|---|
 | `codec_name=pcm_alaw` or `pcm_mulaw`, 8000 Hz | G.711 in WAV | upload as-is |
-| `codec_name=adpcm_g722`, tag `[0x0064]` or `[0x028f]` | G.722 in WAV | upload as-is |
+| `codec_name=adpcm_g722`, tag `[0x0064]`, `[0x0065]`, or `[0x028f]` | G.722 in WAV | upload as-is |
 | `codec_name=gsm_ms` | wav49 (GSM 06.10 in WAV) | convert first — see Asterisk below |
 | `codec_name=opus` in an Ogg container | Opus (Telegram, MediaRecorder) | upload as-is |
 | ffprobe fails with `Invalid data found when processing input`, `file` says `data` | headerless raw stream | declare the codec — see RTP dump below |
 
-The two G.722 tags are the same codec from different writers: `0x0064` comes
-from SBC/Asterisk-style exports, `0x028F` from ffmpeg-based tooling. gigastt
-accepts both.
+The three G.722 tags are the same codec from different writers: `0x0064` comes
+from SBC/Asterisk-style exports, `0x0065` from the mmreg name, `0x028F` from
+ffmpeg-based tooling. gigastt accepts all three.
 
 ### Asterisk Monitor recordings (wav49, G.722 WAV, raw streams)
 
@@ -82,7 +82,7 @@ What `Monitor()`/`MixMonitor` writes depends on the configured format:
 ### Cisco and Teams exports (G.722 WAV)
 
 Cisco phone systems and Teams-adjacent tooling typically hand you G.722 in a
-WAV container — `codec_name=adpcm_g722`, tag `0x0064` or `0x028F`. The
+WAV container — `codec_name=adpcm_g722`, tag `0x0064`, `0x0065`, or `0x028F`. The
 container declares the codec, so no flags are needed:
 
 ```sh
@@ -279,7 +279,7 @@ for batch/watch details and long recordings.
 |---|---|---|---|
 | WAV PCM (8–32 bit, IEEE float) | yes | no | stereo auto-mixed to mono |
 | WAV with G.711 A-law / μ-law | yes | no | typically 8 kHz, resampled to 16 kHz |
-| WAV with G.722 ADPCM (tags `0x0064`, `0x028F`) | yes | no | decodes to native 16 kHz |
+| WAV with G.722 ADPCM (tags `0x0064`, `0x0065`, `0x028F`) | yes | no | decodes to native 16 kHz |
 | OGG/Opus, `.opus` | yes | no | mono/stereo only; >2ch rejected |
 | raw `.ulaw` / `.alaw` | no (headerless) | yes — `pcmu` / `pcma` | `sample_rate` 8000–48000 |
 | raw `.g722` | no (headerless) | yes — `g722` | `sample_rate` 8000 (SDP convention) or 16000; decodes to 16 kHz |
@@ -291,7 +291,7 @@ long calls transcribe fine — and `?codec=` / `?sample_rate=` work on
 `/v1/transcribe`, `/v1/transcribe/stream`, and `/v1/jobs` alike. Operators who
 want an explicit cap can start the server with `--max-audio-secs` (see the
 pitfall below); the whole-buffer paths (diarization, `channels=split`, and the
-G.722 / raw telephony codecs) keep a fixed ~30-minute safety ceiling regardless.
+raw telephony codecs) keep a fixed ~30-minute safety ceiling regardless.
 
 ## Verifying the result
 
@@ -354,7 +354,7 @@ fixtures pass, the problem is the file, not the server — go back to Step 0.
   no duration cap, so this only fires when the server was started with an
   explicit `--max-audio-secs <N>`, or when the upload hits the fixed
   ~30-minute safety ceiling on a whole-buffer path — diarization,
-  `channels=split`, or the G.722 / raw telephony codecs. Splitting is no longer
+  `channels=split`, or the raw telephony codecs. Splitting is no longer
   required for length on the default path; on one of the whole-buffer paths,
   split per call leg (or skip that feature for the file) instead.
 - **A-law/μ-law swapped.** Both laws decode "successfully", so the wrong
@@ -372,7 +372,7 @@ fixtures pass, the problem is the file, not the server — go back to Step 0.
 - [docs/cli.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/cli.md) —
   `transcribe`, `transcribe-batch`, and `watch` flag reference.
 - [crates/gigastt-core/src/inference/audio/](https://github.com/ekhodzitsky/gigastt/tree/main/crates/gigastt-core/src/inference/audio) —
-  decoder internals (G.722 sniffing, the Opus path, dual-mono detection).
+  decoder internals (WAVE ingest via ryf, the Opus path, dual-mono detection).
 - [Telephony and Opus test fixtures](https://github.com/ekhodzitsky/gigastt/tree/main/crates/gigastt/tests/fixtures)
   with their generators
   [generate_telephony_fixtures.sh](https://github.com/ekhodzitsky/gigastt/blob/main/scripts/generate_telephony_fixtures.sh)

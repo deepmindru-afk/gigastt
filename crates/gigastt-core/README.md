@@ -8,7 +8,7 @@ Runtime is **INT8 only**. Default `rnnt` / `e2e_rnnt` files come from GitHub Rel
 
 ```toml
 [dependencies]
-gigastt-core = "2.18"
+gigastt-core = "2.19"
 ```
 
 ```rust,ignore
@@ -63,17 +63,17 @@ the engine work out of the box. For a lean embedded build that side-loads
 INT8 models and feeds raw PCM, disable defaults:
 
 ```toml
-gigastt-core = { version = "2.18", default-features = false }
+gigastt-core = { version = "2.19", default-features = false }
 ```
 
-That drops `tokio`, `reqwest`/HTTP, `symphonia`, and the quantizer (`protoc`)
+That drops `tokio`, `reqwest`/HTTP, `symphonia`, `ryf`, and the quantizer (`protoc`)
 from the dependency graph. Opt features back in as needed.
 
 | Feature | Default | Description |
 |---|---|---|
 | `net` | on | HTTP model download (`reqwest` + async fs); off → side-loaded models only |
 | `async-pool` | on | async `Pool::checkout`; off → synchronous `checkout_blocking` only (no tokio runtime) |
-| `file-decode` | on | file transcription via `symphonia` (WAV/MP3/M4A/OGG/FLAC/Opus, WebM/MKV, telephony G.711/G.722); off → raw-PCM streaming only |
+| `file-decode` | on | file transcription via `ryf` (WAVE family: PCM/IEEE, G.711, G.722, ADPCM, RF64) + `symphonia` (MP3/M4A/OGG/FLAC/Opus, WebM/MKV); off → raw-PCM streaming only |
 | `diarization` | on | speaker identification via polyvoice |
 | `quantize` | on | packaging-only INT8 rebuild from a local FP32 ONNX (`protoc` required) |
 | `ort-load-dynamic` | off | link a system/vendored onnxruntime instead of the build-time download |
@@ -85,7 +85,7 @@ from the dependency graph. Opt features back in as needed.
 - **Inference engine** — ONNX Runtime session pool, Conformer encoder, RNN-T decoder + joiner (or greedy CTC on the multilingual heads)
 - **Mel spectrogram** — 64 bins, FFT=320, hop=160, HTK scale
 - **Tokenizer** — char vocab 34 (`rnnt`), BPE 1025 (`e2e_rnnt`), multilingual char 71 (`ml_ctc` / `ml_ctc_large`)
-- **Audio loading** — WAV, M4A, MP3, OGG, FLAC, Opus, WebM/MKV, telephony G.711/G.722 via symphonia; resampling via rubato
+- **Audio loading** — WAVE family via `ryf` (PCM/IEEE, G.711, G.722, MS/IMA ADPCM, RF64/RIFX/Wave64); M4A, MP3, OGG, FLAC, Opus, WebM/MKV via symphonia; resampling via rubato
 - **Model download** — streaming fetch with SHA-256 verification + atomic rename (Releases for default INT8; HuggingFace for CTC / sidecars)
 - **Protocol types** — `ClientMessage`, `ServerMessage`, `TranscriptSegment` for WebSocket/REST
 
