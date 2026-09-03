@@ -13,6 +13,8 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 
 ## [Unreleased]
 
+## [2.20.0] - 2026-09-03
+
 ### Changed
 
 - **WAVE ingest via [ryf](https://crates.io/crates/ryf) 0.4.** File WAV
@@ -2650,7 +2652,8 @@ _Release candidate for v0.9.0 — bundles five P0 fixes plus two supporting item
 - Multi-format audio support: WAV, MP3, M4A/AAC, OGG/Vorbis, FLAC (via symphonia).
 - 39 unit tests (tokenizer, features, decode, inference, protocol).
 
-[Unreleased]: https://github.com/ekhodzitsky/gigastt/compare/v2.19.0...HEAD
+[Unreleased]: https://github.com/ekhodzitsky/gigastt/compare/v2.20.0...HEAD
+[2.20.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.19.0...v2.20.0
 [2.19.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.18.0...v2.19.0
 [2.18.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.17.0...v2.18.0
 [2.17.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.16.0...v2.17.0
