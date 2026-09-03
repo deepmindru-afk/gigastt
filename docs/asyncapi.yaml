@@ -59,7 +59,7 @@ info:
     - `--shutdown-drain-secs` (default 10) — max wait for in-flight sessions on SIGTERM
     - `--rate-limit-per-minute` (default 0 = off) — per-IP token-bucket limit on `/v1/*` (HTTP 429 + `Retry-After` when exhausted; `/health` exempt)
     - Audio duration: no cap on the default file path, the VAD path, or OGG/Opus — all decode in
-      bounded windows. Whole-buffer paths (diarization, `channels=split`, G.722 / raw telephony)
+      bounded windows. Whole-buffer paths (diarization, `channels=split`, raw telephony)
       enforce a fixed ~30-minute ceiling; `--max-audio-secs` (default 0 = unlimited) can lower it
       for every path but never raise it above that ceiling.
     - Bind address: 127.0.0.1 by default; `--bind-all` / `GIGASTT_ALLOW_BIND_ANY=1` required for non-loopback

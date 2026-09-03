@@ -46,7 +46,7 @@ packaging tool that needs a local FP32 ONNX as source (not a runtime path).
 - **Serialization**: serde + serde_json
 - **Logging**: tracing + tracing-subscriber (env-filter)
 - **Error handling**: anyhow (internal), `GigasttError` (public API)
-- **Audio decoding**: symphonia (AAC, MP3, OGG, FLAC, WAV, PCM)
+- **Audio decoding**: ryf (WAVE family), symphonia (AAC, MP3, OGG, FLAC), opus-rs (Opus)
 - **Audio resampling**: rubato 5
 - **FFT**: rustfft 6
 - **Protobuf**: prost 0.14 + prost-build 0.14 (build-time)
@@ -193,7 +193,7 @@ crates/
       bias.rs             # Hotword biasing
       diarization.rs      # polyvoice glue: Embedder adapter, offline + streaming pipelines
       types.rs            # TranscribeRequest / TranscribeResult and friends
-      audio/              # Decode, resample, channel mixing, windowing, VAD windows, telephony
+      audio/              # Decode (WAVE via ryf, else symphonia), resample, windowing, telephony
     runtime/              # Backend seam — THIS is where execution providers are chosen
       factory.rs          # RuntimeFactory / Runtime traits only
       ort/factory.rs      # cfg-gated EP/backend selection (coreml / cuda / nnapi / ane / candle / CPU)
@@ -298,17 +298,18 @@ The `e2e_rnnt` head (`--model-variant e2e_rnnt`) uses the parallel `v3_e2e_rnnt_
 
 ### Audio format support
 
-- **File transcription**: WAV, M4A/AAC, MP3, OGG/Vorbis, FLAC (via symphonia);
-  OGG/Opus and `.opus` (Telegram voice) plus WebM/Opus and Matroska (a browser's
-  `MediaRecorder` emits nothing else) — symphonia demuxes the container, packets
-  are decoded by the pure-Rust BSD-3 `opus-rs` crate, mono/stereo only. Packet
-  framing is sliced in-tree per RFC 6716 §3.2 rather than by `opus-rs`, whose
-  own parser mis-reads CBR code 3 and long explicit frame lengths.
-- **Telephony codecs**: G.711 A-law/μ-law in WAV (via symphonia); G.722 ADPCM
-  in WAV (format tags 0x0064/0x028F, via the MIT `audio-codec` crate as a
-  fallback when symphonia declines the tag); headerless raw `.ulaw`/`.alaw`/
-  `.g722` streams via `?codec=pcmu|pcma|g722&sample_rate=N` on `/v1/transcribe`
-  or `transcribe --codec … --sample-rate …` on the CLI
+- **File transcription**: WAV family (PCM/IEEE, G.711, G.722, MS/IMA ADPCM,
+  RF64/RIFX/BW64/Wave64) via `ryf`; M4A/AAC, MP3, OGG/Vorbis, FLAC via
+  symphonia; OGG/Opus and `.opus` (Telegram voice) plus WebM/Opus and Matroska
+  (a browser's `MediaRecorder` emits nothing else) — symphonia demuxes the
+  container, packets are decoded by the pure-Rust BSD-3 `opus-rs` crate,
+  mono/stereo only. Packet framing is sliced in-tree per RFC 6716 §3.2 rather
+  than by `opus-rs`, whose own parser mis-reads CBR code 3 and long explicit
+  frame lengths.
+- **Telephony codecs**: G.711 A-law/μ-law and G.722 ADPCM in WAV (via `ryf`;
+  G.722 tags 0x0064/0x0065/0x028F); headerless raw `.ulaw`/`.alaw`/`.g722`
+  streams via `?codec=pcmu|pcma|g722&sample_rate=N` on `/v1/transcribe`
+  or `transcribe --codec … --sample-rate …` on the CLI (also `ryf`)
 - **WebSocket streaming**: raw PCM16 binary frames at configurable sample rate
   (8/16/24/44.1/48 kHz, default 48kHz); resampled to 16kHz server-side via rubato
 - Auto mono mix for multi-channel files

@@ -16,7 +16,7 @@ you should not need any other document to get here.
   [docs/benchmarks.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md).
 - **Network** (unless you follow the air-gapped recipe): reach `github.com`
   for the pre-quantized INT8 bundle (CTC heads use HuggingFace INT8).
-- **An audio file to transcribe** — WAV, M4A, MP3, OGG/Vorbis, OGG/Opus
+- **An audio file to transcribe** — WAV (incl. G.711/G.722), M4A, MP3, OGG/Vorbis, OGG/Opus
   (`.opus`), WebM/Opus, or FLAC. The repo ships a 4 s Russian fixture:
   `crates/gigastt/tests/fixtures/golos_00.wav`. Any short Russian recording
   works. Files → this chapter / REST. Live partials → [Streaming](04-streaming-ws.md).

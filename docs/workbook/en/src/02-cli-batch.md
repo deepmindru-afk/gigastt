@@ -349,7 +349,7 @@ jq -r '.duration' transcripts/episode.json    # JSON parses and has fields
 ## Recipe: unusual inputs — telephony WAV, Opus, raw streams
 
 **G.711 / G.722 inside WAV — just works.** A-law/μ-law (8 kHz telephony
-exports) and G.722 ADPCM (Asterisk/Cisco/Teams, format tags `0x0064`/`0x028F`)
+exports) and G.722 ADPCM (Asterisk/Cisco/Teams, format tags `0x0064`/`0x0065`/`0x028F`)
 are decoded automatically; the batch walker picks them up like any other
 `.wav`.
 

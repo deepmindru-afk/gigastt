@@ -155,10 +155,11 @@ pub struct RuntimeLimits {
     /// is O(one window). When > 0, audio longer than this is rejected with HTTP
     /// 413 and error code `audio_too_long`. The paths that must hold the whole
     /// decoded buffer in RAM — diarization, `channels=split` (including its
-    /// per-channel Opus decode), and the G.722 / raw telephony codecs — keep a
+    /// per-channel Opus decode), and the raw telephony codecs — keep a
     /// fixed ~30-minute safety ceiling regardless of this value, so they refuse
-    /// rather than OOM. The VAD file path and streamed OGG/Opus decode in
-    /// bounded windows like the default path, so no ceiling applies to them.
+    /// rather than OOM. The VAD file path, WAVE ingest, and streamed OGG/Opus
+    /// decode in bounded windows like the default path, so no ceiling applies
+    /// to them.
     pub max_audio_secs: u64,
     /// Whether the asynchronous `/v1/jobs` API is enabled. Off by default so
     /// existing single-user installs see no change.
