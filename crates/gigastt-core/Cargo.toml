@@ -90,7 +90,7 @@ ryf = { version = "0.4", optional = true }
 # this crate (decoder only — the encoder is not used).
 opus-rs = { version = "0.1", optional = true }
 bytes = "1"
-gigastt-quantize = { version = "2.19.0", path = "../gigastt-quantize", optional = true }
+gigastt-quantize = { version = "2.20.0", path = "../gigastt-quantize", optional = true }
 polyvoice = { version = "0.18.0", features = ["onnx"], optional = true }
 parking_lot = "0.12"
 libc = "0.2"

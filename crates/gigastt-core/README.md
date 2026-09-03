@@ -8,7 +8,7 @@ Runtime is **INT8 only**. Default `rnnt` / `e2e_rnnt` files come from GitHub Rel
 
 ```toml
 [dependencies]
-gigastt-core = "2.19"
+gigastt-core = "2.20"
 ```
 
 ```rust,ignore
@@ -63,7 +63,7 @@ the engine work out of the box. For a lean embedded build that side-loads
 INT8 models and feeds raw PCM, disable defaults:
 
 ```toml
-gigastt-core = { version = "2.19", default-features = false }
+gigastt-core = { version = "2.20", default-features = false }
 ```
 
 That drops `tokio`, `reqwest`/HTTP, `symphonia`, `ryf`, and the quantizer (`protoc`)
