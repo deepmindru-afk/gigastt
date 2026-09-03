@@ -117,7 +117,7 @@ enum Commands {
 
     /// Transcribe an audio file (offline)
     Transcribe {
-        /// Path to audio file (WAV, M4A, MP3, OGG, FLAC)
+        /// Path to audio file (WAV, M4A, MP3, OGG, Opus, WebM, FLAC; raw telephony via --codec)
         file: String,
 
         /// Model directory
@@ -263,7 +263,7 @@ enum Commands {
 
     /// Transcribe every audio file in a directory (offline, one-shot)
     TranscribeBatch {
-        /// Directory scanned recursively for audio files (WAV, MP3, M4A, OGG, FLAC)
+        /// Directory scanned recursively for audio files (WAV, MP3, M4A, OGG, FLAC, WebM)
         input_dir: String,
 
         /// Directory the `<stem>.<ext>` transcripts are written into
@@ -278,7 +278,7 @@ enum Commands {
 
     /// Watch a directory and transcribe new/changed audio files as they appear
     Watch {
-        /// Directory polled for audio files (WAV, MP3, M4A, OGG, FLAC). Files
+        /// Directory polled for audio files (WAV, MP3, M4A, OGG, FLAC, WebM). Files
         /// already present at startup are registered but not transcribed.
         input_dir: String,
 

@@ -32,6 +32,13 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
   published. The job now accepts that version-select miss as well (match
   `gigastt-quantize = "^X.Y.Z"`, not a closing backtick right after the
   crate name).
+- **Docker dep-cache layer** stubs `benches/decode.rs` next to the other
+  Criterion benches, so `cargo build` in the image can parse
+  `gigastt-core`'s `[[bench]]` table.
+- **OpenAPI / AsyncAPI duration wording.** G.722-in-WAV is windowed; only
+  raw telephony (plus diarization / `channels=split`) still holds the
+  whole-buffer ~30-minute ceiling. The specs still said "G.722 / raw
+  telephony".
 
 ## [2.19.0] - 2026-08-31
 

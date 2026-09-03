@@ -169,9 +169,8 @@ fn test_decode_audio_bytes_g722_wav_fallback() {
     let encoded = encode_telephony(&mut encoder, &source);
     for tag in [0x0064u16, 0x0065, 0x028F] {
         let wav = make_compressed_wav(tag, 16000, 8000, &encoded);
-        let decoded = decode_audio_bytes(&wav).unwrap_or_else(|e| {
-            panic!("G.722 WAV (tag {tag:#06x}) must decode via the fallback: {e}")
-        });
+        let decoded = decode_audio_bytes(&wav)
+            .unwrap_or_else(|e| panic!("G.722 WAV (tag {tag:#06x}) must decode via ryf: {e}"));
         assert_eq!(
             decoded.len(),
             source.len(),

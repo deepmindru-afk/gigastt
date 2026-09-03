@@ -47,7 +47,8 @@ pub use channels::{
 
 /// Decode any supported audio file to mono f32 samples at 16kHz.
 ///
-/// Supports WAV, MP3, M4A/AAC, OGG/Vorbis, OGG/Opus (`.opus`), and FLAC.
+/// Supports WAV (PCM/IEEE, G.711, G.722, ADPCM, RF64), MP3, M4A/AAC,
+/// OGG/Vorbis, OGG/Opus (`.opus`), WebM/Opus, and FLAC.
 /// Multi-channel audio is mixed to mono. This flat decode materializes the whole
 /// buffer, so it is bounded by the ~30-minute whole-buffer safety ceiling; the
 /// streaming file path (`Engine::transcribe_request`) pulls windows instead and
@@ -107,9 +108,10 @@ pub fn decode_audio_bytes(data: &[u8]) -> Result<Vec<f32>> {
 /// Decode audio from a shared [`Bytes`] buffer in place — no `to_vec()` clone.
 ///
 /// Same logic as [`decode_audio_file`] but reads from a reference-counted
-/// in-memory buffer. Supports WAV, MP3, M4A/AAC, OGG/Vorbis, OGG/Opus
-/// (`.opus`), and FLAC. Multi-channel audio is mixed to mono. The whole-buffer
-/// safety ceiling is enforced **incrementally** on each decoded packet: a
+/// in-memory buffer. Supports WAV (PCM/IEEE, G.711, G.722, ADPCM, RF64), MP3,
+/// M4A/AAC, OGG/Vorbis, OGG/Opus (`.opus`), WebM/Opus, and FLAC. Multi-channel
+/// audio is mixed to mono. The whole-buffer safety ceiling is enforced
+/// **incrementally** on each decoded packet: a
 /// malicious or malformed upload is aborted before its decoded samples blow up
 /// RAM.
 ///

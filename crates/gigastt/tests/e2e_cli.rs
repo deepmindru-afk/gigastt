@@ -707,8 +707,8 @@ fn cli_transcribe_codec_without_sample_rate_fails() {
 #[ignore = "requires the GigaAM model (~225 MB INT8)"]
 #[test]
 fn cli_transcribe_g722_wav() {
-    // G.722-in-WAV (format tag 0x0064/0x028F) is decoded by the fallback
-    // decoder through the ordinary file path — no flags needed.
+    // G.722-in-WAV (format tag 0x0064/0x028F) is decoded by ryf
+    // through the ordinary file path — no flags needed.
     let md = common::model_dir();
     let out = Command::new(bin())
         .args([
