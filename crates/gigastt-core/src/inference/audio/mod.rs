@@ -10,6 +10,8 @@ mod stream;
 mod telephony;
 #[cfg(feature = "file-decode")]
 mod vad_windows;
+#[cfg(feature = "file-decode")]
+mod wave;
 
 #[cfg(test)]
 mod tests;
@@ -31,8 +33,8 @@ pub(crate) use super::{HOP_LENGTH, N_FFT};
 pub(crate) const MAX_BUFFER_SAMPLES: usize = 16000 * 5; // 5 seconds at 16kHz
 /// Explicit, documented safety ceiling (seconds) for the decode paths that must
 /// hold the **whole** decoded buffer in RAM: speaker diarization,
-/// `channels=split` (including its per-channel Opus decode), and the G.722 /
-/// raw telephony codecs, which have no packet-wise decoder. The default
+/// `channels=split` (including its per-channel Opus decode), and the raw
+/// headerless telephony codecs, which have no packet-wise decoder. The default
 /// file path streams overlapping windows (see `Engine::decode_words_streaming`),
 /// the VAD file path streams through
 /// [`VadWindows`](super::audio::VadWindows), and OGG/Opus streams packet-wise
@@ -181,6 +183,3 @@ pub use telephony::{decode_telephony_raw, encode_wav_pcm16};
 #[cfg(all(test, feature = "file-decode"))]
 #[allow(unused_imports)]
 pub(crate) use opus::is_recoverable_packet_eof;
-#[cfg(all(test, feature = "file-decode"))]
-#[allow(unused_imports)]
-pub(crate) use telephony::try_decode_g722_wav;

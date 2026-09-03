@@ -1,168 +1,20 @@
-//! Telephony codecs: G.711/G.722 raw streams and G.722-in-WAV fallback.
+//! Headerless telephony codecs (G.711 / G.722 raw streams).
+//!
+//! WAVE-carried G.711 / G.722 is decoded by the ryf WAVE path — the container
+//! declares the codec, so this module only covers RTP-dump / Asterisk Monitor
+//! captures that have no RIFF header.
 
-#[cfg(feature = "file-decode")]
-use anyhow::Context;
 #[cfg(feature = "file-decode")]
 use anyhow::Result;
 #[cfg(feature = "file-decode")]
-use audio_codec::Decoder;
+use ryf::{ChannelMode, G711Law};
 
 #[cfg(feature = "file-decode")]
 use super::resample::{RESAMPLE_STAGING_FRAMES, ResampleTo16k, SampleRate};
 #[cfg(feature = "file-decode")]
-use super::{
-    WHOLE_BUFFER_MAX_AUDIO_SECS, audio_too_long_err, resolve_budget, whole_buffer_limit_secs,
-};
-
-/// WAV format tags for ITU-T G.722 ADPCM. Symphonia's RIFF demuxer maps them
-/// to `CODEC_TYPE_NULL` and there is no decoder for it, so G.722-in-WAV (what
-/// Asterisk / Cisco / Teams players export) is detected up front and decoded
-/// via the `audio-codec` crate. Both registered tags are accepted: 0x0064
-/// (WAVE_FORMAT_G722_ADPCM, SBC/Asterisk exports) and 0x028F
-/// (WAVE_FORMAT_ADPCM_G722, what ffmpeg/libavcodec writes).
+use super::wave::{decode_options, map_ryf_err, take_mono};
 #[cfg(feature = "file-decode")]
-const WAV_FORMAT_TAGS_G722_ADPCM: [u16; 2] = [0x0064, 0x028F];
-
-/// Size of the leading window inspected for a G.722 `fmt ` chunk. The `fmt `
-/// chunk is virtually always the first chunk (ffmpeg, sox, and Asterisk all
-/// write it at offset 12); when it lies beyond the window the file falls
-/// through to symphonia and fails there as an unsupported codec, exactly as
-/// before.
-#[cfg(feature = "file-decode")]
-const WAV_SNIFF_WINDOW: usize = 512;
-
-/// Inspect the leading bytes of a RIFF/WAVE buffer for a G.722 ADPCM format
-/// tag in the `fmt ` chunk. Returns `Some(is_g722)` when the `fmt ` chunk was
-/// found inside the window, `None` when the buffer is not RIFF/WAVE or the
-/// `fmt ` chunk lies beyond it.
-#[cfg(feature = "file-decode")]
-pub(super) fn sniff_wav_g722_tag(window: &[u8]) -> Option<bool> {
-    if window.len() < 12 || &window[0..4] != b"RIFF" || &window[8..12] != b"WAVE" {
-        return None;
-    }
-    let mut pos = 12usize;
-    while pos + 8 <= window.len() {
-        let id = &window[pos..pos + 4];
-        let size = u32::from_le_bytes([
-            window[pos + 4],
-            window[pos + 5],
-            window[pos + 6],
-            window[pos + 7],
-        ]) as usize;
-        let start = pos + 8;
-        if id == b"fmt " {
-            // Need at least the 2-byte format tag.
-            if size < 2 || start + 2 > window.len() {
-                return None;
-            }
-            let tag = u16::from_le_bytes([window[start], window[start + 1]]);
-            return Some(WAV_FORMAT_TAGS_G722_ADPCM.contains(&tag));
-        }
-        // RIFF chunks are word-aligned: odd sizes carry a pad byte.
-        pos = start.saturating_add(size).saturating_add(size & 1);
-    }
-    None
-}
-
-/// Locate a RIFF chunk payload by 4-byte id, tolerating a truncated final
-/// chunk (clamped to the buffer end so decoders see the bytes that actually
-/// arrived).
-#[cfg(feature = "file-decode")]
-pub(super) fn find_riff_chunk<'a>(data: &'a [u8], want: &[u8; 4]) -> Option<&'a [u8]> {
-    if data.len() < 12 {
-        return None;
-    }
-    let mut pos = 12usize;
-    while pos + 8 <= data.len() {
-        let id = &data[pos..pos + 4];
-        let size = u32::from_le_bytes([data[pos + 4], data[pos + 5], data[pos + 6], data[pos + 7]])
-            as usize;
-        let start = pos + 8;
-        let end = start.saturating_add(size).min(data.len());
-        if id == want {
-            return Some(&data[start..end]);
-        }
-        pos = start.saturating_add(size).saturating_add(size & 1);
-    }
-    None
-}
-
-/// Read the header window of `path` and report whether it declares a
-/// G.722-in-WAV stream. Open errors carry the same message the regular path
-/// would produce; unreadable/short headers simply report `false` so the
-/// symphonia path renders the canonical error.
-#[cfg(feature = "file-decode")]
-pub(super) fn sniffs_as_g722_wav(path: &str) -> Result<bool> {
-    use std::io::Read as _;
-    let mut file =
-        std::fs::File::open(path).with_context(|| format!("Failed to open audio file: {path}"))?;
-    let mut window = [0u8; WAV_SNIFF_WINDOW];
-    let mut read = 0usize;
-    while read < window.len() {
-        match file.read(&mut window[read..]) {
-            Ok(0) => break,
-            Ok(n) => read += n,
-            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
-            Err(e) => {
-                return Err(e).with_context(|| format!("Failed to read audio file: {path}"));
-            }
-        }
-    }
-    Ok(sniff_wav_g722_tag(&window[..read]) == Some(true))
-}
-
-/// Decode a G.722-in-WAV buffer to mono f32 at 16 kHz (the native G.722
-/// output rate). Returns `None` when the buffer is not G.722-in-WAV — the
-/// caller then falls through to the symphonia pipeline; `Some(Err(..))` when
-/// it IS G.722-in-WAV but malformed, so the error names the real problem
-/// instead of surfacing as a generic "unsupported codec".
-#[cfg(feature = "file-decode")]
-pub(crate) fn try_decode_g722_wav(
-    data: &[u8],
-    max_audio_secs: Option<f64>,
-) -> Option<Result<Vec<f32>>> {
-    if sniff_wav_g722_tag(data) != Some(true) {
-        return None;
-    }
-    let payload = match find_riff_chunk(data, b"data") {
-        Some(p) if !p.is_empty() => p,
-        _ => return Some(Err(anyhow::anyhow!("G.722 WAV has no data chunk"))),
-    };
-    // G.722-in-WAV decodes eagerly to the whole 16 kHz buffer (two PCM16 samples
-    // per encoded byte), so it is bounded by the whole-buffer safety ceiling even
-    // when the caller left the streaming budget unbounded.
-    let num_samples = payload.len().saturating_mul(2);
-    let (max_samples, limit_secs) =
-        resolve_budget(Some(whole_buffer_limit_secs(max_audio_secs)), 16000);
-    if num_samples > max_samples {
-        return Some(Err(audio_too_long_err(num_samples, 16000, limit_secs)));
-    }
-    let mut decoder = audio_codec::g722::G722Decoder::new();
-    let pcm = match decode_pcm(&mut decoder, payload) {
-        Ok(p) => p,
-        Err(e) => return Some(Err(e)),
-    };
-    tracing::info!(
-        "Decoded G.722 WAV: {} samples at 16000Hz ({:.1}s)",
-        pcm.len(),
-        pcm.len() as f64 / 16000.0
-    );
-    Some(Ok(pcm.iter().map(|&s| f32::from(s) / 32768.0).collect()))
-}
-
-/// `audio-codec` 0.4 keeps the allocating `Decoder::decode` helper behind the
-/// `std` feature. We ship `default-features = false` (drops the bundled Opus),
-/// so production decode uses the always-on `decode_into` API.
-#[cfg(feature = "file-decode")]
-fn decode_pcm<D: Decoder>(decoder: &mut D, data: &[u8]) -> Result<Vec<i16>> {
-    let n = decoder.max_decode_samples(data.len());
-    let mut pcm = vec![0i16; n];
-    let written = decoder
-        .decode_into(data, &mut pcm)
-        .map_err(|e| anyhow::anyhow!("telephony decode failed: {e}"))?;
-    pcm.truncate(written);
-    Ok(pcm)
-}
+use super::{WHOLE_BUFFER_MAX_AUDIO_SECS, audio_too_long_err, resolve_budget};
 
 /// Headerless telephony codecs accepted for raw uploads (`?codec=` on REST,
 /// `--codec` on the CLI). WAV-carried G.711/G.722 needs no such hint — the
@@ -227,18 +79,21 @@ pub fn decode_telephony_raw(
     codec
         .validate_sample_rate(sample_rate)
         .map_err(|e| anyhow::anyhow!("{e}"))?;
-    let (pcm, rate) = match codec {
+    let opts = decode_options(Some(WHOLE_BUFFER_MAX_AUDIO_SECS), ChannelMode::Mono);
+    let (rate, pcm) = match codec {
         TelephonyCodec::Pcmu => {
-            let mut decoder = audio_codec::pcmu::PcmuDecoder::new();
-            (decode_pcm(&mut decoder, data)?, sample_rate)
+            let decoded = ryf::decode_g711(data, G711Law::MuLaw, sample_rate, 1, &opts)
+                .map_err(map_ryf_err)?;
+            take_mono(decoded)?
         }
         TelephonyCodec::Pcma => {
-            let mut decoder = audio_codec::pcma::PcmaDecoder::new();
-            (decode_pcm(&mut decoder, data)?, sample_rate)
+            let decoded = ryf::decode_g711(data, G711Law::ALaw, sample_rate, 1, &opts)
+                .map_err(map_ryf_err)?;
+            take_mono(decoded)?
         }
         TelephonyCodec::G722 => {
-            let mut decoder = audio_codec::g722::G722Decoder::new();
-            (decode_pcm(&mut decoder, data)?, 16000)
+            let decoded = ryf::decode_g722(data, sample_rate, 1, &opts).map_err(map_ryf_err)?;
+            take_mono(decoded)?
         }
     };
     let (max_samples, limit_secs) = resolve_budget(Some(WHOLE_BUFFER_MAX_AUDIO_SECS), rate);
@@ -249,8 +104,7 @@ pub fn decode_telephony_raw(
     // f32 buffer is never materialized alongside the 16 kHz output.
     let mut acc = ResampleTo16k::new(SampleRate(rate), Some(pcm.len()));
     for piece in pcm.chunks(RESAMPLE_STAGING_FRAMES) {
-        acc.stage()
-            .extend(piece.iter().map(|&s| f32::from(s) / 32768.0));
+        acc.stage().extend_from_slice(piece);
         acc.flush_full()?;
     }
     acc.finish()
@@ -286,4 +140,27 @@ pub fn encode_wav_pcm16(samples: &[f32], sample_rate: u32) -> Vec<u8> {
         buf.extend_from_slice(&((v * 32767.0).round() as i16).to_le_bytes());
     }
     buf
+}
+
+/// Locate a RIFF chunk payload by 4-byte id, tolerating a truncated final
+/// chunk (clamped to the buffer end so decoders see the bytes that actually
+/// arrived). Test helper for fixtures that are not WAVE-decoded end-to-end.
+#[cfg(test)]
+pub(super) fn find_riff_chunk<'a>(data: &'a [u8], want: &[u8; 4]) -> Option<&'a [u8]> {
+    if data.len() < 12 {
+        return None;
+    }
+    let mut pos = 12usize;
+    while pos + 8 <= data.len() {
+        let id = &data[pos..pos + 4];
+        let size = u32::from_le_bytes([data[pos + 4], data[pos + 5], data[pos + 6], data[pos + 7]])
+            as usize;
+        let start = pos + 8;
+        let end = start.saturating_add(size).min(data.len());
+        if id == want {
+            return Some(&data[start..end]);
+        }
+        pos = start.saturating_add(size).saturating_add(size & 1);
+    }
+    None
 }

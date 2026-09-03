@@ -593,13 +593,13 @@ This applies to every file-transcription endpoint (`/v1/transcribe`,
 
 | Input | Decoder |
 |---|---|
-| WAV (PCM 8–32 bit, IEEE float) | symphonia |
-| WAV with G.711 A-law / μ-law (8 kHz typical) | symphonia |
-| WAV with G.722 ADPCM (tags `0x0064`, `0x028F`) | built-in fallback (`audio-codec`) |
+| WAV (PCM 8–32 bit, IEEE float, RF64/BW64/RIFX/Wave64, MS/IMA ADPCM) | ryf |
+| WAV with G.711 A-law / μ-law (8 kHz typical) | ryf |
+| WAV with G.722 ADPCM (tags `0x0064`, `0x0065`, `0x028F`) | ryf |
 | MP3, M4A/AAC, OGG/Vorbis, FLAC | symphonia |
 | OGG/Opus, `.opus` (Telegram voice) | built-in fallback (`opus-rs`, pure Rust) |
 | WebM/Opus, Matroska (browser `MediaRecorder`) | symphonia demux + the same Opus fallback |
-| Raw headerless `.ulaw` / `.alaw` / `.g722` | `audio-codec` — requires `?codec=` |
+| Raw headerless `.ulaw` / `.alaw` / `.g722` | ryf — requires `?codec=` |
 
 **Opus notes**
 
@@ -617,7 +617,8 @@ This applies to every file-transcription endpoint (`/v1/transcribe`,
 - **G.711 A-law / μ-law in WAV** decode natively; a 8 kHz file is resampled to
   the model's 16 kHz.
 - **G.722 in WAV** (what Asterisk, Cisco, and Teams-player exports write —
-  format tag `0x0064`, ffmpeg writes `0x028F`) decodes to its native 16 kHz.
+  format tag `0x0064`, mmreg `0x0065`, ffmpeg writes `0x028F`) decodes to its
+  native 16 kHz.
 - **Headerless streams** (RTP dumps, Asterisk Monitor raw) carry no container
   to sniff, so the codec must be declared explicitly on `/v1/transcribe`:
 
@@ -700,7 +701,7 @@ OGG/Opus uploads stream packet-wise like every other container,
 `?channels=split` streams as well: the stereo-vs-dual-mono decision is made in
 one pass and each channel is then decoded in windows — except on a VAD-enabled
 server, where it keeps the whole-buffer path. Speaker diarization and the
-G.722 / raw telephony codecs still hold the whole decoded buffer in memory, so
+raw telephony codecs still hold the whole decoded buffer in memory, so
 those paths always enforce a fixed
 ~30-minute safety ceiling regardless of `--max-audio-secs`, returning the same
 `audio_too_long` code. A batch worker should gate on `GET /ready` (not just

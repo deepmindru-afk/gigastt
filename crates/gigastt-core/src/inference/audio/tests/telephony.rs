@@ -127,8 +127,7 @@ fn test_decode_telephony_raw_invalid_rate_errors() {
 #[test]
 #[cfg_attr(miri, ignore = "rubato sinc resampler is too slow under Miri")]
 fn test_decode_audio_bytes_g711_alaw_wav() {
-    // G.711 A-law in WAV (tag 0x0006) is decoded by symphonia's PCM codec —
-    // this pins the de-facto support so it cannot silently regress.
+    // G.711 A-law in WAV (tag 0x0006) is decoded by ryf.
     let source = test_tone_8k(8000);
     let mut encoder = audio_codec::pcma::PcmaEncoder::new();
     let encoded = encode_telephony(&mut encoder, &source);
@@ -145,7 +144,7 @@ fn test_decode_audio_bytes_g711_alaw_wav() {
 #[test]
 #[cfg_attr(miri, ignore = "rubato sinc resampler is too slow under Miri")]
 fn test_decode_audio_bytes_g711_mulaw_wav() {
-    // G.711 μ-law in WAV (tag 0x0007), same symphonia PCM path.
+    // G.711 μ-law in WAV (tag 0x0007), same ryf WAVE path.
     let source = test_tone_8k(8000);
     let mut encoder = audio_codec::pcmu::PcmuEncoder::new();
     let encoded = encode_telephony(&mut encoder, &source);
@@ -161,14 +160,14 @@ fn test_decode_audio_bytes_g711_mulaw_wav() {
 
 #[test]
 fn test_decode_audio_bytes_g722_wav_fallback() {
-    // G.722-in-WAV (tag 0x0064) has no symphonia decoder; the fallback must
-    // kick in and produce 2 samples per encoded byte at native 16 kHz.
+    // G.722-in-WAV (tags 0x0064 / 0x0065 / 0x028F) is decoded by ryf
+    // and produces 2 samples per encoded byte at native 16 kHz.
     let source: Vec<i16> = (0..16000)
         .map(|i| ((i as f32 * 0.03).sin() * 10000.0) as i16)
         .collect();
     let mut encoder = audio_codec::g722::G722Encoder::new();
     let encoded = encode_telephony(&mut encoder, &source);
-    for tag in [0x0064u16, 0x028F] {
+    for tag in [0x0064u16, 0x0065, 0x028F] {
         let wav = make_compressed_wav(tag, 16000, 8000, &encoded);
         let decoded = decode_audio_bytes(&wav).unwrap_or_else(|e| {
             panic!("G.722 WAV (tag {tag:#06x}) must decode via the fallback: {e}")
@@ -182,29 +181,27 @@ fn test_decode_audio_bytes_g722_wav_fallback() {
 }
 
 #[test]
-fn test_try_decode_g722_wav_malformed_inputs() {
-    // Not RIFF at all → None (falls through to symphonia).
-    assert!(try_decode_g722_wav(b"not a wave file", None).is_none());
-    // PCM WAV → None (symphonia handles it).
+fn test_wave_g722_malformed_inputs() {
+    // Not RIFF at all → symphonia rejects it as an unsupported container.
+    assert!(decode_audio_bytes(b"not a wave file").is_err());
+    // PCM WAV still decodes.
     let pcm_wav = make_wav_bytes(&[0i16; 32], 16000);
-    assert!(try_decode_g722_wav(&pcm_wav, None).is_none());
-    // G.722 tag but no data chunk → Some(Err), not a panic or silent None.
+    assert!(decode_audio_bytes(&pcm_wav).is_ok());
+    // G.722 tag but no data chunk → error, not a panic.
     let mut header_only = make_compressed_wav(0x0064, 16000, 8000, &[]);
     header_only.truncate(38); // strip the data chunk header + payload
-    let result = try_decode_g722_wav(&header_only, None);
     assert!(
-        matches!(result, Some(Err(_))),
-        "expected Some(Err), got {result:?}"
+        decode_audio_bytes(&header_only).is_err(),
+        "G.722 WAV with no data chunk must error"
     );
     // Truncated data payload must decode the bytes present, not panic.
     let mut enc = audio_codec::g722::G722Encoder::new();
     let encoded = encode_telephony(&mut enc, &[0i16; 320]);
     let mut wav = make_compressed_wav(0x0064, 16000, 8000, &encoded);
     wav.truncate(wav.len() - 3);
-    let result = try_decode_g722_wav(&wav, None);
     assert!(
-        matches!(result, Some(Ok(_))),
-        "truncated data must not panic"
+        decode_audio_bytes(&wav).is_ok(),
+        "truncated G.722 data must not panic"
     );
 }
 
@@ -213,7 +210,7 @@ fn test_decode_audio_bytes_g722_wav_ffmpeg_fixture_matches_reference() {
     // Independent-reference verification: `g722_tone.wav` was ENCODED by
     // ffmpeg (libavcodec G.722, tag 0x028F) and `g722_tone_ffmpeg.pcm` is
     // ffmpeg's own DECODE of it (see scripts/generate_telephony_fixtures.sh).
-    // Our `audio-codec` decode is compared against ffmpeg's decode, so the
+    // Our ryf G.722 decode is compared against ffmpeg's decode, so the
     // fixed-point port is validated against a second implementation rather
     // than against itself. Tolerance: RMSE below 1% of full scale.
     let wav = include_bytes!("../../../../tests/fixtures/telephony/g722_tone.wav");

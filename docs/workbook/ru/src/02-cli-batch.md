@@ -354,7 +354,7 @@ jq -r '.duration' transcripts/episode.json    # JSON parses and has fields
 
 **G.711 / G.722 внутри WAV — работает само.** A-law/μ-law (телефонные
 экспорты 8 кГц) и G.722 ADPCM (Asterisk/Cisco/Teams, теги формата
-`0x0064`/`0x028F`) декодируются автоматически; batch-обходчик подхватывает
+`0x0064`/`0x0065`/`0x028F`) декодируются автоматически; batch-обходчик подхватывает
 их как любой другой `.wav`.
 
 **OGG/Opus и `.opus` (голосовые Telegram, браузерный MediaRecorder).**

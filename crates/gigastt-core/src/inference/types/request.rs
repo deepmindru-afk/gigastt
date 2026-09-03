@@ -94,10 +94,11 @@ pub struct TranscribeRequest<'a> {
     /// longer than `secs` is rejected with
     /// [`GigasttError::AudioTooLong`](crate::error::GigasttError::AudioTooLong).
     /// The whole-buffer paths (diarization, `channels=split` — including its
-    /// per-channel Opus decode — and the G.722 / raw telephony codecs)
+    /// per-channel Opus decode — and the raw telephony codecs)
     /// additionally clamp to a fixed safety ceiling regardless of this value,
-    /// so they refuse rather than exhaust memory. The VAD file path and
-    /// streamed OGG/Opus decode in bounded windows and stay unbounded.
+    /// so they refuse rather than exhaust memory. The VAD file path,
+    /// WAVE ingest, and streamed OGG/Opus decode in bounded windows and stay
+    /// unbounded.
     pub max_audio_secs: Option<f64>,
 }
 
