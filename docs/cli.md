@@ -270,7 +270,7 @@ gigastt transcribe [OPTIONS] <FILE>
     gigastt transcribe call.ulaw --codec pcmu --sample-rate 8000
 
 gigastt transcribe-batch [OPTIONS] <INPUT_DIR> <OUTPUT_DIR>
-  Recursively transcribe every audio file (WAV, MP3, M4A, OGG, FLAC) under
+  Recursively transcribe every audio file (WAV, MP3, M4A, OGG, FLAC, WebM) under
   INPUT_DIR, writing one `<stem>.<ext>` file per format into OUTPUT_DIR.
   Files are processed in parallel (--pool-size workers). Files already inside
   a --move-to directory are excluded from the scan.

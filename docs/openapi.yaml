@@ -23,11 +23,13 @@ info:
 
     ## Audio Formats
 
-    Supported upload formats: WAV, MP3, M4A/AAC, OGG/Vorbis, OGG/Opus (`.opus`),
+    Supported upload formats: WAV (PCM, IEEE float, G.711, G.722, MS/IMA ADPCM,
+    RF64/RIFX/BW64/Wave64), MP3, M4A/AAC, OGG/Vorbis, OGG/Opus (`.opus`),
     WebM/Opus (what a browser's `MediaRecorder` produces), FLAC. Raw headerless
     telephony streams are accepted with
     `?codec=pcmu|pcma|g722&sample_rate=N` (see the transcribe parameters).
-    Containers are decoded server-side via [symphonia](https://github.com/pdeljanov/Symphonia)
+    WAVE-family containers are decoded via [ryf](https://crates.io/crates/ryf);
+    other containers via [symphonia](https://github.com/pdeljanov/Symphonia)
     (Opus packets via pure-Rust `opus-rs`) and resampled to 16 kHz mono.
 
     ## Limits
@@ -45,10 +47,11 @@ info:
       and transcribe in bounded windows, so peak memory stays roughly constant
       regardless of length. The VAD file path and streamed OGG/Opus are
       windowed the same way. Speaker diarization, `channels=split` (including
-      its per-channel Opus decode), and the G.722 / raw telephony codecs hold
+      its per-channel Opus decode), and raw telephony codecs hold
       the whole decoded buffer in memory and always enforce a fixed ~30-minute
       safety ceiling on those paths, independent of `--max-audio-secs`,
-      returning the same `audio_too_long` code
+      returning the same `audio_too_long` code. G.722-in-WAV is windowed like
+      other containers.
     - Pool saturation: REST returns `503 Service Unavailable` + `Retry-After: 30`
 
     ## Error Responses
@@ -192,8 +195,9 @@ paths:
       summary: Transcribe audio file
       description: |
         Upload an audio file and receive a complete transcription.
-        Supports WAV, MP3, M4A/AAC, OGG/Vorbis, OGG/Opus (`.opus`), FLAC, and
-        raw telephony streams via `?codec=` / `?sample_rate=`.
+        Supports WAV (PCM, IEEE float, G.711, G.722, ADPCM, RF64), MP3, M4A/AAC,
+        OGG/Vorbis, OGG/Opus (`.opus`), WebM/Opus, FLAC, and raw telephony
+        streams via `?codec=` / `?sample_rate=`.
 
         The default response is JSON. Alternative export formats are available
         via the `format` query parameter: `txt`, `srt`, `vtt`, `md`. Use
@@ -212,9 +216,10 @@ paths:
         `413 Payload Too Large` and code `audio_too_long`; the default (`0`)
         is unlimited. The VAD file path and streamed OGG/Opus are windowed the
         same way and carry no ceiling of their own. Speaker diarization,
-        `channels=split`, and the G.722 / raw telephony codecs hold the whole
+        `channels=split`, and raw telephony codecs hold the whole
         decoded buffer in memory and always enforce a fixed ~30-minute safety
-        ceiling on those paths, independent of `--max-audio-secs`.
+        ceiling on those paths, independent of `--max-audio-secs`. G.722-in-WAV
+        is windowed like other containers.
       operationId: transcribeFile
       parameters:
         - name: format
@@ -517,7 +522,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
               example:
-                error: "Failed to decode audio file. Check format (WAV, MP3, M4A, OGG, FLAC supported)."
+                error: "Failed to decode audio file. Check format."
                 code: invalid_audio
         "429":
           $ref: "#/components/responses/TooManyRequests"

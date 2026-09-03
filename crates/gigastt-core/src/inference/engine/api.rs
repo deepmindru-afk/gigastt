@@ -3,7 +3,7 @@
 use super::*;
 
 impl Engine {
-    /// Transcribe an audio file to text (supports WAV, MP3, M4A/AAC, OGG, FLAC).
+    /// Transcribe an audio file to text (WAV, MP3, M4A/AAC, OGG, Opus, WebM, FLAC).
     ///
     /// Decodes the file to mono 16kHz, runs the full encoder+decoder pipeline,
     /// and returns the recognized text with word-level details and duration.
