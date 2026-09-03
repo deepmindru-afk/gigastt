@@ -5,7 +5,9 @@ use gigastt_core::export::ExportFormat;
 use std::path::{Path, PathBuf};
 
 /// Audio extensions accepted by the batch / watch walkers (case-insensitive).
-/// Mirrors the symphonia-backed file support of `Engine::transcribe_file`.
+/// Container extensions `Engine::transcribe_file` accepts (WAVE via ryf,
+/// others via symphonia). Headerless raw telephony and `.opus` are not
+/// in this list — they need `--codec` / an explicit path.
 pub const SUPPORTED_EXTENSIONS: &[&str] = &["wav", "mp3", "m4a", "ogg", "flac", "webm"];
 
 /// Whether `path` carries a supported audio extension (case-insensitive).

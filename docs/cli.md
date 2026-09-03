@@ -259,7 +259,7 @@ gigastt transcribe [OPTIONS] <FILE>
                               --sample-rate. Env: GIGASTT_CODEC.
   --sample-rate <HZ>          Sample rate of a raw --codec stream (8000 or 16000
                               for g722). Env: GIGASTT_SAMPLE_RATE.
-  Supports: WAV (incl. G.711 A-law/μ-law and G.722 payloads), M4A, MP3,
+  Supports: WAV (incl. G.711 A-law/μ-law and G.722 payloads, MS/IMA ADPCM, RF64), M4A, MP3,
             OGG/Vorbis, OGG/Opus (.opus), WebM/Opus, FLAC (mono or
             auto-mixed); raw .ulaw/.alaw/.g722 via --codec
 
@@ -270,7 +270,7 @@ gigastt transcribe [OPTIONS] <FILE>
     gigastt transcribe call.ulaw --codec pcmu --sample-rate 8000
 
 gigastt transcribe-batch [OPTIONS] <INPUT_DIR> <OUTPUT_DIR>
-  Recursively transcribe every audio file (WAV, MP3, M4A, OGG, FLAC) under
+  Recursively transcribe every audio file (WAV, MP3, M4A, OGG, FLAC, WebM) under
   INPUT_DIR, writing one `<stem>.<ext>` file per format into OUTPUT_DIR.
   Files are processed in parallel (--pool-size workers). Files already inside
   a --move-to directory are excluded from the scan.

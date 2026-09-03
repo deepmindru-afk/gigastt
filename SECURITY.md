@@ -47,8 +47,8 @@ The following are in scope:
 
 The following are **out of scope**:
 
-- Vulnerabilities in upstream dependencies (ONNX Runtime, axum, tokio, symphonia,
-  etc.) — report those directly to their maintainers
+- Vulnerabilities in upstream dependencies (ONNX Runtime, axum, tokio, ryf,
+  symphonia, etc.) — report those directly to their maintainers
 - Social engineering or phishing attacks
 - Issues in third-party model files hosted on HuggingFace
 - Findings that require physical access to the machine running the server

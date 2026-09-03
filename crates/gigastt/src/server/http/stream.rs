@@ -218,7 +218,7 @@ pub async fn transcribe_stream(
                         tracing::error!("SSE audio decode error: {e:#}");
                         let _ = tx.blocking_send(Err(StreamError {
                             code,
-                            message: "Failed to decode audio file. Check format (WAV, MP3, M4A, OGG, FLAC supported).".into(),
+                            message: "Failed to decode audio file. Check format.".into(),
                         }));
                         return;
                     }
@@ -286,7 +286,7 @@ pub(super) fn map_stream_open_error(e: anyhow::Error) -> ApiError {
     tracing::error!("Audio decode error: {e:#}");
     api_error(
         StatusCode::UNPROCESSABLE_ENTITY,
-        "Failed to decode audio file. Check format (WAV, MP3, M4A, OGG, FLAC supported).",
+        "Failed to decode audio file. Check format.",
         "invalid_audio",
     )
 }

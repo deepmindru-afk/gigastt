@@ -111,7 +111,7 @@ crates/
 - **INT8 only**: `download` / `serve` / engine load use lean prequantized INT8 (~225 MB)
   - Engine rejects FP32-only installs (no fallback)
   - `gigastt quantize` is packaging-only (needs local FP32 source)
-- **Zero-copy REST upload path** (v0.9.0): `bytes::Bytes` flows end-to-end from axum into symphonia via a crate-private `BytesMediaSource`, eliminating the 4× upload copy that used to OOM small containers on concurrent 10-minute uploads.
+- **Zero-copy REST upload path** (v0.9.0): `bytes::Bytes` flows end-to-end from axum into decode — WAVE via ryf (`Cursor<Bytes>`), other containers via a crate-private `BytesMediaSource` into symphonia — eliminating the 4× upload copy that used to OOM small containers on concurrent 10-minute uploads.
 
 ### Key constants (defined in `crates/gigastt-core/src/inference/mod.rs`)
 - `N_MELS = 64`, `N_FFT = 320`, `HOP_LENGTH = 160`, `PRED_HIDDEN = 320`
@@ -212,7 +212,7 @@ OpenSLR download that does not fit the CI cache budget, so these never run in CI
 - **No internal task-tracker IDs outside the tracker itself.** Never write tracker indices (`TTX-NN`, `T-NNN`, `V1-NN`, `SUS-NN`, `TODO-NN`, ticket keys, etc.) into source comments/code, `CHANGELOG.md`, `docs/`, CI/workflows, README, user-facing text, **git branch names**, **commit subjects/bodies**, or **PR titles/descriptions**. They are noise without the tracker. Use conventional language only (e.g. branch `ttx/lazy-speaker`, commit `feat(core): lazy-load speaker encoder…`). Link work to a tracked item only inside tracker docs: anything under `specs/` (notably `specs/todo.md`, `specs/plan.md`, `specs/prod-readiness-v1.0.md`, `specs/resource-ttx-roadmap.md`, and lab notes under `specs/research/`) or `roadmap/` — both are the tracker. Everything outside those two directories must stay index-free.
 
 ### Audio format support
-- File transcription: WAV, M4A/AAC, MP3, OGG/Vorbis, FLAC (via symphonia); OGG/Opus and WebM/Opus (symphonia demux + the pure-Rust `opus-rs` decoder)
+- File transcription: WAV family via `ryf` (PCM/IEEE, G.711, G.722, ADPCM, RF64); M4A/AAC, MP3, OGG/Vorbis, FLAC (via symphonia); OGG/Opus and WebM/Opus (symphonia demux + the pure-Rust `opus-rs` decoder)
 - WebSocket: raw PCM16 binary frames at configurable sample rate (8kHz/16kHz/24kHz/44.1kHz/48kHz, default 48kHz); resampled to 16kHz server-side via rubato
 - Auto mono mix for multi-channel files
 

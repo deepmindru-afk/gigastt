@@ -15,14 +15,14 @@ use symphonia::core::meta::MetadataOptions;
 use super::super::decode::BytesMediaSource;
 use super::super::opus::{OPUS_DECODE_RATE, OpusStream, next_demux_packet};
 use super::super::resample::{RESAMPLE_STAGING_FRAMES, ResampleTo16k, SampleRate};
-use super::super::telephony::{sniffs_as_g722_wav, try_decode_g722_wav};
+use super::super::wave::{WaveRecv, WaveSource, check_budget, try_open_bytes, try_open_path};
 use super::super::{MAX_SAMPLE_RATE, audio_too_long_err, decode_error, resolve_budget};
 use super::{ChannelSelect, PcmWindow, PcmWindows, WindowCursor, WindowSpec};
 
 use crate::error::GigasttError;
 
-/// The decode engine behind [`FileWindows`]: a streaming symphonia loop, or an
-/// already-materialized buffer for the formats that cannot stream.
+/// The decode engine behind [`FileWindows`]: a streaming symphonia loop, a
+/// WAVE-family ryf pull, or Opus via `opus-rs`.
 #[cfg(feature = "file-decode")]
 enum Source {
     /// Container decoded packet-by-packet, resampled to 16 kHz as it goes.
@@ -71,9 +71,8 @@ enum Source {
         /// move. Bounded by one chunk plus one packet.
         pending: Vec<f32>,
     },
-    /// The whole 16 kHz stream is already in [`FileWindows::buf`]. Used by the
-    /// G.722-in-WAV telephony path (no symphonia decoder).
-    Eager,
+    /// WAVE family (PCM/IEEE, G.711, G.722, ADPCM, RF64/RIFX/Wave64) via ryf.
+    Wave(Box<WaveSource>),
 }
 
 /// A [`PcmWindows`] source that pulls overlapping decode windows straight from an
@@ -113,15 +112,11 @@ pub(crate) struct FileWindows {
 
 #[cfg(feature = "file-decode")]
 impl FileWindows {
-    /// Open a file for windowed decode. Mirrors `decode_audio_file`'s probe/hint
-    /// setup, including the G.722-in-WAV telephony sniff.
+    /// Open a file for windowed decode. WAVE containers go through ryf; everything
+    /// else is probed by symphonia.
     pub(crate) fn open(path: &str, spec: WindowSpec, max_audio_secs: Option<f64>) -> Result<Self> {
-        if sniffs_as_g722_wav(path)? {
-            let bytes = std::fs::read(path)
-                .with_context(|| format!("Failed to read audio file: {path}"))?;
-            if let Some(result) = try_decode_g722_wav(&bytes, max_audio_secs) {
-                return Ok(Self::eager(result?, spec));
-            }
+        if let Some(wave) = try_open_path(path, ChannelSelect::Mono, max_audio_secs)? {
+            return Ok(Self::from_wave(wave, spec, ChannelSelect::Mono));
         }
         let file = std::fs::File::open(path)
             .with_context(|| format!("Failed to open audio file: {path}"))?;
@@ -143,19 +138,19 @@ impl FileWindows {
         spec: WindowSpec,
         max_audio_secs: Option<f64>,
     ) -> Result<Self> {
-        if let Some(result) = try_decode_g722_wav(&data, max_audio_secs) {
-            return Ok(Self::eager(result?, spec));
+        if let Some(wave) = try_open_bytes(data.clone(), ChannelSelect::Mono, max_audio_secs)? {
+            return Ok(Self::from_wave(wave, spec, ChannelSelect::Mono));
         }
         let source = BytesMediaSource::new(data);
         let mss = MediaSourceStream::new(Box::new(source), Default::default());
         Self::from_mss(mss, Hint::new(), spec, max_audio_secs, ChannelSelect::Mono)
     }
 
-    /// Probe the container and either set up the streaming decoder or, for Opus /
-    /// G.722, eagerly materialize the whole 16 kHz buffer. Scalar params are
-    /// copied out (and the non-Opus decoder built) inside one borrow scope so the
-    /// `FormatReader` is free to move or be driven afterwards — the same shape as
-    /// the whole-buffer `decode_audio_inner`.
+    /// Probe a non-WAVE container and set up the streaming decoder (or the
+    /// Opus `opus-rs` fallback). Scalar params are copied out (and the non-Opus
+    /// decoder built) inside one borrow scope so the `FormatReader` is free to
+    /// move or be driven afterwards — the same shape as the whole-buffer
+    /// `decode_audio_inner`.
     fn from_mss(
         mss: MediaSourceStream<'static>,
         hint: Hint,
@@ -282,9 +277,10 @@ impl FileWindows {
         max_audio_secs: Option<f64>,
         channel: usize,
     ) -> Result<Self> {
-        if let Some(result) = try_decode_g722_wav(&data, max_audio_secs) {
-            // G.722-in-WAV is mono by construction; there is no channel to pick.
-            return Ok(Self::eager(result?, spec));
+        if let Some(wave) =
+            try_open_bytes(data.clone(), ChannelSelect::One(channel), max_audio_secs)?
+        {
+            return Ok(Self::from_wave(wave, spec, ChannelSelect::One(channel)));
         }
         let source = BytesMediaSource::new(data);
         let mss = MediaSourceStream::new(Box::new(source), Default::default());
@@ -297,18 +293,16 @@ impl FileWindows {
         )
     }
 
-    /// Build an eager source over an already-decoded 16 kHz buffer.
-    fn eager(buf: Vec<f32>, spec: WindowSpec) -> Self {
-        let total = buf.len();
+    fn from_wave(wave: WaveSource, spec: WindowSpec, channel: ChannelSelect) -> Self {
         Self {
-            src: Source::Eager,
-            eof: true,
-            finished: true,
-            buf,
+            src: Source::Wave(Box::new(wave)),
+            eof: false,
+            finished: false,
+            buf: Vec::new(),
             buf_start_abs: 0,
-            decoded_16k_total: total,
+            decoded_16k_total: 0,
             spec,
-            channel: ChannelSelect::Mono,
+            channel,
             cursor: WindowCursor::new(spec),
         }
     }
@@ -347,8 +341,7 @@ impl FileWindows {
         match self.src {
             Source::Streaming { .. } => self.fill_streaming(target),
             Source::Opus { .. } => self.fill_opus(target),
-            // The whole buffer is already resident.
-            Source::Eager => Ok(()),
+            Source::Wave(_) => self.fill_wave(target),
         }
     }
 
@@ -367,7 +360,7 @@ impl FileWindows {
             interleaved,
         } = &mut self.src
         else {
-            return Ok(()); // Eager: the whole buffer is already resident.
+            return Ok(());
         };
 
         while !self.eof && self.decoded_16k_total < target {
@@ -506,6 +499,46 @@ impl FileWindows {
             pending.clear();
             let before = self.buf.len();
             resampler.finish_into(&mut self.buf)?;
+            self.decoded_16k_total += self.buf.len() - before;
+            self.finished = true;
+        }
+        Ok(())
+    }
+
+    /// [`FileWindows::fill_to`] for WAVE family files decoded by ryf.
+    fn fill_wave(&mut self, target: usize) -> Result<()> {
+        let Source::Wave(wave) = &mut self.src else {
+            return Ok(());
+        };
+
+        while !self.eof && self.decoded_16k_total < target {
+            match wave.recv_block()? {
+                WaveRecv::Block(block) => {
+                    wave.source_frames += block.frames;
+                    check_budget(
+                        wave.source_frames,
+                        wave.sample_rate,
+                        wave.max_samples,
+                        wave.limit_secs,
+                    )?;
+                    if !block.samples.is_empty() {
+                        wave.resampler.stage().extend_from_slice(&block.samples);
+                        wave.resampler.flush_full()?;
+                    }
+                    let before = self.buf.len();
+                    wave.resampler.drain_ready_into(&mut self.buf);
+                    self.decoded_16k_total += self.buf.len() - before;
+                }
+                WaveRecv::Eof => {
+                    self.eof = true;
+                    break;
+                }
+            }
+        }
+
+        if self.eof && !self.finished {
+            let before = self.buf.len();
+            wave.resampler.finish_into(&mut self.buf)?;
             self.decoded_16k_total += self.buf.len() - before;
             self.finished = true;
         }

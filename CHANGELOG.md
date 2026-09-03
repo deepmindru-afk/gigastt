@@ -13,6 +13,16 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 
 ## [Unreleased]
 
+### Changed
+
+- **WAVE ingest via [ryf](https://crates.io/crates/ryf) 0.4.** File WAV
+  (PCM/IEEE, G.711, G.722 tags `0x0064`/`0x0065`/`0x028F`, MS/IMA ADPCM,
+  RF64/RIFX/BW64/Wave64) and headerless `?codec=pcmu|pcma|g722` decode
+  through ryf instead of symphonia + `audio-codec`. G.722-in-WAV is
+  windowed like other containers (no 30-minute eager cap). MP3/M4A/FLAC/OGG/Opus
+  stay on symphonia / `opus-rs`. `audio-codec` remains a test-only encoder
+  for telephony fixtures.
+
 ### Fixed
 
 - **Publish dry-run after a version bump.** `gigastt-quantize` is on
@@ -22,13 +32,13 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
   published. The job now accepts that version-select miss as well (match
   `gigastt-quantize = "^X.Y.Z"`, not a closing backtick right after the
   crate name).
-
-### Changed
-
-- **audio-codec 0.3 → 0.4.** Telephony G.711/G.722 decode uses the
-  heap-free `decode_into` / `encode_into` API (`Decoder`/`Encoder` are
-  traits; the allocating `decode`/`encode` helpers need the `std`
-  feature, which we keep off so we do not pull a second Opus).
+- **Docker dep-cache layer** stubs `benches/decode.rs` next to the other
+  Criterion benches, so `cargo build` in the image can parse
+  `gigastt-core`'s `[[bench]]` table.
+- **OpenAPI / AsyncAPI duration wording.** G.722-in-WAV is windowed; only
+  raw telephony (plus diarization / `channels=split`) still holds the
+  whole-buffer ~30-minute ceiling. The specs still said "G.722 / raw
+  telephony".
 
 ## [2.19.0] - 2026-08-31
 
