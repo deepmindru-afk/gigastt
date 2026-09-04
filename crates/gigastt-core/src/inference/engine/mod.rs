@@ -11,20 +11,20 @@ use crate::runtime::production_factory_variant;
 use crate::runtime::tensor::{Shape, TensorDataView};
 
 use super::audio;
-use super::audio::{PcmWindows, SliceWindows, WindowSpec};
+use super::audio::{PcmWindow, PcmWindows, SliceWindows, WindowSpec};
 use super::bias;
 use super::ctc;
 use super::decode;
 use super::load_files::{
     ResolvedModelFiles, encoder_model_path, load_triplets_runtime, resolve_variant_required,
 };
-use super::pool::{Pool, SessionPool, SessionTriplet};
+use super::pool::{Pool, PoolError, PoolGuard, SessionPool, SessionTriplet};
 use super::sizing;
 use super::state::{
     DecoderState, EndpointMode, EndpointReason, FeatureExtractor, StreamingState,
     TranscriptAssembler, TranscriptSegment, WordInfo, aggregate_confidence,
 };
-use super::token_format::{TokenFormatter, stitch_chunk_words};
+use super::token_format::{TokenFormatter, overlap_mid_seconds, stitch_chunk_words};
 use super::tokenizer::Tokenizer;
 use super::types::{
     DEFAULT_HOTWORDS_BOOST, DiarizationOutcome, HotwordError, HotwordOverride,
@@ -172,6 +172,12 @@ pub struct Engine {
     /// the loaded encoder session at boot, not from compile-time features alone,
     /// so non-rnnt heads on an `ane`-feature binary still use the ort window.
     ane_encoder: bool,
+    /// Max session triplets one file decode may hold for overlapping-window
+    /// parallelism. `1` (default) is the historical serial loop. Values `> 1`
+    /// `try_checkout` idle extra slots from the batch pool; if none are free
+    /// the file stays serial. Never waits for a slot (that would deadlock two
+    /// long files each holding one triplet).
+    file_window_concurrency: usize,
     /// Lazy speaker encoder for diarization (`None` if model file is absent).
     ///
     /// Boot only probes for `wespeaker_resnet34.onnx`; the ONNX session is

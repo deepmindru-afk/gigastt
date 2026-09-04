@@ -162,6 +162,7 @@ impl Engine {
             stream_stable_prefix: true,
             int8,
             ane_encoder,
+            file_window_concurrency: 1,
             #[cfg(feature = "diarization")]
             speaker_encoder,
         }

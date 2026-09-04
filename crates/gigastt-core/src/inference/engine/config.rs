@@ -246,6 +246,19 @@ impl Engine {
         self
     }
 
+    /// Max pooled triplets one file decode may hold for overlapping-window
+    /// parallelism (including the caller's already-checked-out slot). `1`
+    /// (the default) keeps the serial loop. Values below 1 are clamped to 1.
+    pub fn with_file_window_concurrency(mut self, n: usize) -> Self {
+        self.file_window_concurrency = n.max(1);
+        self
+    }
+
+    /// Resolved file-window concurrency cap (`>= 1`).
+    pub fn file_window_concurrency(&self) -> usize {
+        self.file_window_concurrency.max(1)
+    }
+
     /// Whether stable-prefix commits are enabled.
     pub fn has_stream_stable_prefix(&self) -> bool {
         self.stream_stable_prefix

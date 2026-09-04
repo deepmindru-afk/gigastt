@@ -220,6 +220,13 @@ enum Commands {
         #[arg(long, env = "GIGASTT_ENCODER_INTRA_THREADS")]
         encoder_intra_threads: Option<usize>,
 
+        /// Max pooled triplets this file decode may hold to run overlapping
+        /// 24 s windows in parallel. Default `1` is serial (one triplet, all
+        /// cores). `2` loads two triplets and splits encoder threads across
+        /// them. Env: GIGASTT_FILE_WINDOW_CONCURRENCY.
+        #[arg(long, env = "GIGASTT_FILE_WINDOW_CONCURRENCY", default_value_t = 1)]
+        file_window_concurrency: usize,
+
         /// Export format: json, txt, srt, vtt, md [default: txt]
         #[arg(short, long, env = "GIGASTT_FORMAT", default_value = "txt")]
         format: String,
@@ -397,6 +404,7 @@ async fn main() -> anyhow::Result<()> {
             vad_min_silence_ms,
             vad_model_dir,
             encoder_intra_threads,
+            file_window_concurrency,
             format,
             output,
             max_chars_per_line,
@@ -421,6 +429,7 @@ async fn main() -> anyhow::Result<()> {
                 vad_min_silence_ms,
                 vad_model_dir,
                 encoder_intra_threads,
+                file_window_concurrency,
                 format,
                 output,
                 max_chars_per_line,

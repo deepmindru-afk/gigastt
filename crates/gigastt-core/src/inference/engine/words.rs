@@ -2,6 +2,65 @@
 
 use super::*;
 
+/// One long-form window copied out of a [`PcmWindows`] source so overlapping
+/// windows can be decoded on separate triplets without holding a borrow into
+/// the rolling file buffer.
+struct OwnedPcmWindow {
+    start_sample: usize,
+    samples: Vec<f32>,
+}
+
+impl From<&PcmWindow<'_>> for OwnedPcmWindow {
+    fn from(window: &PcmWindow<'_>) -> Self {
+        Self {
+            start_sample: window.start_sample,
+            samples: window.samples.to_vec(),
+        }
+    }
+}
+
+impl OwnedPcmWindow {
+    fn span(&self) -> PcmSpan<'_> {
+        PcmSpan {
+            start_sample: self.start_sample,
+            samples: &self.samples,
+        }
+    }
+}
+
+fn next_owned_window(windows: &mut dyn PcmWindows) -> Result<Option<OwnedPcmWindow>, GigasttError> {
+    Ok(windows.next_window()?.map(|w| OwnedPcmWindow::from(&w)))
+}
+
+/// Borrowed PCM window (origin + samples) shared by the serial iterator
+/// path and owned copies so finish/stitch take one argument.
+struct PcmSpan<'a> {
+    start_sample: usize,
+    samples: &'a [f32],
+}
+
+impl<'a> From<&'a PcmWindow<'_>> for PcmSpan<'a> {
+    fn from(window: &'a PcmWindow<'_>) -> Self {
+        Self {
+            start_sample: window.start_sample,
+            samples: window.samples,
+        }
+    }
+}
+
+fn stitch_report(
+    merged: Vec<WordInfo>,
+    start_sample: usize,
+    n_samples: usize,
+    words: Vec<WordInfo>,
+    overlap: usize,
+    ctl: DecodeControls<'_>,
+) -> Vec<WordInfo> {
+    let merged = stitch_chunk_words(merged, words, overlap_mid_seconds(start_sample, overlap));
+    ctl.report((start_sample + n_samples) as u64);
+    merged
+}
+
 impl Engine {
     /// Decode a 16 kHz f32 buffer to words: single-pass for short inputs (one
     /// encoder Run over the whole buffer), chunked overlapping windows for long
@@ -104,6 +163,12 @@ impl Engine {
     ///
     /// Takes the PCM as a [`PcmWindows`] source rather than a `&[f32]`, so the
     /// loop makes no assumption that the whole file is in memory.
+    ///
+    /// When [`Engine::file_window_concurrency`] is `> 1` and the clip has at
+    /// least two windows, idle extra triplets are `try_checkout_n`'d from the
+    /// batch pool (never waited on) so independent windows can encode in
+    /// parallel. A closed pool cancels rather than serial-decoding the rest.
+    /// Short files and a saturated pool stay on the serial loop.
     pub(crate) fn decode_words_streaming(
         &self,
         windows: &mut dyn PcmWindows,
@@ -112,48 +177,229 @@ impl Engine {
         ctl: DecodeControls,
     ) -> Result<Vec<WordInfo>, GigasttError> {
         let overlap = windows.spec().overlap();
-        let frame_samples = HOP_LENGTH * ENCODER_SUBSAMPLING;
+        let cap = self.file_window_concurrency();
+        if cap <= 1 {
+            return self.decode_windows_serial(windows, triplet, biaser, ctl, overlap, Vec::new());
+        }
+        self.decode_windows_maybe_parallel(windows, triplet, biaser, ctl, overlap, cap)
+    }
 
-        let mut merged: Vec<WordInfo> = Vec::new();
-        while let Some(window) = windows.next_window()? {
-            // Cooperative cancellation checkpoint: a flipped abort flag ends the
-            // run at this window boundary, so a cancelled request (client
-            // disconnect, `DELETE /v1/jobs/{id}`, shutdown, or the no-progress
-            // watchdog) frees its pooled session within one window instead of
-            // decoding the rest of the file.
+    fn decode_windows_maybe_parallel(
+        &self,
+        windows: &mut dyn PcmWindows,
+        triplet: &mut SessionTriplet,
+        biaser: Option<&bias::Biaser>,
+        ctl: DecodeControls,
+        overlap: usize,
+        cap: usize,
+    ) -> Result<Vec<WordInfo>, GigasttError> {
+        // Copy the first window so we can peek a second without holding a
+        // borrow into `FileWindows`. A single-window file never steals extras.
+        let Some(first) = next_owned_window(windows)? else {
+            return Ok(Vec::new());
+        };
+        if ctl.aborted() {
+            return Err(GigasttError::Cancelled);
+        }
+        let Some(second) = next_owned_window(windows)? else {
+            return self.finish_window(Vec::new(), first.span(), overlap, triplet, biaser, ctl);
+        };
+
+        let mut extras = match self.pool_for_batch().try_checkout_n(cap.saturating_sub(1)) {
+            Ok(guards) => guards,
+            // Shutdown closed the pool: do not serial-decode the rest of the
+            // file on the slot we already hold. The watchdog also flips abort,
+            // but Closed is the stronger signal and wins the race.
+            Err(PoolError::Closed) => return Err(GigasttError::Cancelled),
+        };
+        if extras.is_empty() {
+            tracing::debug!(
+                cap,
+                "long-form window-parallel requested; no idle extra slot, serial"
+            );
+            let mut merged =
+                self.finish_window(Vec::new(), first.span(), overlap, triplet, biaser, ctl)?;
+            merged = self.finish_window(merged, second.span(), overlap, triplet, biaser, ctl)?;
+            return self.decode_windows_serial(windows, triplet, biaser, ctl, overlap, merged);
+        }
+
+        tracing::info!(slots = 1 + extras.len(), "long-form window-parallel decode");
+        let n_slots = 1 + extras.len();
+        let mut pending = vec![first, second];
+        let mut merged = Vec::new();
+        loop {
             if ctl.aborted() {
                 return Err(GigasttError::Cancelled);
             }
-            let start = window.start_sample;
-            // Window ends advance monotonically, so this doubles as the
-            // cumulative processed-sample count reported below.
-            let win_end = start + window.samples.len();
-            let (features, num_frames) = self.features.compute(window.samples);
-            let frame_offset = start / frame_samples;
-            let mut decoder_state = DecoderState::new(self.tokenizer.blank_id());
-            let (chunk_words, _endpoint) = self
-                .run_inference(
-                    triplet,
-                    &features,
-                    num_frames,
-                    &mut decoder_state,
-                    frame_offset,
-                    false, // file-mode fill floor
-                    biaser,
-                )
-                .map_err(|e| GigasttError::Inference { source: e.into() })?;
-
-            // Seam between the previous chunk's window and this one falls at the
-            // midpoint of their overlap region, in absolute seconds.
-            let overlap_mid_s = (start as f64 + overlap as f64 / 2.0) / 16000.0;
-            merged = stitch_chunk_words(merged, chunk_words, overlap_mid_s);
-
-            // A completed window is one unit of real progress: it resets the
-            // server's no-progress deadline and advances a job's bar by the
-            // seconds of audio just decoded (`win_end / 16000`).
-            ctl.report(win_end as u64);
+            while pending.len() < n_slots {
+                match next_owned_window(windows)? {
+                    Some(w) => pending.push(w),
+                    None => break,
+                }
+            }
+            if pending.is_empty() {
+                break;
+            }
+            // Last wave is often shorter than `n_slots`. Drop idle extras
+            // before the encoder Run so another request can take them.
+            extras.truncate(pending.len().saturating_sub(1));
+            // Fill can take a while (container decode). Re-check before the
+            // encoder wave so a cancel during pull does not start another Run.
+            if ctl.aborted() {
+                return Err(GigasttError::Cancelled);
+            }
+            let decoded = self.decode_wave_parallel(&pending, triplet, &mut extras, biaser)?;
+            for (win, words) in pending.iter().zip(decoded) {
+                merged = stitch_report(
+                    merged,
+                    win.start_sample,
+                    win.samples.len(),
+                    words,
+                    overlap,
+                    ctl,
+                );
+            }
+            pending.clear();
         }
         Ok(merged)
+    }
+
+    fn decode_windows_serial(
+        &self,
+        windows: &mut dyn PcmWindows,
+        triplet: &mut SessionTriplet,
+        biaser: Option<&bias::Biaser>,
+        ctl: DecodeControls,
+        overlap: usize,
+        mut merged: Vec<WordInfo>,
+    ) -> Result<Vec<WordInfo>, GigasttError> {
+        while let Some(window) = windows.next_window()? {
+            merged = self.finish_window(
+                merged,
+                PcmSpan::from(&window),
+                overlap,
+                triplet,
+                biaser,
+                ctl,
+            )?;
+        }
+        Ok(merged)
+    }
+
+    fn finish_window(
+        &self,
+        merged: Vec<WordInfo>,
+        window: PcmSpan<'_>,
+        overlap: usize,
+        triplet: &mut SessionTriplet,
+        biaser: Option<&bias::Biaser>,
+        ctl: DecodeControls,
+    ) -> Result<Vec<WordInfo>, GigasttError> {
+        if ctl.aborted() {
+            return Err(GigasttError::Cancelled);
+        }
+        let words =
+            self.decode_samples_window(window.samples, window.start_sample, triplet, biaser)?;
+        Ok(stitch_report(
+            merged,
+            window.start_sample,
+            window.samples.len(),
+            words,
+            overlap,
+            ctl,
+        ))
+    }
+
+    fn decode_samples_window(
+        &self,
+        samples: &[f32],
+        start_sample: usize,
+        triplet: &mut SessionTriplet,
+        biaser: Option<&bias::Biaser>,
+    ) -> Result<Vec<WordInfo>, GigasttError> {
+        let frame_samples = HOP_LENGTH * ENCODER_SUBSAMPLING;
+        let (features, num_frames) = self.features.compute(samples);
+        let frame_offset = start_sample / frame_samples;
+        let mut decoder_state = DecoderState::new(self.tokenizer.blank_id());
+        self.run_inference(
+            triplet,
+            &features,
+            num_frames,
+            &mut decoder_state,
+            frame_offset,
+            false, // file-mode fill floor
+            biaser,
+        )
+        .map(|r| r.0)
+        .map_err(|e| GigasttError::Inference { source: e.into() })
+    }
+
+    fn decode_wave_parallel(
+        &self,
+        wave: &[OwnedPcmWindow],
+        primary: &mut SessionTriplet,
+        extras: &mut [PoolGuard<SessionTriplet>],
+        biaser: Option<&bias::Biaser>,
+    ) -> Result<Vec<Vec<WordInfo>>, GigasttError> {
+        debug_assert!(!wave.is_empty());
+        // `zip` would silently drop windows if extras ran short — that is a
+        // lost-audio bug, so fail loud instead of stitching a hole.
+        if wave.len() > 1 + extras.len() {
+            return Err(GigasttError::Inference {
+                source: anyhow::anyhow!("window-parallel decode ran out of session triplets")
+                    .into(),
+            });
+        }
+        if wave.len() == 1 {
+            return Ok(vec![self.decode_samples_window(
+                &wave[0].samples,
+                wave[0].start_sample,
+                primary,
+                biaser,
+            )?]);
+        }
+
+        std::thread::scope(|s| {
+            let mut handles = Vec::with_capacity(wave.len());
+            handles.push(s.spawn(|| {
+                self.decode_samples_window(&wave[0].samples, wave[0].start_sample, primary, biaser)
+            }));
+            for (win, guard) in wave[1..].iter().zip(extras.iter_mut()) {
+                handles.push(s.spawn(move || {
+                    self.decode_samples_window(&win.samples, win.start_sample, guard, biaser)
+                }));
+            }
+            // Join every handle before returning: a leftover panicking sibling
+            // would otherwise make `thread::scope` panic on the way out and
+            // swallow the first worker's `Result`.
+            let mut out = Vec::with_capacity(handles.len());
+            let mut first_err: Option<GigasttError> = None;
+            for handle in handles {
+                match handle.join() {
+                    Ok(Ok(words)) => {
+                        if first_err.is_none() {
+                            out.push(words);
+                        }
+                    }
+                    Ok(Err(e)) => {
+                        if first_err.is_none() {
+                            first_err = Some(e);
+                        }
+                    }
+                    Err(_) => {
+                        if first_err.is_none() {
+                            first_err = Some(GigasttError::Inference {
+                                source: anyhow::anyhow!("window decode thread panicked").into(),
+                            });
+                        }
+                    }
+                }
+            }
+            match first_err {
+                Some(e) => Err(e),
+                None => Ok(out),
+            }
+        })
     }
 
     /// Decode a 16 kHz f32 buffer to words, applying VAD if configured.

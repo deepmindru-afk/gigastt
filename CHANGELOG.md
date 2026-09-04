@@ -13,6 +13,19 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 
 ## [Unreleased]
 
+### Added
+
+- **Optional long-form window parallelism (`--file-window-concurrency`).** File
+  transcription still defaults to one pooled triplet per request (serial 24 s
+  windows). `N>1` `try_checkout`s idle extra batch-pool slots and decodes
+  independent windows concurrently (`std::thread::scope`); if no slot is free
+  the file stays serial. Never waits for a second slot (two long files each
+  holding one triplet would otherwise deadlock). A closed pool cancels the
+  file instead of falling back to serial. Unused extras are released before
+  a short last wave. WebSocket is unchanged. Env
+  `GIGASTT_FILE_WINDOW_CONCURRENCY`. Offline `transcribe` loads `N` triplets
+  so a single long file can actually use them.
+
 ## [2.20.0] - 2026-09-03
 
 ### Changed

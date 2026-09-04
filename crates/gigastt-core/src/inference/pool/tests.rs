@@ -40,6 +40,99 @@ fn test_pool_error_display() {
     assert_eq!(format!("{}", PoolError::Closed), "session pool is closed");
 }
 
+#[test]
+fn test_pool_try_checkout_takes_available_without_waiters() {
+    let pool = Pool::new(vec![1u32, 2]);
+    let a = pool.try_checkout().expect("open").expect("slot");
+    assert_eq!(*a, 1);
+    assert_eq!(pool.available(), 1);
+    assert_eq!(pool.waiters(), 0);
+    let b = pool.try_checkout().expect("open").expect("slot");
+    assert_eq!(*b, 2);
+    assert_eq!(pool.available(), 0);
+    assert_eq!(pool.waiters(), 0);
+    assert!(pool.try_checkout().expect("open").is_none());
+    assert_eq!(pool.waiters(), 0);
+    drop(a);
+    drop(b);
+    assert_eq!(pool.available(), 2);
+}
+
+#[test]
+fn test_pool_try_checkout_empty_does_not_block() {
+    let pool = std::sync::Arc::new(Pool::new(vec![1u32]));
+    let held = pool.checkout_blocking().unwrap();
+    let started = std::time::Instant::now();
+    let got = pool.try_checkout().expect("open");
+    assert!(got.is_none());
+    assert!(
+        started.elapsed() < std::time::Duration::from_millis(50),
+        "try_checkout must not wait for a checkin"
+    );
+    assert_eq!(pool.waiters(), 0);
+    drop(held);
+}
+
+#[test]
+fn test_pool_try_checkout_closed() {
+    let pool = Pool::<u32>::new(vec![1]);
+    pool.close();
+    assert!(matches!(pool.try_checkout(), Err(PoolError::Closed)));
+}
+
+#[test]
+fn test_pool_try_checkout_n_takes_up_to_n_without_waiters() {
+    let pool = Pool::new(vec![1u32, 2, 3]);
+    let got = pool.try_checkout_n(2).expect("open");
+    assert_eq!(got.len(), 2);
+    assert_eq!(*got[0], 1);
+    assert_eq!(*got[1], 2);
+    assert_eq!(pool.available(), 1);
+    assert_eq!(pool.waiters(), 0);
+    drop(got);
+    assert_eq!(pool.available(), 3);
+}
+
+#[test]
+fn test_pool_try_checkout_n_stops_when_empty() {
+    let pool = Pool::new(vec![1u32]);
+    let got = pool.try_checkout_n(5).expect("open");
+    assert_eq!(got.len(), 1);
+    assert_eq!(*got[0], 1);
+    assert!(pool.try_checkout_n(1).expect("open").is_empty());
+    assert_eq!(pool.waiters(), 0);
+}
+
+#[test]
+fn test_pool_try_checkout_n_zero_skips_closed() {
+    let pool = Pool::new(vec![1u32]);
+    pool.close();
+    assert!(pool.try_checkout_n(0).expect("open").is_empty());
+    assert!(matches!(pool.try_checkout_n(1), Err(PoolError::Closed)));
+}
+
+#[test]
+fn test_pool_try_checkout_n_closed() {
+    let pool = Pool::<u32>::new(vec![1, 2]);
+    pool.close();
+    assert!(matches!(pool.try_checkout_n(2), Err(PoolError::Closed)));
+}
+
+#[test]
+fn test_pool_try_checkout_n_empty_does_not_block() {
+    let pool = std::sync::Arc::new(Pool::new(vec![1u32]));
+    let held = pool.checkout_blocking().unwrap();
+    let started = std::time::Instant::now();
+    let got = pool.try_checkout_n(3).expect("open");
+    assert!(got.is_empty());
+    assert!(
+        started.elapsed() < std::time::Duration::from_millis(50),
+        "try_checkout_n must not wait for a checkin"
+    );
+    assert_eq!(pool.waiters(), 0);
+    drop(held);
+}
+
 // ---- Pool tests (B.7) ---------------------------------------------------
 //
 // These exercise `Pool<T>` with synthetic items so the contract is
