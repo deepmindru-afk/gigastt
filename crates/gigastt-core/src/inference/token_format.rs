@@ -43,6 +43,13 @@ pub(crate) fn stitch_chunk_words(
     merged
 }
 
+/// Absolute-seconds midpoint of the overlap between this window and the
+/// previous one. `start_sample` is the window's 16 kHz origin; `overlap_samples`
+/// is the shared tail/head (2 s = 32_000 at the file-chunk geometry).
+pub(crate) fn overlap_mid_seconds(start_sample: usize, overlap_samples: usize) -> f64 {
+    (start_sample as f64 + overlap_samples as f64 / 2.0) / 16_000.0
+}
+
 /// Groups RNN-T decoded tokens into words at BPE word boundaries (`▁`).
 ///
 /// Split out of `Engine` so the formatting logic is unit-testable without a

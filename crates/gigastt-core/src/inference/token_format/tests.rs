@@ -84,6 +84,15 @@ fn test_stitch_first_chunk_passes_through() {
 }
 
 #[test]
+fn test_overlap_mid_seconds_is_start_plus_half_overlap() {
+    // File-chunk overlap is 2 s @16 kHz. A window at t=0 seams at 1.0 s;
+    // a window whose start is the 22 s stride (352_000) seams at 23.0 s.
+    assert_eq!(overlap_mid_seconds(0, CHUNK_OVERLAP_SAMPLES), 1.0);
+    assert_eq!(overlap_mid_seconds(352_000, CHUNK_OVERLAP_SAMPLES), 23.0);
+    assert_eq!(overlap_mid_seconds(0, 0), 0.0);
+}
+
+#[test]
 fn test_stitch_dedups_overlap_no_drop_no_dup() {
     // Two 24s windows with a 22s stride: chunk B starts at 22s, overlap
     // [22s, 24s], seam at 23s. The word "dup" at ~22.5s is decoded by both

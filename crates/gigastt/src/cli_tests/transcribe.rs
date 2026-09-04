@@ -27,6 +27,52 @@ fn test_cli_transcribe_encoder_intra_threads_flag() {
 }
 
 #[test]
+fn test_cli_transcribe_file_window_concurrency_default() {
+    let _guard = ENV_LOCK.lock().unwrap();
+    let _restore = EnvRestore(
+        "GIGASTT_FILE_WINDOW_CONCURRENCY",
+        std::env::var("GIGASTT_FILE_WINDOW_CONCURRENCY").ok(),
+    );
+    unsafe {
+        std::env::remove_var("GIGASTT_FILE_WINDOW_CONCURRENCY");
+    }
+    let cli = Cli::parse_from(["gigastt", "transcribe", "audio.wav"]);
+    match cli.command {
+        Commands::Transcribe {
+            file_window_concurrency,
+            ..
+        } => assert_eq!(file_window_concurrency, 1),
+        _ => panic!("expected Transcribe"),
+    }
+}
+
+#[test]
+fn test_cli_transcribe_file_window_concurrency_flag() {
+    let _guard = ENV_LOCK.lock().unwrap();
+    let _restore = EnvRestore(
+        "GIGASTT_FILE_WINDOW_CONCURRENCY",
+        std::env::var("GIGASTT_FILE_WINDOW_CONCURRENCY").ok(),
+    );
+    unsafe {
+        std::env::remove_var("GIGASTT_FILE_WINDOW_CONCURRENCY");
+    }
+    let cli = Cli::parse_from([
+        "gigastt",
+        "transcribe",
+        "audio.wav",
+        "--file-window-concurrency",
+        "2",
+    ]);
+    match cli.command {
+        Commands::Transcribe {
+            file_window_concurrency,
+            ..
+        } => assert_eq!(file_window_concurrency, 2),
+        _ => panic!("expected Transcribe"),
+    }
+}
+
+#[test]
 fn test_cli_transcribe_parsing() {
     let cli = Cli::parse_from(["gigastt", "transcribe", "audio.wav"]);
     match cli.command {
