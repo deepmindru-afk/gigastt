@@ -450,6 +450,7 @@ reference: [`docs/cli.md`](docs/cli.md) (enforced by `scripts/check-docs-drift.p
 | `GIGASTT_VAD_MIN_SILENCE_MS` | `--vad-min-silence-ms` | (see serve help) |
 | `GIGASTT_VAD_MODEL_DIR` | `--vad-model-dir` | `~/.gigastt/models/vad/` |
 | `GIGASTT_ENCODER_INTRA_THREADS` | `--encoder-intra-threads` | auto |
+| `GIGASTT_FILE_WINDOW_CONCURRENCY` | `--file-window-concurrency` | 1 |
 | `GIGASTT_FORMAT` | `transcribe --format` | `txt` (`txt,json` for batch / watch) |
 | `GIGASTT_OUTPUT` | `transcribe --output` | — |
 | `GIGASTT_MAX_CHARS_PER_LINE` | `--max-chars-per-line` | — |

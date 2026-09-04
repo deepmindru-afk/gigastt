@@ -218,6 +218,7 @@ pub(crate) async fn run_transcribe(
     vad_min_silence_ms: Option<u32>,
     vad_model_dir: String,
     encoder_intra_threads: Option<usize>,
+    file_window_concurrency: usize,
     format: String,
     output: Option<String>,
     max_chars_per_line: Option<usize>,
@@ -227,9 +228,11 @@ pub(crate) async fn run_transcribe(
     codec: Option<String>,
     sample_rate: Option<u32>,
 ) -> anyhow::Result<()> {
-    // Single-triplet pool for offline file transcription; when the
-    // thread count is unset it defaults to every logical CPU (one
-    // running triplet), else the explicit value is used as-is.
+    // Default one triplet so unset `--encoder-intra-threads` uses every
+    // logical CPU. `--file-window-concurrency N` loads N triplets so a
+    // long file can decode overlapping windows in parallel (threads split
+    // across the pool at load).
+    let file_window_concurrency = file_window_concurrency.max(1);
     let engine = EngineRecipe::offline(
         model_dir,
         model_variant,
@@ -244,11 +247,13 @@ pub(crate) async fn run_transcribe(
         vad_min_silence_ms,
         vad_model_dir,
         encoder_intra_threads,
-        1,
+        file_window_concurrency,
     )
+    .with_file_window_concurrency(file_window_concurrency)
     .load_offline_engine()
     .await?;
-    let mut guard = engine.pool.checkout().await?;
+    // Same pool extras steal from (`batch_pool` when split, else `pool`).
+    let mut guard = engine.pool_for_batch().checkout().await?;
     let result = if let Some(codec_name) = codec.as_deref() {
         // Raw headerless telephony input: decode via the codec tables
         // straight to mono 16 kHz f32 and hand the samples to the engine.

@@ -101,6 +101,12 @@ gigastt serve [OPTIONS]
                             Avoid `1` on multi-core (~3× slower than auto); explicit
                             `1` is still allowed for debugging.
                             Env: GIGASTT_ENCODER_INTRA_THREADS.
+  --file-window-concurrency <N>  Max pooled triplets one file transcription may
+                            hold to decode overlapping 24 s windows in parallel
+                            [default: 1]. `1` is serial. `2` with `--pool-size 2`
+                            uses an idle extra slot (try-checkout, never waits).
+                            File path only; WebSocket is unchanged.
+                            Env: GIGASTT_FILE_WINDOW_CONCURRENCY.
   --pool-checkout-timeout-secs <S>  Seconds a handler waits for a free session triplet
                             before returning 503 + retry_after_ms [default: 30].
                             Longer = queue under saturation; shorter = fail-fast.
@@ -241,6 +247,10 @@ gigastt transcribe [OPTIONS] <FILE>
                               `1` on multi-core (~3× slower than auto); explicit
                               `1` still allowed for debugging.
                               Env: GIGASTT_ENCODER_INTRA_THREADS.
+  --file-window-concurrency <N>  Max triplets this file decode may hold to run
+                              overlapping 24 s windows in parallel [default: 1].
+                              `2` loads two triplets and splits encoder threads.
+                              Env: GIGASTT_FILE_WINDOW_CONCURRENCY.
   -f, --format <FORMAT>       Export format: json, txt, srt, vtt, md [default: txt].
                               Env: GIGASTT_FORMAT.
   -o, --output <FILE>         Write rendered output to file instead of stdout.
