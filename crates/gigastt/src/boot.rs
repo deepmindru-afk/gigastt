@@ -122,6 +122,9 @@ pub struct EngineRecipe {
     /// Stable-prefix commits at the window cap (serve flag; engine default is
     /// on, offline recipes leave it off — they never slide a streaming window).
     pub stream_stable_prefix: bool,
+    /// Max pooled triplets one file decode may hold for overlapping-window
+    /// parallelism. `1` keeps the serial loop (default).
+    pub file_window_concurrency: usize,
 }
 
 impl EngineRecipe {
@@ -166,7 +169,14 @@ impl EngineRecipe {
             endpoint_mode: None,
             stream_max_window_secs: None,
             stream_stable_prefix: false,
+            file_window_concurrency: 1,
         }
+    }
+
+    /// Cap overlapping-window parallelism for file transcription.
+    pub fn with_file_window_concurrency(mut self, n: usize) -> Self {
+        self.file_window_concurrency = n.max(1);
+        self
     }
 
     /// Resolve the head from the explicit flag or files on disk (no network).
@@ -240,6 +250,7 @@ impl EngineRecipe {
             engine = engine.with_stream_max_window_secs(secs);
         }
         engine = engine.with_stream_stable_prefix(self.stream_stable_prefix);
+        engine = engine.with_file_window_concurrency(self.file_window_concurrency);
         if let Some(pairs) = hotwords {
             engine = engine.with_hotwords(
                 &pairs,

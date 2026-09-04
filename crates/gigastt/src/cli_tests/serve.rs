@@ -106,6 +106,46 @@ fn test_cli_serve_encoder_intra_threads_env() {
 }
 
 #[test]
+fn test_cli_serve_file_window_concurrency_default() {
+    let _guard = ENV_LOCK.lock().unwrap();
+    let _restore = EnvRestore(
+        "GIGASTT_FILE_WINDOW_CONCURRENCY",
+        std::env::var("GIGASTT_FILE_WINDOW_CONCURRENCY").ok(),
+    );
+    unsafe {
+        std::env::remove_var("GIGASTT_FILE_WINDOW_CONCURRENCY");
+    }
+    let cli = Cli::parse_from(["gigastt", "serve"]);
+    match cli.command {
+        Commands::Serve(ServeArgs {
+            file_window_concurrency,
+            ..
+        }) => assert_eq!(file_window_concurrency, 1),
+        _ => panic!("expected Serve"),
+    }
+}
+
+#[test]
+fn test_cli_serve_file_window_concurrency_flag() {
+    let _guard = ENV_LOCK.lock().unwrap();
+    let _restore = EnvRestore(
+        "GIGASTT_FILE_WINDOW_CONCURRENCY",
+        std::env::var("GIGASTT_FILE_WINDOW_CONCURRENCY").ok(),
+    );
+    unsafe {
+        std::env::remove_var("GIGASTT_FILE_WINDOW_CONCURRENCY");
+    }
+    let cli = Cli::parse_from(["gigastt", "serve", "--file-window-concurrency", "2"]);
+    match cli.command {
+        Commands::Serve(ServeArgs {
+            file_window_concurrency,
+            ..
+        }) => assert_eq!(file_window_concurrency, 2),
+        _ => panic!("expected Serve"),
+    }
+}
+
+#[test]
 fn test_cli_serve_model_variant_override() {
     let cli = Cli::parse_from(["gigastt", "serve", "--model-variant", "e2e_rnnt"]);
     match cli.command {

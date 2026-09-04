@@ -193,6 +193,42 @@ impl<T: Send> Pool<T> {
         let waiters = self.inner.waiters.lock();
         waiters.len()
     }
+
+    /// Non-blocking checkout: `Some` if a slot is free, `None` if every item is
+    /// already out. Never enqueues a waiter — a long file can pick up an idle
+    /// extra triplet for window-parallel decode without deadlocking against
+    /// another request that already holds a slot and wants a second.
+    ///
+    /// Returns [`PoolError::Closed`] when the pool has been shut down, matching
+    /// [`checkout`](Self::checkout) / [`checkout_blocking`](Self::checkout_blocking).
+    pub fn try_checkout(&self) -> Result<Option<PoolGuard<T>>, PoolError> {
+        let mut out = self.try_checkout_n(1)?;
+        Ok(out.pop())
+    }
+
+    /// Non-blocking: take up to `n` items in one lock. Stops at the first miss
+    /// (does not wait, does not enqueue waiters). `n == 0` returns an empty
+    /// `Vec` without observing [`PoolError::Closed`].
+    ///
+    /// Long-form window-parallel decode asks for `cap - 1` extras — the
+    /// caller's already-held slot is not counted here.
+    pub fn try_checkout_n(&self, n: usize) -> Result<Vec<PoolGuard<T>>, PoolError> {
+        if n == 0 {
+            return Ok(Vec::new());
+        }
+        let mut items = self.inner.items.lock();
+        if self.inner.closed.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(PoolError::Closed);
+        }
+        let mut out = Vec::with_capacity(n.min(items.len()));
+        for _ in 0..n {
+            match items.pop_front() {
+                Some(item) => out.push(PoolGuard::new(self.inner.clone(), item)),
+                None => break,
+            }
+        }
+        Ok(out)
+    }
 }
 
 impl<T> PoolInner<T> {

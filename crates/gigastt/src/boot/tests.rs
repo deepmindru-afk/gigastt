@@ -286,6 +286,29 @@ fn test_engine_recipe_offline_defaults() {
     assert_eq!(r.pool_size, 2);
     assert_eq!(r.pool_min_size, 1);
     assert_eq!(r.batch_pool_size, 0);
+    assert_eq!(r.file_window_concurrency, 1);
     assert!(!r.quantize);
     assert!(r.endpoint_mode.is_none());
+}
+
+#[test]
+fn test_engine_recipe_file_window_concurrency_clamps_zero() {
+    let r = EngineRecipe::offline(
+        "/models".into(),
+        None,
+        PunctuationMode::Auto,
+        "/punct".into(),
+        ItnMode::Auto,
+        None,
+        false,
+        None,
+        false,
+        None,
+        None,
+        "/vad".into(),
+        None,
+        1,
+    )
+    .with_file_window_concurrency(0);
+    assert_eq!(r.file_window_concurrency, 1);
 }

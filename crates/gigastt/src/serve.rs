@@ -246,6 +246,15 @@ pub(crate) struct ServeArgs {
     #[arg(long, env = "GIGASTT_ENCODER_INTRA_THREADS")]
     pub(crate) encoder_intra_threads: Option<usize>,
 
+    /// Max pooled triplets one file transcription may hold to decode
+    /// overlapping 24 s windows in parallel. Default `1` is the historical
+    /// serial loop. `2` with `--pool-size 2` lets a long file use an idle
+    /// extra slot (try-checkout, never waits — two long files each holding
+    /// one slot stay serial). File path only; WebSocket is unchanged.
+    /// Env: GIGASTT_FILE_WINDOW_CONCURRENCY.
+    #[arg(long, env = "GIGASTT_FILE_WINDOW_CONCURRENCY", default_value_t = 1)]
+    pub(crate) file_window_concurrency: usize,
+
     /// Explicitly acknowledge binding to a non-loopback address.
     /// Can also be enabled via `GIGASTT_ALLOW_BIND_ANY=1`.
     /// Without this flag the server refuses to listen on anything other than
@@ -433,6 +442,7 @@ pub(crate) async fn run_serve(
         endpoint_mode: Some(args.endpoint_mode),
         stream_max_window_secs: Some(args.stream_max_window_secs),
         stream_stable_prefix: args.stream_stable_prefix,
+        file_window_concurrency: args.file_window_concurrency.max(1),
     };
     let build_engine: server::EngineBuilder = {
         let recipe = recipe.clone();
