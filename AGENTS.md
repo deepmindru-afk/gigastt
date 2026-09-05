@@ -298,16 +298,17 @@ The `e2e_rnnt` head (`--model-variant e2e_rnnt`) uses the parallel `v3_e2e_rnnt_
 
 ### Audio format support
 
-- **File transcription**: WAV family (PCM/IEEE, G.711, G.722, MS/IMA ADPCM,
-  RF64/RIFX/BW64/Wave64) via `ryf`; M4A/AAC, MP3, OGG/Vorbis, FLAC via
+- **File transcription**: WAV family (PCM/IEEE, G.711, G.722, GSM 06.10,
+  MS/IMA ADPCM, RF64/RIFX/BW64/Wave64) via `ryf`; M4A/AAC, MP3, OGG/Vorbis, FLAC via
   symphonia; OGG/Opus and `.opus` (Telegram voice) plus WebM/Opus and Matroska
   (a browser's `MediaRecorder` emits nothing else) — symphonia demuxes the
   container, packets are decoded by the pure-Rust BSD-3 `opus-rs` crate,
   mono/stereo only. Packet framing is sliced in-tree per RFC 6716 §3.2 rather
   than by `opus-rs`, whose own parser mis-reads CBR code 3 and long explicit
   frame lengths.
-- **Telephony codecs**: G.711 A-law/μ-law and G.722 ADPCM in WAV (via `ryf`;
-  G.722 tags 0x0064/0x0065/0x028F); headerless raw `.ulaw`/`.alaw`/`.g722`
+- **Telephony codecs**: G.711 A-law/μ-law, G.722 ADPCM, and GSM 06.10 in WAV
+  (via `ryf`; G.722 tags 0x0064/0x0065/0x028F, GSM tag 0x0031 / wav49);
+  headerless raw `.ulaw`/`.alaw`/`.g722`
   streams via `?codec=pcmu|pcma|g722&sample_rate=N` on `/v1/transcribe`
   or `transcribe --codec … --sample-rate …` on the CLI (also `ryf`)
 - **WebSocket streaming**: raw PCM16 binary frames at configurable sample rate

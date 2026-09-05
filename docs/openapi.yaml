@@ -23,8 +23,8 @@ info:
 
     ## Audio Formats
 
-    Supported upload formats: WAV (PCM, IEEE float, G.711, G.722, MS/IMA ADPCM,
-    RF64/RIFX/BW64/Wave64), MP3, M4A/AAC, OGG/Vorbis, OGG/Opus (`.opus`),
+    Supported upload formats: WAV (PCM, IEEE float, G.711, G.722, GSM 06.10,
+    MS/IMA ADPCM, RF64/RIFX/BW64/Wave64), MP3, M4A/AAC, OGG/Vorbis, OGG/Opus (`.opus`),
     WebM/Opus (what a browser's `MediaRecorder` produces), FLAC. Raw headerless
     telephony streams are accepted with
     `?codec=pcmu|pcma|g722&sample_rate=N` (see the transcribe parameters).
@@ -195,7 +195,7 @@ paths:
       summary: Transcribe audio file
       description: |
         Upload an audio file and receive a complete transcription.
-        Supports WAV (PCM, IEEE float, G.711, G.722, ADPCM, RF64), MP3, M4A/AAC,
+        Supports WAV (PCM, IEEE float, G.711, G.722, GSM 06.10, ADPCM, RF64), MP3, M4A/AAC,
         OGG/Vorbis, OGG/Opus (`.opus`), WebM/Opus, FLAC, and raw telephony
         streams via `?codec=` / `?sample_rate=`.
 
