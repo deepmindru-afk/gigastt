@@ -9,10 +9,10 @@ pulled from RTP captures, and the odd Telegram voice note — and you want
 transcripts without manually converting every file.
 
 gigastt decodes most telephony formats natively: G.711 A-law/μ-law in WAV,
-G.722 in WAV (tags `0x0064` / `0x0065` / `0x028F`), OGG/Opus, and headerless raw
-streams via an explicit codec hint. This chapter gets you from "a folder of
-weird files" to working transcripts, including per-channel speaker split for
-stereo recordings.
+G.722 in WAV (tags `0x0064` / `0x0065` / `0x028F`), GSM 06.10 in WAV (wav49 /
+tag `0x0031`), OGG/Opus, and headerless raw streams via an explicit codec hint.
+This chapter gets you from "a folder of weird files" to working transcripts,
+including per-channel speaker split for stereo recordings.
 
 ## Prerequisites
 
@@ -20,8 +20,8 @@ stereo recordings.
   [Getting started](01-getting-started.md).
 - A running server for the REST recipes (`gigastt serve`, default
   `http://127.0.0.1:9876`). The CLI recipes work offline, no server needed.
-- `ffprobe`/`ffmpeg` — only to identify formats and for the two conversion
-  fallbacks (wav49, G.729). Not needed for the supported formats.
+- `ffprobe`/`ffmpeg` — only to identify formats and for the G.729 conversion
+  fallback. Not needed for the supported formats.
 
 ## Recipe
 
@@ -41,7 +41,7 @@ Match the output against this table:
 |---|---|---|
 | `codec_name=pcm_alaw` or `pcm_mulaw`, 8000 Hz | G.711 in WAV | upload as-is |
 | `codec_name=adpcm_g722`, tag `[0x0064]`, `[0x0065]`, or `[0x028f]` | G.722 in WAV | upload as-is |
-| `codec_name=gsm_ms` | wav49 (GSM 06.10 in WAV) | convert first — see Asterisk below |
+| `codec_name=gsm_ms` | wav49 (GSM 06.10 in WAV) | upload as-is |
 | `codec_name=opus` in an Ogg container | Opus (Telegram, MediaRecorder) | upload as-is |
 | ffprobe fails with `Invalid data found when processing input`, `file` says `data` | headerless raw stream | declare the codec — see RTP dump below |
 
@@ -54,15 +54,13 @@ ffmpeg-based tooling. gigastt accepts all three.
 What `Monitor()`/`MixMonitor` writes depends on the configured format:
 
 - **`wav`** — plain PCM16 WAV. Upload as-is.
-- **`wav49`** — GSM 06.10 in a WAV container (`codec_name=gsm_ms`). gigastt
-  does not decode GSM, so convert once to PCM16 WAV:
+- **`wav49`** — GSM 06.10 in a WAV container (`codec_name=gsm_ms`, tag
+  `0x0031`). Upload as-is (8 kHz mono, resampled to 16 kHz). 33-byte toast /
+  MSN variable blocks are not decoded — convert those with ffmpeg first:
 
   ```sh
   ffmpeg -y -i call.wav -ar 16000 -ac 1 -c:a pcm_s16le call_16k.wav
   ```
-
-  Verify: `ffprobe call_16k.wav` reports `codec_name=pcm_s16le`,
-  `sample_rate=16000`. Then transcribe `call_16k.wav` like any WAV.
 - **`ulaw` / `alaw` / `g722`** — raw headerless streams (no container to
   sniff). Declare the codec explicitly:
 
@@ -283,7 +281,7 @@ for batch/watch details and long recordings.
 | OGG/Opus, `.opus` | yes | no | mono/stereo only; >2ch rejected |
 | raw `.ulaw` / `.alaw` | no (headerless) | yes — `pcmu` / `pcma` | `sample_rate` 8000–48000 |
 | raw `.g722` | no (headerless) | yes — `g722` | `sample_rate` 8000 (SDP convention) or 16000; decodes to 16 kHz |
-| wav49 (GSM 06.10 in WAV) | yes | n/a | not decoded — convert to PCM16 WAV first |
+| wav49 (GSM 06.10 in WAV) | yes | no | 8 kHz mono, resampled to 16 kHz |
 | G.729 (any wrapper) | yes | n/a | not supported — convert to PCM16 WAV first |
 
 Applies everywhere: there is no default duration cap on a decoded upload —
@@ -321,8 +319,8 @@ fixtures pass, the problem is the file, not the server — go back to Step 0.
 
 - **`422` — "Check audio format"** (`invalid_audio` / `transcription_error`).
   The bytes were probed as a container and decoding failed. Usual causes: a
-  headerless raw stream posted without `codec=`, a wav49 (GSM) or G.729 file,
-  or a truncated/corrupt upload. Identify the file with Step 0.
+  headerless raw stream posted without `codec=`, a G.729 file, or a
+  truncated/corrupt upload. Identify the file with Step 0.
 - **G.729 is not supported.** A raw upload with `?codec=g729` returns
   `400 unsupported_codec`; G.729-in-WAV fails with `422`. Convert with
   ffmpeg and upload the result:

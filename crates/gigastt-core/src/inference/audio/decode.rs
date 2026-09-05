@@ -34,6 +34,7 @@ pub use channels::{
 // wav
 // wav-g711
 // wav-g722
+// wav-gsm
 // mp3
 // m4a
 // ogg-vorbis
@@ -47,7 +48,7 @@ pub use channels::{
 
 /// Decode any supported audio file to mono f32 samples at 16kHz.
 ///
-/// Supports WAV (PCM/IEEE, G.711, G.722, ADPCM, RF64), MP3, M4A/AAC,
+/// Supports WAV (PCM/IEEE, G.711, G.722, GSM 06.10, ADPCM, RF64), MP3, M4A/AAC,
 /// OGG/Vorbis, OGG/Opus (`.opus`), WebM/Opus, and FLAC.
 /// Multi-channel audio is mixed to mono. This flat decode materializes the whole
 /// buffer, so it is bounded by the ~30-minute whole-buffer safety ceiling; the

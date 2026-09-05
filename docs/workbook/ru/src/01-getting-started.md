@@ -16,7 +16,7 @@ GigaAM v3, транскрибировать первый аудиофайл — 
   [docs/benchmarks.md](https://github.com/ekhodzitsky/gigastt/blob/main/docs/benchmarks.md).
 - **Сеть** (если вы не идёте по рецепту для замкнутого контура): доступ к
   `github.com` для lean INT8-бандла (головы CTC — INT8 с HuggingFace).
-- **Аудиофайл для транскрибации** — WAV (включая G.711/G.722), M4A, MP3, OGG/Vorbis, OGG/Opus
+- **Аудиофайл для транскрибации** — WAV (включая G.711/G.722/GSM), M4A, MP3, OGG/Vorbis, OGG/Opus
   (`.opus`), WebM/Opus или FLAC. В репозитории есть 4-секундная русская
   фикстура: `crates/gigastt/tests/fixtures/golos_00.wav`. Подойдёт любая
   короткая русская запись. Файлы → эта глава / REST. Живые partials →

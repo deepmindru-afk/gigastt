@@ -1,10 +1,10 @@
 //! WAVE family ingest via [`ryf`].
 //!
-//! PCM / IEEE, G.711, G.722, MS/IMA ADPCM, and the RF64 / RIFX / BW64 / Wave64
-//! containers go through ryf. Other containers stay on the symphonia path.
-//! `decode_streaming` is push-based and [`ryf::ByteSource`] is not `Send`, so
-//! the windowed decoder drives it from a dedicated thread with a bounded
-//! channel — peak audio memory stays O(one block + one window).
+//! PCM / IEEE, G.711, G.722, GSM 06.10, MS/IMA ADPCM, and the RF64 / RIFX /
+//! BW64 / Wave64 containers go through ryf. Other containers stay on the
+//! symphonia path. `decode_streaming` is push-based, so the windowed decoder
+//! drives it from a dedicated thread with a bounded channel — peak audio
+//! memory stays O(one block + one window).
 
 use std::io::{Cursor, Seek as _, SeekFrom};
 use std::sync::mpsc::{self, Receiver, RecvError, SyncSender};

@@ -3571,9 +3571,9 @@ dependencies = [
 
 [[package]]
 name = "ryf"
-version = "0.4.0"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fab1b3d37e16065d21d0ce99e604c48513a934b9b961f2a9a38a959b7c7f30ee"
+checksum = "de37b7676e8286b13e24c863d4b6da5f42cd73c5f6a4bcecf9f5a084099fe64e"
 
 [[package]]
 name = "ryu"
