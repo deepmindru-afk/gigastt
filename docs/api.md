@@ -596,6 +596,7 @@ This applies to every file-transcription endpoint (`/v1/transcribe`,
 | WAV (PCM 8–32 bit, IEEE float, RF64/BW64/RIFX/Wave64, MS/IMA ADPCM) | ryf |
 | WAV with G.711 A-law / μ-law (8 kHz typical) | ryf |
 | WAV with G.722 ADPCM (tags `0x0064`, `0x0065`, `0x028F`) | ryf |
+| WAV with GSM 06.10 (wav49 / tag `0x0031`) | ryf |
 | MP3, M4A/AAC, OGG/Vorbis, FLAC | symphonia |
 | OGG/Opus, `.opus` (Telegram voice) | built-in fallback (`opus-rs`, pure Rust) |
 | WebM/Opus, Matroska (browser `MediaRecorder`) | symphonia demux + the same Opus fallback |
@@ -619,6 +620,8 @@ This applies to every file-transcription endpoint (`/v1/transcribe`,
 - **G.722 in WAV** (what Asterisk, Cisco, and Teams-player exports write —
   format tag `0x0064`, mmreg `0x0065`, ffmpeg writes `0x028F`) decodes to its
   native 16 kHz.
+- **GSM 06.10 in WAV** (Asterisk wav49, tag `0x0031`) decodes natively; 8 kHz
+  is resampled to 16 kHz. Headerless GSM is not a `?codec=` option.
 - **Headerless streams** (RTP dumps, Asterisk Monitor raw) carry no container
   to sniff, so the codec must be declared explicitly on `/v1/transcribe`:
 

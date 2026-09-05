@@ -99,6 +99,7 @@ FORMATS = {
     "wav": (r"WAV \(PCM", r"Supports: WAV"),
     "wav-g711": (r"G\.711 A-law / μ-law", r"G\.711 A-law/μ-law"),
     "wav-g722": (r"WAV with G\.722", r"G\.722 payloads"),
+    "wav-gsm": (r"GSM 06\.10", r"GSM 06\.10"),
     "mp3": (r"MP3", r"MP3"),
     "m4a": (r"M4A", r"M4A"),
     "ogg-vorbis": (r"OGG/Vorbis", r"OGG/Vorbis"),
