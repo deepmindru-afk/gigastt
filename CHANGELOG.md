@@ -26,6 +26,13 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
   `GIGASTT_FILE_WINDOW_CONCURRENCY`. Offline `transcribe` loads `N` triplets
   so a single long file can actually use them.
 
+### Changed
+
+- **ryf 0.7.2.** WAVE ingest follows the current crate. GSM 06.10 in WAV
+  (wav49 / tag `0x0031`) decodes natively (8 kHz mono, resampled to 16 kHz).
+  ffmpeg-odd WAVE headers (data-before-fmt, long `fact`, RIFF size 0) no
+  longer reject. Headerless GSM is still not a `?codec=` option.
+
 ## [2.20.0] - 2026-09-03
 
 ### Changed
