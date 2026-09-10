@@ -1,5 +1,5 @@
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use ort::session::Session;
 
@@ -15,6 +15,12 @@ pub struct OrtRuntime {
     provider: OrtExecutionProvider,
     prepacked: Option<Arc<ort::session::builder::PrepackedWeights>>,
     optimized_cache_dir: Option<std::path::PathBuf>,
+    /// Once-per-runtime result of the cache-dir writability probe. Pool
+    /// triplets load concurrently on this shared runtime, so probing per
+    /// `load_session` would repeat the probe (and its warning) pool-size
+    /// times at every boot. Admin reload builds a fresh `OrtRuntime`, so
+    /// re-probing on reload is preserved.
+    usable_cache_dir: OnceLock<Option<std::path::PathBuf>>,
 }
 
 impl OrtRuntime {
@@ -29,6 +35,7 @@ impl OrtRuntime {
             provider,
             prepacked,
             optimized_cache_dir,
+            usable_cache_dir: OnceLock::new(),
         }
     }
 }
@@ -77,6 +84,40 @@ fn optimized_cache_path(cache_dir: &Path, model_path: &Path) -> std::path::PathB
     let basename = crate::model::optimized_cache_basename(model_path)
         .unwrap_or_else(|| "encoder_optimized.ort".into());
     cache_dir.join(basename)
+}
+
+/// Decide whether the ORT optimized-graph cache under `cache_dir` is usable:
+/// the directory must be creatable and writable. Read-only model installs
+/// (e.g. systemd `ProtectSystem=strict` with models under `/usr/share`) make
+/// either step fail with `EROFS`; boot must degrade to a cache-less load
+/// (slower cold start, higher per-session RAM) instead of failing, so both
+/// failures only warn and return `None`. Writability is probed by creating
+/// and deleting a temp file — an existing-but-read-only dir passes
+/// `create_dir_all` yet still cannot hold the cache.
+fn usable_optimized_cache_dir(cache_dir: &Path) -> Option<std::path::PathBuf> {
+    if let Err(e) = std::fs::create_dir_all(cache_dir) {
+        tracing::warn!(
+            path = %cache_dir.display(),
+            error = %e,
+            "encoder: optimized graph cache directory cannot be created; loading source model without the cache (slower cold start, higher per-session RAM)"
+        );
+        return None;
+    }
+    let probe = cache_dir.join(format!(".write-probe-{}", std::process::id()));
+    match std::fs::File::create(&probe) {
+        Ok(_) => {
+            let _ = std::fs::remove_file(&probe);
+            Some(cache_dir.to_path_buf())
+        }
+        Err(e) => {
+            tracing::warn!(
+                path = %cache_dir.display(),
+                error = %e,
+                "encoder: optimized graph cache directory is not writable; loading source model without the cache (slower cold start, higher per-session RAM)"
+            );
+            None
+        }
+    }
 }
 
 impl OrtRuntime {
@@ -204,18 +245,33 @@ impl Runtime for OrtRuntime {
 
         let mut builder = self.session_builder(model_path, is_encoder)?;
 
-        if self.provider.is_cpu()
-            && is_encoder
-            && let Some(cache_dir) = &self.optimized_cache_dir
-        {
-            std::fs::create_dir_all(cache_dir).map_err(|e| load_failed(model_path, e))?;
-            let cache_path = optimized_cache_path(cache_dir, model_path);
+        // Compute the cache path up front (probing writability once per
+        // runtime via the OnceLock), then commit with the fallback: a
+        // writable directory does not guarantee the ~224 MiB cache *file*
+        // write succeeds (stale root-owned entry, ENOSPC mid-write), and ORT
+        // treats that failure as fatal to `commit_from_file` — so on error
+        // retry with a freshly built, cache-less builder (builders are cheap,
+        // see `session_builder`).
+        let cache_path = if self.provider.is_cpu() && is_encoder {
+            self.usable_cache_dir
+                .get_or_init(|| {
+                    self.optimized_cache_dir
+                        .as_deref()
+                        .and_then(usable_optimized_cache_dir)
+                })
+                .as_ref()
+                .map(|dir| optimized_cache_path(dir, model_path))
+        } else {
+            None
+        };
+
+        if let Some(cache_path) = cache_path.as_ref() {
             tracing::info!(
                 path = %cache_path.display(),
                 "encoder: loading source model and refreshing optimized graph cache"
             );
             builder = builder
-                .with_optimized_model_path(&cache_path)
+                .with_optimized_model_path(cache_path)
                 .map_err(|e| load_failed(model_path, e))?;
             // Persist the optimized graph in ORT flatbuffer format so the
             // next boot can memory-map it (see `try_load_cached_encoder`).
@@ -224,9 +280,22 @@ impl Runtime for OrtRuntime {
                 .map_err(|e| load_failed(model_path, e))?;
         }
 
-        let session = builder
-            .commit_from_file(model_path)
-            .map_err(|e| load_failed(model_path, e))?;
+        let session = match builder.commit_from_file(model_path) {
+            Ok(session) => session,
+            Err(e) => {
+                let Some(cache_path) = cache_path.as_ref() else {
+                    return Err(load_failed(model_path, e));
+                };
+                tracing::warn!(
+                    path = %cache_path.display(),
+                    error = %e,
+                    "encoder: optimized graph cache write failed; retrying without the cache (slower cold start, higher per-session RAM)"
+                );
+                self.session_builder(model_path, is_encoder)?
+                    .commit_from_file(model_path)
+                    .map_err(|e| load_failed(model_path, e))?
+            }
+        };
         Ok(Box::new(OrtSession {
             session: Mutex::new(session),
         }))
@@ -326,5 +395,78 @@ mod tests {
             optimized_cache_path(cache_dir, encoder),
             Path::new("/models/optimized_cache/v3_rnnt_encoder_int8_optimized.ort")
         );
+    }
+
+    #[test]
+    fn test_usable_optimized_cache_dir_creates_and_returns_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache_dir = tmp.path().join("optimized_cache");
+        assert!(!cache_dir.exists());
+        assert_eq!(
+            usable_optimized_cache_dir(&cache_dir),
+            Some(cache_dir.clone())
+        );
+        assert!(cache_dir.is_dir());
+        // The write probe must not leave files behind.
+        assert_eq!(std::fs::read_dir(&cache_dir).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn test_usable_optimized_cache_dir_uncreatable_returns_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        // A path under a regular file fails `create_dir_all` (ENOTDIR) on
+        // every platform and privilege level — no reliance on permissions.
+        let blocker = tmp.path().join("blocker");
+        write_file(&blocker, b"not a dir");
+        let cache_dir = blocker.join("optimized_cache");
+        assert_eq!(usable_optimized_cache_dir(&cache_dir), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_usable_optimized_cache_dir_read_only_returns_none() {
+        // Root bypasses directory write permission bits, so the probe would
+        // succeed and this test cannot exercise the read-only path.
+        if unsafe { libc::geteuid() } == 0 {
+            eprintln!(
+                "test_usable_optimized_cache_dir_read_only_returns_none: running as root, \
+                 skipping (root bypasses write permission bits) — vacuous pass"
+            );
+            return;
+        }
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let cache_dir = tmp.path().join("optimized_cache");
+        std::fs::create_dir_all(&cache_dir).unwrap();
+        std::fs::set_permissions(&cache_dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+        // An existing-but-read-only dir passes `create_dir_all` yet cannot
+        // hold the cache: the write probe must degrade to `None`.
+        // Capture the result and restore permissions BEFORE asserting, so a
+        // failing assert does not strand a 0o555 dir that tempdir's Drop
+        // cannot remove (masking the real failure).
+        let result = usable_optimized_cache_dir(&cache_dir);
+        std::fs::set_permissions(&cache_dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_usable_optimized_cache_dir_concurrent_probes() {
+        // Pool triplets load concurrently on the same runtime, so the probe
+        // can race with itself within one process: the shared probe file name
+        // (.write-probe-<pid>) must tolerate create/delete races and every
+        // caller must still see a usable dir with no leftovers.
+        let tmp = tempfile::tempdir().unwrap();
+        let cache_dir = tmp.path().join("optimized_cache");
+        std::fs::create_dir_all(&cache_dir).unwrap();
+        std::thread::scope(|s| {
+            let handles: Vec<_> = (0..4)
+                .map(|_| s.spawn(|| usable_optimized_cache_dir(&cache_dir)))
+                .collect();
+            for h in handles {
+                assert_eq!(h.join().unwrap(), Some(cache_dir.clone()));
+            }
+        });
+        let leftover: Vec<_> = std::fs::read_dir(&cache_dir).unwrap().collect();
+        assert!(leftover.is_empty(), "probe left files behind: {leftover:?}");
     }
 }
