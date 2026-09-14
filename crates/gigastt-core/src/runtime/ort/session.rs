@@ -136,12 +136,11 @@ fn usable_optimized_cache_dir(cache_dir: &Path) -> Option<std::path::PathBuf> {
         );
         return None;
     }
-    let probe = cache_dir.join(format!(".write-probe-{}", std::process::id()));
-    match std::fs::File::create(&probe) {
-        Ok(_) => {
-            let _ = std::fs::remove_file(&probe);
-            Some(cache_dir.to_path_buf())
-        }
+    // Different runtimes can probe the same directory concurrently. Each
+    // probe must own its file, including on Windows where deletion can make
+    // a concurrent open fail with a sharing violation.
+    match PendingCache::new(&cache_dir.join(".write-probe")) {
+        Ok(_probe) => Some(cache_dir.to_path_buf()),
         Err(e) => {
             tracing::warn!(
                 path = %cache_dir.display(),
@@ -608,6 +607,24 @@ mod tests {
     }
 
     #[test]
+    fn test_usable_optimized_cache_dir_preserves_existing_probe() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache_dir = tmp.path().join("optimized_cache");
+        let existing_probe = cache_dir.join(format!(".write-probe-{}", std::process::id()));
+        write_file(&existing_probe, b"another caller's probe");
+
+        assert_eq!(
+            usable_optimized_cache_dir(&cache_dir),
+            Some(cache_dir.clone())
+        );
+        assert_eq!(
+            std::fs::read(&existing_probe).unwrap(),
+            b"another caller's probe"
+        );
+        assert_eq!(std::fs::read_dir(&cache_dir).unwrap().count(), 1);
+    }
+
+    #[test]
     fn test_usable_optimized_cache_dir_uncreatable_returns_none() {
         let tmp = tempfile::tempdir().unwrap();
         // A path under a regular file fails `create_dir_all` (ENOTDIR) on
@@ -647,16 +664,20 @@ mod tests {
 
     #[test]
     fn test_usable_optimized_cache_dir_concurrent_probes() {
-        // Pool triplets load concurrently on the same runtime, so the probe
-        // can race with itself within one process: the shared probe file name
-        // (.write-probe-<pid>) must tolerate create/delete races and every
-        // caller must still see a usable dir with no leftovers.
+        // Each concurrent caller must see a usable directory and remove only
+        // its own probe, without Windows sharing violations or leftovers.
         let tmp = tempfile::tempdir().unwrap();
         let cache_dir = tmp.path().join("optimized_cache");
         std::fs::create_dir_all(&cache_dir).unwrap();
+        let barrier = std::sync::Barrier::new(4);
         std::thread::scope(|s| {
             let handles: Vec<_> = (0..4)
-                .map(|_| s.spawn(|| usable_optimized_cache_dir(&cache_dir)))
+                .map(|_| {
+                    s.spawn(|| {
+                        barrier.wait();
+                        usable_optimized_cache_dir(&cache_dir)
+                    })
+                })
                 .collect();
             for h in handles {
                 assert_eq!(h.join().unwrap(), Some(cache_dir.clone()));
