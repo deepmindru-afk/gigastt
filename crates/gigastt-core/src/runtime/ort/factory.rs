@@ -40,6 +40,7 @@ impl OrtExecutionProvider {
     pub(crate) fn execution_providers(
         self,
         model_path: &Path,
+        secondary_cpu: bool,
     ) -> Vec<ort::ep::ExecutionProviderDispatch> {
         // Each non-CPU arm names a provider type that `ort` 2.0.0-rc.13 gates
         // behind its own feature, so the arm is gated on the matching feature —
@@ -48,6 +49,10 @@ impl OrtExecutionProvider {
         // arm; the `let _` below keeps it accounted for on builds without it.
         #[cfg(not(feature = "coreml"))]
         let _ = model_path;
+        // Only the CUDA arm consults this. CoreML always keeps a CPU EP for
+        // dynamic-shape ops; a CPU-only build has nothing else to register.
+        #[cfg(not(feature = "cuda"))]
+        let _ = secondary_cpu;
         match self {
             Self::Cpu => vec![ort::ep::CPU::default().build()],
             #[cfg(feature = "coreml")]
@@ -73,10 +78,16 @@ impl OrtExecutionProvider {
                 vec![coreml_ep, ort::ep::CPU::default().build()]
             }
             #[cfg(feature = "cuda")]
-            Self::Cuda => vec![
-                ort::ep::CUDA::default().build(),
-                ort::ep::CPU::default().build(),
-            ],
+            Self::Cuda => {
+                // `auto` keeps CPU as a second provider so a missing GPU still
+                // loads. An exact `cuda` request omits it: session creation
+                // fails instead of silently running on CPU.
+                let mut eps = vec![ort::ep::CUDA::default().build()];
+                if secondary_cpu {
+                    eps.push(ort::ep::CPU::default().build());
+                }
+                eps
+            }
             #[cfg(feature = "nnapi")]
             Self::Nnapi => vec![
                 ort::ep::NNAPI::default().build(),
@@ -94,6 +105,9 @@ impl OrtExecutionProvider {
 /// Factory that creates an `ort` runtime configured for a specific provider.
 pub struct OrtFactory {
     provider: OrtExecutionProvider,
+    /// Register the CPU EP behind CoreML/CUDA. Exact CUDA turns this off.
+    /// CoreML always keeps it: dynamic-shape ops stay on CPU by design.
+    secondary_cpu: bool,
     prepacked: Option<Arc<ort::session::builder::PrepackedWeights>>,
     optimized_cache_dir: Option<PathBuf>,
 }
@@ -102,9 +116,18 @@ impl OrtFactory {
     fn with_provider(provider: OrtExecutionProvider) -> Self {
         Self {
             provider,
+            secondary_cpu: true,
             prepacked: None,
             optimized_cache_dir: None,
         }
+    }
+
+    /// CUDA with no CPU provider. Session load fails when the GPU is absent.
+    #[cfg(feature = "cuda")]
+    pub fn cuda_exact() -> Self {
+        let mut factory = Self::cuda();
+        factory.secondary_cpu = false;
+        factory
     }
 
     pub fn cpu() -> Self {
@@ -157,6 +180,7 @@ impl RuntimeFactory for OrtFactory {
         Ok(Box::new(OrtRuntime::new(
             intra_threads,
             self.provider,
+            self.secondary_cpu,
             self.prepacked.clone(),
             self.optimized_cache_dir.clone(),
         )))
@@ -262,6 +286,49 @@ pub(crate) fn select_backend(variant: Option<crate::model::ModelVariant>) -> Bac
     }
     let _ = is_rnnt;
     BackendKind::Ort
+}
+
+/// Build the ort factory for an exact provider. CPU keeps the optimized-graph
+/// cache. Exact CUDA does not register a CPU provider beside it.
+pub(crate) fn exact_ort_factory(
+    provider: super::selection::BoundProvider,
+    model_dir: &Path,
+    optimized_cache_dir: Option<PathBuf>,
+) -> Box<dyn RuntimeFactory> {
+    match provider {
+        super::selection::BoundProvider::Cpu => {
+            let prepacked = std::sync::Arc::new(ort::session::builder::PrepackedWeights::new());
+            let cache = optimized_cache_dir.unwrap_or_else(|| model_dir.join("optimized_cache"));
+            Box::new(
+                OrtFactory::cpu()
+                    .with_optimized_cache_dir(cache)
+                    .with_prepacked_weights(prepacked),
+            )
+        }
+        super::selection::BoundProvider::Coreml => {
+            #[cfg(feature = "coreml")]
+            {
+                Box::new(OrtFactory::coreml())
+            }
+            #[cfg(not(feature = "coreml"))]
+            {
+                let _ = (model_dir, optimized_cache_dir);
+                unreachable!("coreml is rejected before this factory is built")
+            }
+        }
+        super::selection::BoundProvider::Cuda => {
+            #[cfg(feature = "cuda")]
+            {
+                let _ = (model_dir, optimized_cache_dir);
+                Box::new(OrtFactory::cuda_exact())
+            }
+            #[cfg(not(feature = "cuda"))]
+            {
+                let _ = (model_dir, optimized_cache_dir);
+                unreachable!("cuda is rejected before this factory is built")
+            }
+        }
+    }
 }
 
 /// Like [`production_factory`], but the caller supplies the resolved recognition
