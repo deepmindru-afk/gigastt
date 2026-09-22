@@ -120,6 +120,33 @@ impl Engine {
         encoder_intra_threads: usize,
         optimized_cache_dir: Option<PathBuf>,
     ) -> Result<Self, GigasttError> {
+        Self::load_with_execution_provider(
+            model_dir,
+            variant,
+            pool_size,
+            min_size,
+            batch_pool_size,
+            encoder_intra_threads,
+            optimized_cache_dir,
+            crate::runtime::ExecutionProviderChoice::Auto,
+        )
+    }
+
+    /// Like [`Engine::load_with_pools_threads_variant_cache`], with an explicit
+    /// execution provider. `Auto` may fall back to CPU. An exact provider fails
+    /// the load when it is not compiled in, or when a CoreML warmup would
+    /// otherwise rebuild the pool on CPU.
+    #[allow(clippy::too_many_arguments)]
+    pub fn load_with_execution_provider(
+        model_dir: &str,
+        variant: Option<ModelVariant>,
+        pool_size: usize,
+        min_size: usize,
+        batch_pool_size: usize,
+        encoder_intra_threads: usize,
+        optimized_cache_dir: Option<PathBuf>,
+        execution_provider: crate::runtime::ExecutionProviderChoice,
+    ) -> Result<Self, GigasttError> {
         let dir = Path::new(model_dir);
         // Resolve the head once, up front: an explicit `variant` wins, else
         // manifest.toml architecture, else detect from disk (rnnt precedence).
@@ -143,8 +170,29 @@ impl Engine {
         let encoder_intra_threads =
             Self::clamp_encoder_intra_threads(pool_size, encoder_intra_threads, logical_cpus);
 
-        let factory =
-            production_factory_variant_with_cache(dir, Some(variant), optimized_cache_dir);
+        let provider_error = |message: String| GigasttError::ModelLoad {
+            path: model_dir.to_string(),
+            source: Some(message.into()),
+        };
+        let allow_cpu_fallback =
+            crate::runtime::bind_after_primary_failure(execution_provider).is_ok();
+        let (factory, backend_name) = match execution_provider {
+            crate::runtime::ExecutionProviderChoice::Auto => (
+                production_factory_variant_with_cache(
+                    dir,
+                    Some(variant),
+                    optimized_cache_dir.clone(),
+                ),
+                crate::runtime::auto_backend_name(variant),
+            ),
+            exact => {
+                let bound = crate::runtime::resolve_ort_provider(exact).map_err(provider_error)?;
+                (
+                    crate::runtime::exact_ort_factory(bound, dir, optimized_cache_dir.clone()),
+                    bound.as_str(),
+                )
+            }
+        };
         Self::load_with_factory(
             dir,
             Some(variant),
@@ -153,6 +201,8 @@ impl Engine {
             batch_pool_size,
             factory,
             encoder_intra_threads,
+            allow_cpu_fallback,
+            backend_name,
         )
     }
 
@@ -160,6 +210,7 @@ impl Engine {
     ///
     /// Optional attachments (punctuator, ITN, biaser, VAD) stay off — callers
     /// chain [`Engine::with_punctuator`] / [`Engine::with_itn`] / etc.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn from_loaded_parts(
         pool: SessionPool,
         batch_pool: Option<SessionPool>,
@@ -167,6 +218,7 @@ impl Engine {
         variant: ModelVariant,
         int8: bool,
         ane_encoder: bool,
+        execution_provider: impl Into<String>,
         #[cfg(feature = "diarization")] speaker_encoder: Option<LazySpeakerEncoder>,
     ) -> Self {
         Self {
@@ -189,6 +241,7 @@ impl Engine {
             stream_stable_prefix: true,
             int8,
             ane_encoder,
+            execution_provider: execution_provider.into(),
             file_window_concurrency: 1,
             #[cfg(feature = "diarization")]
             speaker_encoder,
@@ -197,6 +250,7 @@ impl Engine {
 
     /// Package-private factory-based loader. Used by production code paths and
     /// by tests that inject a [`crate::runtime::factory::RuntimeFactory`].
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn load_with_factory(
         model_dir: &Path,
         variant_override: Option<ModelVariant>,
@@ -205,6 +259,8 @@ impl Engine {
         batch_pool_size: usize,
         factory: Box<dyn crate::runtime::factory::RuntimeFactory>,
         encoder_intra_threads: usize,
+        allow_cpu_fallback: bool,
+        execution_provider: &'static str,
     ) -> Result<Self, GigasttError> {
         // Honor an explicit variant (e.g. from `--model-variant`) when the caller
         // resolved one; otherwise prefer `manifest.toml`, else auto-detect from
@@ -254,22 +310,32 @@ impl Engine {
         #[cfg(not(any(feature = "coreml", feature = "cuda", feature = "candle")))]
         tracing::info!("Using CPU execution provider");
 
-        // CoreML can reject a model at load time; fall back to CPU if that happens.
+        // CoreML can reject a model at load time. `auto` rebuilds on CPU.
+        // An exact `coreml` request fails instead of changing device.
         #[cfg(feature = "coreml")]
-        let triplets = match load_triplets_runtime(&*runtime, &files, variant, pool_size, min_size)
-            .map_err(model_load)
+        let (triplets, fell_back) = match load_triplets_runtime(
+            &*runtime, &files, variant, pool_size, min_size,
+        )
+        .map_err(model_load)
         {
-            Ok(triplets) => triplets,
-            Err(load_err) => {
+            Ok(triplets) => (triplets, false),
+            Err(load_err) if allow_cpu_fallback => {
                 tracing::warn!(
                     "CoreML EP failed to load sessions ({load_err:#}); falling back to CPU execution provider"
                 );
                 let cpu_factory = factory.cpu_fallback();
                 let runtime = cpu_factory.create(encoder_intra_threads)?;
-                load_triplets_runtime(&*runtime, &files, variant, pool_size, min_size)
-                    .map_err(model_load)?
+                let triplets =
+                    load_triplets_runtime(&*runtime, &files, variant, pool_size, min_size)
+                        .map_err(model_load)?;
+                (triplets, true)
             }
+            Err(load_err) => return Err(load_err),
         };
+        #[cfg(not(feature = "coreml"))]
+        let fell_back = false;
+        #[cfg(not(feature = "coreml"))]
+        let _ = allow_cpu_fallback;
         #[cfg(not(feature = "coreml"))]
         let triplets = load_triplets_runtime(&*runtime, &files, variant, pool_size, min_size)
             .map_err(model_load)?;
@@ -297,6 +363,7 @@ impl Engine {
             variant,
             is_int8,
             ane_encoder,
+            if fell_back { "cpu" } else { execution_provider },
             #[cfg(feature = "diarization")]
             speaker_encoder,
         );
@@ -305,27 +372,37 @@ impl Engine {
         // fine can still fail at the first `Run()`. Probe one triplet now; if the
         // probe fails, rebuild the pool on the CPU EP.
         #[cfg(feature = "coreml")]
-        let engine = sizing::probe_or_rebuild(
-            engine,
-            |e: &Self| e.warmup_one().map_err(anyhow::Error::from),
-            |mut e, probe_err| {
-                tracing::warn!(
-                    "CoreML EP failed at runtime ({probe_err:#}); falling back to CPU execution provider"
-                );
-                let cpu_factory = factory.cpu_fallback();
-                let runtime = cpu_factory
-                    .create(encoder_intra_threads)
-                    .map_err(|e| anyhow::anyhow!(e))?;
-                let triplets =
-                    load_triplets_runtime(&*runtime, &files, variant, pool_size, min_size)?;
-                let (pool, batch_pool) = Self::split_triplets(triplets, batch_pool_size);
-                e.pool = pool;
-                e.batch_pool = batch_pool;
-                Ok(e)
-            },
-        )
-        .map_err(model_load)?;
+        let engine = if allow_cpu_fallback {
+            sizing::probe_or_rebuild(
+                engine,
+                |e: &Self| e.warmup_one().map_err(anyhow::Error::from),
+                |mut e, probe_err| {
+                    tracing::warn!(
+                        "CoreML EP failed at runtime ({probe_err:#}); falling back to CPU execution provider"
+                    );
+                    let cpu_factory = factory.cpu_fallback();
+                    let runtime = cpu_factory
+                        .create(encoder_intra_threads)
+                        .map_err(|e| anyhow::anyhow!(e))?;
+                    let triplets =
+                        load_triplets_runtime(&*runtime, &files, variant, pool_size, min_size)?;
+                    let (pool, batch_pool) = Self::split_triplets(triplets, batch_pool_size);
+                    e.pool = pool;
+                    e.batch_pool = batch_pool;
+                    e.execution_provider = "cpu".to_string();
+                    Ok(e)
+                },
+            )
+            .map_err(model_load)?
+        } else {
+            engine.warmup_one()?;
+            engine
+        };
 
+        tracing::info!(
+            execution_provider = engine.execution_provider(),
+            "execution provider bound"
+        );
         Ok(engine)
     }
 
