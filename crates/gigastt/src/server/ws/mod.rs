@@ -32,12 +32,34 @@ const WS_PING_INTERVAL_SECS: u64 = 30;
 /// seconds (≈ 90 s at the defaults).
 const WS_MAX_MISSED_PONGS: u32 = 2;
 
+/// Fallback deadline when the session cap is disabled or the requested
+/// duration overflows `Instant`. ≈30 years, same horizon tokio uses for
+/// `Instant::far_future()` (tokio-rs/tokio#3551) — large enough to never
+/// fire, small enough to fit in `Instant`'s representation.
+const FAR_FUTURE: std::time::Duration = std::time::Duration::from_secs(86_400 * 365 * 30);
+
 /// Whether a ping tick should close the socket: `true` once `unanswered_pings`
 /// has reached [`WS_MAX_MISSED_PONGS`]. Factored out of the session loop so the
 /// close-threshold and counter-reset edges can be unit-tested without driving a
 /// real socket and timers.
 fn keepalive_should_close(unanswered_pings: u32) -> bool {
     unanswered_pings >= WS_MAX_MISSED_PONGS
+}
+
+/// Wall-clock deadline for one session.
+///
+/// `0` parks the deadline [`FAR_FUTURE`] ahead (~30 years) so the cap never
+/// fires. `Duration::from_secs(u64::MAX / 2)` does not fit in `Instant` and
+/// panics on connect. A non-zero cap that itself does not fit is parked the
+/// same way instead of panicking.
+fn session_deadline(max_session_secs: u64) -> tokio::time::Instant {
+    let now = tokio::time::Instant::now();
+    if max_session_secs == 0 {
+        now + FAR_FUTURE
+    } else {
+        now.checked_add(std::time::Duration::from_secs(max_session_secs))
+            .unwrap_or(now + FAR_FUTURE)
+    }
 }
 
 pub(crate) async fn ws_handler(
@@ -236,16 +258,9 @@ async fn handle_ws_inner(
 
     let idle_timeout = std::time::Duration::from_secs(limits.idle_timeout_secs);
 
-    // Wall-clock deadline independent of `idle_timeout`. Setting
-    // `max_session_secs = 0` disables the cap by parking the deadline far in
-    // the future (u64::MAX / 2 ≈ 292 billion years) so `sleep_until` never
-    // fires — callers who deliberately want unlimited sessions don't pay for
-    // an additional branch in the select.
-    let session_deadline = if limits.max_session_secs == 0 {
-        tokio::time::Instant::now() + std::time::Duration::from_secs(u64::MAX / 2)
-    } else {
-        tokio::time::Instant::now() + std::time::Duration::from_secs(limits.max_session_secs)
-    };
+    // Independent of `idle_timeout`. A disabled cap stays in this `select`
+    // (parked far ahead) instead of adding another branch.
+    let session_deadline = session_deadline(limits.max_session_secs);
 
     // Server-initiated keepalive: ping every `WS_PING_INTERVAL_SECS`, close once
     // `WS_MAX_MISSED_PONGS` consecutive pings go unanswered. Any inbound frame
@@ -497,6 +512,8 @@ async fn handle_ws_inner(
 
 #[cfg(test)]
 mod tests {
+    use super::FAR_FUTURE;
+
     #[test]
     fn test_keepalive_close_threshold_and_reset() {
         use super::{WS_MAX_MISSED_PONGS, keepalive_should_close};
@@ -555,5 +572,27 @@ mod tests {
             triplet_marker, "pool_slot/taken",
             "triplet marker must survive panic"
         );
+    }
+
+    #[test]
+    fn test_session_deadline_does_not_overflow_instant() {
+        // `0` and a duration that cannot fit in `Instant` used to panic at
+        // connect (`u64::MAX / 2` seconds). Both must park ~30 years out.
+        let disabled = horizon(0);
+        assert!(disabled > std::time::Duration::from_secs(86_400 * 365));
+        assert!(disabled <= FAR_FUTURE + std::time::Duration::from_secs(2));
+
+        let overflow = horizon(u64::MAX);
+        assert!(overflow > std::time::Duration::from_secs(86_400 * 365));
+        assert!(overflow <= FAR_FUTURE + std::time::Duration::from_secs(2));
+
+        let capped = horizon(3600);
+        assert!(capped >= std::time::Duration::from_secs(3600));
+        assert!(capped < std::time::Duration::from_secs(3602));
+    }
+
+    fn horizon(max_session_secs: u64) -> std::time::Duration {
+        let before = tokio::time::Instant::now();
+        super::session_deadline(max_session_secs).saturating_duration_since(before)
     }
 }
