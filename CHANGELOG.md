@@ -34,6 +34,10 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
   boundary, removing intermediate owned tensor copies during token decoding.
 - Assign speakers with a linear cursor for ordered, non-overlapping turns;
   preserve first-match behavior for overlaps, unsorted inputs and boundaries.
+- Publish file-transcription snapshots from replacement suffixes instead of
+  rebuilding the accumulated transcript after every window. Readers still get
+  complete owned transcripts; completed split channels share their stored words.
+  See [snapshot allocation measurements](docs/transcript-snapshot-memory.md).
 
 - Document Linux OpenSSL build prerequisites and custom-prefix discovery for
   the ONNX Runtime downloader, including the environment used by Git hooks.

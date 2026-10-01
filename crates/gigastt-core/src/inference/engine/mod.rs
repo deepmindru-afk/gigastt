@@ -24,7 +24,7 @@ use super::state::{
     CommitPolicy, DecoderState, EndpointMode, EndpointReason, FeatureExtractor, StreamingState,
     TranscriptAssembler, TranscriptSegment, WordInfo, aggregate_confidence,
 };
-use super::token_format::{TokenFormatter, seam_seconds, stitch_chunk_words};
+use super::token_format::{TokenFormatter, seam_seconds, stitch_chunk_words_retained};
 use super::tokenizer::Tokenizer;
 use super::types::{
     DEFAULT_HOTWORDS_BOOST, DiarizationOutcome, HotwordError, HotwordOverride,
@@ -40,7 +40,13 @@ use super::{ENCODER_SUBSAMPLING, HOP_LENGTH, N_FFT, N_MELS, SECONDS_PER_FRAME, n
 #[cfg(feature = "diarization")]
 use super::diarization::{self, LazySpeakerEncoder};
 
-type PartialSink<'a> = &'a dyn Fn(&[WordInfo]);
+pub(crate) struct WordUpdate {
+    pub(crate) retained: usize,
+    pub(crate) words: Vec<WordInfo>,
+    pub(crate) channel: Option<usize>,
+}
+
+type PartialSink<'a> = &'a dyn Fn(WordUpdate);
 
 /// Cooperative-run hooks threaded through the decode call chain.
 ///
@@ -58,8 +64,18 @@ pub(crate) struct DecodeControls<'a> {
 
 impl DecodeControls<'_> {
     pub(crate) fn publish(&self, words: &[WordInfo]) {
+        if self.on_partial.is_some() {
+            self.publish_update(WordUpdate {
+                retained: 0,
+                words: words.to_vec(),
+                channel: None,
+            });
+        }
+    }
+
+    pub(crate) fn publish_update(&self, update: WordUpdate) {
         if let Some(on_partial) = self.on_partial {
-            on_partial(words);
+            on_partial(update);
         }
     }
 

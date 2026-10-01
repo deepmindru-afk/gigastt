@@ -2,21 +2,6 @@
 
 use super::*;
 
-fn publish_channel_partial(
-    completed: &[TranscribeResult],
-    words: &[WordInfo],
-    ctl: DecodeControls<'_>,
-) {
-    let mut channels = completed.to_vec();
-    channels.push(TranscribeResult {
-        text: String::new(),
-        words: words.to_vec(),
-        duration_s: 0.0,
-        confidence: None,
-    });
-    ctl.publish(&merge_channel_results(channels).words);
-}
-
 impl Engine {
     /// Transcribe a multi-channel recording with one speaker label per channel.
     ///
@@ -63,12 +48,17 @@ impl Engine {
 
         let mut per_channel = Vec::with_capacity(channels.len());
         let mut completed_samples = 0u64;
-        for channel_samples in channels {
-            let publish = |words: &[WordInfo]| publish_channel_partial(&per_channel, words, ctl);
+        for (channel, channel_samples) in channels.iter().enumerate() {
+            let publish = |update: WordUpdate| {
+                ctl.publish_update(WordUpdate {
+                    channel: Some(channel),
+                    ..update
+                })
+            };
             let report = |n| ctl.report(completed_samples.saturating_add(n));
             let channel_ctl = DecodeControls {
                 on_progress: ctl.on_progress.map(|_| &report as &dyn Fn(u64)),
-                on_partial: ctl.on_partial.map(|_| &publish as &dyn Fn(&[WordInfo])),
+                on_partial: ctl.on_partial.map(|_| &publish as &dyn Fn(WordUpdate)),
                 ..ctl
             };
             let words = self.decode_words_for_samples(
@@ -131,11 +121,16 @@ impl Engine {
         let mut per_channel = Vec::with_capacity(channels);
         let mut completed_samples = 0u64;
         for k in 0..channels {
-            let publish = |words: &[WordInfo]| publish_channel_partial(&per_channel, words, ctl);
+            let publish = |update: WordUpdate| {
+                ctl.publish_update(WordUpdate {
+                    channel: Some(k),
+                    ..update
+                })
+            };
             let report = |n| ctl.report(completed_samples.saturating_add(n));
             let channel_ctl = DecodeControls {
                 on_progress: ctl.on_progress.map(|_| &report as &dyn Fn(u64)),
-                on_partial: ctl.on_partial.map(|_| &publish as &dyn Fn(&[WordInfo])),
+                on_partial: ctl.on_partial.map(|_| &publish as &dyn Fn(WordUpdate)),
                 ..ctl
             };
             let mut windows =
