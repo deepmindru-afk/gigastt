@@ -113,7 +113,7 @@ fn decode_packet_interleaved(
 
 /// Packet-at-a-time Opus decode, mixed down to mono as it goes.
 ///
-/// The streaming counterpart of [`decode_opus_channels`], which has to hold
+/// The streaming counterpart of [`decode_opus_channels_with_abort`], which has to hold
 /// every channel of the whole file before anything can be mixed or resampled —
 /// the reason the Opus path stayed on the whole-buffer duration ceiling while
 /// every other container streamed. This one holds a single packet.
@@ -206,7 +206,7 @@ thread_local! {
 /// the per-channel (48 kHz) sample budget, enforced incrementally as in the
 /// symphonia decode loops; `limit_secs` is the seconds figure reported on a
 /// trip.
-#[cfg(feature = "file-decode")]
+#[cfg(all(test, feature = "file-decode"))]
 pub(super) fn decode_opus_channels(
     format: &mut dyn FormatReader,
     track_id: u32,
@@ -214,6 +214,19 @@ pub(super) fn decode_opus_channels(
     max_samples: usize,
     limit_secs: f64,
 ) -> Result<Vec<Vec<f32>>> {
+    decode_opus_channels_with_abort(format, track_id, channels, max_samples, limit_secs, None)
+}
+
+#[cfg(feature = "file-decode")]
+pub(super) fn decode_opus_channels_with_abort(
+    format: &mut dyn FormatReader,
+    track_id: u32,
+    channels: usize,
+    max_samples: usize,
+    limit_secs: f64,
+    abort: Option<&(dyn Fn() -> bool + Sync)>,
+) -> Result<Vec<Vec<f32>>> {
+    super::check_decode_abort(abort)?;
     #[cfg(test)]
     CHANNEL_DECODE_PASSES.with(|count| count.set(count.get() + 1));
     check_opus_channels(channels)?;
@@ -222,6 +235,7 @@ pub(super) fn decode_opus_channels(
     let mut pcm: Vec<f32> = Vec::new();
     let mut frame: Vec<u8> = Vec::new();
     loop {
+        super::check_decode_abort(abort)?;
         let have_pcm = per_channel.first().is_some_and(|c| !c.is_empty());
         let Some(packet) = next_demux_packet(format, have_pcm)? else {
             break;
@@ -231,6 +245,7 @@ pub(super) fn decode_opus_channels(
         }
         let decoded =
             decode_packet_interleaved(&mut decoder, channels, &packet.data, &mut pcm, &mut frame)?;
+        super::check_decode_abort(abort)?;
         if channels == 1 {
             per_channel[0].extend_from_slice(&pcm[..decoded]);
         } else {
@@ -250,6 +265,7 @@ pub(super) fn decode_opus_channels(
             ));
         }
     }
+    super::check_decode_abort(abort)?;
     Ok(per_channel)
 }
 

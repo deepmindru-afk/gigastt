@@ -68,8 +68,9 @@ impl Engine {
                         ctl,
                     )
                 } else {
-                    let float_samples = audio::decode_audio_file_bounded(path, max_audio_secs)
-                        .map_err(audio::decode_error)?;
+                    let float_samples =
+                        audio::decode_audio_file_with_abort(path, max_audio_secs, ctl.abort)
+                            .map_err(audio::decode_error)?;
                     self.transcribe_samples_with_overrides(
                         &float_samples,
                         triplet,
@@ -96,7 +97,7 @@ impl Engine {
                     )
                 } else {
                     let float_samples =
-                        audio::decode_audio_bytes_shared_bounded(data, max_audio_secs)
+                        audio::decode_audio_bytes_with_abort(data, max_audio_secs, ctl.abort)
                             .map_err(audio::decode_error)?;
                     self.transcribe_samples_with_overrides(
                         &float_samples,
@@ -177,38 +178,52 @@ impl Engine {
         // when the caller asked for it (REST `?diarization=true`). A plain
         // transcript — and the `channels=split` dual-mono fallback — must carry no
         // speaker labels, so the default paths pass `false`.
+        ctl.check_abort()?;
         let wall_start = std::time::Instant::now();
         let duration_s = float_samples.len() as f64 / 16000.0;
 
         #[cfg_attr(not(feature = "diarization"), allow(unused_mut))]
         let mut words =
             self.decode_words_for_samples(float_samples, triplet, overrides, hotwords, ctl)?;
+        ctl.check_abort()?;
 
         // Record *why* speakers were or were not labeled into the caller's sink
         // so a `?diarization=true` request that produced no labels can be
         // surfaced with a reason instead of an all-empty-speaker transcript.
         #[cfg(feature = "diarization")]
         if diarize {
-            let outcome = match self
+            let encoder = self
                 .speaker_encoder
                 .as_ref()
-                .and_then(|lazy| lazy.get_or_load())
-            {
+                .and_then(|lazy| lazy.get_or_load());
+            ctl.check_abort()?;
+            let outcome = match encoder {
                 None => DiarizationOutcome::NoSpeakerModel,
-                Some(enc) => match diarization::run_offline(&enc, float_samples) {
-                    Ok(turns) => {
-                        let speakers = turns
-                            .iter()
-                            .map(|turn| turn.speaker)
-                            .collect::<std::collections::BTreeSet<_>>()
-                            .len();
-                        tracing::info!(turns = turns.len(), speakers, "offline diarization turns");
-                        diarization::assign_speakers_by_midpoint(&turns, &mut words);
-                        DiarizationOutcome::Applied
+                Some(enc) => {
+                    match diarization::run_offline_with_abort(&enc, float_samples, ctl.abort) {
+                        Ok(turns) => {
+                            ctl.check_abort()?;
+                            let speakers = turns
+                                .iter()
+                                .map(|turn| turn.speaker)
+                                .collect::<std::collections::BTreeSet<_>>()
+                                .len();
+                            tracing::info!(
+                                turns = turns.len(),
+                                speakers,
+                                "offline diarization turns"
+                            );
+                            diarization::assign_speakers_by_midpoint(&turns, &mut words);
+                            DiarizationOutcome::Applied
+                        }
+                        Err(diarization::OfflineRunError::Cancelled) => {
+                            return Err(GigasttError::Cancelled);
+                        }
+                        Err(diarization::OfflineRunError::Declined(declined)) => declined,
                     }
-                    Err(declined) => declined,
-                },
+                }
             };
+            ctl.check_abort()?;
             if let Some(sink) = diar_sink {
                 let _ = sink.set(outcome);
             }
@@ -220,7 +235,7 @@ impl Engine {
             let _ = sink.set(DiarizationOutcome::NoSpeakerModel);
         }
 
-        let result = self.finish_transcribe_result(words, duration_s, overrides);
+        let result = self.finish_transcribe_result(words, duration_s, overrides, ctl)?;
 
         let wall_s = wall_start.elapsed().as_secs_f64();
         let rtf = if duration_s > 0.0 {
@@ -260,7 +275,9 @@ impl Engine {
         words: Vec<WordInfo>,
         duration_s: f64,
         overrides: &TranscribeOverrides,
-    ) -> TranscribeResult {
+        ctl: DecodeControls,
+    ) -> Result<TranscribeResult, GigasttError> {
+        ctl.check_abort()?;
         let text: String = words
             .iter()
             .map(|w| w.word.as_str())
@@ -274,13 +291,15 @@ impl Engine {
             text,
             overrides.itn.unwrap_or(self.itn),
             overrides.punctuation.unwrap_or(true),
-        );
+            ctl,
+        )?;
 
-        TranscribeResult {
+        ctl.check_abort()?;
+        Ok(TranscribeResult {
             text,
             confidence: aggregate_confidence(&words),
             words,
             duration_s,
-        }
+        })
     }
 }

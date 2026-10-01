@@ -39,11 +39,25 @@ fn test_engine_config_getters_and_builders() {
         VadConfig::default().threshold
     );
     assert_eq!(
-        engine.apply_text_postprocess("двадцать один".into(), true, false),
+        engine
+            .apply_text_postprocess(
+                "двадцать один".into(),
+                true,
+                false,
+                DecodeControls::default()
+            )
+            .unwrap(),
         "21"
     );
     assert_eq!(
-        engine.apply_text_postprocess("двадцать один".into(), false, true),
+        engine
+            .apply_text_postprocess(
+                "двадцать один".into(),
+                false,
+                true,
+                DecodeControls::default()
+            )
+            .unwrap(),
         "двадцать один"
     );
 }

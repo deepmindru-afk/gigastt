@@ -97,32 +97,15 @@ async fn openai_transcriptions_stream(
     }
 
     let engine = state.engine.load_full();
-    let mut reservation =
-        reserve_batch_slot(&engine, &limits, state.metrics_registry.as_ref()).await?;
-
-    let max_audio_secs = limits.max_audio_secs_opt();
-    let (chunks, upload_lifetime) = tokio::task::spawn_blocking(move || {
-        let upload_lifetime = body.clone();
-        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            super::stream::open_stream_chunks_blocking(body, max_audio_secs)
-        })) {
-            Ok(inner) => inner.map(|chunks| (chunks, upload_lifetime)),
-            Err(_) => {
-                tracing::error!("Panic in OpenAI SSE audio probe — treated as decode error");
-                Err(anyhow::anyhow!("Audio decode thread panicked"))
-            }
-        }
-    })
-    .await
-    .map_err(|e| {
-        tracing::error!("spawn_blocking join error: {e}");
-        api_error(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Internal server error",
-            "internal",
-        )
-    })?
-    .map_err(super::stream::map_stream_open_error)?;
+    let reservation = reserve_batch_slot(&engine, &limits, state.metrics_registry.as_ref()).await?;
+    let (chunks, upload_lifetime, mut reservation) = super::stream::open_stream_chunks(
+        &state,
+        body,
+        reservation,
+        limits.max_audio_secs_opt(),
+        limits.inference_timeout_secs,
+    )
+    .await?;
 
     // Channel of pre-rendered SSE `data:` payloads (JSON events or `[DONE]`).
     let (tx, rx) = tokio::sync::mpsc::channel::<String>(32);
@@ -131,23 +114,31 @@ async fn openai_transcriptions_stream(
     let tracker = state.tracker.clone();
     let (abort, finished) =
         super::super::file_transcribe::stream_abort(&tx, cancel.clone(), &tracker);
+    let watchdog = super::stream_watchdog::StreamWatchdog::start(
+        &state,
+        limits.inference_timeout_secs,
+        abort.clone(),
+        cancel.clone(),
+    );
+    let response_watchdog = watchdog.clone();
+    let partial = Arc::new(gigastt_core::inference::TranscriptSnapshot::default());
+    let response_partial = partial.clone();
     let span = tracing::Span::current();
     tracker.spawn_blocking(move || {
+        let _completion = watchdog.completion();
         let _upload_lifetime = upload_lifetime;
         let _finished = finished;
         let _enter = span.enter();
         use super::super::openai::{OpenAIStreamAssembler, sse_delta_payload, sse_done_payload};
 
         let runtime = tokio::runtime::Handle::current();
-        let send = |payload: String| {
-            runtime.block_on(super::stream::send_stream_item(
-                &tx, payload, &cancel, &abort,
-            ))
-        };
+        let send = |payload: String| runtime.block_on(watchdog.send(&tx, payload, &cancel, &abort));
 
-        let partial = Arc::new(gigastt_core::inference::TranscriptSnapshot::default());
         let mut asm = OpenAIStreamAssembler::new();
         let report_error = |asm: &mut OpenAIStreamAssembler, code, message: &str| {
+            if !watchdog.claim_finish() {
+                return;
+            }
             if let Some(segment) = partial.get()
                 && let Some(delta) = asm.push_segment(&segment.text, false)
                 && !send(sse_delta_payload(&delta))
@@ -184,6 +175,7 @@ async fn openai_transcriptions_stream(
                 };
                 match engine.process_chunk(chunk, &mut stream_state, &mut reservation) {
                     Ok(segs) => {
+                        watchdog.progress();
                         for seg in segs {
                             if let Some(delta) = asm.push_segment(&seg.text, seg.is_final)
                                 && !send(sse_delta_payload(&delta))
@@ -202,13 +194,20 @@ async fn openai_transcriptions_stream(
 
             match engine.try_finish_stream(&mut stream_state, &mut reservation) {
                 Ok(Some(segment)) => {
+                    if !watchdog.claim_finish() {
+                        return;
+                    }
                     if let Some(delta) = asm.push_segment(&segment.text, segment.is_final)
                         && !send(sse_delta_payload(&delta))
                     {
                         return;
                     }
                 }
-                Ok(None) => {}
+                Ok(None) => {
+                    if !watchdog.claim_finish() {
+                        return;
+                    }
+                }
                 Err(error) => {
                     tracing::error!("Final OpenAI SSE decode failed: {error:#}");
                     report_error(&mut asm, error.code(), "Failed to finish transcription.");
@@ -232,7 +231,17 @@ async fn openai_transcriptions_stream(
         // reservation dropped → pool
     });
 
-    let stream = tokio_stream::wrappers::ReceiverStream::new(rx)
+    let stream = response_watchdog
+        .response(rx, move || {
+            let mut error = serde_json::json!({
+                "type": "error", "code": "inference_timeout",
+                "message": "Transcription made no progress within the configured timeout.",
+            });
+            if let Some(segment) = response_partial.get() {
+                error["partial"] = serde_json::to_value(segment).unwrap_or(serde_json::Value::Null);
+            }
+            vec![error.to_string()]
+        })
         .map(|data| Ok::<_, std::convert::Infallible>(super::super::openai::sse_event_data(data)));
 
     Ok(Sse::new(stream)
