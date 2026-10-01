@@ -243,6 +243,7 @@ impl FeatureExtractor {
     }
 
     /// Compute log-mel features from 16 kHz f32 samples, reusing state buffers.
+    /// The complex buffer retains the FFT input followed by plan-specific scratch.
     pub fn compute_mel(
         &self,
         samples: &[f32],

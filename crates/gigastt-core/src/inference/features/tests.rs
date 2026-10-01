@@ -213,3 +213,50 @@ fn test_golos_00_mel_matches_author_preprocessor() {
     );
     assert!(active_mean < 0.02, "active-bin mel mean abs {active_mean}");
 }
+
+#[test]
+fn test_fft_scratch_retained_with_reused_feature_buffers() {
+    let mel = MelSpectrogram::new();
+    let mut fft_input = Vec::new();
+    let mut power = Vec::new();
+    let mut output = Vec::new();
+    let samples: Vec<f32> = (0..80_000).map(|i| (i as f32 * 0.17).sin()).collect();
+    mel.compute_with_buffers(&samples, &mut fft_input, &mut power, &mut output);
+    assert!(fft_input.len() >= mel.n_fft + mel.fft.get_inplace_scratch_len());
+    let buffer = fft_input.as_ptr();
+    // Growing, shrinking, and sub-frame inputs must not disturb subsequent FFTs.
+    for len in [320, 480, 16_000, 80_000, 319, 0, 320, 32_000] {
+        let mut expected = output.clone();
+        let expected_frames = allocating_reference(&mel, &samples[..len], &mut expected);
+        let frames =
+            mel.compute_with_buffers(&samples[..len], &mut fft_input, &mut power, &mut output);
+        assert_eq!(frames, expected_frames);
+        assert_eq!(output, expected);
+        assert_eq!(fft_input.as_ptr(), buffer);
+    }
+}
+
+// Original per-frame allocating FFT path, including short-input resize semantics.
+fn allocating_reference(mel: &MelSpectrogram, samples: &[f32], output: &mut Vec<f32>) -> usize {
+    if samples.len() < mel.n_fft {
+        output.resize(mel.mel_bands.len(), 0.0);
+        return 1;
+    }
+    let frames = (samples.len() - mel.n_fft) / mel.hop_length + 1;
+    output.resize(mel.mel_bands.len() * frames, 0.0);
+    let mut input = vec![Complex::new(0.0, 0.0); mel.n_fft];
+    for frame in 0..frames {
+        for (i, value) in input.iter_mut().enumerate() {
+            *value = Complex::new(samples[frame * mel.hop_length + i] * mel.window[i], 0.0);
+        }
+        mel.fft.process(&mut input);
+        for (m, band) in mel.mel_bands.iter().enumerate() {
+            let mut energy = 0.0_f32;
+            for (i, &weight) in band.weights.iter().enumerate() {
+                energy += weight * input[band.start + i].norm_sqr();
+            }
+            output[m * frames + frame] = energy.max(1e-10).ln();
+        }
+    }
+    frames
+}
