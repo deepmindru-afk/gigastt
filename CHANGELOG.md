@@ -82,6 +82,9 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
   including recognition-only cache hits. Pin the encoder oracle to CPU/rnnt,
   record model provenance, and calibrate its maximum-error bound against the
   observed CI runner while retaining cosine and exact-transcript checks.
+- Cancel stalled native and OpenAI file SSE producers after a 30-second output
+  wait, and interrupt full-queue sends on shutdown or disconnect so unread
+  responses cannot indefinitely retain inference slots.
 
 - **WebSocket sessions no longer panic on startup when
   `GIGASTT_MAX_SESSION_SECS=0`.** Previously, the unlimited-session deadline

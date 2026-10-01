@@ -19,6 +19,46 @@ use super::transcribe::reserve_batch_slot;
 /// depend on the chunk cadence.
 pub(super) const STREAM_CHUNK_SAMPLES: usize = 16_000;
 
+/// Maximum time a file-stream producer waits for a reader to drain its queue.
+pub(super) const STREAM_SEND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Keep FIFO delivery bounded without pinning an inference reservation behind
+/// an unread response. On cancellation a final/error can still be queued if
+/// capacity is immediately available; a full queue is never waited on again.
+/// The token must belong to this request, not the server shutdown token.
+pub(super) async fn send_stream_item<T>(
+    tx: &tokio::sync::mpsc::Sender<T>,
+    item: T,
+    cancel: &tokio_util::sync::CancellationToken,
+    abort: &std::sync::atomic::AtomicBool,
+) -> bool {
+    use tokio::sync::mpsc::error::TrySendError;
+    let delivered = match tx.try_send(item) {
+        Ok(()) => return true,
+        Err(TrySendError::Closed(_)) => false,
+        Err(TrySendError::Full(item)) => {
+            tokio::select! {
+                biased;
+                _ = cancel.cancelled() => false,
+                result = tokio::time::timeout(STREAM_SEND_TIMEOUT, tx.send(item)) => {
+                    match result {
+                        Ok(result) => result.is_ok(),
+                        Err(_) => {
+                            tracing::warn!("SSE reader stalled; cancelling transcription");
+                            false
+                        }
+                    }
+                }
+            }
+        }
+    };
+    if !delivered {
+        abort.store(true, std::sync::atomic::Ordering::Relaxed);
+        cancel.cancel();
+    }
+    delivered
+}
+
 /// Per-request text commitment for the native SSE endpoint.
 #[derive(Default, serde::Deserialize)]
 pub struct StreamQuery {
@@ -207,11 +247,10 @@ pub async fn transcribe_stream(
     // long transcription drops cleanly.
     //
     // The whole file is transcribed in one blocking task, streaming each 1 s
-    // chunk's segments out as they are produced. Each `process_chunk` is a small
-    // bounded unit of work, so unlike the single-shot REST path it is not
-    // wrapped by the per-request inference timeout; liveness on shutdown is
-    // handled by the per-chunk cancellation check.
-    let cancel = state.shutdown.clone();
+    // chunk's segments out as they are produced. This path does not use the
+    // REST inference watchdog. Decode observes cancellation between runtime
+    // calls; output waits have their own bounded cancellation-aware policy.
+    let cancel = state.shutdown.child_token();
     let tracker = state.tracker.clone();
     let (abort, finished) =
         super::super::file_transcribe::stream_abort(&tx, cancel.clone(), &tracker);
@@ -219,6 +258,8 @@ pub async fn transcribe_stream(
     tracker.spawn_blocking(move || {
         let _finished = finished;
         let _enter = span.enter();
+        let runtime = tokio::runtime::Handle::current();
+        let send = |item| runtime.block_on(send_stream_item(&tx, item, &cancel, &abort));
         // catch_unwind ensures the triplet is returned to the pool even on panic.
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let mut stream_state = engine.create_state(false);
@@ -232,7 +273,7 @@ pub async fn transcribe_stream(
                 if cancel.is_cancelled() {
                     tracing::info!("SSE transcription cancelled by shutdown");
                     let segment = engine.flush_truncated(&mut stream_state);
-                    let _ = tx.blocking_send(Ok(segment));
+                    let _ = send(Ok(segment));
                     return;
                 }
                 let chunk = match chunks.next_chunk() {
@@ -248,7 +289,7 @@ pub async fn transcribe_stream(
                             .downcast_ref::<gigastt_core::error::GigasttError>()
                             .map_or("invalid_audio", |g| g.code());
                         tracing::error!("SSE audio decode error: {e:#}");
-                        let _ = tx.blocking_send(Err(StreamError {
+                        let _ = send(Err(StreamError {
                             code,
                             message: "Failed to decode audio file. Check format.".into(),
                         }));
@@ -258,17 +299,19 @@ pub async fn transcribe_stream(
                 match engine.process_chunk(chunk, &mut stream_state, &mut reservation) {
                     Ok(segs) => {
                         for seg in segs {
-                            if tx.blocking_send(Ok(seg)).is_err() {
-                                // Receiver dropped (client disconnected).
+                            if !send(Ok(seg)) {
+                                // Reader disconnected, stalled, or shutdown interrupted the send.
                                 return;
                             }
                         }
                     }
                     Err(e) => {
-                        if let Some(partial) = engine.flush_state(&mut stream_state) {
-                            let _ = tx.blocking_send(Ok(partial));
+                        if let Some(partial) = engine.flush_state(&mut stream_state)
+                            && !send(Ok(partial))
+                        {
+                            return;
                         }
-                        let _ = tx.blocking_send(Err(StreamError {
+                        let _ = send(Err(StreamError {
                             code: e.code(),
                             message: "Transcription failed. Please check audio format.".into(),
                         }));
@@ -277,10 +320,10 @@ pub async fn transcribe_stream(
                 }
             }
 
-            // Final decode of the sub-stride remainder, then flush — best-effort;
-            // always emit so SSE clients receive a clean end-of-stream marker.
+            // Final decode of the sub-stride remainder, then flush. Terminal
+            // delivery follows the same bounded wait as ordinary segments.
             if let Some(seg) = engine.finish_stream(&mut stream_state, &mut reservation) {
-                let _ = tx.blocking_send(Ok(seg));
+                let _ = send(Ok(seg));
             }
         }));
 
@@ -288,7 +331,7 @@ pub async fn transcribe_stream(
             tracing::error!("Panic in SSE inference task — triplet recovered");
             // Mirror the WebSocket contract: surface a distinct `inference_panic`
             // code instead of ending the stream silently.
-            let _ = tx.blocking_send(Err(StreamError {
+            let _ = send(Err(StreamError {
                 code: "inference_panic",
                 message: "Inference failed unexpectedly.".into(),
             }));
