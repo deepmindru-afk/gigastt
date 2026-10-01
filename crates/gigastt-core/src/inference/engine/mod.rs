@@ -211,6 +211,8 @@ mod channels;
 mod config;
 mod file_stream;
 mod infer;
+#[cfg(test)]
+mod live_probe;
 mod load;
 mod stream;
 #[cfg(test)]
