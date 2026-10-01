@@ -512,6 +512,12 @@ including audio-specific credentials, private-network settings, and verification
 | `srt` / `vtt` | captions |
 | `verbose_json` | Whisper-style: `task`, `language`, `duration`, `text`, optional `segments` / `words` |
 
+Both file SSE endpoints require clients to keep reading the response. When an
+output queue stays full for 30 seconds, the server cancels that transcription.
+Shutdown or disconnect interrupts the wait immediately. Final/error events are
+best effort on these paths; a stalled stream may close without them, and OpenAI
+completion is not confirmed without `[DONE]`.
+
 **Streaming (`stream=true`).** Response is `text/event-stream`:
 
 ```

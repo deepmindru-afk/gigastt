@@ -107,7 +107,7 @@ async fn openai_transcriptions_stream(
     // Channel of pre-rendered SSE `data:` payloads (JSON events or `[DONE]`).
     let (tx, rx) = tokio::sync::mpsc::channel::<String>(32);
 
-    let cancel = state.shutdown.clone();
+    let cancel = state.shutdown.child_token();
     let tracker = state.tracker.clone();
     let (abort, finished) =
         super::super::file_transcribe::stream_abort(&tx, cancel.clone(), &tracker);
@@ -117,7 +117,12 @@ async fn openai_transcriptions_stream(
         let _enter = span.enter();
         use super::super::openai::{OpenAIStreamAssembler, sse_delta_payload, sse_done_payload};
 
-        let send = |payload: String| -> bool { tx.blocking_send(payload).is_ok() };
+        let runtime = tokio::runtime::Handle::current();
+        let send = |payload: String| {
+            runtime.block_on(super::stream::send_stream_item(
+                &tx, payload, &cancel, &abort,
+            ))
+        };
 
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let mut stream_state = engine.create_state(false);
@@ -135,8 +140,9 @@ async fn openai_transcriptions_stream(
                     Ok(None) => break,
                     Err(e) => {
                         tracing::error!("OpenAI SSE audio decode error: {e:#}");
-                        let _ = send(sse_done_payload(asm.text()));
-                        let _ = send("[DONE]".into());
+                        if send(sse_done_payload(asm.text())) {
+                            let _ = send("[DONE]".into());
+                        }
                         return;
                     }
                 };
@@ -154,8 +160,9 @@ async fn openai_transcriptions_stream(
                         tracing::error!("OpenAI SSE transcription error: {e}");
                         // Surface a final done with whatever we have so clients
                         // do not hang; OpenAI stream errors are not standardized.
-                        let _ = send(sse_done_payload(asm.text()));
-                        let _ = send("[DONE]".into());
+                        if send(sse_done_payload(asm.text())) {
+                            let _ = send("[DONE]".into());
+                        }
                         return;
                     }
                 }
@@ -163,18 +170,21 @@ async fn openai_transcriptions_stream(
 
             if let Some(seg) = engine.finish_stream(&mut stream_state, &mut reservation)
                 && let Some(delta) = asm.push_segment(&seg.text, seg.is_final)
+                && !send(sse_delta_payload(&delta))
             {
-                let _ = send(sse_delta_payload(&delta));
+                return;
             }
 
-            let _ = send(sse_done_payload(asm.text()));
-            let _ = send("[DONE]".into());
+            if send(sse_done_payload(asm.text())) {
+                let _ = send("[DONE]".into());
+            }
         }));
 
         if result.is_err() {
             tracing::error!("Panic in OpenAI SSE inference task — triplet recovered");
-            let _ = send(sse_done_payload(""));
-            let _ = send("[DONE]".into());
+            if send(sse_done_payload("")) {
+                let _ = send("[DONE]".into());
+            }
         }
         // reservation dropped → pool
     });
