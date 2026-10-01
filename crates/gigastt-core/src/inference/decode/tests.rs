@@ -576,3 +576,58 @@ fn test_bias_none_is_byte_for_byte_unchanged() {
     );
     assert_eq!(none.tokens.len(), 2);
 }
+
+#[test]
+fn test_blank_frames_skip_confidence_normalization() {
+    let mut backend = FakeBackend::new(vec![], 3, 2);
+    let encoded = Tensor::new_checked(
+        Shape::new(vec![1, ENC_DIM, 20]),
+        TensorData::F32(vec![0.0; ENC_DIM * 20]),
+    );
+    CONFIDENCE_NORMALIZATIONS.with(|count| count.set(0));
+    let result = greedy_decode_impl(
+        &mut backend,
+        &encoded.view(),
+        20,
+        2,
+        &mut DecoderState::new(2),
+        None,
+    )
+    .unwrap();
+    assert!(result.tokens.is_empty());
+    assert_eq!(backend.joiner_calls, 20);
+    assert_eq!(CONFIDENCE_NORMALIZATIONS.with(|count| count.get()), 0);
+}
+
+#[test]
+fn test_capped_tied_tokens_normalize_only_emissions() {
+    let mut backend = FlatLogitsBackend {
+        logits: vec![0.0, 1.0, 1.0],
+    };
+    let expected = token_confidence(&backend.logits, 2).to_bits();
+    let encoded = Tensor::new_checked(
+        Shape::new(vec![1, ENC_DIM, 1]),
+        TensorData::F32(vec![0.0; ENC_DIM]),
+    );
+    CONFIDENCE_NORMALIZATIONS.with(|count| count.set(0));
+    let result = greedy_decode_impl(
+        &mut backend,
+        &encoded.view(),
+        1,
+        0,
+        &mut DecoderState::new(0),
+        None,
+    )
+    .unwrap();
+    assert_eq!(result.tokens.len(), MAX_TOKENS_PER_STEP);
+    assert!(
+        result
+            .tokens
+            .iter()
+            .all(|t| t.token_id == 2 && t.confidence.to_bits() == expected)
+    );
+    assert_eq!(
+        CONFIDENCE_NORMALIZATIONS.with(|count| count.get()),
+        MAX_TOKENS_PER_STEP
+    );
+}
