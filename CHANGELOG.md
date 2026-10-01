@@ -19,6 +19,9 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
   exact transcription oracle plus real-speech WebSocket finalization coverage.
 - Keep internal planning files local, publish benchmark and edge protocols under
   `docs/`, and check public content and Git metadata for internal identifiers.
+- Add opt-in [sidecar contention measurements](docs/sidecar-contention.md) for
+  mixed interactive and batch recognition, separating cold use, lock waits and warm execution. Production
+  sidecar sharing and inference defaults are unchanged.
 
 - Require Symphonia 0.6.1 and remove the vendored metadata and Matroska
   patches. Upstream now handles APEv2 size overflow and unknown-size WebM

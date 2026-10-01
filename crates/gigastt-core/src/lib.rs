@@ -91,3 +91,6 @@ pub mod runtime_api {
         TensorDataView, cpu_factory, production_factory,
     };
 }
+
+#[cfg(test)]
+mod sidecar_probe;
