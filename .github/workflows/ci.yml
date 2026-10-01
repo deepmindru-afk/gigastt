@@ -20,6 +20,15 @@ jobs:
           components: rustfmt
       - run: cargo fmt --all --check
 
+  release-source:
+    runs-on: ubuntu-latest
+    name: Release source validation
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - run: python3 scripts/test-resolve-release.py
+
   runtime-isolation:
     runs-on: ubuntu-latest
     name: Runtime Isolation

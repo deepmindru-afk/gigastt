@@ -122,6 +122,9 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 - Wait for operational readiness in the CLI server smoke test before checking
   metrics, and reap the owned subprocess on assertion failures. Startup and
   metrics time budgets are unchanged.
+- Resolve and validate release tags before building artifacts. Manual dispatch,
+  binary packages, SBOMs and container images now share one immutable source
+  commit, with workflow and artifact source recorded separately in provenance.
 
 - Provision punctuation and VAD sidecars before model-backed coverage tests,
   including recognition-only cache hits. Pin the encoder oracle to CPU/rnnt,
