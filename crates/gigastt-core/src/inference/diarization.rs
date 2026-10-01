@@ -46,6 +46,8 @@ impl Embedder for SharedExtractor {
     }
 
     fn embed(&self, samples: &[f32]) -> Result<Vec<f32>, EmbedderError> {
+        #[cfg(test)]
+        let _probe = crate::sidecar_probe::Probe::new("speaker_embedding_total");
         self.0.embed(samples)
     }
 }
@@ -204,6 +206,8 @@ pub fn run_offline(
     encoder: &SpeakerEncoder,
     samples: &[f32],
 ) -> Result<Vec<LabeledTurn>, DiarizationOutcome> {
+    #[cfg(test)]
+    let _probe = crate::sidecar_probe::Probe::new("diarization_total");
     let config = DiaConfig::default();
     let vad_config = VadConfig::default();
     let pipeline = LegacyPipeline::new(config, vad_config);

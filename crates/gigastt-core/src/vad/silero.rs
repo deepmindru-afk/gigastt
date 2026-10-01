@@ -82,8 +82,12 @@ impl SileroVad {
         let n = frame.len().min(VAD_FRAME_SAMPLES);
         input[..n].copy_from_slice(&frame[..n]);
 
+        #[cfg(test)]
+        let mut probe = crate::sidecar_probe::Probe::new("vad");
         let outputs = {
             let mut inputs = self.input_tensors.lock();
+            #[cfg(test)]
+            probe.acquired();
             inputs[0]
                 .as_f32_mut()
                 .context("VAD frame tensor is not f32")?
@@ -97,6 +101,9 @@ impl SileroVad {
             let session = self.session.lock();
             session.run(&inputs).context("VAD model inference failed")?
         };
+
+        #[cfg(test)]
+        drop(probe);
 
         // Identify the state and probability outputs by shape so the code
         // does not depend on the exact output order of the Silero model.

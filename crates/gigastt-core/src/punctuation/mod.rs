@@ -362,8 +362,12 @@ impl Punctuator {
         // Run the session and reduce the borrowed logits to an owned
         // per-token argmax inside this scope.
         let num_labels = self.id2label.len();
+        #[cfg(test)]
+        let mut probe = crate::sidecar_probe::Probe::new("punctuation");
         let argmax_per_token: Vec<usize> = {
             let session = self.session.lock();
+            #[cfg(test)]
+            probe.acquired();
             let outputs = session
                 .run(&[input_ids, attention_mask, token_type])
                 .context("punct model inference failed")?;
@@ -389,6 +393,8 @@ impl Punctuator {
                 })
                 .collect()
         };
+        #[cfg(test)]
+        drop(probe);
 
         Ok(first_subword_labels(
             encoding.get_word_ids(),
