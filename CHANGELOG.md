@@ -21,6 +21,8 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 
 ### Changed
 
+- Add cross-mode transcription contract checks for observable REST/job overrides, cancelled job registration, and real RNN-T numerical parity across file and channel source representations.
+
 - Poll cancellation during channel scanning and buffered audio decode, between offline diarization steps, and across speaker-loading and text-postprocessing boundaries. Preserve readable partial transcripts and document the synchronous calls that can delay worker/resource release.
 
 - Run a bounded, serial model smoke gate on every PR: pinned CPU encoder and
