@@ -84,6 +84,7 @@ fn test_raw_codec_to_wav_produces_decodable_wav() {
         &raw,
         gigastt_core::inference::audio::TelephonyCodec::Pcmu,
         8000,
+        None,
     )
     .unwrap();
     let samples = gigastt_core::inference::audio::decode_audio_bytes_shared(wav).unwrap();
@@ -104,6 +105,7 @@ fn test_raw_codec_to_wav_rejects_bad_input() {
         &[],
         gigastt_core::inference::audio::TelephonyCodec::Pcmu,
         8000,
+        None,
     );
     assert!(result.is_err(), "empty raw payload must error");
 }

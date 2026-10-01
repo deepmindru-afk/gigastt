@@ -147,3 +147,76 @@ fn test_cancelled_second_channel_keeps_first_channel_text() {
     assert!(words.iter().any(|word| word.speaker == Some(0)));
     assert!(words.iter().any(|word| word.speaker == Some(1)));
 }
+
+#[test]
+#[cfg(feature = "diarization")]
+fn test_cancel_after_recognition_skips_lazy_speaker_load() {
+    let (mut engine, tmp) = crate::test_support::rnnt_engine();
+    std::fs::write(tmp.path().join("wespeaker_resnet34.onnx"), b"invalid model").unwrap();
+    engine.speaker_encoder = super::super::diarization::probe_speaker_encoder(tmp.path());
+    let mut guard = engine.pool.checkout_blocking().unwrap();
+    let flag = AtomicBool::new(false);
+    let abort = || flag.load(Ordering::Relaxed);
+    let report = |_| flag.store(true, Ordering::Relaxed);
+    let outcome = std::sync::OnceLock::new();
+    let result = engine.transcribe_samples_with_overrides(
+        &[0.0; 320],
+        &mut guard,
+        &TranscribeOverrides::default(),
+        None,
+        true,
+        Some(&outcome),
+        DecodeControls {
+            abort: Some(&abort),
+            on_progress: Some(&report),
+            ..Default::default()
+        },
+    );
+    assert!(matches!(result, Err(GigasttError::Cancelled)));
+    assert!(outcome.get().is_none());
+    // A failed load is cached permanently; pending proves the load never began.
+    assert!(engine.speaker_encoder.as_ref().unwrap().is_pending());
+}
+
+#[test]
+fn test_cancelled_window_decode_does_not_pull_source() {
+    struct UnreadSource;
+    impl PcmWindows for UnreadSource {
+        fn next_window(&mut self) -> Result<Option<PcmWindow<'_>>, GigasttError> {
+            panic!("cancelled request pulled a new source window")
+        }
+    }
+    for concurrency in [1, 2] {
+        let (engine, _tmp) = crate::test_support::rnnt_engine();
+        let engine = engine.with_file_window_concurrency(concurrency);
+        let mut guard = engine.pool.checkout_blocking().unwrap();
+        let result = engine.decode_words_streaming(
+            &mut UnreadSource,
+            &mut guard,
+            None,
+            DecodeControls {
+                abort: Some(&|| true),
+                ..Default::default()
+            },
+        );
+        assert!(matches!(result, Err(GigasttError::Cancelled)));
+    }
+}
+
+#[test]
+fn test_postprocess_cancellation_between_stages_rejects_final_text() {
+    let (engine, _tmp) = crate::test_support::rnnt_engine();
+    let checks = AtomicUsize::new(0);
+    let abort = || checks.fetch_add(1, Ordering::Relaxed) >= 1;
+    let result = engine.apply_text_postprocess(
+        "двадцать один".into(),
+        true,
+        true,
+        DecodeControls {
+            abort: Some(&abort),
+            ..Default::default()
+        },
+    );
+    assert!(matches!(result, Err(GigasttError::Cancelled)));
+    assert_eq!(checks.load(Ordering::Relaxed), 2);
+}

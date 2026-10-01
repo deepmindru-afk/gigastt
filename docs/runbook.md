@@ -37,9 +37,25 @@ is released. Pending final/error events may be omitted; OpenAI `[DONE]` is never
 queued after a failed preceding completion event. Already queued events can
 still drain if the reader resumes.
 
-This bounds output waits, not the duration of an active native inference call.
-Inference cancellation remains cooperative between runtime calls; the file SSE
-paths do not currently use the REST no-progress inference watchdog.
+File streams also apply `--inference-timeout-secs` to the initial container
+probe and to processing without a completed chunk (`0` disables this timeout).
+The watchdog samples every 100 ms; runtime scheduling can add delay. A pending
+output send suspends the inference timer and retains the separate 30-second
+backpressure limit. Progress restarts the processing deadline.
+
+A probe timeout returns HTTP 504. After SSE headers have been sent, timeout
+emits one `inference_timeout` error and closes the response, independently of
+the blocking worker. Native SSE first emits the latest available partial;
+OpenAI includes an optional `partial` snapshot in its error object. Buffered
+ordinary events are discarded on timeout and no terminal success or `[DONE]`
+is emitted. A completed request that already claimed terminal delivery instead
+finishes under the output-send bound.
+
+Timeout requests cooperative cancellation: it cannot interrupt an active codec
+or native inference call. The tracked worker retains its pool reservation and
+upload admission guard until it actually exits, including during probing. A
+client disconnect likewise requests cancellation without returning an in-use
+session to the pool.
 
 ### Rollback: disable graceful drain
 
@@ -121,6 +137,46 @@ beam search). The blocking worker returns its triplet when it observes abort.
 a native encoder call already in progress must return before the flag can be
 observed. A wedged native call can therefore retain its slot after the client
 has received the timeout. There is no fixed cancellation-latency guarantee.
+
+### Cancellation boundaries and resource ownership
+
+A cancellation flag prevents later work when the worker next checks it. It is
+not a thread kill. HTTP timeout closes the response independently of worker
+termination; disconnect and shutdown request the same cooperative stop.
+
+| Stage | Cancellation boundary | Work that must finish before the next check |
+|---|---|---|
+| Source probing and raw telephony conversion | Before preparation, after probe/decode, and before invoking recognition | Active container probe, raw codec call, or WAV encoding |
+| Split-channel scan and buffered decode | Before each container packet and after codec calls; between resampler blocks and before final drain | Active codec/resampler call; Opus full-buffer correlation runs synchronously between checks |
+| Flat mono decode for offline diarization | Between container packets or WAVE blocks, preserving the normal mixing/resampling order | Active packet decode or WAVE block receive; dropping the WAVE source joins its decoder worker |
+| Windowed file decode and VAD | Between requested windows; streaming VAD polls every 16 two-second blocks, buffered VAD every 64 frames (about two seconds of audio) | Active source fill or VAD call; audio duration between checks is not elapsed wall time |
+| Recognition | Before encoding and between decoder tokens/frames; after completed recognition | Active feature extraction or native encoder/decoder call |
+| Lazy speaker model loading | Before loading and immediately after it returns | Concurrent load lock wait and native model construction |
+| Offline speaker diarization | Before/after each VAD and embedding call; after the pipeline returns and before speaker assignment | Active embedding call and the pipeline's synchronous clustering/assembly stage |
+| Speaker assignment and text postprocessing | Before/after assignment; before ITN, between ITN and punctuation, and after punctuation | Active assignment, ITN pass, or punctuation restoration call |
+| Response output | Disconnect/shutdown and bounded output-send checks | A send may wait up to the separate 30-second backpressure bound |
+
+Packet/block regression tests cancel after a known checkpoint and verify that
+no later checkpoint or inference callback is reached. Diarization adapter tests
+cancel inside one embedding call and verify that the next embedding never
+starts. These are cooperative step bounds, not maximum wall-clock latency:
+container/native calls, speaker loading, clustering, and decoder-thread joins
+have no interrupt hook. A permanently stuck call can retain resources until
+process termination.
+
+The detached blocking worker owns its inference reservation throughout source
+preparation, recognition, diarization, and finalization. It also keeps the
+upload admission guard when encoded bytes are replaced by PCM or a raw-codec
+WAV. Stream probe workers retain these owners even if the async handler is
+dropped. Reservations and admitted upload bytes become available only when the
+owning worker exits and drops them, which may be later than the client timeout.
+Do not interpret a completed error response as proof that pool capacity has
+already recovered.
+
+A file-stream timeout uses the latest available provisional snapshot. Successfully
+finalized segments whose snapshots were already cleared, and native results
+produced after timeout, are not reconstructed into that error response.
+Previously delivered text remains readable by the client.
 
 The latest provisional text survives interruption. REST errors may include
 `partial`; WebSocket sends its last available `partial` before an error when
