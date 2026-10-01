@@ -917,6 +917,16 @@ jobs:
         if: steps.cache-model.outputs.cache-hit != 'true'
         run: cargo run -p gigastt -- download
 
+      - name: Prepare coverage sidecars
+        # A cache hit can contain only the recognition model. Ignored unit
+        # tests also require the punctuation model, config and tokenizer.
+        run: |
+          cargo run -p gigastt -- transcribe crates/gigastt/tests/fixtures/golos_00.wav --model-variant rnnt --punctuation on --vad --output "$RUNNER_TEMP/coverage-warmup.txt"
+          for file in punct/rupunct_small_int8.onnx punct/config.json punct/tokenizer.json vad/silero_vad.onnx; do
+            test -s "$HOME/.gigastt/models/$file"
+          done
+          sha256sum "$HOME/.gigastt/models/v3_rnnt_encoder_int8.onnx"
+
       - name: Run e2e coverage
         # Run each integration test target sequentially with `--no-report` so
         # coverage data accumulates in target/llvm-cov-target, then generate a

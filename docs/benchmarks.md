@@ -114,7 +114,11 @@ transcript and the author FP32 transcript are the same string. Log-mel is
 `1e-9` before the log and this frontend clamps at `1e-10`, so silent bins
 differ by `ln(10)` (max abs 2.303). On bins above that clamp the mean
 absolute gap is 0.0088 and the max is 0.307. Encoder output is `[768, 100]`:
-INT8 versus the author FP32 activation has cosine 0.9985 and max abs 0.145.
+INT8 versus the author FP32 activation has cosine 0.9985 and max abs 0.145
+on the measured Ryzen host. The GitHub Ubuntu runner measured 0.99750 and
+0.22470 with the checksum-verified model. The CPU oracle requires cosine
+above 0.997, max abs below 0.25, and the exact reference transcript; the
+runner observation and model hash are recorded in the tolerance JSON.
 
 FLEURS `ru_ru` test, n=775, same greedy recipe, punctuation and ITN off.
 Word error here is raw `jiwer.wer` (whitespace tokens, no number
