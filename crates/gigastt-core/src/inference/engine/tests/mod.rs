@@ -17,3 +17,6 @@ mod paths;
 mod predictor_probe;
 mod stream;
 mod transcribe;
+
+#[cfg(feature = "file-decode")]
+mod runtime_workspace;
