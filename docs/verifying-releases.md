@@ -66,3 +66,26 @@ gh attestation verify gigastt-2.18.0-aarch64-apple-darwin.tar.gz \
 
 For privacy-conscious deployments, verify **both** minisign and SLSA —
 they fail independently, so it takes two compromises to forge.
+
+## Release source selection
+
+Both a `v*` tag push and a manual Release dispatch first resolve an existing
+`vMAJOR.MINOR.PATCH` tag, optionally with a SemVer prerelease suffix such as
+`-rc.1`. Build metadata (`+suffix`) is rejected because it cannot be used in a
+Docker tag. The tag version must match the workspace and every workspace
+package's effective version. Missing tags and mismatches stop all publishing
+jobs.
+
+Every binary build, SBOM and container context uses the same resolved commit,
+even when manual dispatch selects a different workflow ref. Container revision
+labels identify that commit. The SLSA predicate records both the invoking
+workflow's ref/commit and the resolved release tag/commit, so the workflow
+revision is not mistaken for the artifact source. The existing attestation
+[action supports custom predicates](https://github.com/actions/attest-build-provenance/blob/v4/action.yml).
+
+Maintainers must select a reviewed revision with green main CI before tagging
+or dispatching. Source validation does not enforce that CI prerequisite and is
+not a dry run: successful Release jobs publish GitHub assets and GHCR images.
+Local resolver regressions use temporary Git repositories and never publish.
+Do not dispatch historical tags as part of history maintenance or replace
+previously signed release assets.

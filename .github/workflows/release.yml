@@ -21,7 +21,28 @@ permissions:
   packages: write
 
 jobs:
+  resolve-release:
+    name: Validate release source
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.source.outputs.tag }}
+      commit: ${{ steps.source.outputs.commit }}
+      version: ${{ steps.source.outputs.version }}
+      predicate: ${{ steps.source.outputs.predicate }}
+    steps:
+      # The validator comes from the invoking workflow revision; artifact
+      # producers below use only the validated immutable release commit.
+      - uses: actions/checkout@v7
+      - name: Resolve existing tag and validate package versions
+        id: source
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: python3 scripts/resolve-release.py
+
   build:
+    needs: resolve-release
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -73,16 +94,8 @@ jobs:
           # 12.4.x package names).
     steps:
       - uses: actions/checkout@v7
-
-      - name: Resolve tag
-        id: tag
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          fi
+        with:
+          ref: ${{ needs.resolve-release.outputs.commit }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -140,7 +153,7 @@ jobs:
         id: package
         shell: bash
         env:
-          TAG: ${{ steps.tag.outputs.tag }}
+          TAG: ${{ needs.resolve-release.outputs.tag }}
           SUFFIX: ${{ matrix.asset_suffix }}
           TARGET: ${{ matrix.target }}
         run: |
@@ -188,7 +201,7 @@ jobs:
         if: matrix.ffi
         shell: bash
         env:
-          TAG: ${{ steps.tag.outputs.tag }}
+          TAG: ${{ needs.resolve-release.outputs.tag }}
           SUFFIX: ${{ matrix.asset_suffix }}
           TARGET: ${{ matrix.target }}
         run: |
@@ -234,7 +247,7 @@ jobs:
         id: package_offline
         shell: bash
         env:
-          TAG: ${{ steps.tag.outputs.tag }}
+          TAG: ${{ needs.resolve-release.outputs.tag }}
           SUFFIX: ${{ matrix.asset_suffix }}
           TARGET: ${{ matrix.target }}
         run: |
@@ -285,7 +298,7 @@ jobs:
         id: package_deb
         shell: bash
         env:
-          TAG: ${{ steps.tag.outputs.tag }}
+          TAG: ${{ needs.resolve-release.outputs.tag }}
           TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
@@ -320,7 +333,7 @@ jobs:
 
   publish:
     name: Publish GitHub release
-    needs: build
+    needs: [resolve-release, build]
     runs-on: ubuntu-latest
     env:
       # GitHub Actions forbids referencing `secrets.*` in `if:` conditions
@@ -328,16 +341,8 @@ jobs:
       HAS_MINISIGN_KEY: ${{ secrets.MINISIGN_SECRET_KEY != '' && 'true' || 'false' }}
     steps:
       - uses: actions/checkout@v7
-
-      - name: Resolve tag
-        id: tag
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          fi
+        with:
+          ref: ${{ needs.resolve-release.outputs.commit }}
 
       - uses: actions/download-artifact@v8
         with:
@@ -365,7 +370,7 @@ jobs:
       - name: Generate CycloneDX SBOM
         shell: bash
         env:
-          TAG: ${{ steps.tag.outputs.tag }}
+          TAG: ${{ needs.resolve-release.outputs.tag }}
         run: |
           set -euo pipefail
           cargo install --locked --version 0.5.5 cargo-cyclonedx
@@ -381,9 +386,16 @@ jobs:
       # `dist/` gets a signed in-toto provenance statement anchored to
       # this workflow run. Downstream consumers verify with
       # `gh attestation verify <file> --repo ekhodzitsky/gigastt`.
+      - name: Write resolved source provenance
+        env:
+          RELEASE_PREDICATE: ${{ needs.resolve-release.outputs.predicate }}
+        run: python3 -c 'import os; from pathlib import Path; Path("release-predicate.json").write_text(os.environ["RELEASE_PREDICATE"])'
+
       - name: Generate SLSA build provenance
         uses: actions/attest-build-provenance@v4
         with:
+          predicate-type: https://slsa.dev/provenance/v1
+          predicate-path: release-predicate.json
           subject-path: |
             dist/*.tar.gz
             dist/*.deb
@@ -422,7 +434,7 @@ jobs:
             printf '%s\n' "$MINISIGN_PASSWORD" | \
               minisign -Sm "$f" -s minisign.key \
                 -c "gigastt release $(basename "$f")" \
-                -t "gigastt $(basename "$f") ${{ steps.tag.outputs.tag }}"
+                -t "gigastt $(basename "$f") ${{ needs.resolve-release.outputs.tag }}"
           done
           shred -u minisign.key 2>/dev/null || rm -f minisign.key
           ls -la ./*.minisig
@@ -437,8 +449,8 @@ jobs:
       - name: Create / update release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ steps.tag.outputs.tag }}
-          name: ${{ steps.tag.outputs.tag }}
+          tag_name: ${{ needs.resolve-release.outputs.tag }}
+          name: ${{ needs.resolve-release.outputs.tag }}
           draft: false
           prerelease: false
           fail_on_unmatched_files: true
@@ -457,28 +469,13 @@ jobs:
   # hiccup must never block the binary GitHub release, and a binary failure
   # must never block the image push — the two release channels stand alone.
   docker-publish:
+    needs: resolve-release
     name: Publish container images (GHCR)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-
-      - name: Resolve tag
-        id: tag
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Resolve version
-        id: version
-        shell: bash
-        env:
-          TAG: ${{ steps.tag.outputs.tag }}
-        run: |
-          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+        with:
+          ref: ${{ needs.resolve-release.outputs.commit }}
 
       # QEMU registers binfmt handlers so the linux/arm64 CPU image can be
       # cross-built on the x86_64 runner. Not needed for the amd64-only CUDA
@@ -507,12 +504,12 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/ekhodzitsky/gigastt:${{ steps.version.outputs.version }}
+            ghcr.io/ekhodzitsky/gigastt:${{ needs.resolve-release.outputs.version }}
             ghcr.io/ekhodzitsky/gigastt:latest
           labels: |
             org.opencontainers.image.source=https://github.com/ekhodzitsky/gigastt
-            org.opencontainers.image.version=${{ steps.version.outputs.version }}
-            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ needs.resolve-release.outputs.version }}
+            org.opencontainers.image.revision=${{ needs.resolve-release.outputs.commit }}
           cache-from: type=registry,ref=ghcr.io/ekhodzitsky/gigastt-buildcache:cpu
           cache-to: type=registry,ref=ghcr.io/ekhodzitsky/gigastt-buildcache:cpu,mode=max
 
@@ -526,11 +523,11 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ghcr.io/ekhodzitsky/gigastt:${{ steps.version.outputs.version }}-cuda
+            ghcr.io/ekhodzitsky/gigastt:${{ needs.resolve-release.outputs.version }}-cuda
             ghcr.io/ekhodzitsky/gigastt:cuda
           labels: |
             org.opencontainers.image.source=https://github.com/ekhodzitsky/gigastt
-            org.opencontainers.image.version=${{ steps.version.outputs.version }}
-            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ needs.resolve-release.outputs.version }}
+            org.opencontainers.image.revision=${{ needs.resolve-release.outputs.commit }}
           cache-from: type=registry,ref=ghcr.io/ekhodzitsky/gigastt-buildcache:cuda
           cache-to: type=registry,ref=ghcr.io/ekhodzitsky/gigastt-buildcache:cuda,mode=max
