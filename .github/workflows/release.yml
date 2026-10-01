@@ -39,7 +39,15 @@ jobs:
         id: source
         env:
           RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          RELEASE_METADATA_PATH: ${{ runner.temp }}/release-source.json
         run: python3 scripts/resolve-release.py
+      - name: Preserve validated release selection for downstream automation
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-source-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/release-source.json
+          if-no-files-found: error
+          retention-days: 7
 
   build:
     needs: resolve-release
@@ -354,6 +362,7 @@ jobs:
 
       - uses: actions/download-artifact@v8
         with:
+          pattern: gigastt-*
           path: dist
           merge-multiple: true
 
