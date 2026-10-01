@@ -222,7 +222,7 @@ fn test_verify_pinned_checksums_rejects_placeholder_encoder() {
     std::fs::write(dir.path().join("v3_rnnt_decoder.onnx"), b"dec").unwrap();
     std::fs::write(dir.path().join("v3_rnnt_joint.onnx"), b"joint").unwrap();
     std::fs::write(dir.path().join("v3_vocab.txt"), b"a\n").unwrap();
-    let files = ResolvedModelFiles::resolve(dir.path(), ModelVariant::Rnnt).unwrap();
+    let mut files = ResolvedModelFiles::resolve(dir.path(), ModelVariant::Rnnt).unwrap();
     let err = files
         .verify_pinned_checksums(ModelVariant::Rnnt)
         .expect_err("placeholder bytes must not match the pinned digest");
@@ -231,4 +231,30 @@ fn test_verify_pinned_checksums_rejects_placeholder_encoder() {
         msg.contains("SHA-256 mismatch") || msg.contains("model load error"),
         "unexpected error: {msg}"
     );
+}
+
+#[test]
+fn test_custom_encoder_hash_is_retained_only_for_self_contained_sources() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("manifest.toml"),
+        r#"architecture = "ml_ctc"
+[files]
+encoder = "custom.onnx"
+encoder_int8 = "custom.onnx"
+vocab = "custom.txt"
+"#,
+    )
+    .unwrap();
+    let encoder = dir.path().join("custom.onnx");
+    for bytes in [b"self-contained".as_slice(), b"external location"] {
+        std::fs::write(&encoder, bytes).unwrap();
+        let mut files = ResolvedModelFiles::resolve(dir.path(), ModelVariant::MlCtc).unwrap();
+        files.verify_pinned_checksums(ModelVariant::MlCtc).unwrap();
+        assert_eq!(
+            files.encoder_hash,
+            crate::model::optimized_source_hash(&encoder).unwrap()
+        );
+        assert_eq!(files.encoder_hash.is_some(), bytes == b"self-contained");
+    }
 }

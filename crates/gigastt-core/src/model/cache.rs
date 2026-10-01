@@ -1,7 +1,7 @@
 //! Model-directory cache hygiene: prune stale ORT optimized graphs and
 //! optional content-hash hardlink dedupe.
 //!
-//! ONNX Runtime writes one optimized graph per encoder stem under
+//! ONNX Runtime writes content- and configuration-addressed graphs under
 //! `optimized_cache/`. Switching heads or running FP32 leaves zombie graphs
 //! that reclaim **hundreds of MiB to ~1 GiB** on polluted installs without
 //! changing inference accuracy.
@@ -40,13 +40,41 @@ pub(crate) fn coreml_cache_dir(model_dir: &Path) -> PathBuf {
         .join(coreml_cache_version_dir())
 }
 
-/// Basename of the optimized graph ORT would open for `model_path`'s stem:
-/// `{file_stem}_optimized.ort` (ORT flatbuffer format — loaded via mmap
-/// by the encoder session loader).
+/// Legacy basename used before content-addressed caching. Kept for source
+/// compatibility; new runtime loads never read or write this filename.
 pub fn optimized_cache_basename(encoder_path: &Path) -> Option<String> {
     encoder_path
         .file_stem()
         .map(|s| format!("{}_optimized.ort", s.to_string_lossy()))
+}
+
+/// Hash a self-contained ONNX source. External tensors require a `location`
+/// entry in TensorProto.external_data; conservatively reject any occurrence of
+/// that marker, including across read boundaries. False positives only disable
+/// caching. Hashing the main protobuf alone cannot identify external weights.
+pub(crate) fn optimized_source_hash(path: &Path) -> std::io::Result<Option<String>> {
+    use std::io::Read;
+    let mut file = std::fs::File::open(path)?;
+    let mut hash = Sha256::new();
+    let mut buf = [0u8; 64 * 1024 + 7];
+    let mut overlap = 0;
+    let mut external = false;
+    loop {
+        let n = file.read(&mut buf[overlap..])?;
+        if n == 0 {
+            break;
+        }
+        hash.update(&buf[overlap..overlap + n]);
+        let end = overlap + n;
+        external |= buf[..end].windows(8).any(|bytes| bytes == b"location");
+        overlap = end.min(7);
+        buf.copy_within(end - overlap..end, 0);
+    }
+    Ok((!external).then(|| hex_lower(&hash.finalize())))
+}
+
+pub(crate) fn optimized_content_basename(source_hash: &str, settings_hash: &str) -> String {
+    format!("{source_hash}-{settings_hash}_optimized.ort")
 }
 
 /// Preferred encoder path on disk for `variant`: INT8 when present, else FP32
@@ -69,7 +97,7 @@ pub fn preferred_encoder_path(variant: ModelVariant, dir: &Path) -> Option<PathB
 /// Result of pruning `model_dir/optimized_cache/`.
 #[derive(Debug, Default, Clone)]
 pub struct OptimizedCachePruneReport {
-    /// Optimized graphs retained: one per installed head (may be empty).
+    /// Optimized graphs retained for installed contents, across configurations.
     pub kept: Vec<PathBuf>,
     /// Paths removed (or that would be removed under `dry_run`).
     pub removed: Vec<PathBuf>,
@@ -107,15 +135,11 @@ pub struct DedupeReport {
 /// Drop optimized graphs that no installed head can load from
 /// `model_dir/optimized_cache/`.
 ///
-/// Keeps `{preferred_encoder_stem}_optimized.ort` for **every** head whose
-/// encoder weights are present in `model_dir` (INT8 preferred), plus the
-/// encoder named by a `manifest.toml` when one is installed: every installed
-/// head can be started with `serve --model-variant`, so its graph must survive
-/// a GC run — even while a running server has it memory-mapped. Legacy
-/// `*_optimized.onnx` graphs (written by versions before the switch to the ORT
-/// flatbuffer format) and `.ort` graphs whose encoder is not installed count
-/// as zombies and are pruned. When no head is detected, the cache is left
-/// untouched so a half-installed tree is not wiped.
+/// Keeps all configuration variants whose source digest matches an installed
+/// preferred encoder (INT8 preferred), including manifest-named encoders.
+/// Legacy basename-only graphs and graphs for removed or changed weights are
+/// pruned. No encoders means no deletion, preserving partial installations.
+/// Sources with possible external tensors cannot use this cache.
 ///
 /// With `dry_run`, reports what would be deleted without removing files.
 pub fn prune_optimized_cache(model_dir: &Path, dry_run: bool) -> Result<OptimizedCachePruneReport> {
@@ -139,27 +163,32 @@ pub fn prune_optimized_cache_dir(
         return Ok(report);
     }
 
-    let mut keep_names: std::collections::HashSet<String> = ModelVariant::ALL
+    let mut encoders: Vec<PathBuf> = ModelVariant::ALL
         .into_iter()
         .filter_map(|v| preferred_encoder_path(v, model_dir))
-        .filter_map(|p| optimized_cache_basename(&p))
         .collect();
 
     // A manifest install may rename the encoder away from the hardcoded
     // variant basenames; the engine loads that name, so keep its graph too.
-    if let Some(manifest) = super::manifest::ModelManifest::load(model_dir)?
-        && let Some(name) = optimized_cache_basename(&manifest.preferred_encoder_path(model_dir))
-    {
-        keep_names.insert(name);
+    if let Some(manifest) = super::manifest::ModelManifest::load(model_dir)? {
+        encoders.push(manifest.preferred_encoder_path(model_dir));
     }
 
-    if keep_names.is_empty() {
+    if encoders.is_empty() {
         tracing::info!(
             "optimized_cache prune: no usable encoder in {}; leaving cache untouched",
             model_dir.display()
         );
         return Ok(report);
     }
+
+    let keep_hashes: std::collections::HashSet<String> = encoders
+        .iter()
+        .map(|path| optimized_source_hash(path).with_context(|| format!("hash {}", path.display())))
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .flatten()
+        .collect();
 
     for entry in std::fs::read_dir(cache_dir)
         .with_context(|| format!("failed to read optimized_cache at {}", cache_dir.display()))?
@@ -176,7 +205,14 @@ pub fn prune_optimized_cache_dir(
         if !name.ends_with("_optimized.ort") && !name.ends_with("_optimized.onnx") {
             continue;
         }
-        if keep_names.contains(name.as_ref()) {
+        if name.split_once('-').is_some_and(|(hash, settings)| {
+            keep_hashes.contains(hash)
+                && settings
+                    .strip_suffix("_optimized.ort")
+                    .is_some_and(|digest| {
+                        digest.len() == 64 && digest.bytes().all(|b| b.is_ascii_hexdigit())
+                    })
+        }) {
             report.kept.push(path);
             continue;
         }

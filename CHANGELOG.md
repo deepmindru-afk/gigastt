@@ -82,6 +82,10 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
   including recognition-only cache hits. Pin the encoder oracle to CPU/rnnt,
   record model provenance, and calibrate its maximum-error bound against the
   observed CI runner while retaining cosine and exact-transcript checks.
+- Bind CPU optimized graph caches to encoder content and ORT configuration,
+  preventing stale inference after same-name or timestamp-preserving model
+  replacements. Legacy caches are rebuilt; cache GC retains installed content
+  across configurations. Models with possible external tensors bypass caching.
 
 - **WebSocket sessions no longer panic on startup when
   `GIGASTT_MAX_SESSION_SECS=0`.** Previously, the unlimited-session deadline
