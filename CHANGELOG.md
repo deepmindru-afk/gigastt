@@ -43,6 +43,9 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
   limits and speaker mapping are unchanged.
 - Job status polling copies only status metadata, avoiding completed transcript
   copies under the shared queue lock. Result downloads retain owned snapshots.
+- Clarify that stable-prefix streaming windows have a soft slide trigger, not
+  a hard retained-audio bound; document deterministic counterexamples and a
+  resource-limit correction contract without changing commitment behavior.
 
 - Document Linux OpenSSL build prerequisites and custom-prefix discovery for
   the ONNX Runtime downloader, including the environment used by Git hooks.

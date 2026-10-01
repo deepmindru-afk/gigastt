@@ -1033,3 +1033,97 @@ fn test_source_budget_encoded_and_predecoded_boundaries_match() {
         }
     }
 }
+
+#[test]
+fn test_moving_edge_hypotheses_disprove_retained_audio_cap() {
+    use crate::inference::windows::{STREAM_DECODE_STRIDE_SAMPLES, STREAM_MAX_WINDOW_SAMPLES};
+    let mut state = bare_state(vec![], 0, STREAM_MAX_WINDOW_SAMPLES, 0);
+    state.endpoint_mode = EndpointMode::Manual;
+    for step in 0..120 {
+        state
+            .audio_buffer
+            .resize(state.audio_buffer.len() + STREAM_DECODE_STRIDE_SAMPLES, 0.0);
+        let edge = state.audio_buffer.len() as f64 / 16000.0;
+        state.assembler.set_words(vec![w(
+            if step % 2 == 0 { "a" } else { "b" },
+            edge - 0.3,
+            edge - 0.1,
+        )]);
+        state.agreed_prefix = 0;
+        let committed = Engine::cap_commit_stable_prefix(&mut state);
+        assert_eq!(committed, 0);
+        assert!(!Engine::speech_endpoint(
+            state.endpoint_mode,
+            true,
+            true,
+            true
+        ));
+        assert_eq!(state.window_start_samples, 0);
+    }
+    // A constructive counterexample: every word remains inside the moving
+    // horizon, so even the streak fallback has nothing it may commit.
+    assert_eq!(
+        state.audio_buffer.len(),
+        STREAM_MAX_WINDOW_SAMPLES + 120 * STREAM_DECODE_STRIDE_SAMPLES
+    );
+    assert_eq!(state.assembler.live_word_count(), 1);
+    assert_eq!(state.assembler.committed_coverage_end(), None);
+}
+
+#[test]
+fn test_retention_fixed_timestamp_eventually_leaves_horizon() {
+    use crate::inference::windows::{STREAM_DECODE_STRIDE_SAMPLES, STREAM_MAX_WINDOW_SAMPLES};
+    let mut state = bare_state(vec![w("word", 2.0, 2.4)], 0, STREAM_MAX_WINDOW_SAMPLES, 0);
+    for _ in 0..3 {
+        state
+            .audio_buffer
+            .resize(state.audio_buffer.len() + STREAM_DECODE_STRIDE_SAMPLES, 0.0);
+        state.agreed_prefix = 0;
+        if Engine::cap_commit_stable_prefix(&mut state) > 0 {
+            Engine::slide_streaming_window_anchored(&mut state, None);
+        }
+    }
+    assert_eq!(state.assembler.committed_coverage_end(), Some(2.4));
+    assert!(state.window_start_samples > 0);
+}
+
+#[test]
+fn test_retention_drifting_agreed_word_remains_uncommittable() {
+    use crate::inference::windows::{STREAM_DECODE_STRIDE_SAMPLES, STREAM_MAX_WINDOW_SAMPLES};
+    let mut state = bare_state(vec![], 0, STREAM_MAX_WINDOW_SAMPLES, 0);
+    for _ in 0..60 {
+        state
+            .audio_buffer
+            .resize(state.audio_buffer.len() + STREAM_DECODE_STRIDE_SAMPLES, 0.0);
+        let edge = state.audio_buffer.len() as f64 / 16000.0;
+        state.assembler.set_words(vec![w("same", 0.0, edge - 0.1)]);
+        state.agreed_prefix = 1;
+        assert_eq!(Engine::cap_commit_stable_prefix(&mut state), 0);
+    }
+    assert_eq!(
+        state.audio_buffer.len(),
+        STREAM_MAX_WINDOW_SAMPLES + 60 * STREAM_DECODE_STRIDE_SAMPLES
+    );
+}
+
+#[test]
+fn test_retention_silence_slides_to_left_context() {
+    use crate::inference::windows::{
+        STREAM_DECODE_STRIDE_SAMPLES, STREAM_LEFT_CONTEXT_SAMPLES, STREAM_MAX_WINDOW_SAMPLES,
+    };
+    let mut state = bare_state(vec![], 0, 0, 0);
+    state.endpoint_mode = EndpointMode::Manual;
+    for _ in 0..120 {
+        state
+            .audio_buffer
+            .resize(state.audio_buffer.len() + STREAM_DECODE_STRIDE_SAMPLES, 0.0);
+        if state.audio_buffer.len() >= STREAM_MAX_WINDOW_SAMPLES {
+            assert_eq!(Engine::cap_commit_stable_prefix(&mut state), 0);
+            assert_eq!(state.assembler.live_word_count(), 0);
+            Engine::slide_streaming_window(&mut state);
+            assert_eq!(state.audio_buffer.len(), STREAM_LEFT_CONTEXT_SAMPLES);
+        }
+        assert!(state.audio_buffer.len() < STREAM_MAX_WINDOW_SAMPLES);
+    }
+    assert!(state.window_start_samples > STREAM_MAX_WINDOW_SAMPLES);
+}

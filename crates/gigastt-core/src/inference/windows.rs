@@ -6,19 +6,20 @@
 
 use super::audio::WindowSpec;
 
-/// Default max streaming encoder window before sliding (samples @16kHz, 2.5s).
+/// Default streaming slide trigger (samples @16kHz, 2.5s), not a hard bound.
 /// Configurable at serve time via `--stream-max-window-secs` (see
 /// [`stream_max_window_samples`]); the engine stores the resolved value.
 /// Re-decoding the whole window each stride gives the offline Conformer left
-/// context; this cap bounds the per-stride encoder cost. With the 1.5s retained
-/// left context and the 0.8s stride, a 2.5s window keeps the steady-state
-/// re-encode overlap near ~3x (vs ~6.25x at a 5s window) — roughly half the
-/// streaming encoder work. Short utterances stay on par with batch (ordered-WER
+/// context. Stable-prefix mode can exceed this trigger while no words are
+/// committable (see docs/stream-retention.md). With the 1.5s retained
+/// left context and the 0.8s stride, a nominal 2.5s window implies about 3x
+/// re-encode overlap (vs about 6.25x at 5s); these are geometry estimates,
+/// not bounds or measured savings when hypotheses delay sliding. Short utterances stay on par with batch (ordered-WER
 /// `streaming_quality` tests); phrases longer than the window can degrade
 /// (stream-vs-file gap measured in docs/benchmarks.md) — raising the window is
 /// the mitigation, at a linear encoder-cost increase per stride.
 ///
-/// Hitting the cap **commits a stable prefix** and slides; it does **not** emit
+/// Hitting the cap attempts to **commit a stable prefix** and slide; it does **not** emit
 /// a speech-final `final` (that would mean "utterance complete" to assistants).
 pub(crate) const STREAM_MAX_WINDOW_SAMPLES: usize = 16000 * 5 / 2;
 /// Bounds for the configurable streaming window (seconds). The floor keeps the
@@ -55,9 +56,9 @@ pub(crate) const STREAM_DECODE_STRIDE_SAMPLES: usize = 16000 * 4 / 5;
 /// two consecutive truncated decodes agree with each other). 1.0 s covers the
 /// observed edge-truncation window.
 pub(crate) const STREAM_COMMIT_HORIZON_SECS: f64 = 1.0;
-/// Consecutive cap hits with zero hypothesis agreement after which the whole
-/// live tail is committed anyway, so a pathological stream cannot grow the
-/// retained buffer (and its per-chunk encoder cost) without bound.
+/// Consecutive cap hits without a commit before accepting the pre-horizon
+/// prefix without agreement. Words inside the horizon remain uncommitted;
+/// this fallback does not guarantee a retained-audio or encoder-cost bound.
 pub(crate) const STREAM_CAP_STREAK_MAX: usize = 3;
 
 /// File-transcription chunking threshold (samples @16kHz, 30s). Inputs at or
