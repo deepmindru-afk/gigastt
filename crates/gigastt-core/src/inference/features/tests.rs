@@ -215,6 +215,24 @@ fn test_golos_00_mel_matches_author_preprocessor() {
 }
 
 #[test]
+fn test_short_input_clears_reused_mel_output() {
+    let mel = MelSpectrogram::new();
+    let samples: Vec<f32> = (0..960).map(|i| (i as f32 * 0.13).sin()).collect();
+    let (mut fft_input, mut power, mut output) = (Vec::new(), Vec::new(), Vec::new());
+    for len in [960, 0, 960, 319, 320, 1, 640, 0] {
+        let (expected, expected_frames) = mel.compute(&samples[..len]);
+        let retained = (output.as_ptr(), output.capacity());
+        let frames =
+            mel.compute_with_buffers(&samples[..len], &mut fft_input, &mut power, &mut output);
+        assert_eq!(frames, expected_frames, "sample count {len}");
+        assert_eq!(output, expected, "sample count {len}");
+        if len < mel.n_fft {
+            assert_eq!((output.as_ptr(), output.capacity()), retained);
+        }
+    }
+}
+
+#[test]
 fn test_fft_scratch_retained_with_reused_feature_buffers() {
     let mel = MelSpectrogram::new();
     let mut fft_input = Vec::new();
@@ -226,7 +244,7 @@ fn test_fft_scratch_retained_with_reused_feature_buffers() {
     let buffer = fft_input.as_ptr();
     // Growing, shrinking, and sub-frame inputs must not disturb subsequent FFTs.
     for len in [320, 480, 16_000, 80_000, 319, 0, 320, 32_000] {
-        let mut expected = output.clone();
+        let mut expected = Vec::new();
         let expected_frames = allocating_reference(&mel, &samples[..len], &mut expected);
         let frames =
             mel.compute_with_buffers(&samples[..len], &mut fft_input, &mut power, &mut output);
@@ -236,7 +254,7 @@ fn test_fft_scratch_retained_with_reused_feature_buffers() {
     }
 }
 
-// Original per-frame allocating FFT path, including short-input resize semantics.
+// Original per-frame allocating FFT path, evaluated with fresh output storage.
 fn allocating_reference(mel: &MelSpectrogram, samples: &[f32], output: &mut Vec<f32>) -> usize {
     if samples.len() < mel.n_fft {
         output.resize(mel.mel_bands.len(), 0.0);
