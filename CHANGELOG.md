@@ -41,6 +41,8 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 - Reuse the stereo Opus PCM already decoded during channel detection for VAD
   transcription. Mono fallback, streaming scans for other formats, duration
   limits and speaker mapping are unchanged.
+- Job status polling copies only status metadata, avoiding completed transcript
+  copies under the shared queue lock. Result downloads retain owned snapshots.
 
 - Document Linux OpenSSL build prerequisites and custom-prefix discovery for
   the ONNX Runtime downloader, including the environment used by Git hooks.
