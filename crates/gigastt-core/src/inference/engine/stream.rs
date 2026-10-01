@@ -146,10 +146,10 @@ impl Engine {
         // an over-cap buffer just waits for the next stride (bounded by the
         // stride itself), avoiding an 8x decode rate during cap saturation.
         let cap_forces_decode = over_cap && !self.stable_prefix_enabled(state);
-        if state.pending_samples < STREAM_DECODE_STRIDE_SAMPLES
-            && !cap_forces_decode
-            && !vad_endpoint
-        {
+        let decode_stride = STREAM_DECODE_STRIDE_SAMPLES;
+        #[cfg(test)]
+        let decode_stride = super::live_probe::stride(decode_stride);
+        if state.pending_samples < decode_stride && !cap_forces_decode && !vad_endpoint {
             return Ok(vec![]);
         }
         // Too little audio to extract a frame. Skip — but never when finalizing:
@@ -365,6 +365,10 @@ impl Engine {
             state.failed = true;
             return Ok(false);
         }
+        #[cfg(test)]
+        super::live_probe::window(state);
+        #[cfg(test)]
+        super::live_probe::begin_stage();
         let mel_start = std::time::Instant::now();
         let num_frames = self.features.compute_mel(
             &state.audio_buffer,
@@ -372,6 +376,8 @@ impl Engine {
             &mut state.mel_power,
             &mut state.mel_output,
         );
+        #[cfg(test)]
+        super::live_probe::stage("mel", mel_start.elapsed());
         tracing::debug!(
             elapsed_us = mel_start.elapsed().as_micros() as u64,
             "mel_compute"
@@ -587,11 +593,17 @@ impl Engine {
     ) -> TranscriptSegment {
         let partial = self.stream_partial(state, timestamp);
         let mut segment = state.assembler.finalize_with_reason(timestamp, reason);
+        #[cfg(test)]
+        super::live_probe::begin_stage();
+        #[cfg(test)]
+        let postprocess_start = std::time::Instant::now();
         let tail = self.apply_text_postprocess(
             partial.tentative.trim_start().to_owned(),
             state.itn.unwrap_or(self.itn),
             state.punctuation.unwrap_or(true),
         );
+        #[cfg(test)]
+        super::live_probe::stage("postprocess", postprocess_start.elapsed());
         segment.text = if partial.committed.is_empty() {
             tail
         } else if tail.is_empty() {

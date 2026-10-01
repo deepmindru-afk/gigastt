@@ -1,0 +1,3012 @@
+{
+  "config": {
+    "chunk_ms": 100,
+    "concurrent": 1,
+    "encoder_threads_per_slot": 4,
+    "itn": true,
+    "punctuation": true,
+    "stride_ms": 400,
+    "vad": false,
+    "window_secs": 2.5
+  },
+  "elapsed_ms": 86216,
+  "process_cpu_ticks": 7819,
+  "rows": [
+    {
+      "audio_samples": 64000,
+      "elapsed_ms": 4056,
+      "events": [
+        {
+          "at_ms": 757,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "шесть",
+          "text": "шесть"
+        },
+        {
+          "at_ms": 1177,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "шестьдесят",
+          "text": "шестьдесят"
+        },
+        {
+          "at_ms": 1590,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "шестьдесят тысяч",
+          "text": "шестьдесят тысяч"
+        },
+        {
+          "at_ms": 2008,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "шестьдесят тысяч тенге",
+          "text": "шестьдесят тысяч тенге"
+        },
+        {
+          "at_ms": 2461,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "шестьдесят тысяч тенге",
+          "text": "шестьдесят тысяч тенге"
+        },
+        {
+          "at_ms": 2857,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "шестьдесят тысяч тенге сколько будет",
+          "text": "шестьдесят тысяч тенге сколько будет"
+        },
+        {
+          "at_ms": 3274,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "шестьдесят тысяч тенге сколько будет",
+          "text": "шестьдесят тысяч тенге сколько будет"
+        },
+        {
+          "at_ms": 3693,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "шестьдесят тысяч тенге сколько будет стоить",
+          "text": "шестьдесят тысяч тенге сколько будет стоить"
+        },
+        {
+          "at_ms": 4055,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "шестьдесят тысяч тенге сколько будет стоить",
+          "text": "шестьдесят тысяч тенге сколько будет стоить"
+        },
+        {
+          "at_ms": 4056,
+          "committed": "60000 тенге, сколько будет стоить?",
+          "endpoint": "stop",
+          "final": true,
+          "tentative": "",
+          "text": "60000 тенге, сколько будет стоить?"
+        }
+      ],
+      "file": "golos_00.wav",
+      "final_after_stop_ms": 0.66925,
+      "max_audio_samples": 49600,
+      "peak_rss_kib": 461188,
+      "probe": {
+        "stages_ns": {
+          "decode": 51790684,
+          "encoder": 1089338223,
+          "mel": 74984515,
+          "postprocess": 654021
+        },
+        "stride_samples": 6400,
+        "windows": [
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 6400,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 12800,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 19200,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 25600,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 32000,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 38400,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 44800,
+            "start": 0
+          },
+          {
+            "context": 23040,
+            "pending": 6400,
+            "samples": 51200,
+            "start": 0
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 48960,
+            "start": 8640
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 47040,
+            "start": 16960
+          }
+        ]
+      },
+      "reference": "шестьдесят тысяч тенге сколько будет стоить",
+      "text": "60000 тенге, сколько будет стоить?",
+      "work_ns": 1218848380,
+      "worker": 0
+    },
+    {
+      "audio_samples": 54880,
+      "elapsed_ms": 3645,
+      "events": [
+        {
+          "at_ms": 333,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "пока",
+          "text": "пока"
+        },
+        {
+          "at_ms": 769,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "покажи мне",
+          "text": "покажи мне"
+        },
+        {
+          "at_ms": 1183,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "покажи мне на смотрешке",
+          "text": "покажи мне на смотрешке"
+        },
+        {
+          "at_ms": 1601,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "покажи мне на смотрешке те",
+          "text": "покажи мне на смотрешке те"
+        },
+        {
+          "at_ms": 2043,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "покажи мне на смотрешке телеканал",
+          "text": "покажи мне на смотрешке телеканал"
+        },
+        {
+          "at_ms": 2431,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "покажи мне на смотрешке телеканал сине",
+          "text": "покажи мне на смотрешке телеканал сине"
+        },
+        {
+          "at_ms": 2873,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "покажи мне на смотрешке телеканал синергия",
+          "text": "покажи мне на смотрешке телеканал синергия"
+        },
+        {
+          "at_ms": 3285,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "покажи мне на смотрешке телеканал синергия тв",
+          "text": "покажи мне на смотрешке телеканал синергия тв"
+        },
+        {
+          "at_ms": 3645,
+          "committed": "Покажи мне на смотрешке телеканал Синергия ТВ.",
+          "endpoint": "stop",
+          "final": true,
+          "tentative": "",
+          "text": "Покажи мне на смотрешке телеканал Синергия ТВ."
+        }
+      ],
+      "file": "golos_01.wav",
+      "final_after_stop_ms": 215.576992,
+      "max_audio_samples": 49600,
+      "peak_rss_kib": 461636,
+      "probe": {
+        "stages_ns": {
+          "decode": 51913846,
+          "encoder": 1008308899,
+          "mel": 73695867,
+          "postprocess": 1372184
+        },
+        "stride_samples": 6400,
+        "windows": [
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 6400,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 12800,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 19200,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 25600,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 32000,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 38400,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 44800,
+            "start": 0
+          },
+          {
+            "context": 23040,
+            "pending": 6400,
+            "samples": 51200,
+            "start": 0
+          },
+          {
+            "context": 24000,
+            "pending": 3680,
+            "samples": 46880,
+            "start": 8000
+          }
+        ]
+      },
+      "reference": "покажи мне на смотрешке телеканал синергия тв",
+      "text": "Покажи мне на смотрешке телеканал Синергия ТВ.",
+      "work_ns": 1137319196,
+      "worker": 0
+    },
+    {
+      "audio_samples": 48960,
+      "elapsed_ms": 3223,
+      "events": [
+        {
+          "at_ms": 370,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "за",
+          "text": "за"
+        },
+        {
+          "at_ms": 774,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "заказа",
+          "text": "заказа"
+        },
+        {
+          "at_ms": 1195,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "заказать яб",
+          "text": "заказать яб"
+        },
+        {
+          "at_ms": 1610,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "заказать яблоки",
+          "text": "заказать яблоки"
+        },
+        {
+          "at_ms": 2009,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "заказать яблоки",
+          "text": "заказать яблоки"
+        },
+        {
+          "at_ms": 2443,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "заказать яблоки зеленые",
+          "text": "заказать яблоки зеленые"
+        },
+        {
+          "at_ms": 2883,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "заказать яблоки зеленые",
+          "text": "заказать яблоки зеленые"
+        },
+        {
+          "at_ms": 3223,
+          "committed": "Заказать яблоки зеленые.",
+          "endpoint": "stop",
+          "final": true,
+          "tentative": "",
+          "text": "Заказать яблоки зеленые."
+        }
+      ],
+      "file": "golos_02.wav",
+      "final_after_stop_ms": 163.782872,
+      "max_audio_samples": 48640,
+      "peak_rss_kib": 461636,
+      "probe": {
+        "stages_ns": {
+          "decode": 44104163,
+          "encoder": 840678292,
+          "mel": 63730649,
+          "postprocess": 513657
+        },
+        "stride_samples": 6400,
+        "windows": [
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 6400,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 12800,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 19200,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 25600,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 32000,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 38400,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 44800,
+            "start": 0
+          },
+          {
+            "context": 24000,
+            "pending": 4160,
+            "samples": 48640,
+            "start": 320
+          }
+        ]
+      },
+      "reference": "заказать яблоки зеленые",
+      "text": "Заказать яблоки зеленые.",
+      "work_ns": 950711353,
+      "worker": 0
+    },
+    {
+      "audio_samples": 87040,
+      "elapsed_ms": 5526,
+      "events": [
+        {
+          "at_ms": 821,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "аль",
+          "text": "аль"
+        },
+        {
+          "at_ms": 1278,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "алиса",
+          "text": "алиса"
+        },
+        {
+          "at_ms": 1705,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "алиса закажи",
+          "text": "алиса закажи"
+        },
+        {
+          "at_ms": 2057,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "алиса закажи килограмм",
+          "text": "алиса закажи килограмм"
+        },
+        {
+          "at_ms": 2458,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "алиса закажи килограммовую",
+          "text": "алиса закажи килограммовую"
+        },
+        {
+          "at_ms": 2845,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "алиса закажи килограммовый торт",
+          "text": "алиса закажи килограммовый торт"
+        },
+        {
+          "at_ms": 3261,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "алиса закажи килограммовый торт",
+          "text": "алиса закажи килограммовый торт"
+        },
+        {
+          "at_ms": 3688,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "алиса закажи килограммовый торт графский",
+          "text": "алиса закажи килограммовый торт графский"
+        },
+        {
+          "at_ms": 4042,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "алиса закажи килограммовый торт графские разва",
+          "text": "алиса закажи килограммовый торт графские разва"
+        },
+        {
+          "at_ms": 4444,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "алиса закажи килограммовый торт графские развалины",
+          "text": "алиса закажи килограммовый торт графские развалины"
+        },
+        {
+          "at_ms": 4855,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "алиса закажи килограммовый торт графские развалины",
+          "text": "алиса закажи килограммовый торт графские развалины"
+        },
+        {
+          "at_ms": 5239,
+          "committed": "Алиса закажи килограммовый торт, графские развалины.",
+          "endpoint": "blank",
+          "final": true,
+          "tentative": "",
+          "text": "Алиса закажи килограммовый торт, графские развалины."
+        }
+      ],
+      "file": "golos_03.wav",
+      "final_after_stop_ms": 86.456751,
+      "max_audio_samples": 55040,
+      "peak_rss_kib": 461648,
+      "probe": {
+        "stages_ns": {
+          "decode": 71663852,
+          "encoder": 1800599826,
+          "mel": 140923933,
+          "postprocess": 691582
+        },
+        "stride_samples": 6400,
+        "windows": [
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 6400,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 12800,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 19200,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 25600,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 32000,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 38400,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 44800,
+            "start": 0
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 50240,
+            "start": 960
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 56640,
+            "start": 960
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 48320,
+            "start": 15680
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 49600,
+            "start": 20800
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 56000,
+            "start": 20800
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 50240,
+            "start": 32960
+          },
+          {
+            "context": 24000,
+            "pending": 3840,
+            "samples": 27840,
+            "start": 59200
+          }
+        ]
+      },
+      "reference": "алиса закажи килограммовый торт графские развалины",
+      "text": "Алиса закажи килограммовый торт, графские развалины.",
+      "work_ns": 2016338385,
+      "worker": 0
+    },
+    {
+      "audio_samples": 83520,
+      "elapsed_ms": 5456,
+      "events": [
+        {
+          "at_ms": 1574,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "ищи",
+          "text": "ищи"
+        },
+        {
+          "at_ms": 1996,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "ищи",
+          "text": "ищи"
+        },
+        {
+          "at_ms": 2405,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "ищи телеканал",
+          "text": "ищи телеканал"
+        },
+        {
+          "at_ms": 2832,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "ищи телеканал",
+          "text": "ищи телеканал"
+        },
+        {
+          "at_ms": 3247,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "ищи телеканал про",
+          "text": "ищи телеканал про"
+        },
+        {
+          "at_ms": 3653,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "ищи телеканал про бизнес",
+          "text": "ищи телеканал про бизнес"
+        },
+        {
+          "at_ms": 4032,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "ищи телеканал про бизнес на",
+          "text": "ищи телеканал про бизнес на"
+        },
+        {
+          "at_ms": 4499,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "ищи телеканал про бизнес на тв",
+          "text": "ищи телеканал про бизнес на тв"
+        },
+        {
+          "at_ms": 4967,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "ищи телеканал про бизнес на тв",
+          "text": "ищи телеканал про бизнес на тв"
+        },
+        {
+          "at_ms": 5336,
+          "committed": "Ищи телеканал про бизнес на ТВ.",
+          "endpoint": "blank",
+          "final": true,
+          "tentative": "",
+          "text": "Ищи телеканал про бизнес на ТВ."
+        }
+      ],
+      "file": "golos_04.wav",
+      "final_after_stop_ms": 119.452523,
+      "max_audio_samples": 55040,
+      "peak_rss_kib": 461648,
+      "probe": {
+        "stages_ns": {
+          "decode": 56042236,
+          "encoder": 1635257578,
+          "mel": 111730406,
+          "postprocess": 1071176
+        },
+        "stride_samples": 6400,
+        "windows": [
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 6400,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 12800,
+            "start": 0
+          },
+          {
+            "context": 12800,
+            "pending": 6400,
+            "samples": 19200,
+            "start": 0
+          },
+          {
+            "context": 19200,
+            "pending": 6400,
+            "samples": 25600,
+            "start": 0
+          },
+          {
+            "context": 19200,
+            "pending": 6400,
+            "samples": 32000,
+            "start": 0
+          },
+          {
+            "context": 19200,
+            "pending": 6400,
+            "samples": 38400,
+            "start": 0
+          },
+          {
+            "context": 19200,
+            "pending": 6400,
+            "samples": 44800,
+            "start": 0
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 50240,
+            "start": 960
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 56640,
+            "start": 960
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 48960,
+            "start": 15040
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 48960,
+            "start": 21440
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 55360,
+            "start": 21440
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 50240,
+            "start": 32960
+          },
+          {
+            "context": 24000,
+            "pending": 320,
+            "samples": 24320,
+            "start": 59200
+          }
+        ]
+      },
+      "reference": "ищи телеканал про бизнес на тиви",
+      "text": "Ищи телеканал про бизнес на ТВ.",
+      "work_ns": 1806413922,
+      "worker": 0
+    },
+    {
+      "audio_samples": 51263,
+      "elapsed_ms": 3333,
+      "events": [
+        {
+          "at_ms": 1191,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "михаил",
+          "text": "михаил"
+        },
+        {
+          "at_ms": 1600,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "михаила",
+          "text": "михаила"
+        },
+        {
+          "at_ms": 2030,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "михаила мурадя",
+          "text": "михаила мурадя"
+        },
+        {
+          "at_ms": 2418,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "михаила мурадяна",
+          "text": "михаила мурадяна"
+        },
+        {
+          "at_ms": 2836,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "михаила мурадяна",
+          "text": "михаила мурадяна"
+        },
+        {
+          "at_ms": 3246,
+          "committed": "Михаила Мурадяна.",
+          "endpoint": "blank",
+          "final": true,
+          "tentative": "",
+          "text": "Михаила Мурадяна."
+        }
+      ],
+      "file": "golos_05.wav",
+      "final_after_stop_ms": 86.33399,
+      "max_audio_samples": 49600,
+      "peak_rss_kib": 461648,
+      "probe": {
+        "stages_ns": {
+          "decode": 27704853,
+          "encoder": 863598970,
+          "mel": 51448490,
+          "postprocess": 691491
+        },
+        "stride_samples": 6400,
+        "windows": [
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 6400,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 12800,
+            "start": 0
+          },
+          {
+            "context": 12800,
+            "pending": 6400,
+            "samples": 19200,
+            "start": 0
+          },
+          {
+            "context": 12800,
+            "pending": 6400,
+            "samples": 25600,
+            "start": 0
+          },
+          {
+            "context": 12800,
+            "pending": 6400,
+            "samples": 32000,
+            "start": 0
+          },
+          {
+            "context": 12800,
+            "pending": 6400,
+            "samples": 38400,
+            "start": 0
+          },
+          {
+            "context": 12800,
+            "pending": 6400,
+            "samples": 44800,
+            "start": 0
+          },
+          {
+            "context": 20480,
+            "pending": 6400,
+            "samples": 51200,
+            "start": 0
+          },
+          {
+            "context": 24000,
+            "pending": 63,
+            "samples": 24063,
+            "start": 27200
+          }
+        ]
+      },
+      "reference": "михаила мурадяна",
+      "text": "Михаила Мурадяна.",
+      "work_ns": 944885681,
+      "worker": 0
+    },
+    {
+      "audio_samples": 80000,
+      "elapsed_ms": 5112,
+      "events": [
+        {
+          "at_ms": 1183,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "любов",
+          "text": "любов"
+        },
+        {
+          "at_ms": 1609,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "любовницы",
+          "text": "любовницы"
+        },
+        {
+          "at_ms": 2033,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "любовницы две тысячи",
+          "text": "любовницы две тысячи"
+        },
+        {
+          "at_ms": 2452,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "любовницы две тысячи тринадцать",
+          "text": "любовницы две тысячи тринадцать"
+        },
+        {
+          "at_ms": 2886,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "любовницы две тысячи тринадцать",
+          "text": "любовницы две тысячи тринадцать"
+        },
+        {
+          "at_ms": 3297,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "любовницы две тысячи тринадцать пятнад",
+          "text": "любовницы две тысячи тринадцать пятнад"
+        },
+        {
+          "at_ms": 3698,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "любовницы две тысячи тринадцать пятнадцатый",
+          "text": "любовницы две тысячи тринадцать пятнадцатый"
+        },
+        {
+          "at_ms": 4114,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "любовницы две тысячи тринадцать пятнадцатый сезон",
+          "text": "любовницы две тысячи тринадцать пятнадцатый сезон"
+        },
+        {
+          "at_ms": 4496,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "любовницы две тысячи тринадцать пятнадцатый сезон",
+          "text": "любовницы две тысячи тринадцать пятнадцатый сезон"
+        },
+        {
+          "at_ms": 4916,
+          "committed": "Любовницы 2013— пятнадцатый сезон.",
+          "endpoint": "blank",
+          "final": true,
+          "tentative": "",
+          "text": "Любовницы 2013— пятнадцатый сезон."
+        }
+      ],
+      "file": "golos_06.wav",
+      "final_after_stop_ms": 112.35912,
+      "max_audio_samples": 55680,
+      "peak_rss_kib": 461648,
+      "probe": {
+        "stages_ns": {
+          "decode": 77042837,
+          "encoder": 1719761702,
+          "mel": 118121005,
+          "postprocess": 819153
+        },
+        "stride_samples": 6400,
+        "windows": [
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 6400,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 12800,
+            "start": 0
+          },
+          {
+            "context": 12800,
+            "pending": 6400,
+            "samples": 19200,
+            "start": 0
+          },
+          {
+            "context": 12800,
+            "pending": 6400,
+            "samples": 25600,
+            "start": 0
+          },
+          {
+            "context": 12800,
+            "pending": 6400,
+            "samples": 32000,
+            "start": 0
+          },
+          {
+            "context": 12800,
+            "pending": 6400,
+            "samples": 38400,
+            "start": 0
+          },
+          {
+            "context": 12800,
+            "pending": 6400,
+            "samples": 44800,
+            "start": 0
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 48320,
+            "start": 2880
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 49600,
+            "start": 8000
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 56000,
+            "start": 8000
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 50880,
+            "start": 19520
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 57280,
+            "start": 19520
+          },
+          {
+            "context": 24000,
+            "pending": 3200,
+            "samples": 27200,
+            "start": 52800
+          }
+        ]
+      },
+      "reference": "любовницы две тысячи тринадцать пятнадцатый сезон",
+      "text": "Любовницы 2013— пятнадцатый сезон.",
+      "work_ns": 1918264795,
+      "worker": 0
+    },
+    {
+      "audio_samples": 32640,
+      "elapsed_ms": 2155,
+      "events": [
+        {
+          "at_ms": 769,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "найди",
+          "text": "найди"
+        },
+        {
+          "at_ms": 1189,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "найди боевик",
+          "text": "найди боевик"
+        },
+        {
+          "at_ms": 1613,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "найди боевики",
+          "text": "найди боевики"
+        },
+        {
+          "at_ms": 2025,
+          "committed": "Найди боевики!",
+          "endpoint": "blank",
+          "final": true,
+          "tentative": "",
+          "text": "Найди боевики!"
+        }
+      ],
+      "file": "golos_07.wav",
+      "final_after_stop_ms": 114.888502,
+      "max_audio_samples": 30400,
+      "peak_rss_kib": 461648,
+      "probe": {
+        "stages_ns": {
+          "decode": 19660701,
+          "encoder": 500040129,
+          "mel": 32562528,
+          "postprocess": 820455
+        },
+        "stride_samples": 6400,
+        "windows": [
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 6400,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 12800,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 19200,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 25600,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 32000,
+            "start": 0
+          },
+          {
+            "context": 24000,
+            "pending": 640,
+            "samples": 24640,
+            "start": 8000
+          }
+        ]
+      },
+      "reference": "найди боевики",
+      "text": "Найди боевики!",
+      "work_ns": 554170119,
+      "worker": 0
+    },
+    {
+      "audio_samples": 78848,
+      "elapsed_ms": 5050,
+      "events": [
+        {
+          "at_ms": 2023,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "гет",
+          "text": "гет"
+        },
+        {
+          "at_ms": 2440,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "гетто",
+          "text": "гетто"
+        },
+        {
+          "at_ms": 2859,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "гетто сезон",
+          "text": "гетто сезон"
+        },
+        {
+          "at_ms": 3366,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "гетто сезон три",
+          "text": "гетто сезон три"
+        },
+        {
+          "at_ms": 3840,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "гетто сезон три",
+          "text": "гетто сезон три"
+        },
+        {
+          "at_ms": 4196,
+          "committed": "Гетто — сезон 3.",
+          "endpoint": "blank",
+          "final": true,
+          "tentative": "",
+          "text": "Гетто — сезон 3."
+        }
+      ],
+      "file": "golos_08.wav",
+      "final_after_stop_ms": 121.930528,
+      "max_audio_samples": 51840,
+      "peak_rss_kib": 461648,
+      "probe": {
+        "stages_ns": {
+          "decode": 65401264,
+          "encoder": 1827457825,
+          "mel": 115388212,
+          "postprocess": 910303
+        },
+        "stride_samples": 6400,
+        "windows": [
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 6400,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 12800,
+            "start": 0
+          },
+          {
+            "context": 12800,
+            "pending": 6400,
+            "samples": 19200,
+            "start": 0
+          },
+          {
+            "context": 19200,
+            "pending": 6400,
+            "samples": 25600,
+            "start": 0
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 30400,
+            "start": 1600
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 36800,
+            "start": 1600
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 43200,
+            "start": 1600
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 49600,
+            "start": 1600
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 47040,
+            "start": 10560
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 53440,
+            "start": 10560
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 30400,
+            "start": 40000
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 30400,
+            "start": 46400
+          },
+          {
+            "context": 24000,
+            "pending": 2048,
+            "samples": 26048,
+            "start": 52800
+          }
+        ]
+      },
+      "reference": "гетто сезон три",
+      "text": "Гетто — сезон 3.",
+      "work_ns": 2012035439,
+      "worker": 0
+    },
+    {
+      "audio_samples": 53492,
+      "elapsed_ms": 3526,
+      "events": [
+        {
+          "at_ms": 777,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "хочу",
+          "text": "хочу"
+        },
+        {
+          "at_ms": 1201,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "хочу посмотреть",
+          "text": "хочу посмотреть"
+        },
+        {
+          "at_ms": 1610,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "хочу посмотреть ростов",
+          "text": "хочу посмотреть ростов"
+        },
+        {
+          "at_ms": 2036,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "хочу посмотреть ростов папа",
+          "text": "хочу посмотреть ростов папа"
+        },
+        {
+          "at_ms": 2473,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "хочу посмотреть ростов папа на теле",
+          "text": "хочу посмотреть ростов папа на теле"
+        },
+        {
+          "at_ms": 2896,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "хочу посмотреть ростов папа на телевизоре",
+          "text": "хочу посмотреть ростов папа на телевизоре"
+        },
+        {
+          "at_ms": 3305,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "хочу посмотреть ростов папа на телевизоре",
+          "text": "хочу посмотреть ростов папа на телевизоре"
+        },
+        {
+          "at_ms": 3526,
+          "committed": "Хочу посмотреть Ростов, папа на телевизоре.",
+          "endpoint": "stop",
+          "final": true,
+          "tentative": "",
+          "text": "Хочу посмотреть Ростов, папа на телевизоре."
+        }
+      ],
+      "file": "golos_09.wav",
+      "final_after_stop_ms": 182.887607,
+      "max_audio_samples": 47360,
+      "peak_rss_kib": 461648,
+      "probe": {
+        "stages_ns": {
+          "decode": 61941582,
+          "encoder": 1087823522,
+          "mel": 75740098,
+          "postprocess": 874566
+        },
+        "stride_samples": 6400,
+        "windows": [
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 6400,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 12800,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 19200,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 25600,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 32000,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 38400,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 44800,
+            "start": 0
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 48960,
+            "start": 2240
+          },
+          {
+            "context": 24000,
+            "pending": 2292,
+            "samples": 42292,
+            "start": 11200
+          }
+        ]
+      },
+      "reference": "хочу посмотреть ростов папа на телевизоре",
+      "text": "Хочу посмотреть Ростов, папа на телевизоре.",
+      "work_ns": 1228465845,
+      "worker": 0
+    },
+    {
+      "audio_samples": 62499,
+      "elapsed_ms": 4051,
+      "events": [
+        {
+          "at_ms": 350,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "сбер",
+          "text": "сбер"
+        },
+        {
+          "at_ms": 787,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "сбер какой твой",
+          "text": "сбер какой твой"
+        },
+        {
+          "at_ms": 1199,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "сбер какой твой самый",
+          "text": "сбер какой твой самый"
+        },
+        {
+          "at_ms": 1634,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "сбер какой твой самое ненави",
+          "text": "сбер какой твой самое ненави"
+        },
+        {
+          "at_ms": 2070,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "сбер какое твое самое ненавистное",
+          "text": "сбер какое твое самое ненавистное"
+        },
+        {
+          "at_ms": 2508,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "сбер какое твое самое ненавистное занятие",
+          "text": "сбер какое твое самое ненавистное занятие"
+        },
+        {
+          "at_ms": 2948,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "сбер какое твое самое ненавистное занятие",
+          "text": "сбер какое твое самое ненавистное занятие"
+        },
+        {
+          "at_ms": 3339,
+          "committed": "Сбер, какое твое самое ненавистное занятие?",
+          "endpoint": "blank",
+          "final": true,
+          "tentative": "",
+          "text": "Сбер, какое твое самое ненавистное занятие?"
+        }
+      ],
+      "file": "golos_10.wav",
+      "final_after_stop_ms": 144.75843,
+      "max_audio_samples": 49600,
+      "peak_rss_kib": 461648,
+      "probe": {
+        "stages_ns": {
+          "decode": 81956390,
+          "encoder": 1354159213,
+          "mel": 90785749,
+          "postprocess": 1137861
+        },
+        "stride_samples": 6400,
+        "windows": [
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 6400,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 12800,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 19200,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 25600,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 32000,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 38400,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 44800,
+            "start": 0
+          },
+          {
+            "context": 19200,
+            "pending": 6400,
+            "samples": 51200,
+            "start": 0
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 30400,
+            "start": 27200
+          },
+          {
+            "context": 24000,
+            "pending": 4899,
+            "samples": 28899,
+            "start": 33600
+          }
+        ]
+      },
+      "reference": "сбер какое твое самое ненавистное занятие",
+      "text": "Сбер, какое твое самое ненавистное занятие?",
+      "work_ns": 1530220880,
+      "worker": 0
+    },
+    {
+      "audio_samples": 90240,
+      "elapsed_ms": 5770,
+      "events": [
+        {
+          "at_ms": 2118,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "афи",
+          "text": "афи"
+        },
+        {
+          "at_ms": 2438,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "афина",
+          "text": "афина"
+        },
+        {
+          "at_ms": 2890,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "афина чем пла",
+          "text": "афина чем пла"
+        },
+        {
+          "at_ms": 3302,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "афина чем платят",
+          "text": "афина чем платят"
+        },
+        {
+          "at_ms": 3687,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "афина чем платят у китай",
+          "text": "афина чем платят у китай"
+        },
+        {
+          "at_ms": 4098,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "афина чем платят у китайцев",
+          "text": "афина чем платят у китайцев"
+        },
+        {
+          "at_ms": 4498,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "афина чем платят у китайцев",
+          "text": "афина чем платят у китайцев"
+        },
+        {
+          "at_ms": 4930,
+          "committed": "Афина, чем платят у китайцев?",
+          "endpoint": "blank",
+          "final": true,
+          "tentative": "",
+          "text": "Афина, чем платят у китайцев?"
+        }
+      ],
+      "file": "golos_11.wav",
+      "final_after_stop_ms": 130.278303,
+      "max_audio_samples": 48640,
+      "peak_rss_kib": 461648,
+      "probe": {
+        "stages_ns": {
+          "decode": 68128028,
+          "encoder": 2157446960,
+          "mel": 133441868,
+          "postprocess": 1707253
+        },
+        "stride_samples": 6400,
+        "windows": [
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 6400,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 12800,
+            "start": 0
+          },
+          {
+            "context": 12800,
+            "pending": 6400,
+            "samples": 19200,
+            "start": 0
+          },
+          {
+            "context": 19200,
+            "pending": 6400,
+            "samples": 25600,
+            "start": 0
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 30400,
+            "start": 1600
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 36800,
+            "start": 1600
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 43200,
+            "start": 1600
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 49600,
+            "start": 1600
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 48320,
+            "start": 9280
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 48960,
+            "start": 15040
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 46400,
+            "start": 24000
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 50240,
+            "start": 26560
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 30400,
+            "start": 52800
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 30400,
+            "start": 59200
+          },
+          {
+            "context": 24000,
+            "pending": 640,
+            "samples": 31040,
+            "start": 59200
+          }
+        ]
+      },
+      "reference": "афина чем платят у китайцев",
+      "text": "Афина, чем платят у китайцев?",
+      "work_ns": 2363795020,
+      "worker": 0
+    },
+    {
+      "audio_samples": 95103,
+      "elapsed_ms": 7324,
+      "events": [
+        {
+          "at_ms": 2231,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "джой",
+          "text": "джой"
+        },
+        {
+          "at_ms": 2733,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "джой",
+          "text": "джой"
+        },
+        {
+          "at_ms": 3202,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "джой как",
+          "text": "джой как"
+        },
+        {
+          "at_ms": 3822,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "джой как работает",
+          "text": "джой как работает"
+        },
+        {
+          "at_ms": 4393,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "джой как работает досроч",
+          "text": "джой как работает досроч"
+        },
+        {
+          "at_ms": 4911,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "джой как работает досрочное пога",
+          "text": "джой как работает досрочное пога"
+        },
+        {
+          "at_ms": 5480,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "джой как работает досрочное погашение",
+          "text": "джой как работает досрочное погашение"
+        },
+        {
+          "at_ms": 5976,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "джой как работает досрочное погашение кредита",
+          "text": "джой как работает досрочное погашение кредита"
+        },
+        {
+          "at_ms": 6489,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "джой как работает досрочное погашение кредита",
+          "text": "джой как работает досрочное погашение кредита"
+        },
+        {
+          "at_ms": 7073,
+          "committed": "Джой, как работает досрочное погашение кредита?",
+          "endpoint": "blank",
+          "final": true,
+          "tentative": "",
+          "text": "Джой, как работает досрочное погашение кредита?"
+        }
+      ],
+      "file": "golos_12.wav",
+      "final_after_stop_ms": 250.534569,
+      "max_audio_samples": 52480,
+      "peak_rss_kib": 461648,
+      "probe": {
+        "stages_ns": {
+          "decode": 219397196,
+          "encoder": 5608270255,
+          "mel": 271461512,
+          "postprocess": 1662089
+        },
+        "stride_samples": 6400,
+        "windows": [
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 6400,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 12800,
+            "start": 0
+          },
+          {
+            "context": 12800,
+            "pending": 6400,
+            "samples": 19200,
+            "start": 0
+          },
+          {
+            "context": 19200,
+            "pending": 6400,
+            "samples": 25600,
+            "start": 0
+          },
+          {
+            "context": 19200,
+            "pending": 6400,
+            "samples": 32000,
+            "start": 0
+          },
+          {
+            "context": 19200,
+            "pending": 6400,
+            "samples": 38400,
+            "start": 0
+          },
+          {
+            "context": 19200,
+            "pending": 6400,
+            "samples": 44800,
+            "start": 0
+          },
+          {
+            "context": 19200,
+            "pending": 6400,
+            "samples": 51200,
+            "start": 0
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 52160,
+            "start": 5440
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 47680,
+            "start": 16320
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 54080,
+            "start": 16320
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 51520,
+            "start": 25280
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 47040,
+            "start": 36160
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 53440,
+            "start": 36160
+          },
+          {
+            "context": 24000,
+            "pending": 5503,
+            "samples": 29503,
+            "start": 65600
+          }
+        ]
+      },
+      "reference": "джой как работает досрочное погашение кредита",
+      "text": "Джой, как работает досрочное погашение кредита?",
+      "work_ns": 6104126730,
+      "worker": 0
+    },
+    {
+      "audio_samples": 51200,
+      "elapsed_ms": 3364,
+      "events": [
+        {
+          "at_ms": 776,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "у тебя на",
+          "text": "у тебя на"
+        },
+        {
+          "at_ms": 1211,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "у тебя найдется",
+          "text": "у тебя найдется"
+        },
+        {
+          "at_ms": 1641,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "у тебя найдется",
+          "text": "у тебя найдется"
+        },
+        {
+          "at_ms": 2046,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "у тебя найдется лю",
+          "text": "у тебя найдется лю"
+        },
+        {
+          "at_ms": 2458,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "у тебя найдется люк кейдж",
+          "text": "у тебя найдется люк кейдж"
+        },
+        {
+          "at_ms": 2891,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "у тебя найдется люк кейдж",
+          "text": "у тебя найдется люк кейдж"
+        },
+        {
+          "at_ms": 3364,
+          "committed": "У тебя найдется люк Кейдж.",
+          "endpoint": "blank",
+          "final": true,
+          "tentative": "",
+          "text": "У тебя найдется люк Кейдж."
+        }
+      ],
+      "file": "golos_13.wav",
+      "final_after_stop_ms": 0.002094,
+      "max_audio_samples": 49600,
+      "peak_rss_kib": 461648,
+      "probe": {
+        "stages_ns": {
+          "decode": 48265876,
+          "encoder": 1056363128,
+          "mel": 58423141,
+          "postprocess": 1339732
+        },
+        "stride_samples": 6400,
+        "windows": [
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 6400,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 12800,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 19200,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 25600,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 32000,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 38400,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 44800,
+            "start": 0
+          },
+          {
+            "context": 20480,
+            "pending": 6400,
+            "samples": 51200,
+            "start": 0
+          }
+        ]
+      },
+      "reference": "у тебя найдется люк кейдж",
+      "text": "У тебя найдется люк Кейдж.",
+      "work_ns": 1166838649,
+      "worker": 0
+    },
+    {
+      "audio_samples": 54560,
+      "elapsed_ms": 3617,
+      "events": [
+        {
+          "at_ms": 772,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "у тебя",
+          "text": "у тебя"
+        },
+        {
+          "at_ms": 1195,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "у тебя будет",
+          "text": "у тебя будет"
+        },
+        {
+          "at_ms": 1622,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "у тебя будет луч",
+          "text": "у тебя будет луч"
+        },
+        {
+          "at_ms": 2070,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "у тебя будет лучшая часть",
+          "text": "у тебя будет лучшая часть"
+        },
+        {
+          "at_ms": 2481,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "у тебя будет лучшая часть",
+          "text": "у тебя будет лучшая часть"
+        },
+        {
+          "at_ms": 2902,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "у тебя будет лучшая часть пинк",
+          "text": "у тебя будет лучшая часть пинк"
+        },
+        {
+          "at_ms": 3300,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "у тебя будет лучшая часть пинк",
+          "text": "у тебя будет лучшая часть пинк"
+        },
+        {
+          "at_ms": 3617,
+          "committed": "У тебя будет лучшая часть пинк.",
+          "endpoint": "stop",
+          "final": true,
+          "tentative": "",
+          "text": "У тебя будет лучшая часть пинк."
+        }
+      ],
+      "file": "golos_14.wav",
+      "final_after_stop_ms": 207.759656,
+      "max_audio_samples": 45440,
+      "peak_rss_kib": 461648,
+      "probe": {
+        "stages_ns": {
+          "decode": 71869019,
+          "encoder": 1156943102,
+          "mel": 82087115,
+          "postprocess": 1081636
+        },
+        "stride_samples": 6400,
+        "windows": [
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 6400,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 12800,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 19200,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 25600,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 32000,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 38400,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 44800,
+            "start": 0
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 47040,
+            "start": 4160
+          },
+          {
+            "context": 24000,
+            "pending": 3360,
+            "samples": 43360,
+            "start": 11200
+          }
+        ]
+      },
+      "reference": "у тебя будет лучшая часть пинк",
+      "text": "У тебя будет лучшая часть пинк.",
+      "work_ns": 1314643561,
+      "worker": 0
+    },
+    {
+      "audio_samples": 112960,
+      "elapsed_ms": 7208,
+      "events": [
+        {
+          "at_ms": 2468,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "за",
+          "text": "за"
+        },
+        {
+          "at_ms": 2892,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "заказа",
+          "text": "заказа"
+        },
+        {
+          "at_ms": 3286,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "заказать",
+          "text": "заказать"
+        },
+        {
+          "at_ms": 3700,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "заказать яблоки",
+          "text": "заказать яблоки"
+        },
+        {
+          "at_ms": 4134,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "заказать яблоки",
+          "text": "заказать яблоки"
+        },
+        {
+          "at_ms": 4517,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "заказать яблоки зеленые",
+          "text": "заказать яблоки зеленые"
+        },
+        {
+          "at_ms": 4909,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "заказать яблоки зеленые",
+          "text": "заказать яблоки зеленые"
+        },
+        {
+          "at_ms": 5306,
+          "committed": "Заказать яблоки зеленые.",
+          "endpoint": "blank",
+          "final": true,
+          "tentative": "",
+          "text": "Заказать яблоки зеленые."
+        },
+        {
+          "at_ms": 6825,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "да",
+          "text": "да"
+        }
+      ],
+      "file": "silence_padded_02",
+      "final_after_stop_ms": 148.491668,
+      "max_audio_samples": 60800,
+      "peak_rss_kib": 461660,
+      "probe": {
+        "stages_ns": {
+          "decode": 76187933,
+          "encoder": 2520794946,
+          "mel": 170123668,
+          "postprocess": 877653
+        },
+        "stride_samples": 6400,
+        "windows": [
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 6400,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 12800,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 19200,
+            "start": 0
+          },
+          {
+            "context": 19200,
+            "pending": 6400,
+            "samples": 25600,
+            "start": 0
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 30400,
+            "start": 1600
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 36800,
+            "start": 1600
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 43200,
+            "start": 1600
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 49600,
+            "start": 1600
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 56000,
+            "start": 1600
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 62400,
+            "start": 1600
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 48960,
+            "start": 21440
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 55360,
+            "start": 21440
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 51520,
+            "start": 31680
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 30400,
+            "start": 59200
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 30400,
+            "start": 65600
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 30400,
+            "start": 72000
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 30400,
+            "start": 78400
+          },
+          {
+            "context": 24000,
+            "pending": 4160,
+            "samples": 34560,
+            "start": 78400
+          }
+        ]
+      },
+      "reference": "заказать яблоки зеленые",
+      "text": "Заказать яблоки зеленые.",
+      "work_ns": 2771431525,
+      "worker": 0
+    },
+    {
+      "audio_samples": 48000,
+      "elapsed_ms": 3131,
+      "events": [],
+      "file": "silence_only",
+      "final_after_stop_ms": 131.460398,
+      "max_audio_samples": 35200,
+      "peak_rss_kib": 461660,
+      "probe": {
+        "stages_ns": {
+          "decode": 19625194,
+          "encoder": 920813252,
+          "mel": 73052226,
+          "postprocess": 49403
+        },
+        "stride_samples": 6400,
+        "windows": [
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 6400,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 12800,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 19200,
+            "start": 0
+          },
+          {
+            "context": 19200,
+            "pending": 6400,
+            "samples": 25600,
+            "start": 0
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 30400,
+            "start": 1600
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 36800,
+            "start": 1600
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 30400,
+            "start": 14400
+          },
+          {
+            "context": 24000,
+            "pending": 3200,
+            "samples": 33600,
+            "start": 14400
+          }
+        ]
+      },
+      "reference": "",
+      "text": "",
+      "work_ns": 1014819395,
+      "worker": 0
+    },
+    {
+      "audio_samples": 167840,
+      "elapsed_ms": 10657,
+      "events": [
+        {
+          "at_ms": 775,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "шесть",
+          "text": "шесть"
+        },
+        {
+          "at_ms": 1181,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "шестьдесят",
+          "text": "шестьдесят"
+        },
+        {
+          "at_ms": 1614,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "шестьдесят тысяч",
+          "text": "шестьдесят тысяч"
+        },
+        {
+          "at_ms": 2019,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "шестьдесят тысяч тенге",
+          "text": "шестьдесят тысяч тенге"
+        },
+        {
+          "at_ms": 2607,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "шестьдесят тысяч тенге",
+          "text": "шестьдесят тысяч тенге"
+        },
+        {
+          "at_ms": 3019,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "шестьдесят тысяч тенге сколько будет",
+          "text": "шестьдесят тысяч тенге сколько будет"
+        },
+        {
+          "at_ms": 3472,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "шестьдесят тысяч тенге сколько будет",
+          "text": "шестьдесят тысяч тенге сколько будет"
+        },
+        {
+          "at_ms": 3847,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "шестьдесят тысяч тенге сколько будет стоить",
+          "text": "шестьдесят тысяч тенге сколько будет стоить"
+        },
+        {
+          "at_ms": 4170,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "шестьдесят тысяч тенге сколько будет стоить",
+          "text": "шестьдесят тысяч тенге сколько будет стоить"
+        },
+        {
+          "at_ms": 4506,
+          "committed": "60000 тенге, сколько будет стоить?",
+          "endpoint": "blank",
+          "final": true,
+          "tentative": "",
+          "text": "60000 тенге, сколько будет стоить?"
+        },
+        {
+          "at_ms": 4813,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "покажи мне",
+          "text": "покажи мне"
+        },
+        {
+          "at_ms": 5313,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "покажи мне на смотрешке",
+          "text": "покажи мне на смотрешке"
+        },
+        {
+          "at_ms": 5668,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "покажи мне на смотрешке те",
+          "text": "покажи мне на смотрешке те"
+        },
+        {
+          "at_ms": 6088,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "покажи мне на смотрешке телеканал",
+          "text": "покажи мне на смотрешке телеканал"
+        },
+        {
+          "at_ms": 6502,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "покажи мне на смотрешке телеканал сине",
+          "text": "покажи мне на смотрешке телеканал сине"
+        },
+        {
+          "at_ms": 6887,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "покажи мне на смотрешке телеканал синергия",
+          "text": "покажи мне на смотрешке телеканал синергия"
+        },
+        {
+          "at_ms": 7314,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "покажи мне на смотрешке телеканал синергия тв",
+          "text": "покажи мне на смотрешке телеканал синергия тв"
+        },
+        {
+          "at_ms": 7724,
+          "committed": "Покажи мне на смотрешке телеканал Синергия ТВ.",
+          "endpoint": "blank",
+          "final": true,
+          "tentative": "",
+          "text": "Покажи мне на смотрешке телеканал Синергия ТВ."
+        },
+        {
+          "at_ms": 8814,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "яблоки",
+          "text": "яблоки"
+        },
+        {
+          "at_ms": 9240,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "яблоки",
+          "text": "яблоки"
+        },
+        {
+          "at_ms": 9690,
+          "committed": "Яблоки.",
+          "endpoint": "blank",
+          "final": true,
+          "tentative": "",
+          "text": "Яблоки."
+        },
+        {
+          "at_ms": 10026,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "зеленый",
+          "text": "зеленый"
+        },
+        {
+          "at_ms": 10468,
+          "committed": "",
+          "endpoint": null,
+          "final": false,
+          "tentative": "зеленые",
+          "text": "зеленые"
+        },
+        {
+          "at_ms": 10657,
+          "committed": "Зеленые.",
+          "endpoint": "stop",
+          "final": true,
+          "tentative": "",
+          "text": "Зеленые."
+        }
+      ],
+      "file": "concatenated_00_01_02",
+      "final_after_stop_ms": 167.565794,
+      "max_audio_samples": 51200,
+      "peak_rss_kib": 461520,
+      "probe": {
+        "stages_ns": {
+          "decode": 210337737,
+          "encoder": 4370073385,
+          "mel": 319064837,
+          "postprocess": 3525376
+        },
+        "stride_samples": 6400,
+        "windows": [
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 6400,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 12800,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 19200,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 25600,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 32000,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 38400,
+            "start": 0
+          },
+          {
+            "context": 0,
+            "pending": 6400,
+            "samples": 44800,
+            "start": 0
+          },
+          {
+            "context": 23040,
+            "pending": 6400,
+            "samples": 51200,
+            "start": 0
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 48960,
+            "start": 8640
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 47040,
+            "start": 16960
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 47040,
+            "start": 23360
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 30400,
+            "start": 46400
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 36800,
+            "start": 46400
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 43200,
+            "start": 46400
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 48960,
+            "start": 47040
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 48960,
+            "start": 53440
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 46400,
+            "start": 62400
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 52800,
+            "start": 62400
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 50240,
+            "start": 71360
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 30400,
+            "start": 97600
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 30400,
+            "start": 104000
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 30400,
+            "start": 110400
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 36800,
+            "start": 110400
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 43200,
+            "start": 110400
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 30400,
+            "start": 129600
+          },
+          {
+            "context": 24000,
+            "pending": 6400,
+            "samples": 36800,
+            "start": 129600
+          },
+          {
+            "context": 24000,
+            "pending": 1440,
+            "samples": 38240,
+            "start": 129600
+          }
+        ]
+      },
+      "reference": "шестьдесят тысяч тенге сколько будет стоить покажи мне на смотрешке телеканал синергия тв заказать яблоки зеленые",
+      "text": "60000 тенге, сколько будет стоить? Покажи мне на смотрешке телеканал Синергия ТВ. Яблоки. Зеленые.",
+      "work_ns": 4908561401,
+      "worker": 0
+    }
+  ],
+  "schema": 1
+}

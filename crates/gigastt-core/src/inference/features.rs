@@ -240,3 +240,6 @@ impl MelSpectrogram {
 // Miri-checked.
 #[cfg(all(test, not(miri)))]
 mod tests;
+
+#[cfg(all(test, not(miri)))]
+mod cache_probe;
