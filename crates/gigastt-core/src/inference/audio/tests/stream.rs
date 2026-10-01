@@ -513,7 +513,7 @@ fn test_dual_mono_detector_uses_the_overlap_only() {
 
 /// Two-channel PCM16 WAV with the given channels.
 #[cfg(feature = "file-decode")]
-fn stereo_wav(left: &[f32], right: &[f32], rate: u32) -> bytes::Bytes {
+pub(super) fn stereo_wav(left: &[f32], right: &[f32], rate: u32) -> bytes::Bytes {
     let frames = left.len().min(right.len());
     let data_bytes = (frames * 4) as u32;
     let mut w = Vec::with_capacity(44 + data_bytes as usize);

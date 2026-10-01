@@ -81,7 +81,7 @@ impl Engine {
         }
 
         let merged = merge_channel_results(per_channel);
-        Ok(self.finish_transcribe_result(merged.words, merged.duration_s, overrides))
+        self.finish_transcribe_result(merged.words, merged.duration_s, overrides, ctl)
     }
 
     /// Streaming twin of the `channels=split` decode.
@@ -150,6 +150,6 @@ impl Engine {
         }
 
         let merged = merge_channel_results(per_channel);
-        Ok(self.finish_transcribe_result(merged.words, merged.duration_s, overrides))
+        self.finish_transcribe_result(merged.words, merged.duration_s, overrides, ctl)
     }
 }

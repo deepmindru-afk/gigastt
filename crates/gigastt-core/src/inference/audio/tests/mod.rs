@@ -167,3 +167,6 @@ mod pcm;
 mod resample;
 mod stream;
 mod telephony;
+
+#[cfg(feature = "file-decode")]
+mod cancellation;

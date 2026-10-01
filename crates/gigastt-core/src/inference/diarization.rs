@@ -92,6 +92,11 @@ enum SpeakerLoadSlot {
 }
 
 impl LazySpeakerEncoder {
+    #[cfg(test)]
+    pub(crate) fn is_pending(&self) -> bool {
+        matches!(*self.slot.lock(), SpeakerLoadSlot::Pending)
+    }
+
     /// True when the speaker encoder is resident.
     #[cfg(test)]
     pub(crate) fn is_loaded(&self) -> bool {
@@ -224,6 +229,105 @@ pub fn run_offline(
             .collect()),
         Err(e) => Err(classify_offline_error(e)),
     }
+}
+
+/// Internal cancellation stays separate from capability/decode outcomes.
+pub(crate) enum OfflineRunError {
+    Cancelled,
+    Declined(DiarizationOutcome),
+}
+
+struct CancellableEmbedder<'a, E> {
+    inner: &'a E,
+    abort: &'a (dyn Fn() -> bool + Sync),
+}
+
+impl<E: Embedder> Embedder for CancellableEmbedder<'_, E> {
+    fn dim(&self) -> usize {
+        self.inner.dim()
+    }
+    fn embed(&self, samples: &[f32]) -> Result<Vec<f32>, EmbedderError> {
+        if (self.abort)() {
+            return Err(EmbedderError::InferenceFailed {
+                detail: "cancelled".into(),
+            });
+        }
+        let result = self.inner.embed(samples);
+        if (self.abort)() {
+            return Err(EmbedderError::InferenceFailed {
+                detail: "cancelled".into(),
+            });
+        }
+        result
+    }
+}
+
+struct CancellableVad<'a, V> {
+    inner: V,
+    abort: &'a (dyn Fn() -> bool + Sync),
+}
+
+impl<V: polyvoice::VoiceActivityDetector> polyvoice::VoiceActivityDetector
+    for CancellableVad<'_, V>
+{
+    fn reset(&mut self) {
+        self.inner.reset();
+    }
+    fn sample_rate(&self) -> u32 {
+        self.inner.sample_rate()
+    }
+    fn process(&mut self, samples: &[f32]) -> Result<Vec<f32>, polyvoice::VadError> {
+        if (self.abort)() {
+            return Err(polyvoice::VadError::Model("cancelled".into()));
+        }
+        let result = self.inner.process(samples);
+        if (self.abort)() {
+            return Err(polyvoice::VadError::Model("cancelled".into()));
+        }
+        result
+    }
+}
+
+/// The existing pipeline still owns clustering. Active model calls and the
+/// clustering call finish synchronously; checks prevent starting later stages.
+pub(crate) fn run_offline_with_abort(
+    encoder: &SpeakerEncoder,
+    samples: &[f32],
+    abort: Option<&(dyn Fn() -> bool + Sync)>,
+) -> Result<Vec<LabeledTurn>, OfflineRunError> {
+    let Some(abort) = abort else {
+        return run_offline(encoder, samples).map_err(OfflineRunError::Declined);
+    };
+    if abort() {
+        return Err(OfflineRunError::Cancelled);
+    }
+    let vad_config = VadConfig::default();
+    let pipeline = LegacyPipeline::new(DiaConfig::default(), vad_config);
+    let mut vad = CancellableVad {
+        inner: EnergyVad::new(-40.0, 16000, vad_config.frame_size),
+        abort,
+    };
+    let extractor = CancellableEmbedder {
+        inner: encoder.as_ref(),
+        abort,
+    };
+    let result = pipeline.run(samples, &extractor, &mut vad);
+    if abort() {
+        return Err(OfflineRunError::Cancelled);
+    }
+    result
+        .map(|result| {
+            result
+                .turns
+                .into_iter()
+                .map(|turn| LabeledTurn {
+                    start: turn.time.start,
+                    end: turn.time.end,
+                    speaker: turn.speaker.0,
+                })
+                .collect()
+        })
+        .map_err(|error| OfflineRunError::Declined(classify_offline_error(error)))
 }
 
 /// Map a polyvoice [`LegacyPipelineError`] to the client-facing [`DiarizationOutcome`].
@@ -550,5 +654,78 @@ mod assignment_tests {
                 new[new.len() / 2]
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod cancellation_tests {
+    use super::*;
+    use polyvoice::VoiceActivityDetector;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+    struct CountingEmbedder<'a> {
+        calls: &'a AtomicUsize,
+        cancelled: &'a AtomicBool,
+    }
+    impl Embedder for CountingEmbedder<'_> {
+        fn dim(&self) -> usize {
+            2
+        }
+        fn embed(&self, _: &[f32]) -> Result<Vec<f32>, EmbedderError> {
+            self.calls.fetch_add(1, Ordering::Relaxed);
+            self.cancelled.store(true, Ordering::Relaxed);
+            Ok(vec![1.0, 0.0])
+        }
+    }
+    #[test]
+    fn test_diarization_embed_cancellation_stops_before_next_window() {
+        let calls = AtomicUsize::new(0);
+        let cancelled = AtomicBool::new(false);
+        let inner = CountingEmbedder {
+            calls: &calls,
+            cancelled: &cancelled,
+        };
+        let abort = || cancelled.load(Ordering::Relaxed);
+        let guarded = CancellableEmbedder {
+            inner: &inner,
+            abort: &abort,
+        };
+        let config = VadConfig::default();
+        let pipeline = LegacyPipeline::new(DiaConfig::default(), config);
+        let samples = vec![0.5; 16000 * 8];
+        let mut vad = EnergyVad::new(-40.0, 16000, config.frame_size);
+        assert!(pipeline.run(&samples, &guarded, &mut vad).is_err());
+        assert!(guarded.embed(&samples).is_err());
+        assert_eq!(calls.load(Ordering::Relaxed), 1);
+
+        // Without cancellation the unchanged pipeline reaches later windows.
+        calls.store(0, Ordering::Relaxed);
+        let expected = pipeline.run(&samples, &inner, &mut vad).unwrap();
+        assert!(calls.load(Ordering::Relaxed) > 1);
+        let guarded = CancellableEmbedder {
+            inner: &inner,
+            abort: &|| false,
+        };
+        let mut vad = CancellableVad {
+            inner: EnergyVad::new(-40.0, 16000, config.frame_size),
+            abort: &|| false,
+        };
+        let actual = pipeline.run(&samples, &guarded, &mut vad).unwrap();
+        assert_eq!(actual.turns.len(), expected.turns.len());
+        for (actual, expected) in actual.turns.iter().zip(&expected.turns) {
+            assert_eq!(actual.time.start, expected.time.start);
+            assert_eq!(actual.time.end, expected.time.end);
+            assert_eq!(actual.speaker, expected.speaker);
+        }
+    }
+
+    #[test]
+    fn test_diarization_vad_cancellation_prevents_processing() {
+        let mut guarded = CancellableVad {
+            inner: EnergyVad::new(-40.0, 16000, 512),
+            abort: &|| true,
+        };
+        // Empty input normally succeeds, so the error proves the boundary check.
+        assert!(guarded.process(&[]).is_err());
     }
 }

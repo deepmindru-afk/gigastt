@@ -23,7 +23,7 @@ mod channels;
 #[cfg(feature = "file-decode")]
 pub use channels::{
     decode_audio_bytes_shared_channels, decode_audio_bytes_shared_channels_bounded,
-    load_audio_channels,
+    decode_audio_bytes_shared_channels_bounded_with_abort, load_audio_channels,
 };
 
 // docs-drift: codecs
@@ -144,10 +144,44 @@ pub fn decode_audio_bytes_shared_bounded(
     FileWindows::decode_bytes(data, Some(whole_buffer_limit_secs(max_audio_secs)))
 }
 
+/// Flat decode with cooperative packet/block boundaries and the existing ceiling.
+#[cfg(feature = "file-decode")]
+pub(crate) fn decode_audio_file_with_abort(
+    path: &str,
+    max_audio_secs: Option<f64>,
+    abort: Option<&(dyn Fn() -> bool + Sync)>,
+) -> Result<Vec<f32>> {
+    super::check_decode_abort(abort)?;
+    FileWindows::open(
+        path,
+        super::WindowSpec::flat(),
+        Some(whole_buffer_limit_secs(max_audio_secs)),
+    )?
+    .drain_to_vec_with_abort(abort)
+}
+
+#[cfg(feature = "file-decode")]
+pub(crate) fn decode_audio_bytes_with_abort(
+    data: Bytes,
+    max_audio_secs: Option<f64>,
+    abort: Option<&(dyn Fn() -> bool + Sync)>,
+) -> Result<Vec<f32>> {
+    super::check_decode_abort(abort)?;
+    FileWindows::from_bytes(
+        data,
+        super::WindowSpec::flat(),
+        Some(whole_buffer_limit_secs(max_audio_secs)),
+    )?
+    .drain_to_vec_with_abort(abort)
+}
+
 #[cfg(feature = "file-decode")]
 mod scan;
 #[cfg(feature = "file-decode")]
-pub use scan::{ChannelScan, PreparedChannels, prepare_channels_for_vad, scan_channels};
+pub use scan::{
+    ChannelScan, PreparedChannels, prepare_channels_for_vad, prepare_channels_for_vad_with_abort,
+    scan_channels, scan_channels_with_abort,
+};
 mod dual_mono;
 #[cfg(test)]
 pub(crate) use dual_mono::normalized_correlation_for_test;

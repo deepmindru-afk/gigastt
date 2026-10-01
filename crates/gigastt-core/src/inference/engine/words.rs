@@ -204,6 +204,7 @@ impl Engine {
         biaser: Option<&bias::Biaser>,
         ctl: DecodeControls,
     ) -> Result<Vec<WordInfo>, GigasttError> {
+        ctl.check_abort()?;
         if regions.is_empty() {
             tracing::info!("VAD found no speech; skipping decode");
             return Ok(Vec::new());
@@ -267,6 +268,7 @@ impl Engine {
         biaser: Option<&bias::Biaser>,
         ctl: DecodeControls,
     ) -> Result<Vec<WordInfo>, GigasttError> {
+        ctl.check_abort()?;
         let cap = self.file_window_concurrency();
         if cap <= 1 {
             return self.decode_windows_serial(
@@ -345,6 +347,7 @@ impl Engine {
                 return Err(GigasttError::Cancelled);
             }
             while pending.len() < n_slots {
+                ctl.check_abort()?;
                 match next_owned_window(windows)? {
                     Some(w) => pending.push(w),
                     None => break,
@@ -399,7 +402,11 @@ impl Engine {
             words: mut merged,
             mut publisher,
         } = transcript;
-        while let Some(window) = windows.next_window()? {
+        loop {
+            ctl.check_abort()?;
+            let Some(window) = windows.next_window()? else {
+                break;
+            };
             let span = PcmSpan::from(&window);
             let end = span.end();
             let (updated, retained) =

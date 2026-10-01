@@ -34,6 +34,7 @@ impl Engine {
         hotwords: Option<&HotwordOverride>,
         ctl: DecodeControls,
     ) -> Result<TranscribeResult, GigasttError> {
+        ctl.check_abort()?;
         let use_vad = self.vad.is_some() && overrides.vad.unwrap_or(true);
         if let (true, Some(vad)) = (use_vad, &self.vad) {
             let wall_start = std::time::Instant::now();
@@ -47,6 +48,7 @@ impl Engine {
                 ctl.abort.map(|a| a as &dyn Fn() -> bool),
             );
             let mut words = self.decode_words_streaming(&mut windows, triplet, biaser, ctl)?;
+            ctl.check_abort()?;
             if !windows.needs_fallback() {
                 // Words are decoded on the compressed (silence-removed)
                 // timeline; put them back on the clip's own.
@@ -71,7 +73,7 @@ impl Engine {
                     regions = regions.len(),
                     "transcribe complete (streaming windows, vad)"
                 );
-                return Ok(self.finish_transcribe_result(words, duration_s, overrides));
+                return self.finish_transcribe_result(words, duration_s, overrides, ctl);
             }
             // Either the VAD found no speech at all — tone or continuous speech
             // against a bad threshold — or the model failed mid-stream (already
@@ -79,6 +81,7 @@ impl Engine {
             // rather than returning an empty transcript.
             tracing::warn!("VAD produced no usable speech regions; decoding full audio");
         }
+        ctl.check_abort()?;
         self.transcribe_stream_mono(
             open(window_spec(self.ane_encoder, self.variant.is_ctc()))?,
             triplet,
@@ -116,7 +119,7 @@ impl Engine {
         let words = self.decode_words_streaming(&mut windows, triplet, biaser, ctl)?;
         // Exact once every window is consumed (the loop above drains to EOF).
         let duration_s = windows.total_16k_samples() as f64 / 16000.0;
-        let result = self.finish_transcribe_result(words, duration_s, overrides);
+        let result = self.finish_transcribe_result(words, duration_s, overrides, ctl)?;
 
         let wall_s = wall_start.elapsed().as_secs_f64();
         let rtf = if duration_s > 0.0 {
