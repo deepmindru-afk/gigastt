@@ -187,6 +187,12 @@ pub(super) fn push_mono_mix(pcm: &[f32], channels: usize, frames: usize, out: &m
     }
 }
 
+#[cfg(feature = "file-decode")]
+#[cfg(test)]
+thread_local! {
+    pub(super) static CHANNEL_DECODE_PASSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Decode the packets of an Opus track (OGG container) to per-channel f32
 /// samples at 48 kHz.
 ///
@@ -208,6 +214,8 @@ pub(super) fn decode_opus_channels(
     max_samples: usize,
     limit_secs: f64,
 ) -> Result<Vec<Vec<f32>>> {
+    #[cfg(test)]
+    CHANNEL_DECODE_PASSES.with(|count| count.set(count.get() + 1));
     check_opus_channels(channels)?;
     let mut decoder = new_opus_decoder(channels)?;
     let mut per_channel: Vec<Vec<f32>> = (0..channels).map(|_| Vec::new()).collect();

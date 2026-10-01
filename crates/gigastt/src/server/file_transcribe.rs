@@ -241,8 +241,24 @@ fn with_file_transcribe_request<T>(
         // whole file and correlating two of them, which is what pinned this
         // path to a duration ceiling. The scan answers it in one pass — from
         // the header alone unless the file is exactly stereo.
-        let scan = gigastt_core::inference::audio::scan_channels(body.clone(), opts.max_audio_secs)
-            .map_err(map_decode_error)?;
+        let use_vad = has_vad && opts.overrides.vad.unwrap_or(true);
+        let prepared = if use_vad {
+            gigastt_core::inference::audio::prepare_channels_for_vad(
+                body.clone(),
+                opts.max_audio_secs,
+            )
+            .map_err(map_decode_error)?
+        } else {
+            gigastt_core::inference::audio::PreparedChannels {
+                scan: gigastt_core::inference::audio::scan_channels(
+                    body.clone(),
+                    opts.max_audio_secs,
+                )
+                .map_err(map_decode_error)?,
+                decoded: None,
+            }
+        };
+        let scan = prepared.scan;
         if let Some(channels) = &opts.progress_channels {
             let count = if scan.mono_fallback_reason().is_some() {
                 1
@@ -256,16 +272,18 @@ fn with_file_transcribe_request<T>(
                 "channels=split requested but {reason} detected; falling back to mono transcription"
             );
             transcribe(opts.request(TranscribeSource::Bytes(body)))
-        } else if has_vad && opts.overrides.vad.unwrap_or(true) {
+        } else if use_vad {
             // The per-channel VAD pass still needs each channel resident, so a
             // VAD-enabled server keeps the whole-buffer split (and its ceiling)
             // until the VAD itself runs inside the window loop.
-            let channels =
-                gigastt_core::inference::audio::decode_audio_bytes_shared_channels_bounded(
+            let channels = match prepared.decoded {
+                Some(channels) => channels,
+                None => gigastt_core::inference::audio::decode_audio_bytes_shared_channels_bounded(
                     body,
                     opts.max_audio_secs,
                 )
-                .map_err(map_decode_error)?;
+                .map_err(map_decode_error)?,
+            };
             transcribe(opts.request(TranscribeSource::Channels(&channels)))
         } else {
             transcribe(opts.request(TranscribeSource::ChannelStreams {
@@ -315,7 +333,25 @@ mod tests {
 
     #[test]
     fn test_channel_routing_preserves_request_context() {
-        for (channels, dual_mono) in [(1, false), (2, true), (2, false)] {
+        for (fixture, channels, dual_mono) in [
+            (channel_fixture(1, false), 1, false),
+            (channel_fixture(2, true), 2, true),
+            (channel_fixture(2, false), 2, false),
+            (
+                Bytes::from_static(include_bytes!(
+                    "../../../gigastt-core/tests/fixtures/opus/dual.ogg"
+                )),
+                2,
+                true,
+            ),
+            (
+                Bytes::from_static(include_bytes!(
+                    "../../../gigastt-core/tests/fixtures/opus/late_stereo.ogg"
+                )),
+                2,
+                false,
+            ),
+        ] {
             for has_vad in [false, true] {
                 for vad in [None, Some(false), Some(true)] {
                     for enabled in [false, true] {
@@ -337,11 +373,11 @@ mod tests {
                                 progress: Some(Arc::new(AtomicU64::new(0))),
                                 progress_channels: Some(Arc::new(AtomicU64::new(0))),
                                 diarization_outcome: Some(Arc::new(Default::default())),
-                                max_audio_secs: Some(1.0),
+                                max_audio_secs: Some(3.0),
                                 ..Default::default()
                             };
                             with_file_transcribe_request(
-                                channel_fixture(channels, dual_mono),
+                                fixture.clone(),
                                 &opts,
                                 has_vad,
                                 |request| {
