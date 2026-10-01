@@ -13,6 +13,12 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 
 ## [Unreleased]
 
+### Performance
+
+- Skip confidence normalization for discarded CTC blanks and repeated labels,
+  and RNN-T blanks and tokens beyond the per-frame cap. Emitted confidence still
+  uses the original model logits.
+
 ### Changed
 
 - Run a bounded, serial model smoke gate on every PR: pinned CPU encoder and

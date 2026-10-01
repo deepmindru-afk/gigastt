@@ -69,9 +69,16 @@ pub(crate) fn argmax(logits: &[f32], blank_id: usize) -> usize {
         .unwrap_or(blank_id)
 }
 
-/// Softmax probability `logits` assigns to `token`. Zero for an empty buffer or
-/// a token beyond it.
+#[cfg(test)]
+thread_local! {
+    pub(super) static CONFIDENCE_NORMALIZATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Softmax probability assigned by the original model logits.
+/// Zero for an empty buffer or a token beyond it.
 pub(crate) fn token_confidence(logits: &[f32], token: usize) -> f32 {
+    #[cfg(test)]
+    CONFIDENCE_NORMALIZATIONS.with(|count| count.set(count.get() + 1));
     let Some(&logit) = logits.get(token) else {
         return 0.0;
     };
@@ -83,6 +90,7 @@ pub(crate) fn token_confidence(logits: &[f32], token: usize) -> f32 {
 /// Argmax with softmax confidence score.
 ///
 /// Returns `(token_id, confidence)` where confidence is the softmax probability.
+#[cfg(test)]
 pub(crate) fn argmax_with_confidence(logits: &[f32], blank_id: usize) -> (usize, f32) {
     if logits.is_empty() {
         return (blank_id, 0.0);
@@ -334,7 +342,7 @@ pub fn greedy_decode(
 /// it decides the pick, it does not get to report on it. A pick it flips
 /// spends this frame's override budget — see [`MAX_BIAS_OVERRIDES_PER_STEP`].
 ///
-/// Returns `(token, confidence, spent_override)`.
+/// Returns `(token, spent_override)`. Confidence is calculated only on emission.
 fn select_token(
     logits: &[f32],
     blank_id: usize,
@@ -342,7 +350,7 @@ fn select_token(
     bias_state: Option<&super::bias::BiasState>,
     bias_overrides: usize,
     biased_buf: &mut Vec<f32>,
-) -> (usize, f32, bool) {
+) -> (usize, bool) {
     match (biaser, bias_state) {
         (Some(b), Some(bs)) if bias_overrides < MAX_BIAS_OVERRIDES_PER_STEP => {
             biased_buf.clear();
@@ -350,12 +358,9 @@ fn select_token(
             b.boost_logits(bs, biased_buf);
             let boosted = argmax(biased_buf, blank_id);
             let spent = boosted != argmax(logits, blank_id);
-            (boosted, token_confidence(logits, boosted), spent)
+            (boosted, spent)
         }
-        _ => {
-            let (token, confidence) = argmax_with_confidence(logits, blank_id);
-            (token, confidence, false)
-        }
+        _ => (argmax(logits, blank_id), false),
     }
 }
 
@@ -498,7 +503,7 @@ fn greedy_decode_impl_with_abort<B: DecodeBackend>(
             )?;
 
             // === CONTEXTUAL HOTWORD BIASING (shallow fusion) ===
-            let (token, confidence, spent) = select_token(
+            let (token, spent) = select_token(
                 &logits_buf,
                 blank_id,
                 biaser,
@@ -538,7 +543,7 @@ fn greedy_decode_impl_with_abort<B: DecodeBackend>(
             tokens.push(TokenInfo {
                 token_id: token,
                 frame_index: t,
-                confidence,
+                confidence: token_confidence(&logits_buf, token),
             });
             tokens_this_step += 1;
         }

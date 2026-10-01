@@ -11,7 +11,7 @@
 //! `[1, D, T]` layout (see [`super::decode::extract_encoder_frame`]).
 
 use super::bias::{BiasPath, Biaser};
-use super::decode::{TokenInfo, argmax_with_confidence};
+use super::decode::{TokenInfo, argmax, token_confidence};
 use super::tokenizer::{Tokenizer, WORD_BOUNDARY};
 use super::{SECONDS_PER_FRAME, WordInfo};
 
@@ -341,7 +341,7 @@ pub(crate) fn ctc_greedy_decode_with_abort(
             break;
         }
         let row = &log_probs[t * vocab..(t + 1) * vocab];
-        let (id, confidence) = argmax_with_confidence(row, blank_id);
+        let id = argmax(row, blank_id);
         // Collapse: skip a frame whose argmax equals the previous frame's argmax
         // (blank or not). Tracking the raw argmax — not the last *emitted* token —
         // is what makes a blank between two identical labels keep both.
@@ -355,7 +355,7 @@ pub(crate) fn ctc_greedy_decode_with_abort(
         out.push(TokenInfo {
             token_id: id,
             frame_index: t,
-            confidence,
+            confidence: token_confidence(row, id),
         });
     }
     out
