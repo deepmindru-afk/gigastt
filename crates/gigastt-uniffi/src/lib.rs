@@ -225,10 +225,21 @@ impl Stream {
         Ok(segs.into_iter().map(segment_from).collect())
     }
 
-    /// Flush remaining buffered audio and return any final segment(s).
+    /// Decode remaining buffered audio and return any final segment(s).
+    /// Failure leaves previously returned text incomplete and requires a new stream.
+    /// Successful flushes allow further chunks.
     pub fn flush(&self) -> Result<Vec<TranscriptSegment>, GigasttFfiError> {
-        let mut guard = self.inner.lock().expect("stream mutex poisoned");
-        let seg = self.engine.inner.flush_state(&mut guard.state);
+        let mut guard = self.inner.lock().map_err(|_| GigasttFfiError::Inference {
+            msg: "Stream mutex poisoned".into(),
+        })?;
+        let StreamInner { state, reservation } = &mut *guard;
+        let seg = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.engine.inner.try_finish_stream(state, reservation)
+        }))
+        .map_err(|_| GigasttFfiError::Inference {
+            msg: "Final transcription panicked".into(),
+        })?
+        .map_err(GigasttFfiError::from)?;
         Ok(seg.into_iter().map(segment_from).collect())
     }
 }
@@ -291,6 +302,42 @@ mod tests {
         match GigasttFfiError::from(core) {
             GigasttFfiError::Inference { msg } => assert_eq!(msg, "decoder failed"),
             other => panic!("expected Inference, got {other}"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod finalization_tests {
+    use super::*;
+
+    #[test]
+    fn test_flush_tail_failure_returns_error_without_poisoning_mutex() {
+        for joiner in [false, true] {
+            for panic in [false, true] {
+                let tmp = tempfile::tempdir().unwrap();
+                gigastt_core::test_support::write_rnnt_layout(tmp.path()).unwrap();
+                let factory = gigastt_core::test_support::FailingStreamFactory::new(joiner, panic);
+                let core = gigastt_core::test_support::load_rnnt_engine_with_factory(
+                    tmp.path(),
+                    1,
+                    Box::new(factory.clone()),
+                )
+                .unwrap();
+                factory.arm(1);
+                let stream = Stream::new(Arc::new(Engine { inner: core })).unwrap();
+                assert!(
+                    stream
+                        .process_chunk(vec![0; 3200], 16000)
+                        .unwrap()
+                        .is_empty()
+                );
+                assert!(matches!(
+                    stream.flush(),
+                    Err(GigasttFfiError::Inference { .. })
+                ));
+                assert!(stream.inner.lock().unwrap().state.is_failed());
+                assert!(stream.flush().is_err());
+            }
         }
     }
 }

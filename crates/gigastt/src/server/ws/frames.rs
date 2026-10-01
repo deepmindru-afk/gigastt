@@ -511,10 +511,10 @@ pub(super) async fn handle_stop_message(
         let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             match reservation.as_mut() {
                 // Final decode of audio buffered since the last strided decode
-                // so trailing words aren't lost. Falls back to a plain flush
-                // if the triplet was already returned to the pool.
-                Some(res) => eng.finish_stream(&mut state, res),
-                None => eng.flush_state(&mut state),
+                // so trailing words aren't lost. A missing triplet cannot
+                // establish that all pending audio was decoded.
+                Some(res) => eng.try_finish_stream(&mut state, res),
+                None => Err(gigastt_core::error::GigasttError::Cancelled),
             }
         }));
         (r, reservation)
@@ -528,24 +528,26 @@ pub(super) async fn handle_stop_message(
         }
     };
     let flush_seg = match joined {
-        Ok((Ok(seg), reservation_back)) => {
-            // Drop after the join so the pool slot is held for the duration of
-            // the final decode (same lifetime as the pre-offload path).
+        Ok((Ok(Ok(seg)), reservation_back)) => {
             drop(reservation_back);
             seg
         }
+        Ok((Ok(Err(error)), reservation_back)) => {
+            drop(reservation_back);
+            tracing::error!("Final WS decode failed for {peer}: {error:#}");
+            send_finish_error(sink, control.partial.get(), error.code()).await?;
+            return Ok(FrameOutcome::Break);
+        }
         Ok((Err(_panic), reservation_back)) => {
             drop(reservation_back);
-            tracing::error!(
-                "Panic in WS finish_stream for {peer} — triplet recovered, emitting empty Final"
-            );
-            None
+            tracing::error!("Panic in WS final decode for {peer} — triplet recovered");
+            send_finish_error(sink, control.partial.get(), "inference_panic").await?;
+            return Ok(FrameOutcome::Break);
         }
-        Err(e) => {
-            // spawn_blocking failed (runtime shutdown). Reservation was moved
-            // into the task and dropped with it → pool recovers automatically.
-            tracing::error!("spawn_blocking join error on WS stop for {peer}: {e}");
-            return Err(anyhow::anyhow!("Blocking task join failed"));
+        Err(error) => {
+            tracing::error!("Blocking task join error on WS stop for {peer}: {error}");
+            send_finish_error(sink, control.partial.get(), "inference_panic").await?;
+            return Ok(FrameOutcome::Break);
         }
     };
 
@@ -560,6 +562,32 @@ pub(super) async fn handle_stop_message(
     };
     send_server_message(sink, &final_msg).await?;
     Ok(FrameOutcome::Break)
+}
+
+/// A failed stop preserves readable text but never masquerades as a successful final.
+async fn send_finish_error(
+    sink: &mut WsSink,
+    partial: Option<gigastt_core::inference::TranscriptSegment>,
+    code: &str,
+) -> Result<()> {
+    if let Some(partial) = partial.filter(|segment| !segment.text.is_empty()) {
+        send_server_message(sink, &ServerMessage::Partial(partial)).await?;
+    }
+    send_server_message(
+        sink,
+        &ServerMessage::Error {
+            code: code.into(),
+            message: "Failed to finish transcription.".into(),
+            retry_after_ms: None,
+        },
+    )
+    .await?;
+    sink.send(WsMessage::Close(Some(axum::extract::ws::CloseFrame {
+        code: 1011,
+        reason: "final transcription failed".into(),
+    })))
+    .await?;
+    Ok(())
 }
 
 /// Flush any pending streaming state and emit a `Final` frame (even an empty

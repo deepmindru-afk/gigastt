@@ -124,10 +124,27 @@ async fn openai_transcriptions_stream(
             ))
         };
 
+        let partial = Arc::new(gigastt_core::inference::TranscriptSnapshot::default());
+        let mut asm = OpenAIStreamAssembler::new();
+        let report_error = |asm: &mut OpenAIStreamAssembler, code, message: &str| {
+            if let Some(segment) = partial.get()
+                && let Some(delta) = asm.push_segment(&segment.text, false)
+                && !send(sse_delta_payload(&delta))
+            {
+                return;
+            }
+            let _ = send(super::stream::sse_data_payload(&Err(
+                super::stream::StreamError {
+                    code,
+                    message: message.into(),
+                },
+            )));
+        };
+
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let mut stream_state = engine.create_state(false);
             stream_state.abort = Some(abort.clone());
-            let mut asm = OpenAIStreamAssembler::new();
+            stream_state.partial = Some(partial.clone());
             let mut chunks = chunks;
 
             loop {
@@ -140,9 +157,7 @@ async fn openai_transcriptions_stream(
                     Ok(None) => break,
                     Err(e) => {
                         tracing::error!("OpenAI SSE audio decode error: {e:#}");
-                        if send(sse_done_payload(asm.text())) {
-                            let _ = send("[DONE]".into());
-                        }
+                        report_error(&mut asm, "invalid_audio", "Failed to decode audio file.");
                         return;
                     }
                 };
@@ -158,21 +173,26 @@ async fn openai_transcriptions_stream(
                     }
                     Err(e) => {
                         tracing::error!("OpenAI SSE transcription error: {e}");
-                        // Surface a final done with whatever we have so clients
-                        // do not hang; OpenAI stream errors are not standardized.
-                        if send(sse_done_payload(asm.text())) {
-                            let _ = send("[DONE]".into());
-                        }
+                        report_error(&mut asm, e.code(), "Transcription failed.");
                         return;
                     }
                 }
             }
 
-            if let Some(seg) = engine.finish_stream(&mut stream_state, &mut reservation)
-                && let Some(delta) = asm.push_segment(&seg.text, seg.is_final)
-                && !send(sse_delta_payload(&delta))
-            {
-                return;
+            match engine.try_finish_stream(&mut stream_state, &mut reservation) {
+                Ok(Some(segment)) => {
+                    if let Some(delta) = asm.push_segment(&segment.text, segment.is_final)
+                        && !send(sse_delta_payload(&delta))
+                    {
+                        return;
+                    }
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    tracing::error!("Final OpenAI SSE decode failed: {error:#}");
+                    report_error(&mut asm, error.code(), "Failed to finish transcription.");
+                    return;
+                }
             }
 
             if send(sse_done_payload(asm.text())) {
@@ -182,9 +202,11 @@ async fn openai_transcriptions_stream(
 
         if result.is_err() {
             tracing::error!("Panic in OpenAI SSE inference task — triplet recovered");
-            if send(sse_done_payload("")) {
-                let _ = send("[DONE]".into());
-            }
+            report_error(
+                &mut asm,
+                "inference_panic",
+                "Inference failed unexpectedly.",
+            );
         }
         // reservation dropped → pool
     });
