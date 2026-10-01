@@ -98,6 +98,9 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 - Load the lazy speaker model for WebSocket Configure on a blocking worker,
   keeping async workers responsive and honoring shutdown and disconnect while
   initialization is in progress.
+- Cancel stalled native and OpenAI file SSE producers after a 30-second output
+  wait, and interrupt full-queue sends on shutdown or disconnect so unread
+  responses cannot indefinitely retain inference slots.
 
 - **WebSocket sessions no longer panic on startup when
   `GIGASTT_MAX_SESSION_SECS=0`.** Previously, the unlimited-session deadline

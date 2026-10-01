@@ -24,9 +24,22 @@ When the server receives `SIGTERM` (or the `run_with_shutdown` oneshot fires):
 
 1. A process-wide `CancellationToken` is cancelled.
 2. Every live WebSocket session observes shutdown even while waiting for a blocking decode. An in-flight run receives the shared abort flag; the client receives its last available `Partial`, a `cancelled` error, `Final`, and `Close(1001 Going Away)`. Idle sessions flush and close as before.
-3. SSE producers also link shutdown and receiver disconnect to their decode abort flag. Cancellation ends the stream; any partial already received remains usable.
+3. SSE producers also link shutdown and receiver disconnect to their decode abort flag. Cancellation ends the stream; any partial already received remains usable. A full output queue is interrupted immediately by shutdown or disconnect; terminal events are best effort and never delay shutdown.
 4. After `axum::serve` returns, the main task waits up to `shutdown_drain_secs` seconds for the `TaskTracker` to report all tracked WS / SSE futures complete.
 5. If the drain window expires with tracked tasks still running, a WARN is emitted (`Drain window expired with tracked tasks still running`) and the process exits anyway.
+
+File-stream output backpressure (`/v1/transcribe/stream` and OpenAI
+`stream=true`) has a separate **30-second send limit**. The native stream keeps
+at most 16 queued events and the OpenAI stream at most 32; events remain in FIFO
+order and are not coalesced. If a full queue cannot accept the next event within
+30 seconds, only that transcription is cancelled and its inference reservation
+is released. Pending final/error events may be omitted; OpenAI `[DONE]` is never
+queued after a failed preceding completion event. Already queued events can
+still drain if the reader resumes.
+
+This bounds output waits, not the duration of an active native inference call.
+Inference cancellation remains cooperative between runtime calls; the file SSE
+paths do not currently use the REST no-progress inference watchdog.
 
 ### Rollback: disable graceful drain
 
