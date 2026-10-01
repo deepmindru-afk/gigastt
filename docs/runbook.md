@@ -94,7 +94,10 @@ For REST and jobs, this is a **no-progress watchdog**. The deadline
 resets every time a decode window completes, so a file that keeps making
 progress never trips it no matter how long it is — do not raise this value
 "for long files". Audio length is governed by `--max-audio-secs` (default
-`0` = unlimited) instead.
+`0` = unlimited) instead. Split-channel decoding accumulates work across
+channels, so starting the next channel does not reset the watchdog. Progress is
+sampled every 100 ms. With prompt runtime scheduling, a stalled run is detected
+within the timeout plus at most 100 ms after its last progress update.
 
 WebSocket applies the timeout to each chunk decode and the Stop/finalize decode.
 On timeout, disconnect, job DELETE, or shutdown, the same per-run abort flag

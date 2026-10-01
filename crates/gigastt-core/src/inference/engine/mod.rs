@@ -47,7 +47,8 @@ type PartialSink<'a> = &'a dyn Fn(&[WordInfo]);
 /// Absent hooks preserve the historical decode path. `abort` is polled before
 /// encoding and between tokens/frames; a native encoder Run is not interrupted.
 /// `on_progress` receives cumulative processed 16 kHz samples after each whole
-/// window; `on_partial` receives provisional words, including on cancellation.
+/// window, summed across channels; `on_partial` receives provisional words,
+/// including on cancellation.
 #[derive(Clone, Copy, Default)]
 pub(crate) struct DecodeControls<'a> {
     pub(crate) abort: Option<&'a (dyn Fn() -> bool + Sync)>,
@@ -80,18 +81,6 @@ impl DecodeControls<'_> {
     pub(crate) fn report(&self, processed_16k_samples: u64) {
         if let Some(on_progress) = self.on_progress {
             on_progress(processed_16k_samples);
-        }
-    }
-
-    /// Drop the progress sink but keep the abort hook. Used for the
-    /// `channels=split` path, where each channel restarts the sample clock and a
-    /// shared monotonic progress counter would go backwards.
-    #[inline]
-    pub(crate) fn abort_only(&self) -> Self {
-        Self {
-            abort: self.abort,
-            on_progress: None,
-            on_partial: self.on_partial,
         }
     }
 }

@@ -91,7 +91,7 @@ pub struct JobStatusResponse {
 /// Build a public status view from a stored job.
 pub(crate) fn job_status_response(job: &Job) -> JobStatusResponse {
     let percent = if job.total_seconds > 0.0 {
-        ((job.processed_seconds / job.total_seconds) * 100.0) as u32
+        (((job.processed_seconds / job.total_seconds) * 100.0) as u32).min(100)
     } else {
         0
     };

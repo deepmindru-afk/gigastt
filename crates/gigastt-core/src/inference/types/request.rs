@@ -79,7 +79,10 @@ pub struct TranscribeRequest<'a> {
     pub partial: Option<Arc<crate::inference::TranscriptSnapshot>>,
     /// Optional progress sink. When set, the long-form decode stores the number
     /// of 16 kHz samples processed so far (monotonically increasing, ending at
-    /// the decoded length) after each window completes. A server watchdog reads
+    /// the decoded length for mono, or the sum of channel lengths for split
+    /// channels) after each window completes. This measures work, not a completion
+    /// percentage: divide by the number of channels when presenting audio time.
+    /// A server watchdog reads
     /// it both to reset its no-progress deadline and to drive a real per-window
     /// job progress bar. `None` (the default) reports nothing.
     pub progress: Option<Arc<AtomicU64>>,
