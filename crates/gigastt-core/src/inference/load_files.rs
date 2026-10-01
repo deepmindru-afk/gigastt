@@ -59,6 +59,7 @@ pub(crate) struct ResolvedModelFiles {
     pub joint: Option<std::path::PathBuf>,
     pub vocab: std::path::PathBuf,
     pub using_int8: bool,
+    encoder_hash: Option<String>,
 }
 
 impl ResolvedModelFiles {
@@ -75,6 +76,7 @@ impl ResolvedModelFiles {
                 joint: m.joint_path(dir),
                 vocab: m.vocab_path(dir),
                 using_int8: true,
+                encoder_hash: None,
             });
         }
         Self::from_variant(dir, variant)
@@ -97,6 +99,7 @@ impl ResolvedModelFiles {
                 joint: None,
                 vocab: dir.join(variant.vocab_file()),
                 using_int8: true,
+                encoder_hash: None,
             })
         } else {
             Ok(Self {
@@ -105,6 +108,7 @@ impl ResolvedModelFiles {
                 joint: Some(dir.join(variant.joint_file())),
                 vocab: dir.join(variant.vocab_file()),
                 using_int8: true,
+                encoder_hash: None,
             })
         }
     }
@@ -112,7 +116,7 @@ impl ResolvedModelFiles {
     /// Check every resolved file that has a pinned digest. Custom
     /// `manifest.toml` names with no table entry are skipped.
     pub(crate) fn verify_pinned_checksums(
-        &self,
+        &mut self,
         variant: ModelVariant,
     ) -> Result<(), GigasttError> {
         let mut files: Vec<&std::path::Path> = vec![&self.encoder, &self.vocab];
@@ -130,6 +134,19 @@ impl ResolvedModelFiles {
                 continue;
             };
             crate::model::verify_pinned_checksum(path, expected)?;
+            if path == self.encoder {
+                // Pinned bundles are self-contained; reuse the verified digest.
+                self.encoder_hash = Some(expected.to_owned());
+            }
+        }
+        if self.encoder_hash.is_none() {
+            self.encoder_hash =
+                crate::model::optimized_source_hash(&self.encoder).map_err(|e| {
+                    GigasttError::ModelLoad {
+                        path: self.encoder.display().to_string(),
+                        source: Some(e.into()),
+                    }
+                })?;
         }
         Ok(())
     }
@@ -182,7 +199,11 @@ pub(crate) fn load_triplets_runtime(
                             i + 1
                         );
                         let encoder = runtime
-                            .load_session(encoder_path, true)
+                            .load_session_with_model_hash(
+                                encoder_path,
+                                true,
+                                files.encoder_hash.as_deref(),
+                            )
                             .map_err(|e| anyhow::anyhow!(e))?;
                         let (decoder, joiner) = if is_ctc {
                             (None, None)

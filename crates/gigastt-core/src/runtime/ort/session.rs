@@ -53,43 +53,76 @@ fn load_failed(path: &Path, e: impl std::fmt::Display) -> RuntimeError {
     }
 }
 
-/// Pure freshness decision for an ORT optimized-graph cache entry: the cache
-/// must be non-empty and no older than the source model it was derived from.
-/// An ORT/binary upgrade typically rewrites the source model install or fails
-/// to load the stale graph — the load-failure fallback covers the latter.
-fn cache_is_fresh(
-    cache_len: u64,
-    cache_mtime: std::time::SystemTime,
-    source_mtime: std::time::SystemTime,
-) -> bool {
-    cache_len > 0 && cache_mtime >= source_mtime
-}
-
-/// Filesystem wiring for [`cache_is_fresh`]: any metadata error (missing cache,
-/// missing source, unreadable mtime) means "not fresh" so the caller falls
-/// back to loading the source model and rewriting the cache.
-fn optimized_cache_is_fresh(cache_path: &Path, source_path: &Path) -> bool {
-    let (Ok(cache), Ok(source)) = (
-        std::fs::metadata(cache_path),
-        std::fs::metadata(source_path),
-    ) else {
-        return false;
-    };
-    match (cache.modified(), source.modified()) {
-        (Ok(cache_mtime), Ok(source_mtime)) => {
-            cache_is_fresh(cache.len(), cache_mtime, source_mtime)
-        }
-        _ => false,
+/// Level3 may specialize layouts for CPU vector capabilities. A graph built
+/// on an AVX512 host must not be selected on an AVX2-only host with the same OS.
+fn cpu_isa() -> String {
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    {
+        format!(
+            "sse2={};sse41={};avx={};avx2={};fma={};avx512f={};avx512bw={};avx512dq={};avx512vl={};avx512vnni={};avx512bf16={};avx512fp16={};avxvnni={}",
+            std::is_x86_feature_detected!("sse2"),
+            std::is_x86_feature_detected!("sse4.1"),
+            std::is_x86_feature_detected!("avx"),
+            std::is_x86_feature_detected!("avx2"),
+            std::is_x86_feature_detected!("fma"),
+            std::is_x86_feature_detected!("avx512f"),
+            std::is_x86_feature_detected!("avx512bw"),
+            std::is_x86_feature_detected!("avx512dq"),
+            std::is_x86_feature_detected!("avx512vl"),
+            std::is_x86_feature_detected!("avx512vnni"),
+            std::is_x86_feature_detected!("avx512bf16"),
+            std::is_x86_feature_detected!("avx512fp16"),
+            std::is_x86_feature_detected!("avxvnni")
+        )
+    }
+    #[cfg(target_arch = "aarch64")]
+    {
+        format!(
+            "neon={};fp16={};dotprod={};i8mm={};bf16={};sve={};sve2={}",
+            std::arch::is_aarch64_feature_detected!("neon"),
+            std::arch::is_aarch64_feature_detected!("fp16"),
+            std::arch::is_aarch64_feature_detected!("dotprod"),
+            std::arch::is_aarch64_feature_detected!("i8mm"),
+            std::arch::is_aarch64_feature_detected!("bf16"),
+            std::arch::is_aarch64_feature_detected!("sve"),
+            std::arch::is_aarch64_feature_detected!("sve2")
+        )
+    }
+    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64", target_arch = "aarch64")))]
+    {
+        std::env::consts::ARCH.to_owned()
     }
 }
 
-/// Path of the optimized graph ORT writes for `model_path` under `cache_dir`.
-/// Uses the same basename rule as `model::cache::optimized_cache_basename` so
-/// the file we write here is exactly the one `cache-gc` keeps.
-fn optimized_cache_path(cache_dir: &Path, model_path: &Path) -> std::path::PathBuf {
-    let basename = crate::model::optimized_cache_basename(model_path)
-        .unwrap_or_else(|| "encoder_optimized.ort".into());
-    cache_dir.join(basename)
+/// A cache entry is identified by source bytes and the exact optimization policy.
+/// Bump this policy when changing serialization, provider, or builder settings.
+fn settings_hash(runtime_info: &str, intra_threads: usize, prepacked: bool, isa: &str) -> String {
+    use crate::sha256::{Sha256, hex_lower};
+    let policy = format!(
+        "v1;ort={runtime_info};api={};cpu;level=3;intra={};inter=1;prepacked={prepacked};format=ORT;mmap=1;initializers=1;cached-prepacking=0;os={};arch={};endian={};isa={isa}",
+        ort::MINOR_VERSION,
+        intra_threads.max(1),
+        std::env::consts::OS,
+        std::env::consts::ARCH,
+        cfg!(target_endian = "little"),
+    );
+    let mut hash = Sha256::new();
+    hash.update(policy.as_bytes());
+    hex_lower(&hash.finalize())
+}
+
+impl OrtRuntime {
+    fn cache_path(&self, cache_dir: &Path, source_hash: &str) -> std::path::PathBuf {
+        cache_dir.join(crate::model::optimized_content_basename(
+            source_hash,
+            &settings_hash(
+                ort::info(),
+                self.intra_threads,
+                self.prepacked.is_some(),
+                &cpu_isa(),
+            ),
+        ))
+    }
 }
 
 /// Stage beside the destination so rename publishes a complete graph atomically.
@@ -165,7 +198,10 @@ impl OrtRuntime {
         model_path: &Path,
         is_encoder: bool,
     ) -> Result<ort::session::builder::SessionBuilder, RuntimeError> {
-        let mut builder = Session::builder().map_err(|e| load_failed(model_path, e))?;
+        let mut builder = Session::builder()
+            .map_err(|e| load_failed(model_path, e))?
+            .with_optimization_level(ort::session::builder::GraphOptimizationLevel::Level3)
+            .map_err(|e| load_failed(model_path, e))?;
 
         if let Some(prepacked) = self.prepacked.as_ref() {
             builder = builder
@@ -211,13 +247,17 @@ impl OrtRuntime {
     /// Prepacking is disabled on this path — for this model it only
     /// duplicated the weights into per-session buffers (~145 MiB each) with
     /// no measurable RTF benefit.
-    fn try_load_cached_encoder(&self, model_path: &Path) -> Option<Result<Session, RuntimeError>> {
+    fn try_load_cached_encoder(
+        &self,
+        model_path: &Path,
+        source_hash: &str,
+    ) -> Option<Result<Session, RuntimeError>> {
         if !self.provider.is_cpu() {
             return None;
         }
         let cache_dir = self.optimized_cache_dir.as_ref()?;
-        let cache_path = optimized_cache_path(cache_dir, model_path);
-        if !optimized_cache_is_fresh(&cache_path, model_path) {
+        let cache_path = self.cache_path(cache_dir, source_hash);
+        if !std::fs::metadata(&cache_path).is_ok_and(|meta| meta.is_file() && meta.len() > 0) {
             return None;
         }
         let result = self
@@ -268,12 +308,40 @@ impl Runtime for OrtRuntime {
         model_path: &Path,
         is_encoder: bool,
     ) -> Result<Box<dyn RuntimeSession>, RuntimeError> {
-        // Check freshness under the same gate as publication. Waiting pool
+        self.load_session_with_model_hash(model_path, is_encoder, None)
+    }
+
+    fn load_session_with_model_hash(
+        &self,
+        model_path: &Path,
+        is_encoder: bool,
+        source_hash: Option<&str>,
+    ) -> Result<Box<dyn RuntimeSession>, RuntimeError> {
+        let source_hash =
+            if is_encoder && self.provider.is_cpu() && self.optimized_cache_dir.is_some() {
+                match source_hash {
+                    Some(hash)
+                        if hash.len() == 64
+                            && hash
+                                .bytes()
+                                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) =>
+                    {
+                        Some(hash.to_owned())
+                    }
+                    _ => crate::model::optimized_source_hash(model_path)
+                        .map_err(|e| load_failed(model_path, e))?,
+                }
+            } else {
+                None
+            };
+        // Check identity under the same gate as publication. Waiting pool
         // triplets reuse the first writer's graph instead of re-optimizing it.
         let _cache_guard =
             (is_encoder && self.provider.is_cpu() && self.optimized_cache_dir.is_some())
                 .then(|| self.cache_load.lock());
-        if is_encoder && let Some(result) = self.try_load_cached_encoder(model_path) {
+        if let Some(hash) = source_hash.as_deref()
+            && let Some(result) = self.try_load_cached_encoder(model_path, hash)
+        {
             let session = result?;
             return Ok(Box::new(OrtSession {
                 session: Mutex::new(session),
@@ -289,7 +357,7 @@ impl Runtime for OrtRuntime {
         // treats that failure as fatal to `commit_from_file` — so on error
         // retry with a freshly built, cache-less builder (builders are cheap,
         // see `session_builder`).
-        let cache_path = if self.provider.is_cpu() && is_encoder {
+        let cache_path = if let Some(hash) = source_hash.as_deref() {
             self.usable_cache_dir
                 .get_or_init(|| {
                     self.optimized_cache_dir
@@ -297,7 +365,7 @@ impl Runtime for OrtRuntime {
                         .and_then(usable_optimized_cache_dir)
                 })
                 .as_ref()
-                .map(|dir| optimized_cache_path(dir, model_path))
+                .map(|dir| self.cache_path(dir, hash))
         } else {
             None
         };
@@ -333,14 +401,19 @@ impl Runtime for OrtRuntime {
 
         let session = match builder.commit_from_file(model_path) {
             Ok(session) => {
-                if let (Some(pending), Some(cache_path)) = (&pending_cache, &cache_path)
-                    && let Err(e) = std::fs::rename(&pending.0, cache_path)
-                {
-                    tracing::warn!(
-                        path = %cache_path.display(),
-                        error = %e,
-                        "encoder: cannot publish optimized graph cache; keeping the source model session"
-                    );
+                if let (Some(pending), Some(cache_path)) = (&pending_cache, &cache_path) {
+                    // A stale caller hint or source replacement during compilation
+                    // must never publish a graph under a different source's digest.
+                    match crate::model::optimized_source_hash(model_path) {
+                        Ok(current) if current.is_some() && current == source_hash => {
+                            if let Err(e) = std::fs::rename(&pending.0, cache_path) {
+                                tracing::warn!(path = %cache_path.display(), error = %e,
+                                    "encoder: cannot publish optimized graph cache; keeping the source model session");
+                            }
+                        }
+                        _ => tracing::warn!(path = %model_path.display(),
+                            "encoder: source changed or is not self-contained; discarding optimized graph cache"),
+                    }
                 }
                 session
             }
@@ -395,7 +468,6 @@ impl RuntimeSession for OrtSession {
 mod tests {
     use super::*;
     use std::io::Write;
-    use std::time::{Duration, SystemTime};
 
     fn write_file(path: &Path, bytes: &[u8]) {
         if let Some(parent) = path.parent() {
@@ -410,6 +482,13 @@ mod tests {
         write_file(path, b"\x08\x08\x3a\x40\x0a\x10\x0a\x01x\x12\x01y\x22\x08Identity\x12\x0acache-test\x5a\x0f\x0a\x01x\x12\x0a\x0a\x08\x08\x01\x12\x04\x0a\x02\x08\x01\x62\x0f\x0a\x01y\x12\x0a\x0a\x08\x08\x01\x12\x04\x0a\x02\x08\x01\x42\x02\x10\x0d");
     }
 
+    fn optimized_cache_path(cache_dir: &Path, model: &Path) -> std::path::PathBuf {
+        cached_runtime(cache_dir).cache_path(
+            cache_dir,
+            &crate::model::optimized_source_hash(model).unwrap().unwrap(),
+        )
+    }
+
     fn cached_runtime(cache_dir: &Path) -> OrtRuntime {
         OrtRuntime::new(
             1,
@@ -418,6 +497,188 @@ mod tests {
             None,
             Some(cache_dir.to_path_buf()),
         )
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore = "calls into onnxruntime FFI")]
+    fn test_cache_changed_contents_with_preserved_size_and_time() {
+        let tmp = tempfile::tempdir().unwrap();
+        let model = tmp.path().join("encoder.onnx");
+        let cache_dir = tmp.path().join("cache");
+        write_identity_model(&model);
+        let runtime = cached_runtime(&cache_dir);
+        drop(runtime.load_session(&model, true).unwrap());
+        let modified = std::fs::metadata(&model).unwrap().modified().unwrap();
+        let old = std::fs::read(&model).unwrap();
+        let replacement = String::from_utf8(old.clone())
+            .unwrap()
+            .replace("Identity", "Softsign");
+        assert_eq!(old.len(), replacement.len());
+        write_file(&model, replacement.as_bytes());
+        std::fs::File::options()
+            .write(true)
+            .open(&model)
+            .unwrap()
+            .set_modified(modified)
+            .unwrap();
+        let session = runtime.load_session(&model, true).unwrap();
+        let input = Tensor::new_checked(
+            crate::runtime::tensor::Shape::new(vec![1]),
+            crate::runtime::tensor::TensorData::F32(vec![42.0]),
+        );
+        let expected = Tensor::new_checked(
+            crate::runtime::tensor::Shape::new(vec![1]),
+            crate::runtime::tensor::TensorData::F32(vec![42.0 / 43.0]),
+        );
+        assert_eq!(session.run(&[input]).unwrap(), vec![expected]);
+    }
+
+    #[test]
+    fn test_cache_settings_include_runtime_threads_and_prepacking() {
+        let reference = settings_hash("runtime-a", 1, false, "avx2");
+        assert_ne!(reference, settings_hash("runtime-a", 1, false, "avx512"));
+        assert_ne!(reference, settings_hash("runtime-b", 1, false, "avx2"));
+        assert_ne!(reference, settings_hash("runtime-a", 2, false, "avx2"));
+        assert_ne!(reference, settings_hash("runtime-a", 1, true, "avx2"));
+        assert_eq!(reference, settings_hash("runtime-a", 0, false, "avx2"));
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore = "calls into onnxruntime FFI")]
+    fn test_cache_same_name_different_directories_and_thread_settings() {
+        let tmp = tempfile::tempdir().unwrap();
+        let first = tmp.path().join("one/encoder.onnx");
+        let second = tmp.path().join("two/encoder.onnx");
+        let cache_dir = tmp.path().join("cache");
+        write_identity_model(&first);
+        let bytes = String::from_utf8(std::fs::read(&first).unwrap()).unwrap();
+        write_file(&second, bytes.replace("Identity", "Softsign").as_bytes());
+        let runtime = cached_runtime(&cache_dir);
+        drop(runtime.load_session(&first, true).unwrap());
+        drop(runtime.load_session(&second, true).unwrap());
+        let mut other = cached_runtime(&cache_dir);
+        other.intra_threads = 2;
+        drop(other.load_session(&first, true).unwrap());
+        assert_eq!(std::fs::read_dir(&cache_dir).unwrap().count(), 3);
+        assert_ne!(
+            optimized_cache_path(&cache_dir, &first),
+            optimized_cache_path(&cache_dir, &second)
+        );
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore = "calls into onnxruntime FFI")]
+    fn test_cache_legacy_graph_is_not_loaded() {
+        let tmp = tempfile::tempdir().unwrap();
+        let model = tmp.path().join("encoder.onnx");
+        let cache_dir = tmp.path().join("cache");
+        write_identity_model(&model);
+        let legacy = cache_dir.join("encoder_optimized.ort");
+        write_file(&legacy, b"old graph");
+        drop(
+            cached_runtime(&cache_dir)
+                .load_session(&model, true)
+                .unwrap(),
+        );
+        assert_eq!(std::fs::read(&legacy).unwrap(), b"old graph");
+        assert_eq!(std::fs::read_dir(&cache_dir).unwrap().count(), 2);
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore = "calls into onnxruntime FFI")]
+    fn test_cache_stale_digest_hint_does_not_publish_source_graph() {
+        let tmp = tempfile::tempdir().unwrap();
+        let model = tmp.path().join("encoder.onnx");
+        let cache_dir = tmp.path().join("cache");
+        write_identity_model(&model);
+        drop(
+            cached_runtime(&cache_dir)
+                .load_session_with_model_hash(&model, true, Some(&"f".repeat(64)))
+                .unwrap(),
+        );
+        assert_eq!(std::fs::read_dir(&cache_dir).unwrap().count(), 0);
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore = "calls into onnxruntime FFI")]
+    fn test_cache_malformed_hash_hint_cannot_escape_directory() {
+        let tmp = tempfile::tempdir().unwrap();
+        let model = tmp.path().join("encoder.onnx");
+        let cache_dir = tmp.path().join("cache");
+        write_identity_model(&model);
+        let runtime = cached_runtime(&cache_dir);
+        for hint in ["../escape", "/outside", "not-a-digest"] {
+            drop(
+                runtime
+                    .load_session_with_model_hash(&model, true, Some(hint))
+                    .unwrap(),
+            );
+        }
+        assert!(optimized_cache_path(&cache_dir, &model).is_file());
+        assert_eq!(std::fs::read_dir(&cache_dir).unwrap().count(), 1);
+        assert_eq!(std::fs::read_dir(tmp.path()).unwrap().count(), 2);
+    }
+
+    fn protobuf_bytes(field: u8, data: &[u8]) -> Vec<u8> {
+        let mut out = vec![field << 3 | 2];
+        let mut len = data.len();
+        while len >= 128 {
+            out.push((len as u8 & 127) | 128);
+            len >>= 7;
+        }
+        out.push(len as u8);
+        out.extend_from_slice(data);
+        out
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore = "calls into onnxruntime FFI")]
+    fn test_cache_external_weights_changes_are_observed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let model = tmp.path().join("encoder.onnx");
+        let weights = tmp.path().join("weights.bin");
+        let cache_dir = tmp.path().join("cache");
+        // Add(x, w) -> y with w stored outside the ModelProto.
+        let mut node = protobuf_bytes(1, b"x");
+        node.extend(protobuf_bytes(1, b"w"));
+        node.extend(protobuf_bytes(2, b"y"));
+        node.extend(protobuf_bytes(4, b"Add"));
+        let mut tensor = vec![8, 1, 16, 1]; // dims=[1], FLOAT
+        tensor.extend(protobuf_bytes(8, b"w"));
+        let mut location = protobuf_bytes(1, b"location");
+        location.extend(protobuf_bytes(2, b"weights.bin"));
+        tensor.extend(protobuf_bytes(13, &location));
+        tensor.extend([112, 1]); // data_location=EXTERNAL
+        let mut graph = protobuf_bytes(1, &node);
+        graph.extend(protobuf_bytes(2, b"external-test"));
+        graph.extend(protobuf_bytes(5, &tensor));
+        graph.extend(protobuf_bytes(
+            11,
+            b"\x0a\x01x\x12\x0a\x0a\x08\x08\x01\x12\x04\x0a\x02\x08\x01",
+        ));
+        graph.extend(protobuf_bytes(
+            12,
+            b"\x0a\x01y\x12\x0a\x0a\x08\x08\x01\x12\x04\x0a\x02\x08\x01",
+        ));
+        let mut bytes = vec![8, 8];
+        bytes.extend(protobuf_bytes(7, &graph));
+        bytes.extend([66, 2, 16, 13]);
+        write_file(&model, &bytes);
+        let runtime = cached_runtime(&cache_dir);
+        for value in [42.0f32, 10.0] {
+            write_file(&weights, &value.to_le_bytes());
+            let session = runtime.load_session(&model, true).unwrap();
+            let input = Tensor::new_checked(
+                crate::runtime::tensor::Shape::new(vec![1]),
+                crate::runtime::tensor::TensorData::F32(vec![1.0]),
+            );
+            let expected = Tensor::new_checked(
+                crate::runtime::tensor::Shape::new(vec![1]),
+                crate::runtime::tensor::TensorData::F32(vec![value + 1.0]),
+            );
+            assert_eq!(session.run(&[input]).unwrap(), vec![expected]);
+        }
+        assert!(!cache_dir.exists());
     }
 
     #[test]
@@ -460,15 +721,34 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let model = tmp.path().join("encoder.onnx");
         let cache_dir = tmp.path().join("cache");
-        let cache = optimized_cache_path(&cache_dir, &model);
         write_identity_model(&model);
+        let cache = optimized_cache_path(&cache_dir, &model);
         write_file(&cache, b"invalid ORT");
         let runtime = cached_runtime(&cache_dir);
-        assert!(runtime.try_load_cached_encoder(&model).is_none());
+        assert!(
+            runtime
+                .try_load_cached_encoder(
+                    &model,
+                    &crate::model::optimized_source_hash(&model)
+                        .unwrap()
+                        .unwrap()
+                )
+                .is_none()
+        );
         // A failed reader must not delete a path another process can replace.
         assert_eq!(std::fs::read(&cache).unwrap(), b"invalid ORT");
         drop(runtime.load_session(&model, true).unwrap());
-        assert!(runtime.try_load_cached_encoder(&model).unwrap().is_ok());
+        assert!(
+            runtime
+                .try_load_cached_encoder(
+                    &model,
+                    &crate::model::optimized_source_hash(&model)
+                        .unwrap()
+                        .unwrap()
+                )
+                .unwrap()
+                .is_ok()
+        );
         assert_eq!(std::fs::read_dir(&cache_dir).unwrap().count(), 1);
     }
 
@@ -481,12 +761,15 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let model = tmp.path().join("encoder.onnx");
         let cache_dir = tmp.path().join("cache");
-        let cache = optimized_cache_path(&cache_dir, &model);
         write_identity_model(&model);
+        let cache = optimized_cache_path(&cache_dir, &model);
         let runtime = cached_runtime(&cache_dir);
         drop(runtime.load_session(&model, true).unwrap());
         let reader = std::fs::File::open(&cache).unwrap();
-        reader.set_modified(SystemTime::UNIX_EPOCH).unwrap();
+        // Replace the cached graph with invalid bytes. Keep the old mapped inode
+        // open; recovery must publish another file rather than truncating it.
+        std::fs::remove_file(&cache).unwrap();
+        write_file(&cache, b"broken cache");
 
         drop(runtime.load_session(&model, true).unwrap());
 
@@ -494,7 +777,17 @@ mod tests {
             reader.metadata().unwrap().ino(),
             std::fs::metadata(&cache).unwrap().ino()
         );
-        assert!(runtime.try_load_cached_encoder(&model).unwrap().is_ok());
+        assert!(
+            runtime
+                .try_load_cached_encoder(
+                    &model,
+                    &crate::model::optimized_source_hash(&model)
+                        .unwrap()
+                        .unwrap()
+                )
+                .unwrap()
+                .is_ok()
+        );
         assert_eq!(std::fs::read_dir(&cache_dir).unwrap().count(), 1);
     }
 
@@ -530,7 +823,12 @@ mod tests {
         });
         assert!(
             cached_runtime(&cache_dir)
-                .try_load_cached_encoder(&model)
+                .try_load_cached_encoder(
+                    &model,
+                    &crate::model::optimized_source_hash(&model)
+                        .unwrap()
+                        .unwrap()
+                )
                 .unwrap()
                 .is_ok()
         );
@@ -552,60 +850,6 @@ mod tests {
                 .is_ok()
         );
         assert_eq!(std::fs::read_dir(&cache_dir).unwrap().count(), 1);
-    }
-
-    #[test]
-    fn test_cache_is_fresh_nonempty_and_not_older_than_source() {
-        let now = SystemTime::now();
-        assert!(cache_is_fresh(100, now, now));
-        assert!(cache_is_fresh(100, now + Duration::from_secs(1), now));
-    }
-
-    #[test]
-    fn test_cache_is_fresh_rejects_stale_or_empty() {
-        let now = SystemTime::now();
-        assert!(!cache_is_fresh(100, now - Duration::from_secs(1), now));
-        assert!(!cache_is_fresh(0, now + Duration::from_secs(1), now));
-    }
-
-    #[test]
-    fn test_optimized_cache_is_fresh_with_real_files() {
-        let tmp = tempfile::tempdir().unwrap();
-        let dir = tmp.path();
-        let source = dir.join("v3_rnnt_encoder_int8.onnx");
-        let cache = dir.join("optimized_cache/v3_rnnt_encoder_int8_optimized.ort");
-        write_file(&source, b"source");
-        write_file(&cache, b"optimized");
-        assert!(optimized_cache_is_fresh(&cache, &source));
-    }
-
-    #[test]
-    fn test_optimized_cache_is_fresh_missing_or_empty_cache() {
-        let tmp = tempfile::tempdir().unwrap();
-        let dir = tmp.path();
-        let source = dir.join("encoder.onnx");
-        let cache = dir.join("optimized_cache/encoder_optimized.ort");
-        write_file(&source, b"source");
-
-        // Missing cache file → not fresh.
-        assert!(!optimized_cache_is_fresh(&cache, &source));
-
-        // Empty cache file → not fresh even though it is newer than the source.
-        write_file(&cache, b"");
-        assert!(!optimized_cache_is_fresh(&cache, &source));
-
-        // Missing source model → not fresh (nothing trustworthy to compare).
-        assert!(!optimized_cache_is_fresh(&cache, &dir.join("absent.onnx")));
-    }
-
-    #[test]
-    fn test_optimized_cache_path_matches_gc_keep_name() {
-        let cache_dir = Path::new("/models/optimized_cache");
-        let encoder = Path::new("/models/v3_rnnt_encoder_int8.onnx");
-        assert_eq!(
-            optimized_cache_path(cache_dir, encoder),
-            Path::new("/models/optimized_cache/v3_rnnt_encoder_int8_optimized.ort")
-        );
     }
 
     #[test]
