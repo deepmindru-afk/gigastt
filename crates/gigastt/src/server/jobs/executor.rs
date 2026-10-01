@@ -117,8 +117,10 @@ impl JobExecution for RealJobExecutor {
                     if matches!(j.status, JobStatus::Cancelled) {
                         abort.store(true, Ordering::Relaxed);
                     }
-                    j.abort = Some(abort);
-                    j.partial = Some(partial);
+                    if j.status == JobStatus::Processing {
+                        j.abort = Some(abort);
+                        j.partial = Some(partial);
+                    }
                 })
             })
             .await;
@@ -152,7 +154,14 @@ impl JobExecution for RealJobExecutor {
                         total,
                     );
                     let _ = store
-                        .update(&id, Box::new(move |j| j.processed_seconds = processed))
+                        .update(
+                            &id,
+                            Box::new(move |j| {
+                                if j.status == JobStatus::Processing {
+                                    j.processed_seconds = processed;
+                                }
+                            }),
+                        )
                         .await;
                     broadcast_event(
                         &*store,

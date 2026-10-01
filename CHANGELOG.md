@@ -88,6 +88,9 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
   long requests do not hit false inference timeouts. Jobs retain processed time
   for unknown-duration files and scale split-channel completion correctly.
   The no-progress watchdog now checks every 100 ms instead of once per timeout.
+- Make asynchronous job transitions and SSE subscriptions atomic so cancellation,
+  completion and concurrent listeners cannot produce conflicting or missing terminal
+  events. Concurrent queue-capacity rejections now return HTTP 429 with retry hints.
 
 - **WebSocket sessions no longer panic on startup when
   `GIGASTT_MAX_SESSION_SECS=0`.** Previously, the unlimited-session deadline
