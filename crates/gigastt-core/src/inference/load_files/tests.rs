@@ -258,3 +258,49 @@ vocab = "custom.txt"
         assert_eq!(files.encoder_hash.is_some(), bytes == b"self-contained");
     }
 }
+
+#[test]
+fn test_canonical_int8_name_preserves_custom_weights_and_content_identity() {
+    // Local quantization may use the standard name with different weights.
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("manifest.toml"),
+        r#"architecture = "rnnt"
+[files]
+encoder = "custom-fp32.onnx"
+encoder_int8 = "v3_rnnt_encoder_int8.onnx"
+decoder = "custom-decoder.onnx"
+joint = "custom-joint.onnx"
+vocab = "custom-vocab.txt"
+"#,
+    )
+    .unwrap();
+    let encoder = dir.path().join(ModelVariant::Rnnt.encoder_int8_file());
+    std::fs::write(&encoder, b"custom weights A").unwrap();
+    let modified = encoder.metadata().unwrap().modified().unwrap();
+    let mut first = ResolvedModelFiles::resolve(dir.path(), ModelVariant::Rnnt).unwrap();
+    first.verify_pinned_checksums(ModelVariant::Rnnt).unwrap();
+    assert_eq!(
+        first.encoder_hash,
+        crate::model::optimized_source_hash(&encoder).unwrap()
+    );
+    assert_ne!(
+        first.encoder_hash.as_deref(),
+        Some(ModelVariant::Rnnt.encoder_int8_checksum())
+    );
+
+    std::fs::write(&encoder, b"custom weights B").unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(&encoder)
+        .unwrap()
+        .set_times(std::fs::FileTimes::new().set_modified(modified))
+        .unwrap();
+    let mut second = ResolvedModelFiles::resolve(dir.path(), ModelVariant::Rnnt).unwrap();
+    second.verify_pinned_checksums(ModelVariant::Rnnt).unwrap();
+    assert_eq!(
+        second.encoder_hash,
+        crate::model::optimized_source_hash(&encoder).unwrap()
+    );
+    assert_ne!(first.encoder_hash, second.encoder_hash);
+}
