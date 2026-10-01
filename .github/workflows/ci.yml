@@ -29,6 +29,7 @@ jobs:
       - uses: actions/checkout@v7
       - run: python3 scripts/test-resolve-release.py
       - run: python3 scripts/test-resolve-android.py
+      - run: python3 scripts/test-release-assets.py
 
   runtime-isolation:
     runs-on: ubuntu-latest
