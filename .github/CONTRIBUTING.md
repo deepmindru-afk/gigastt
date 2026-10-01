@@ -19,12 +19,18 @@ Pass `--lib --bins`: a bare `cargo test` builds only the default member and a
 bare `cargo test --workspace` pulls in the ~2.5-hour WER benchmark, which is a
 `harness = false` target and so is not skipped by `--ignored`.
 
-Enable the repository pre-commit hook once — it runs exactly the checks above
-(plus [`typos`](https://github.com/crate-ci/typos), which CI also enforces):
+Enable the repository hooks once. Pre-commit checks public content, the Rust
+checks above and [`typos`](https://github.com/crate-ci/typos); commit-msg and
+pre-push also check publication metadata:
 
 ```sh
 git config core.hooksPath .githooks
 ```
+
+Keep internal planning in the ignored local backlog. Do not publish tracker
+identifiers or private planning files in commits, branches, tags or PR text.
+Run `python3 scripts/check-publication.py` to check the staged tree and branch;
+CI also checks commit history introduced by the PR and its title/description.
 
 For E2E / load / soak tests see [`CLAUDE.md`](../CLAUDE.md).
 

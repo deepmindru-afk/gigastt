@@ -200,7 +200,7 @@ caveat in that doc).
 
 Second column outside Golos/OpenSTT. Full numbers, CIs, and takeaways:
 [`docs/benchmarks.md` § Held-out](../docs/benchmarks.md#held-out--additional-public-sets--wer--95-ci).
-Protocol and queue: [`specs/held-out-datasets-roadmap.md`](../specs/held-out-datasets-roadmap.md).
+Protocol and queue: [`docs/held-out-datasets-roadmap.md`](../docs/held-out-datasets-roadmap.md).
 Licenses: [`DATA_LICENSE`](DATA_LICENSE).
 
 | Manifest | Domain | n | Prep script | Engines published (2026-07) |

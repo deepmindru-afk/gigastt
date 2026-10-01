@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Edge / Raspberry Pi measurement wrapper.
-# See specs/edge-raspberry-pi-roadmap.md for the full protocol.
+# See docs/edge-raspberry-pi-roadmap.md for the full protocol.
 #
 # Usage (on the Pi, 64-bit OS):
 #   ./scripts/bench_edge_pi.sh --storage-label microSD --variants rnnt,ml_ctc
