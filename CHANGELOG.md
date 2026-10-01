@@ -15,6 +15,9 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 
 ### Changed
 
+- Run a bounded, serial model smoke gate on every PR: pinned CPU encoder and
+  exact transcription oracle plus real-speech WebSocket finalization coverage.
+
 - Require Symphonia 0.6.1 and remove the vendored metadata and Matroska
   patches. Upstream now handles APEv2 size overflow and unknown-size WebM
   Clusters; the fuzz workspace uses the same upstream fixes.

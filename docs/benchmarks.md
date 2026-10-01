@@ -539,6 +539,31 @@ lighter head — a single encoder-only session, no decoder/joiner pair.
   time; `download --skip-diarization` skips downloading the speaker model on
   constrained devices.
 
+## Pull-request model smoke gate
+
+`Model smoke` runs on every pull request (including forks) and main push,
+with read-only repository permissions and no secrets. It caches only the four
+pinned `rnnt` recognition files; cache misses download them, and engine loading
+verifies the checksums from `model/variant.rs` on every run. The workflow checks
+file presence before invoking the ignored oracle so a missing model cannot
+silently skip the gate. Exact test names are also checked against the test list
+to reject a zero-test run after renaming. It does not cache optimized graphs or
+optional sidecars.
+
+The serial tests compare the encoder to the author activation fixture and the
+exact expected transcript (see the oracle tolerance JSON), then exercise real
+speech through WebSocket partials, window slides and finalization under all
+commit policies. The WebSocket test checks text consistency between policies,
+not equality with batch recognition or corpus WER. These are correctness gates;
+no shared-runner latency threshold is enforced. The entire job has a 25-minute
+limit. The full custom WER harness is never invoked by these explicit targets.
+
+Repository administrators must require the `Model smoke` check for `main`
+after this workflow is available. Full E2E and quality suites remain main-push
+checks; the Criterion regression job remains advisory because runner timing is
+noisy. Forks use the ordinary `pull_request` event, not a privileged target event;
+GitHub may require a maintainer to approve a first-time contributor's run.
+
 ## Headline single-engine metrics
 
 All gigastt numbers are the default **`rnnt`** head (since v2.3; INT8), measured through the
