@@ -359,6 +359,50 @@ jobs:
       # Warning-free with the lean core (no default features) + ane only.
       - run: cargo check -p gigastt-core --no-default-features --features ane
 
+  model-smoke:
+    # All PRs, including forks: indirect inference dependencies cannot skip this gate.
+    runs-on: ubuntu-latest
+    name: Model smoke
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install native build prerequisites
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler pkg-config libssl-dev
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Cache pinned recognition bundle
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.gigastt/models/v3_rnnt_encoder_int8.onnx
+            ~/.gigastt/models/v3_rnnt_decoder.onnx
+            ~/.gigastt/models/v3_rnnt_joint.onnx
+            ~/.gigastt/models/v3_vocab.txt
+          key: gigastt-rnnt-smoke-${{ hashFiles('crates/gigastt-core/src/model/**') }}
+      - name: Provision recognition files on cache hits and misses
+        run: |
+          cargo run -p gigastt -- download --model-variant rnnt --skip-diarization
+          for file in v3_rnnt_encoder_int8.onnx v3_rnnt_decoder.onnx v3_rnnt_joint.onnx v3_vocab.txt; do
+            test -s "$HOME/.gigastt/models/$file"
+            sha256sum "$HOME/.gigastt/models/$file"
+          done
+      - name: Check pinned CPU encoder and exact fixture transcript
+        # Engine loading checks model/variant.rs hashes; the oracle uses a fresh graph cache.
+        run: |
+          cargo test -p gigastt-core --lib inference::engine::tests::author_oracle::test_golos_00_int8_encoder_near_author_fp32 -- --ignored --exact --list | grep -Fx 'inference::engine::tests::author_oracle::test_golos_00_int8_encoder_near_author_fp32: test'
+          cargo test -p gigastt-core --lib inference::engine::tests::author_oracle::test_golos_00_int8_encoder_near_author_fp32 -- --ignored --exact --test-threads=1 --nocapture
+      - name: Check real-speech WebSocket partials and finalization
+        run: |
+          cargo test -p gigastt --test e2e_ws test_ws_commit_policies_preserve_legacy_text_through_window_slides -- --ignored --exact --list | grep -Fx 'test_ws_commit_policies_preserve_legacy_text_through_window_slides: test'
+          cargo test -p gigastt --test e2e_ws test_ws_commit_policies_preserve_legacy_text_through_window_slides -- --ignored --exact --test-threads=1
+
   e2e-tests:
     # Only run on main push — PRs get fast feedback from unit tests + clippy
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'

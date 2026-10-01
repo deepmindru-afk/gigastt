@@ -330,7 +330,9 @@ The `e2e_rnnt` head (`--model-variant e2e_rnnt`) uses the parallel `v3_e2e_rnnt_
 
 ### E2E test strategy
 
-- E2E tests run **only on main push**, not on PRs, to keep PR feedback fast
+- Full E2E tests run **only on main push**. `Model smoke` also runs on every PR
+  (including forks): a pinned CPU encoder/transcript oracle and one real-speech
+  WebSocket finalization test, serially, with a 25-minute job limit.
 - Model is cached via `actions/cache` with key derived from `crates/gigastt-core/src/model/`
 - E2E tests run with `--test-threads=1` because each loads the full ONNX model
   into memory; concurrent runs OOM on CI runners
@@ -340,7 +342,9 @@ The `e2e_rnnt` head (`--model-variant e2e_rnnt`) uses the parallel `v3_e2e_rnnt_
 The following rules must be enabled in **GitHub Settings → Branches** for `main`:
 
 - **Require a pull request before merging** — direct push to `main` is blocked.
-- **Require status checks to pass** — at minimum `fmt`, `clippy`, and `unit-tests` jobs from `ci.yml` must be green.
+- **Require status checks to pass** — at minimum the `Format`, `Clippy`, `Unit Tests`, and `Model smoke` checks
+  from `ci.yml` must be green. Add `Model smoke` in repository settings after
+  the workflow introducing it has landed.
 - **Include administrators** — rules apply to everyone, no exceptions.
 
 This guarantees that a regression like a broken `cargo test` cannot reach `main` even if the local pre-commit hook is bypassed.
