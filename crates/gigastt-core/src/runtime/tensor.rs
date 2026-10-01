@@ -1,4 +1,5 @@
-/// Owned, cheaply cloneable tensor value used by the runtime abstraction layer.
+/// Owned tensor value used by the runtime abstraction layer.
+/// Cloning copies both the shape and the tensor storage.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Tensor {
     shape: Shape,

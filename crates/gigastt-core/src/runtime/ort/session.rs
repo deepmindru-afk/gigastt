@@ -389,6 +389,46 @@ impl RuntimeSession for OrtSession {
             .map(|(_name, value)| value_to_tensor(value))
             .collect()
     }
+
+    fn run_f32_into(
+        &self,
+        inputs: &[Tensor],
+        destinations: &mut [&mut Vec<f32>],
+    ) -> Result<(), RuntimeError> {
+        let session_inputs: Vec<ort::session::SessionInputValue<'_>> = inputs
+            .iter()
+            .map(Tensor::as_ort_input)
+            .collect::<Result<_, _>>()?;
+        let mut session = self
+            .session
+            .lock()
+            .map_err(|_| RuntimeError::InferenceFailed("ort session mutex poisoned".into()))?;
+        let outputs = session
+            .run(&session_inputs[..])
+            .map_err(|e| RuntimeError::InferenceFailed(e.to_string()))?;
+        if outputs.len() != destinations.len() {
+            return Err(RuntimeError::InferenceFailed(format!(
+                "expected {} output buffers, got {}",
+                outputs.len(),
+                destinations.len()
+            )));
+        }
+        // Validate every borrowed output before changing any caller buffer.
+        // ORT values and the session guard stay alive through both passes.
+        for (_, output) in outputs.iter() {
+            output
+                .try_extract_tensor::<f32>()
+                .map_err(|e| RuntimeError::InferenceFailed(e.to_string()))?;
+        }
+        for ((_, output), destination) in outputs.iter().zip(destinations) {
+            let (_, data) = output
+                .try_extract_tensor::<f32>()
+                .map_err(|e| RuntimeError::InferenceFailed(e.to_string()))?;
+            destination.clear();
+            destination.extend_from_slice(data);
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -408,6 +448,43 @@ mod tests {
     fn write_identity_model(path: &Path) {
         // ONNX IR 8, opset 13: Identity(x: float[1]) -> y: float[1].
         write_file(path, b"\x08\x08\x3a\x40\x0a\x10\x0a\x01x\x12\x01y\x22\x08Identity\x12\x0acache-test\x5a\x0f\x0a\x01x\x12\x0a\x0a\x08\x08\x01\x12\x04\x0a\x02\x08\x01\x62\x0f\x0a\x01y\x12\x0a\x0a\x08\x08\x01\x12\x04\x0a\x02\x08\x01\x42\x02\x10\x0d");
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore = "calls into onnxruntime FFI")]
+    fn test_ort_f32_workspace_errors_preserve_destinations() {
+        use crate::runtime::tensor::{Shape, TensorData};
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("identity.onnx");
+        write_identity_model(&path);
+        let runtime = cached_runtime(dir.path());
+        let session = runtime.load_session(&path, false).unwrap();
+        let inputs = [Tensor::new(Shape::new(vec![1]), TensorData::F32(vec![3.0])).unwrap()];
+        let mut first = vec![9.0];
+        let mut second = vec![8.0];
+        assert!(
+            session
+                .run_f32_into(&inputs, &mut [&mut first, &mut second])
+                .is_err()
+        );
+        assert_eq!(first, [9.0]);
+        assert_eq!(second, [8.0]);
+        assert!(session.run_f32_into(&[], &mut [&mut first]).is_err());
+        assert_eq!(first, [9.0]);
+        // Change both ONNX tensor element types from float to int64, while
+        // preserving the single-element shapes and Identity graph.
+        let mut model = std::fs::read(&path).unwrap();
+        for index in 0..model.len() - 5 {
+            if model[index..index + 5] == [0x0a, 0x08, 0x08, 0x01, 0x12] {
+                model[index + 3] = 7;
+            }
+        }
+        let integer_path = dir.path().join("integer.onnx");
+        std::fs::write(&integer_path, model).unwrap();
+        let integer = runtime.load_session(&integer_path, false).unwrap();
+        let inputs = [Tensor::new(Shape::new(vec![1]), TensorData::I64(vec![3])).unwrap()];
+        assert!(integer.run_f32_into(&inputs, &mut [&mut first]).is_err());
+        assert_eq!(first, [9.0]);
     }
 
     fn cached_runtime(cache_dir: &Path) -> OrtRuntime {
