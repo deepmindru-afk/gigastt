@@ -347,7 +347,8 @@ than default `rnnt` in lab — e.g. RTF **~0.023** vs **~0.034**), **not** a
 low-memory SKU. Ready RSS for `ml_ctc` is **about the same class as `rnnt`**
 on multi-head installs (both ~225 MB INT8 encoder class). For less RAM use
 **`--pool-size 1`**, not a head switch. Use `ml_ctc` / `ml_ctc_large` when you
-need **ru/en/kk/ky/uz** or higher encode speed; keep `rnnt` for best Russian WER.
+need **ru/en/kk/ky/uz** or higher encode speed; `rnnt` remains the Russian-only
+default. Its primary accuracy comparison awaits complete benchmark evidence.
 
 ### Optional model ready tax
 

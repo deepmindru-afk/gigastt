@@ -33,7 +33,7 @@ packaging tool that needs a local FP32 ONNX as source (not a runtime path).
 
 | Property | Value |
 |---|---|
-| WER (Russian) | **3.55%** clean read (rnnt head, `golos_crowd_1k`); leads far-field/phone/YouTube — see [docs/benchmarks.md](docs/benchmarks.md) |
+| WER (Russian) | Primary rnnt comparison withheld pending raw results and complete provenance — see [docs/benchmarks.md](docs/benchmarks.md) |
 | RTF (INT8, M1 CPU) | ~0.10 |
 | Memory | ~46 MB resident / ~277 MB `ps` RSS at `--pool-size 1`; ~66 MB / ~510 MB at the default `--pool-size 2` (INT8, M1 Pro, steady state — the 215 MB model is memory-mapped and shared, so RSS overstates; resident footprint is the honest figure) |
 | Concurrent sessions | 2 (configurable via `--pool-size`) |
