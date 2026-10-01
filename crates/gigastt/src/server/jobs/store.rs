@@ -90,6 +90,12 @@ pub struct JobStatusResponse {
 
 /// Build a public status view from a stored job.
 pub(crate) fn job_status_response(job: &Job) -> JobStatusResponse {
+    let mut response = job_status_metadata(job);
+    response.partial = job.partial.as_ref().and_then(|partial| partial.get());
+    response
+}
+
+fn job_status_metadata(job: &Job) -> JobStatusResponse {
     let percent = if job.total_seconds > 0.0 {
         (((job.processed_seconds / job.total_seconds) * 100.0) as u32).min(100)
     } else {
@@ -101,7 +107,7 @@ pub(crate) fn job_status_response(job: &Job) -> JobStatusResponse {
         processed_seconds: job.processed_seconds,
         percent,
         error: job.error.clone(),
-        partial: job.partial.as_ref().and_then(|partial| partial.get()),
+        partial: None,
     }
 }
 
@@ -309,6 +315,15 @@ pub trait JobStore: Send + Sync + 'static {
     fn create<'a>(&'a self, job: Job) -> JobStoreFuture<'a, anyhow::Result<String>>;
     /// Return a clone of the job, if it exists.
     fn get<'a>(&'a self, id: &str) -> JobStoreFuture<'a, anyhow::Result<Option<Job>>>;
+    /// Read status metadata without requiring a completed transcript. The default
+    /// preserves existing stores; implementations can avoid cloning the result.
+    fn status<'a>(
+        &'a self,
+        id: &str,
+    ) -> JobStoreFuture<'a, anyhow::Result<Option<JobStatusResponse>>> {
+        let id = id.to_owned();
+        Box::pin(async move { Ok(self.get(&id).await?.as_ref().map(job_status_response)) })
+    }
     /// Register a live listener or send the terminal event under one lock.
     /// Returns false if the job does not exist.
     fn subscribe<'a>(
@@ -451,6 +466,26 @@ impl JobStore for InMemoryJobStore {
         })
     }
 
+    fn status<'a>(
+        &'a self,
+        id: &str,
+    ) -> JobStoreFuture<'a, anyhow::Result<Option<JobStatusResponse>>> {
+        let id = id.to_owned();
+        Box::pin(async move {
+            let snapshot = {
+                let jobs = self.jobs.lock();
+                jobs.get(&id)
+                    .map(|job| (job_status_metadata(job), job.partial.clone()))
+            };
+            // A snapshot can be updated by a blocking inference worker. Resolve
+            // its text after releasing the store lock, including after eviction.
+            Ok(snapshot.map(|(mut response, partial)| {
+                response.partial = partial.and_then(|partial| partial.get());
+                response
+            }))
+        })
+    }
+
     fn subscribe<'a>(
         &'a self,
         id: &str,
@@ -546,6 +581,51 @@ impl InMemoryJobStore {
         let mut jobs = self.jobs.lock();
         if let Some(job) = jobs.get_mut(id) {
             job.updated_at -= seconds;
+        }
+    }
+}
+
+#[cfg(test)]
+mod polling_benchmark {
+    use super::*;
+
+    #[test]
+    #[ignore = "synthetic lock-hold benchmark; run explicitly with --nocapture"]
+    fn benchmark_completed_status_lock_hold() {
+        let store = InMemoryJobStore::new(RuntimeLimits::default());
+        let mut job = Job::queued(Bytes::new(), ExportParams::default());
+        job.status = JobStatus::Done;
+        job.result = Some(gigastt_core::inference::TranscribeResult {
+            text: "x".repeat(8 * 1024 * 1024),
+            words: vec![],
+            duration_s: 1.0,
+            confidence: None,
+        });
+        let id = job.id.clone();
+        store.jobs.lock().insert(id.clone(), job);
+        for legacy in [true, false] {
+            let mut elapsed = std::time::Duration::ZERO;
+            for _ in 0..200 {
+                let jobs = store.jobs.lock();
+                let started = std::time::Instant::now();
+                let job = jobs.get(&id).unwrap();
+                if legacy {
+                    let snapshot = std::hint::black_box(job.clone());
+                    elapsed += started.elapsed();
+                    drop(jobs);
+                    drop(snapshot);
+                } else {
+                    let snapshot =
+                        std::hint::black_box((job_status_metadata(job), job.partial.clone()));
+                    elapsed += started.elapsed();
+                    drop(jobs);
+                    drop(snapshot);
+                }
+            }
+            eprintln!(
+                "legacy={legacy} mean_lock_hold_ns={}",
+                elapsed.as_nanos() / 200
+            );
         }
     }
 }

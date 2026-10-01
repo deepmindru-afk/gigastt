@@ -114,15 +114,8 @@ impl<E: JobExecution + 'static> JobWorker<E> {
             }
 
             let store = self.store.clone();
-            let body = match self.store.get(&id).await {
-                Ok(Some(job)) if job.status == JobStatus::Processing => job.body,
-                _ => {
-                    drop(permit);
-                    continue;
-                }
-            };
-            let params = match self.store.get(&id).await {
-                Ok(Some(job)) => job.params,
+            let (body, params) = match self.store.get(&id).await {
+                Ok(Some(job)) if job.status == JobStatus::Processing => (job.body, job.params),
                 _ => {
                     drop(permit);
                     continue;
