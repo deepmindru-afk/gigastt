@@ -76,6 +76,13 @@ def provenance(source, env):
 def main():
     result = resolve(os.environ['RELEASE_TAG'])
     result['predicate'] = json.dumps(provenance(result, os.environ), separators=(',', ':'))
+    metadata = {
+        'schema': 1, 'tag': result['tag'], 'commit': result['commit'],
+        'repository': os.environ['GITHUB_REPOSITORY'],
+        'run_id': int(os.environ['GITHUB_RUN_ID']),
+        'run_attempt': int(os.environ['GITHUB_RUN_ATTEMPT']),
+    }
+    Path(os.environ['RELEASE_METADATA_PATH']).write_text(json.dumps(metadata) + '\n')
     # Publish outputs only after every validation succeeds.
     with Path(os.environ['GITHUB_OUTPUT']).open('a') as output:
         for key, value in result.items():

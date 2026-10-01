@@ -43,6 +43,7 @@ class ReleaseSourceTests(unittest.TestCase):
     def run_resolver(self, tag, **github):
         return subprocess.run(['python3', str(SCRIPT)], cwd=self.checkout,
                               env={**os.environ, 'RELEASE_TAG': tag, 'GITHUB_OUTPUT': str(self.output),
+                                   'RELEASE_METADATA_PATH': str(self.root / 'metadata.json'),
                                    'GITHUB_SERVER_URL': 'https://github.com', 'GITHUB_REPOSITORY': 'example/repo',
                                    'GITHUB_WORKFLOW_REF': 'example/repo/.github/workflows/release.yml@refs/heads/main',
                                    'GITHUB_REF': 'refs/heads/main', 'GITHUB_SHA': self.dispatch,
@@ -54,6 +55,9 @@ class ReleaseSourceTests(unittest.TestCase):
         result = self.run_resolver('v2.22.0')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn(f'commit={self.release}\n', self.output.read_text())
+        metadata = json.loads((self.root / 'metadata.json').read_text())
+        self.assertEqual(metadata, {'schema': 1, 'tag': 'v2.22.0', 'commit': self.release,
+                                   'repository': 'example/repo', 'run_id': 123, 'run_attempt': 2})
         outputs = dict(line.split('=', 1) for line in self.output.read_text().splitlines())
         predicate = json.loads(outputs['predicate'])
         self.assertEqual(predicate['buildDefinition']['externalParameters']['inputs'], {'tag': 'v2.22.0'})
