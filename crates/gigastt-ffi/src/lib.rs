@@ -442,7 +442,9 @@ pub unsafe extern "C" fn gigastt_stream_process_chunk(
     }
 }
 
-/// Flush the streaming state and return the final segment(s).
+/// Decode pending audio and return the final segment(s).
+/// Successful flushes allow further chunks. A failed flush requires a new
+/// stream; previously returned text remains incomplete.
 ///
 /// # Safety
 /// `stream` must be a pointer returned by `gigastt_stream_new`. Concurrent
@@ -465,11 +467,19 @@ pub unsafe extern "C" fn gigastt_stream_flush(
     catch_ffi_panic("gigastt_stream_flush", || {
         let mut stream_ref = stream_arc.lock().unwrap_or_else(|e| e.into_inner());
         let engine_slot = stream_ref.engine.clone();
-        let segments: Vec<gigastt_core::inference::TranscriptSegment> = engine_slot
-            .engine
-            .flush_state(&mut stream_ref.state)
-            .into_iter()
-            .collect();
+        let StreamSlot {
+            state, reservation, ..
+        } = &mut *stream_ref;
+        let Some(reservation) = reservation.as_mut() else {
+            return ptr::null_mut();
+        };
+        let segments: Vec<_> = match engine_slot.engine.try_finish_stream(state, reservation) {
+            Ok(segment) => segment.into_iter().collect(),
+            Err(error) => {
+                tracing::error!(%error, "gigastt_stream_flush failed");
+                return ptr::null_mut();
+            }
+        };
 
         let json = serde_json::to_string(&segments).unwrap_or_else(|_| "[]".into());
         match CString::new(json) {

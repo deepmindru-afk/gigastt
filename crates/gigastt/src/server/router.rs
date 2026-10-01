@@ -1,8 +1,10 @@
 //! Protected `/v1` route table (REST + WebSocket + optional jobs).
 
-use axum::Router;
+use super::upload::{UploadAdmission, UploadPermit};
+use axum::body::Bytes;
 use axum::http::StatusCode;
 use axum::routing::{delete, get, options, post};
+use axum::{Extension, Router};
 use std::sync::Arc;
 
 use super::http;
@@ -10,16 +12,33 @@ use super::ws;
 
 /// Routes gated by origin middleware (and the per-IP limiter when enabled).
 /// `/metrics` is intentionally absent — it lives on the loopback listener.
-pub(crate) fn protected_v1_router(jobs_enabled: bool) -> Router<Arc<http::AppState>> {
+pub(crate) fn protected_v1_router(
+    jobs_enabled: bool,
+    admission: UploadAdmission,
+) -> Router<Arc<http::AppState>> {
     let protected = Router::new()
         .route("/v1/models", get(http::models))
         .route("/v1/models", options(|| async { StatusCode::NO_CONTENT }))
-        .route("/v1/transcribe", post(http::transcribe))
+        .route(
+            "/v1/transcribe",
+            post(
+                |state, query, Extension(permit): Extension<UploadPermit>, body: Bytes| async move {
+                    http::transcribe(state, query, permit.retain(body)).await
+                },
+            ),
+        )
         .route(
             "/v1/transcribe",
             options(|| async { StatusCode::NO_CONTENT }),
         )
-        .route("/v1/transcribe/stream", post(http::transcribe_stream))
+        .route(
+            "/v1/transcribe/stream",
+            post(
+                |state, query, Extension(permit): Extension<UploadPermit>, body: Bytes| async move {
+                    http::transcribe_stream(state, query, permit.retain(body)).await
+                },
+            ),
+        )
         .route(
             "/v1/transcribe/stream",
             options(|| async { StatusCode::NO_CONTENT }),
@@ -28,7 +47,7 @@ pub(crate) fn protected_v1_router(jobs_enabled: bool) -> Router<Arc<http::AppSta
         // with a custom base_url) that POST multipart `file` + `model`.
         .route(
             "/v1/audio/transcriptions",
-            post(http::openai_transcriptions),
+            post(http::openai_transcriptions_admitted),
         )
         .route(
             "/v1/audio/transcriptions",
@@ -49,7 +68,7 @@ pub(crate) fn protected_v1_router(jobs_enabled: bool) -> Router<Arc<http::AppSta
 
     // Asynchronous job API routes. Only registered when `--enable-jobs` is set;
     // without the flag the paths fall through to axum's default 404.
-    if jobs_enabled {
+    let protected = if jobs_enabled {
         protected
             .route("/v1/jobs", post(http::submit_job))
             .route("/v1/jobs", options(|| async { StatusCode::NO_CONTENT }))
@@ -67,7 +86,11 @@ pub(crate) fn protected_v1_router(jobs_enabled: bool) -> Router<Arc<http::AppSta
             .route("/v1/jobs/{id}/events", get(http::job_events))
     } else {
         protected
-    }
+    };
+    protected.route_layer(axum::middleware::from_fn_with_state(
+        admission,
+        super::upload::admit,
+    ))
 }
 
 #[cfg(test)]
@@ -78,7 +101,7 @@ mod tests {
     fn test_protected_v1_router_builds_with_and_without_jobs() {
         // Both branches must construct: jobs routes are only registered when
         // the flag is on, and a panic here would be a boot-time outage.
-        let _ = protected_v1_router(false);
-        let _ = protected_v1_router(true);
+        let _ = protected_v1_router(false, UploadAdmission::new(1, 30));
+        let _ = protected_v1_router(true, UploadAdmission::new(1, 30));
     }
 }

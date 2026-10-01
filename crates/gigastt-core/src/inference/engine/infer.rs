@@ -31,6 +31,8 @@ impl Engine {
             .as_i64_mut()
             .context("encoder length tensor is not i64")?[0] = num_frames as i64;
 
+        #[cfg(test)]
+        super::live_probe::begin_stage();
         let enc_start = std::time::Instant::now();
         let encoder_outputs = if low_latency {
             triplet
@@ -43,6 +45,8 @@ impl Engine {
                 .run(&triplet.encoder_inputs)
                 .context("Encoder inference failed")?
         };
+        #[cfg(test)]
+        super::live_probe::stage("encoder", enc_start.elapsed());
         tracing::info!(
             elapsed_ms = enc_start.elapsed().as_millis() as u64,
             "encoder_inference"
@@ -93,6 +97,8 @@ impl Engine {
         }
 
         // RNN-T greedy decode — the encoder output is borrowed for the decode loop.
+        #[cfg(test)]
+        super::live_probe::begin_stage();
         let dec_start = std::time::Instant::now();
         let decoder = triplet
             .decoder
@@ -112,6 +118,8 @@ impl Engine {
             biaser,
             abort,
         )?;
+        #[cfg(test)]
+        super::live_probe::stage("decode", dec_start.elapsed());
         tracing::info!(
             elapsed_ms = dec_start.elapsed().as_millis() as u64,
             "greedy_decode"

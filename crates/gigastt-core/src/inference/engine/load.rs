@@ -278,7 +278,7 @@ impl Engine {
             source: Some(e.into()),
         };
 
-        let files = ResolvedModelFiles::resolve(model_dir, variant).map_err(model_load)?;
+        let mut files = ResolvedModelFiles::resolve(model_dir, variant).map_err(model_load)?;
         if factory.verify_on_disk_checksums() {
             files.verify_pinned_checksums(variant)?;
         }

@@ -234,9 +234,8 @@ the model dir holds more than one head's files (fixed in 2.11.1); with no flag t
 head is auto-detected from the files on disk (`rnnt` precedence):
 - **`rnnt`** (default since v2.3): lean INT8 set from GitHub Releases —
   `v3_rnnt_encoder_int8.onnx` + `v3_rnnt_{decoder,joint}.onnx` + `v3_vocab.txt`
-  (34-token char vocab). Much lower WER than e2e (clean read 3.55% on
-  `golos_crowd_1k` via the cross-engine harness vs e2e 8.60%; leads
-  far-field/phone/YouTube — see `docs/benchmarks.md`); bare lowercase output, so
+  (34-token char vocab). Primary WER comparisons are withheld pending complete
+  raw results and provenance (see `docs/benchmarks.md`); bare lowercase output, so
   pair with `--punctuation` / `--itn` for readable text.
 - **`e2e_rnnt`**: `v3_e2e_rnnt_encoder_int8.onnx` + `v3_e2e_rnnt_{decoder,joint}.onnx`
   + `v3_e2e_rnnt_vocab.txt` (1025-token BPE). Punctuation/casing/ITN baked in.

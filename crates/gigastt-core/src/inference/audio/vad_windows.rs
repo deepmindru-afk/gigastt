@@ -152,6 +152,10 @@ impl<'a> VadWindows<'a> {
 }
 
 impl PcmWindows for VadWindows<'_> {
+    fn remap_stable_before(&self) -> f64 {
+        self.compressed_total as f64 / 16000.0
+    }
+
     fn remap_words(&self, words: &mut [crate::inference::WordInfo]) {
         for word in words {
             word.start = crate::vad::remap_compressed_seconds(word.start, self.regions(), 16000.0);

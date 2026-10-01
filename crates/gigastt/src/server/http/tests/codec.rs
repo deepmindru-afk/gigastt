@@ -76,17 +76,19 @@ async fn test_resolve_raw_codec_bad_sample_rate_is_400() {
 }
 
 #[test]
-fn test_raw_codec_to_wav_produces_decodable_wav() {
-    // μ-law silence (0xFF ≈ 0) re-wraps into a WAV the standard pipeline
-    // accepts: the full raw→16kHz-WAV transform without a model.
+fn test_prepare_raw_audio_produces_pcm16_precision_silence() {
+    // The prepared mono PCM has the same precision as the former WAV route.
     let raw = vec![0xFFu8; 8000]; // 1 s of μ-law silence at 8 kHz
-    let wav = raw_codec_to_wav(
+    let crate::server::file_transcribe::PreparedRawAudio::Samples(samples) = prepare_raw_audio(
         &raw,
         gigastt_core::inference::audio::TelephonyCodec::Pcmu,
         8000,
+        None,
+        None,
     )
-    .unwrap();
-    let samples = gigastt_core::inference::audio::decode_audio_bytes_shared(wav).unwrap();
+    .unwrap() else {
+        panic!("expected short PCM");
+    };
     assert!(
         samples.len() > 12_000 && samples.len() <= 16_000,
         "expected ~1 s at 16 kHz, got {}",
@@ -99,11 +101,13 @@ fn test_raw_codec_to_wav_produces_decodable_wav() {
 }
 
 #[test]
-fn test_raw_codec_to_wav_rejects_bad_input() {
-    let result = raw_codec_to_wav(
+fn test_prepare_raw_audio_rejects_bad_input() {
+    let result = prepare_raw_audio(
         &[],
         gigastt_core::inference::audio::TelephonyCodec::Pcmu,
         8000,
+        None,
+        None,
     );
     assert!(result.is_err(), "empty raw payload must error");
 }

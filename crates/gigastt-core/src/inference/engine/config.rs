@@ -118,16 +118,21 @@ impl Engine {
         text: String,
         itn: bool,
         punctuation: bool,
-    ) -> String {
+        ctl: DecodeControls,
+    ) -> Result<String, GigasttError> {
+        ctl.check_abort()?;
         let text = if itn {
             crate::itn::apply_itn(&text)
         } else {
             text
         };
-        match &self.punctuator {
+        ctl.check_abort()?;
+        let text = match &self.punctuator {
             Some(p) if punctuation => p.restore(&text),
             _ => text,
-        }
+        };
+        ctl.check_abort()?;
+        Ok(text)
     }
 
     /// Enable or disable inverse text normalization (Russian number-words →

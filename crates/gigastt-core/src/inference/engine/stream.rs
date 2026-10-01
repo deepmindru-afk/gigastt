@@ -116,9 +116,9 @@ impl Engine {
         // (an isolated ~100ms chunk decodes to garbage). Re-decoding is the cost,
         // so we only decode once STREAM_DECODE_STRIDE_SAMPLES of NEW audio have
         // arrived (or the window hit its cap) — this keeps the engine real-time.
-        // The window is bounded by `self.stream_max_window_samples` (default
-        // 2.5s, configurable at serve time); on endpoint or cap we finalize the
-        // tail and slide, retaining STREAM_LEFT_CONTEXT_SAMPLES.
+        // `stream_max_window_samples` is a slide trigger, not a hard memory
+        // bound: stable-prefix mode retains nonempty uncommittable hypotheses.
+        // See docs/stream-retention.md for the constructive counterexample.
         state.audio_buffer.extend_from_slice(samples);
         state.pending_samples += samples.len();
 
@@ -146,10 +146,10 @@ impl Engine {
         // an over-cap buffer just waits for the next stride (bounded by the
         // stride itself), avoiding an 8x decode rate during cap saturation.
         let cap_forces_decode = over_cap && !self.stable_prefix_enabled(state);
-        if state.pending_samples < STREAM_DECODE_STRIDE_SAMPLES
-            && !cap_forces_decode
-            && !vad_endpoint
-        {
+        let decode_stride = STREAM_DECODE_STRIDE_SAMPLES;
+        #[cfg(test)]
+        let decode_stride = super::live_probe::stride(decode_stride);
+        if state.pending_samples < decode_stride && !cap_forces_decode && !vad_endpoint {
             return Ok(vec![]);
         }
         // Too little audio to extract a frame. Skip — but never when finalizing:
@@ -188,7 +188,14 @@ impl Engine {
             } else {
                 EndpointReason::Blank
             };
-            let seg = self.finalize_stream_segment(state, ts, reason);
+            let seg = match self.finalize_stream_segment(state, ts, reason) {
+                Ok(segment) => segment,
+                Err(error) => {
+                    state.failed = true;
+                    self.publish_stream_partial(state);
+                    return Err(error);
+                }
+            };
             Self::slide_streaming_window(state);
             if seg.text.trim().is_empty() {
                 return Ok(vec![]);
@@ -222,7 +229,8 @@ impl Engine {
                 // and sliding without a commit would cut audio under the live
                 // (uncommitted) tail — the next decode would suppress those
                 // words and lose them permanently. With no commit the buffer
-                // simply waits for agreement (bounded by the cap streak).
+                // waits for a committable prefix. The streak fallback cannot
+                // bound retention when all words stay inside the moving horizon.
                 // Exception: an empty tail (silence) slides as before, or a
                 // long silent stream would grow the buffer unboundedly.
                 if committed > 0 {
@@ -282,8 +290,8 @@ impl Engine {
     /// window's right edge (words decoded from the edge may still be revised by
     /// the next decode — or truncated mid-word by the buffer edge). Cap hits
     /// with nothing committable are counted; at [`STREAM_CAP_STREAK_MAX`] the
-    /// committable prefix is taken even without agreement so the retained
-    /// buffer stays bounded — but the horizon is still respected: committing a
+    /// committable prefix is taken even without agreement. This does not impose
+    /// a hard retained-audio bound: the horizon is still respected. Committing a
     /// word the buffer edge may have truncated locks the truncated form in
     /// permanently. Returns the number of committed words. The caller must NOT
     /// slide the window when this returns 0 — the uncommitted live words'
@@ -303,9 +311,9 @@ impl Engine {
         if n == 0 && !live.is_empty() {
             state.cap_streak += 1;
             if state.cap_streak >= STREAM_CAP_STREAK_MAX {
-                // Boundedness fallback: commit the pre-horizon prefix even
-                // without agreement. Edge words keep waiting; the moving buffer
-                // edge takes them out of the horizon within ~0.5 s of audio.
+                // Commit the pre-horizon prefix even without agreement.
+                // Edge words keep waiting; revised timestamps may keep them
+                // inside the horizon indefinitely.
                 while n < live.len() && live[n].end <= horizon_s {
                     n += 1;
                 }
@@ -365,6 +373,10 @@ impl Engine {
             state.failed = true;
             return Ok(false);
         }
+        #[cfg(test)]
+        super::live_probe::window(state);
+        #[cfg(test)]
+        super::live_probe::begin_stage();
         let mel_start = std::time::Instant::now();
         let num_frames = self.features.compute_mel(
             &state.audio_buffer,
@@ -372,6 +384,8 @@ impl Engine {
             &mut state.mel_power,
             &mut state.mel_output,
         );
+        #[cfg(test)]
+        super::live_probe::stage("mel", mel_start.elapsed());
         tracing::debug!(
             elapsed_us = mel_start.elapsed().as_micros() as u64,
             "mel_compute"
@@ -490,32 +504,76 @@ impl Engine {
         }
     }
 
-    /// Decode any audio buffered since the last strided decode, then finalize.
-    /// Call when the stream ends (Stop / EOF) so the decode-stride batching does
-    /// not drop trailing words. Best-effort: on decode failure, falls back to a
-    /// plain flush of whatever the assembler already holds.
+    /// Decode pending audio and finalize, preserving the historical return type.
+    /// On failure, returns only a non-final readable partial (if any) and marks
+    /// the state failed. Use [`Self::try_finish_stream`] to receive the error.
     pub fn finish_stream(
         &self,
         state: &mut StreamingState,
         triplet: &mut SessionTriplet,
     ) -> Option<TranscriptSegment> {
-        if state.abort_requested() {
-            state.failed = true;
-            self.publish_stream_partial(state);
-            return (!state.assembler.is_empty())
-                .then(|| self.stream_partial(state, now_timestamp()));
+        match self.try_finish_stream(state, triplet) {
+            Ok(segment) => segment,
+            Err(error) => {
+                tracing::warn!("finish_stream failed: {error:#}");
+                self.flush_state(state)
+            }
         }
-        let has_pending = state.pending_samples > 0 && state.audio_buffer.len() >= N_FFT;
-        if has_pending && let Err(e) = self.decode_window(state, triplet) {
-            tracing::warn!("finish_stream decode failed: {e:#}");
+    }
+
+    /// Decode sub-stride tail audio and return a successful final, or an error.
+    /// Failed/cancelled states cannot resume decoding; their existing text stays
+    /// available through `state.partial` and [`Self::flush_state`] as a partial.
+    /// Successful flushes remain reusable and do not decode the same tail twice.
+    ///
+    /// Runtime panics mark the state failed and preserve its partial before
+    /// resuming the unwind, so transport/binding boundaries can report a panic.
+    pub fn try_finish_stream(
+        &self,
+        state: &mut StreamingState,
+        triplet: &mut SessionTriplet,
+    ) -> Result<Option<TranscriptSegment>, GigasttError> {
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            if state.abort_requested() {
+                return Err(GigasttError::Cancelled);
+            }
+            if state.pending_samples > 0 && state.audio_buffer.len() >= N_FFT {
+                self.decode_window(state, triplet)
+                    .map_err(|error| GigasttError::Inference {
+                        source: error.into(),
+                    })?;
+            }
+            if state.abort_requested() {
+                return Err(GigasttError::Cancelled);
+            }
+            let segment = self.flush_state(state);
+            // A cancelled postprocess preserves the assembler and marks failure.
+            // Once flush commits successfully, later cancellation belongs to the
+            // next operation; rejecting that final here would lose its text.
+            if state.failed {
+                return Err(GigasttError::Cancelled);
+            }
+            // A sub-frame tail cannot be decoded yet. Keep it pending so a
+            // reusable flush can combine it with the next chunk.
+            if state.audio_buffer.len() >= N_FFT {
+                state.pending_samples = 0;
+                Self::slide_streaming_window(state);
+            }
+            Ok(segment)
+        }));
+        match outcome {
+            Ok(Ok(segment)) => Ok(segment),
+            Ok(Err(error)) => {
+                state.failed = true;
+                self.publish_stream_partial(state);
+                Err(error)
+            }
+            Err(panic) => {
+                state.failed = true;
+                self.publish_stream_partial(state);
+                std::panic::resume_unwind(panic)
+            }
         }
-        if state.abort_requested() {
-            state.failed = true;
-            self.publish_stream_partial(state);
-            return (!state.assembler.is_empty())
-                .then(|| self.stream_partial(state, now_timestamp()));
-        }
-        self.flush_state(state)
     }
 
     /// Flush accumulated text as a Final segment (called on Stop/Close).
@@ -529,7 +587,14 @@ impl Engine {
         if state.assembler.is_empty() {
             return None;
         }
-        Some(self.finalize_stream_segment(state, now_timestamp(), EndpointReason::Stop))
+        match self.finalize_stream_segment(state, now_timestamp(), EndpointReason::Stop) {
+            Ok(segment) => Some(segment),
+            Err(_) => {
+                state.failed = true;
+                self.publish_stream_partial(state);
+                Some(self.stream_partial(state, now_timestamp()))
+            }
+        }
     }
 
     /// Flush for a terminal cap (session limit or shutdown).
@@ -584,14 +649,28 @@ impl Engine {
         state: &mut StreamingState,
         timestamp: f64,
         reason: EndpointReason,
-    ) -> TranscriptSegment {
+    ) -> Result<TranscriptSegment, GigasttError> {
         let partial = self.stream_partial(state, timestamp);
-        let mut segment = state.assembler.finalize_with_reason(timestamp, reason);
+        #[cfg(test)]
+        super::live_probe::begin_stage();
+        #[cfg(test)]
+        let postprocess_start = std::time::Instant::now();
+        let abort = state.abort.as_ref();
+        let cancelled =
+            || abort.is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed));
         let tail = self.apply_text_postprocess(
             partial.tentative.trim_start().to_owned(),
             state.itn.unwrap_or(self.itn),
             state.punctuation.unwrap_or(true),
-        );
+            DecodeControls {
+                abort: Some(&cancelled),
+                ..Default::default()
+            },
+        )?;
+        #[cfg(test)]
+        super::live_probe::stage("postprocess", postprocess_start.elapsed());
+        // Preserve the readable assembler if post-processing panics.
+        let mut segment = state.assembler.finalize_with_reason(timestamp, reason);
         segment.text = if partial.committed.is_empty() {
             tail
         } else if tail.is_empty() {
@@ -604,6 +683,6 @@ impl Engine {
         if let Some(snapshot) = &state.partial {
             snapshot.clear();
         }
-        segment
+        Ok(segment)
     }
 }

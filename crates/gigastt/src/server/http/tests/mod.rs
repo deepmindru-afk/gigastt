@@ -8,7 +8,7 @@ pub(super) use super::error::{
 };
 pub(super) use super::export::render_export_response;
 pub(super) use super::stream::{StreamError, sse_data_payload};
-pub(super) use super::transcribe::{raw_codec_to_wav, resolve_raw_codec};
+pub(super) use super::transcribe::{prepare_raw_audio, resolve_raw_codec};
 pub(super) use super::*;
 
 pub(super) use arc_swap::ArcSwap;
@@ -113,3 +113,9 @@ mod handlers;
 mod jobs;
 mod serde_contract;
 mod sse;
+
+mod stream_backpressure;
+
+mod stream_finalization;
+
+mod transcription_contracts;

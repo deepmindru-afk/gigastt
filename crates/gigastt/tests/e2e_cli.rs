@@ -299,6 +299,17 @@ fn cli_quantize_existing_is_noop() {
 
 // ─── model-gated: serve boot + graceful shutdown ────────────────────────────
 
+/// Reap only the subprocess owned by this test, including assertion unwinds.
+struct ServeChild(std::process::Child);
+
+impl Drop for ServeChild {
+    fn drop(&mut self) {
+        // Child::kill does not reap. Waiting also handles an already-exited child.
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
 #[ignore = "requires the GigaAM model (~225 MB INT8)"]
 #[test]
 fn cli_serve_boots_and_graceful_shutdown() {
@@ -311,51 +322,53 @@ fn cli_serve_boots_and_graceful_shutdown() {
     // biasing, limits build, metrics listener, server run) plus the graceful
     // SIGTERM shutdown path. `--punctuation off --itn off` and no `--vad` keep
     // it hermetic (no auxiliary model downloads).
-    let mut child = Command::new(bin())
-        .args([
-            "serve",
-            "--port",
-            &port.to_string(),
-            "--model-dir",
-            &md,
-            "--punctuation",
-            "off",
-            "--itn",
-            "off",
-            "--pool-size",
-            "1",
-            "--hotwords-default",
-            "--metrics",
-            "--metrics-listen",
-            &format!("127.0.0.1:{metrics_port}"),
-        ])
-        .env_remove("GIGASTT_VAD")
-        .env_remove("GIGASTT_ALLOW_BIND_ANY")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .expect("spawn serve");
+    let mut child = ServeChild(
+        Command::new(bin())
+            .args([
+                "serve",
+                "--port",
+                &port.to_string(),
+                "--model-dir",
+                &md,
+                "--punctuation",
+                "off",
+                "--itn",
+                "off",
+                "--pool-size",
+                "1",
+                "--hotwords-default",
+                "--metrics",
+                "--metrics-listen",
+                &format!("127.0.0.1:{metrics_port}"),
+            ])
+            .env_remove("GIGASTT_VAD")
+            .env_remove("GIGASTT_ALLOW_BIND_ANY")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn serve"),
+    );
 
-    // Wait for readiness (model load can take a while on a cold cache).
+    // Bootstrap /health is live before model loading finishes. Wait for the
+    // operational endpoint within the existing cold-start budget.
     let start = Instant::now();
     let mut ready = false;
     while start.elapsed() < Duration::from_secs(120) {
-        if let Ok(Some(status)) = child.try_wait() {
+        if let Ok(Some(status)) = child.0.try_wait() {
             panic!("serve exited early with {status}");
         }
-        if http_status(port, "/health") == Some(200) {
+        if http_status(port, "/ready") == Some(200) {
             ready = true;
             break;
         }
         std::thread::sleep(Duration::from_millis(200));
     }
-    assert!(ready, "server did not become healthy within 120s");
+    assert!(ready, "server did not become ready within 120s");
 
-    // Metrics live on their own loopback port, bound by a separate listener that
-    // can come up slightly after the main server reports `/health` ready — more
-    // so under the instrumented coverage build. Poll it instead of probing once,
-    // to avoid a readiness race (the single-probe version flaked in CI's
-    // `Coverage (E2E)` job while the non-instrumented `E2E Tests` job passed).
+    assert_eq!(http_status(port, "/health"), Some(200));
+
+    // Poll the separate metrics listener after operational readiness, retaining
+    // its existing budget for scheduling delays under instrumented builds.
     let metrics_start = Instant::now();
     let mut metrics_ok = false;
     while metrics_start.elapsed() < Duration::from_secs(30) {
@@ -374,12 +387,12 @@ fn cli_serve_boots_and_graceful_shutdown() {
     // also what flushes the subprocess's coverage profile.
     let _ = Command::new("kill")
         .arg("-TERM")
-        .arg(child.id().to_string())
+        .arg(child.0.id().to_string())
         .status();
 
     let exit_start = Instant::now();
     loop {
-        match child.try_wait().expect("try_wait") {
+        match child.0.try_wait().expect("try_wait") {
             Some(status) => {
                 assert!(
                     status.success(),
@@ -389,7 +402,7 @@ fn cli_serve_boots_and_graceful_shutdown() {
             }
             None => {
                 if exit_start.elapsed() > Duration::from_secs(20) {
-                    let _ = child.kill();
+                    let _ = child.0.kill();
                     panic!("serve did not exit within 20s of SIGTERM");
                 }
                 std::thread::sleep(Duration::from_millis(100));

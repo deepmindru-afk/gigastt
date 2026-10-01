@@ -15,17 +15,47 @@ struct WindowDecode {
     completed: bool,
 }
 
-fn publish_window(
-    windows: &dyn PcmWindows,
-    ctl: DecodeControls<'_>,
-    words: &[WordInfo],
-) -> Result<(), GigasttError> {
-    if ctl.on_partial.is_some() {
-        let mut original = words.to_vec();
-        windows.remap_words(&mut original);
-        ctl.publish(&original);
+#[derive(Default)]
+struct WindowPublisher {
+    mapped_stable: usize,
+}
+
+/// Carry the transcript and its publication cursor together when a parallel
+/// attempt falls back to the serial window loop.
+#[derive(Default)]
+struct WindowTranscript {
+    end_sample: usize,
+    words: Vec<WordInfo>,
+    publisher: WindowPublisher,
+}
+
+impl WindowPublisher {
+    fn publish(
+        &mut self,
+        windows: &dyn PcmWindows,
+        ctl: DecodeControls<'_>,
+        words: &[WordInfo],
+        retained: usize,
+    ) -> Result<(), GigasttError> {
+        if ctl.on_partial.is_some() {
+            let retained = retained.min(self.mapped_stable);
+            let suffix = &words[retained..];
+            let boundary = windows.remap_stable_before();
+            self.mapped_stable = retained
+                + suffix
+                    .iter()
+                    .position(|word| word.start > boundary || word.end > boundary)
+                    .unwrap_or(suffix.len());
+            let mut original = suffix.to_vec();
+            windows.remap_words(&mut original);
+            ctl.publish_update(WordUpdate {
+                retained,
+                words: original,
+                channel: None,
+            });
+        }
+        ctl.check_abort()
     }
-    ctl.check_abort()
 }
 
 impl From<&PcmWindow<'_>> for OwnedPcmWindow {
@@ -88,15 +118,16 @@ fn stitch_report(
     n_samples: usize,
     words: Vec<WordInfo>,
     ctl: DecodeControls<'_>,
-) -> Vec<WordInfo> {
+) -> (Vec<WordInfo>, usize) {
     // An abort before any new word must not trim the preceding window's tail.
     let extends_previous = words
         .last()
         .is_some_and(|word| merged.last().is_none_or(|previous| word.end > previous.end));
     let merged = if ctl.aborted() && !extends_previous {
-        merged
+        let retained = merged.len();
+        (merged, retained)
     } else {
-        stitch_chunk_words(merged, words, seam_seconds(prev_end, start_sample))
+        stitch_chunk_words_retained(merged, words, seam_seconds(prev_end, start_sample))
     };
     if !ctl.aborted() {
         ctl.report((start_sample + n_samples) as u64);
@@ -173,6 +204,7 @@ impl Engine {
         biaser: Option<&bias::Biaser>,
         ctl: DecodeControls,
     ) -> Result<Vec<WordInfo>, GigasttError> {
+        ctl.check_abort()?;
         if regions.is_empty() {
             tracing::info!("VAD found no speech; skipping decode");
             return Ok(Vec::new());
@@ -188,16 +220,15 @@ impl Engine {
             float_samples.len(),
             regions.len()
         );
-        let publish = |words: &[WordInfo]| {
-            let mut original = words.to_vec();
-            for w in &mut original {
+        let publish = |mut update: WordUpdate| {
+            for w in &mut update.words {
                 w.start = crate::vad::remap_compressed_seconds(w.start, regions, 16000.0);
                 w.end = crate::vad::remap_compressed_seconds(w.end, regions, 16000.0);
             }
-            ctl.publish(&original);
+            ctl.publish_update(update);
         };
         let mapped = DecodeControls {
-            on_partial: ctl.on_partial.map(|_| &publish as &dyn Fn(&[WordInfo])),
+            on_partial: ctl.on_partial.map(|_| &publish as &dyn Fn(WordUpdate)),
             ..ctl
         };
         let mut words = self.decode_words(&speech, triplet, biaser, mapped)?;
@@ -237,9 +268,16 @@ impl Engine {
         biaser: Option<&bias::Biaser>,
         ctl: DecodeControls,
     ) -> Result<Vec<WordInfo>, GigasttError> {
+        ctl.check_abort()?;
         let cap = self.file_window_concurrency();
         if cap <= 1 {
-            return self.decode_windows_serial(windows, triplet, biaser, ctl, 0, Vec::new());
+            return self.decode_windows_serial(
+                windows,
+                triplet,
+                biaser,
+                ctl,
+                WindowTranscript::default(),
+            );
         }
         self.decode_windows_maybe_parallel(windows, triplet, biaser, ctl, cap)
     }
@@ -252,6 +290,7 @@ impl Engine {
         ctl: DecodeControls,
         cap: usize,
     ) -> Result<Vec<WordInfo>, GigasttError> {
+        let mut publisher = WindowPublisher::default();
         // Copy the first window so we can peek a second without holding a
         // borrow into `FileWindows`. A single-window file never steals extras.
         let Some(first) = next_owned_window(windows)? else {
@@ -261,8 +300,9 @@ impl Engine {
             return Err(GigasttError::Cancelled);
         }
         let Some(second) = next_owned_window(windows)? else {
-            let words = self.finish_window(Vec::new(), 0, first.span(), triplet, biaser, ctl)?;
-            publish_window(windows, ctl, &words)?;
+            let (words, retained) =
+                self.finish_window(Vec::new(), 0, first.span(), triplet, biaser, ctl)?;
+            publisher.publish(windows, ctl, &words, retained)?;
             return Ok(words);
         };
 
@@ -278,13 +318,23 @@ impl Engine {
                 cap,
                 "long-form window-parallel requested; no idle extra slot, serial"
             );
-            let mut merged =
+            let (merged, retained) =
                 self.finish_window(Vec::new(), 0, first.span(), triplet, biaser, ctl)?;
-            publish_window(windows, ctl, &merged)?;
-            merged =
+            publisher.publish(windows, ctl, &merged, retained)?;
+            let (merged, retained) =
                 self.finish_window(merged, first.end(), second.span(), triplet, biaser, ctl)?;
-            publish_window(windows, ctl, &merged)?;
-            return self.decode_windows_serial(windows, triplet, biaser, ctl, second.end(), merged);
+            publisher.publish(windows, ctl, &merged, retained)?;
+            return self.decode_windows_serial(
+                windows,
+                triplet,
+                biaser,
+                ctl,
+                WindowTranscript {
+                    end_sample: second.end(),
+                    words: merged,
+                    publisher,
+                },
+            );
         }
 
         tracing::info!(slots = 1 + extras.len(), "long-form window-parallel decode");
@@ -297,6 +347,7 @@ impl Engine {
                 return Err(GigasttError::Cancelled);
             }
             while pending.len() < n_slots {
+                ctl.check_abort()?;
                 match next_owned_window(windows)? {
                     Some(w) => pending.push(w),
                     None => break,
@@ -315,8 +366,9 @@ impl Engine {
             }
             let decoded =
                 self.decode_wave_parallel(&pending, triplet, &mut extras, biaser, ctl.abort)?;
+            let mut retained = merged.len();
             for (win, decoded) in pending.iter().zip(decoded) {
-                merged = stitch_report(
+                let (updated, unchanged) = stitch_report(
                     merged,
                     prev_end,
                     win.start_sample,
@@ -324,12 +376,14 @@ impl Engine {
                     decoded.words,
                     ctl,
                 );
+                merged = updated;
+                retained = retained.min(unchanged);
                 prev_end = win.end();
                 if !decoded.completed {
                     break;
                 }
             }
-            publish_window(windows, ctl, &merged)?;
+            publisher.publish(windows, ctl, &merged, retained)?;
             pending.clear();
         }
         Ok(merged)
@@ -341,15 +395,25 @@ impl Engine {
         triplet: &mut SessionTriplet,
         biaser: Option<&bias::Biaser>,
         ctl: DecodeControls,
-        mut prev_end: usize,
-        mut merged: Vec<WordInfo>,
+        transcript: WindowTranscript,
     ) -> Result<Vec<WordInfo>, GigasttError> {
-        while let Some(window) = windows.next_window()? {
+        let WindowTranscript {
+            end_sample: mut prev_end,
+            words: mut merged,
+            mut publisher,
+        } = transcript;
+        loop {
+            ctl.check_abort()?;
+            let Some(window) = windows.next_window()? else {
+                break;
+            };
             let span = PcmSpan::from(&window);
             let end = span.end();
-            merged = self.finish_window(merged, prev_end, span, triplet, biaser, ctl)?;
+            let (updated, retained) =
+                self.finish_window(merged, prev_end, span, triplet, biaser, ctl)?;
+            merged = updated;
             prev_end = end;
-            publish_window(windows, ctl, &merged)?;
+            publisher.publish(windows, ctl, &merged, retained)?;
         }
         ctl.check_abort()?;
         Ok(merged)
@@ -363,7 +427,7 @@ impl Engine {
         triplet: &mut SessionTriplet,
         biaser: Option<&bias::Biaser>,
         ctl: DecodeControls,
-    ) -> Result<Vec<WordInfo>, GigasttError> {
+    ) -> Result<(Vec<WordInfo>, usize), GigasttError> {
         if ctl.aborted() {
             return Err(GigasttError::Cancelled);
         }
@@ -550,6 +614,138 @@ impl Engine {
                 }
             }
             _ => self.decode_words(float_samples, triplet, biaser, ctl),
+        }
+    }
+}
+
+#[cfg(test)]
+mod publication_tests {
+    use super::*;
+    use crate::inference::TranscriptSnapshot;
+
+    struct MappedWindows {
+        regions: Vec<(usize, usize)>,
+    }
+    impl PcmWindows for MappedWindows {
+        fn next_window(&mut self) -> Result<Option<PcmWindow<'_>>, GigasttError> {
+            Ok(None)
+        }
+        fn remap_stable_before(&self) -> f64 {
+            self.regions
+                .iter()
+                .map(|(start, end)| end - start)
+                .sum::<usize>() as f64
+                / 16000.0
+        }
+        fn remap_words(&self, words: &mut [WordInfo]) {
+            for word in words {
+                word.start =
+                    crate::vad::remap_compressed_seconds(word.start, &self.regions, 16000.0);
+                word.end = crate::vad::remap_compressed_seconds(word.end, &self.regions, 16000.0);
+            }
+        }
+    }
+
+    #[test]
+    fn test_publication_remaps_previously_clamped_vad_tail() {
+        let snapshot = TranscriptSnapshot::default();
+        let writer = std::cell::RefCell::new(crate::inference::state::SnapshotPublisher::default());
+        let publish = |update: WordUpdate| {
+            writer.borrow_mut().publish(
+                &snapshot,
+                update.retained,
+                update.words,
+                update.channel,
+                123.0,
+            )
+        };
+        let ctl = DecodeControls {
+            on_partial: Some(&publish),
+            ..Default::default()
+        };
+        let mut publisher = WindowPublisher::default();
+        let mut source = MappedWindows {
+            regions: vec![(0, 16000)],
+        };
+        let words = vec![
+            WordInfo::new("first", 0.0, 0.5, 0.9, None),
+            WordInfo::new("tail", 0.75, 1.1, 0.8, None),
+        ];
+        publisher.publish(&source, ctl, &words, 0).unwrap();
+        assert_eq!(snapshot.get().unwrap().words[1].end, 1.0);
+        source.regions.push((32000, 48000));
+        publisher
+            .publish(&source, ctl, &words, words.len())
+            .unwrap();
+        let mut expected = words;
+        source.remap_words(&mut expected);
+        assert_eq!(
+            serde_json::to_value(snapshot.get().unwrap().words).unwrap(),
+            serde_json::to_value(expected).unwrap()
+        );
+        assert_eq!(snapshot.get().unwrap().words[1].end, 2.1);
+    }
+
+    #[test]
+    fn test_publication_stitch_deltas_match_every_full_hypothesis() {
+        for batch in [1, 3] {
+            let snapshot = TranscriptSnapshot::default();
+            let writer =
+                std::cell::RefCell::new(crate::inference::state::SnapshotPublisher::default());
+            let publish = |update: WordUpdate| {
+                writer.borrow_mut().publish(
+                    &snapshot,
+                    update.retained,
+                    update.words,
+                    update.channel,
+                    123.0,
+                )
+            };
+            let ctl = DecodeControls {
+                on_partial: Some(&publish),
+                ..Default::default()
+            };
+            let source = MappedWindows {
+                regions: vec![(0, 160_000_000)],
+            };
+            let mut publisher = WindowPublisher::default();
+            let mut merged = Vec::new();
+            let mut previous_end = 0;
+            for wave in 0..12 {
+                let mut wave_retained = merged.len();
+                for offset in 0..batch {
+                    let n = wave * batch + offset;
+                    let start = n * 20 * 16000;
+                    let words = (0..24)
+                        .map(|offset| {
+                            WordInfo::new(
+                                format!("word{}", n * 20 + offset),
+                                (n * 20 + offset) as f64,
+                                (n * 20 + offset) as f64 + 0.5,
+                                0.9,
+                                None,
+                            )
+                        })
+                        .collect();
+                    let old = merged.clone();
+                    let (updated, retained) =
+                        stitch_report(merged, previous_end, start, 24 * 16000, words, ctl);
+                    assert_eq!(
+                        serde_json::to_value(&old[..retained]).unwrap(),
+                        serde_json::to_value(&updated[..retained]).unwrap()
+                    );
+                    merged = updated;
+                    wave_retained = wave_retained.min(retained);
+                    previous_end = start + 24 * 16000;
+                }
+                publisher
+                    .publish(&source, ctl, &merged, wave_retained)
+                    .unwrap();
+                assert_eq!(
+                    serde_json::to_value(snapshot.get().unwrap().words).unwrap(),
+                    serde_json::to_value(&merged).unwrap()
+                );
+            }
         }
     }
 }

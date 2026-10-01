@@ -18,6 +18,19 @@ pub trait RuntimeFactory: Send + Sync + 'static {
 
 /// Owns loaded sessions. One runtime per `Engine`.
 pub trait Runtime: Send + Sync + 'static {
+    /// Load a session using an already verified SHA-256 of a self-contained
+    /// ONNX file. Callers supplying a hash must keep the source immutable for
+    /// the duration of pool loading and must not use external-data models.
+    /// `None` requests normal source inspection. Other backends may ignore it.
+    fn load_session_with_model_hash(
+        &self,
+        model_path: &std::path::Path,
+        is_encoder: bool,
+        _source_hash: Option<&str>,
+    ) -> Result<Box<dyn RuntimeSession>, RuntimeError> {
+        self.load_session(model_path, is_encoder)
+    }
+
     fn load_session(
         &self,
         model_path: &std::path::Path,

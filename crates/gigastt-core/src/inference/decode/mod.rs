@@ -69,9 +69,16 @@ pub(crate) fn argmax(logits: &[f32], blank_id: usize) -> usize {
         .unwrap_or(blank_id)
 }
 
-/// Softmax probability `logits` assigns to `token`. Zero for an empty buffer or
-/// a token beyond it.
+#[cfg(test)]
+thread_local! {
+    pub(super) static CONFIDENCE_NORMALIZATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Softmax probability assigned by the original model logits.
+/// Zero for an empty buffer or a token beyond it.
 pub(crate) fn token_confidence(logits: &[f32], token: usize) -> f32 {
+    #[cfg(test)]
+    CONFIDENCE_NORMALIZATIONS.with(|count| count.set(count.get() + 1));
     let Some(&logit) = logits.get(token) else {
         return 0.0;
     };
@@ -83,6 +90,7 @@ pub(crate) fn token_confidence(logits: &[f32], token: usize) -> f32 {
 /// Argmax with softmax confidence score.
 ///
 /// Returns `(token_id, confidence)` where confidence is the softmax probability.
+#[cfg(test)]
 pub(crate) fn argmax_with_confidence(logits: &[f32], blank_id: usize) -> (usize, f32) {
     if logits.is_empty() {
         return (blank_id, 0.0);
@@ -96,9 +104,10 @@ pub(crate) fn argmax_with_confidence(logits: &[f32], blank_id: usize) -> (usize,
 /// During blank runs, decoder inputs (prev_token, h, c) are unchanged, so the
 /// output is deterministic and the buffers are reused (read-only) without
 /// re-calling the decoder. On a non-blank token the decoder runs again and
-/// overwrites these buffers in place ([`copy_from_slice`]), so steady-state
-/// decoding allocates nothing per token. The buffers are sized once on the
-/// first decode call and stay stable for the rest of the loop.
+/// copies directly into these buffers on ORT, avoiding intermediate owned
+/// output tensors. Buffer capacity is retained for this decode invocation;
+/// runtime input wrappers and native inference allocations still remain.
+/// Other backends may use the compatibility path through owned outputs.
 #[derive(Default)]
 pub(crate) struct DecoderOutput {
     /// Decoder output vector [PRED_HIDDEN].
@@ -109,6 +118,7 @@ pub(crate) struct DecoderOutput {
     new_c: Vec<f32>,
 }
 
+#[cfg(test)]
 impl DecoderOutput {
     /// Overwrite `dst` in place with `src`, resizing only if the length differs
     /// (first call / shape change). Steady-state calls hit the `copy_from_slice`
@@ -183,29 +193,12 @@ fn run_decoder(
         .context("decoder c tensor is not f32")?
         .copy_from_slice(&state.c);
 
-    let decoder_outputs = decoder
-        .run(&bufs.decoder_inputs)
+    decoder
+        .run_f32_into(
+            &bufs.decoder_inputs,
+            &mut [&mut out.dec_data, &mut out.new_h, &mut out.new_c],
+        )
         .context("Decoder inference failed")?;
-
-    let dec_data = decoder_outputs[0]
-        .view()
-        .data()
-        .as_f32()
-        .context("Failed to extract decoder output")?;
-    let new_h_data = decoder_outputs[1]
-        .view()
-        .data()
-        .as_f32()
-        .context("Failed to extract decoder h state")?;
-    let new_c_data = decoder_outputs[2]
-        .view()
-        .data()
-        .as_f32()
-        .context("Failed to extract decoder c state")?;
-
-    DecoderOutput::fill(&mut out.dec_data, dec_data);
-    DecoderOutput::fill(&mut out.new_h, new_h_data);
-    DecoderOutput::fill(&mut out.new_c, new_c_data);
     Ok(())
 }
 
@@ -229,19 +222,9 @@ fn run_joiner_single(
         .context("joiner dec_data tensor is not f32")?
         .copy_from_slice(dec_data);
 
-    let joiner_outputs = joiner
-        .run(&bufs.joiner_inputs)
+    joiner
+        .run_f32_into(&bufs.joiner_inputs, &mut [logits_buf])
         .context("Joiner inference failed")?;
-
-    let logits = joiner_outputs[0]
-        .view()
-        .data()
-        .as_f32()
-        .context("Failed to extract joiner output")?;
-
-    // Reuse the buffer's capacity: copy in place after a one-time size match,
-    // so steady-state joiner calls allocate nothing.
-    DecoderOutput::fill(logits_buf, logits);
     Ok(())
 }
 
@@ -334,7 +317,7 @@ pub fn greedy_decode(
 /// it decides the pick, it does not get to report on it. A pick it flips
 /// spends this frame's override budget — see [`MAX_BIAS_OVERRIDES_PER_STEP`].
 ///
-/// Returns `(token, confidence, spent_override)`.
+/// Returns `(token, spent_override)`. Confidence is calculated only on emission.
 fn select_token(
     logits: &[f32],
     blank_id: usize,
@@ -342,7 +325,7 @@ fn select_token(
     bias_state: Option<&super::bias::BiasState>,
     bias_overrides: usize,
     biased_buf: &mut Vec<f32>,
-) -> (usize, f32, bool) {
+) -> (usize, bool) {
     match (biaser, bias_state) {
         (Some(b), Some(bs)) if bias_overrides < MAX_BIAS_OVERRIDES_PER_STEP => {
             biased_buf.clear();
@@ -350,12 +333,9 @@ fn select_token(
             b.boost_logits(bs, biased_buf);
             let boosted = argmax(biased_buf, blank_id);
             let spent = boosted != argmax(logits, blank_id);
-            (boosted, token_confidence(logits, boosted), spent)
+            (boosted, spent)
         }
-        _ => {
-            let (token, confidence) = argmax_with_confidence(logits, blank_id);
-            (token, confidence, false)
-        }
+        _ => (argmax(logits, blank_id), false),
     }
 }
 
@@ -498,7 +478,7 @@ fn greedy_decode_impl_with_abort<B: DecodeBackend>(
             )?;
 
             // === CONTEXTUAL HOTWORD BIASING (shallow fusion) ===
-            let (token, confidence, spent) = select_token(
+            let (token, spent) = select_token(
                 &logits_buf,
                 blank_id,
                 biaser,
@@ -538,7 +518,7 @@ fn greedy_decode_impl_with_abort<B: DecodeBackend>(
             tokens.push(TokenInfo {
                 token_id: token,
                 frame_index: t,
-                confidence,
+                confidence: token_confidence(&logits_buf, token),
             });
             tokens_this_step += 1;
         }

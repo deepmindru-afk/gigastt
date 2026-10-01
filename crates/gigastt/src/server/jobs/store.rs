@@ -90,8 +90,14 @@ pub struct JobStatusResponse {
 
 /// Build a public status view from a stored job.
 pub(crate) fn job_status_response(job: &Job) -> JobStatusResponse {
+    let mut response = job_status_metadata(job);
+    response.partial = job.partial.as_ref().and_then(|partial| partial.get());
+    response
+}
+
+fn job_status_metadata(job: &Job) -> JobStatusResponse {
     let percent = if job.total_seconds > 0.0 {
-        ((job.processed_seconds / job.total_seconds) * 100.0) as u32
+        (((job.processed_seconds / job.total_seconds) * 100.0) as u32).min(100)
     } else {
         0
     };
@@ -101,7 +107,7 @@ pub(crate) fn job_status_response(job: &Job) -> JobStatusResponse {
         processed_seconds: job.processed_seconds,
         percent,
         error: job.error.clone(),
-        partial: job.partial.as_ref().and_then(|partial| partial.get()),
+        partial: None,
     }
 }
 
@@ -173,10 +179,94 @@ impl Job {
         }
     }
 
+    /// Apply metadata and publish the corresponding event while the store
+    /// owns its mutation lock. Queue bookkeeping belongs to the store.
+    fn transition(&mut self, transition: JobTransition) -> TransitionOutcome {
+        let allowed = match &transition {
+            JobTransition::Start => self.status == JobStatus::Queued,
+            JobTransition::Cancel => !self.status.is_terminal(),
+            _ => self.status == JobStatus::Processing,
+        };
+        if !allowed {
+            return TransitionOutcome::Rejected(self.status);
+        }
+        match transition {
+            JobTransition::Start => {
+                self.status = JobStatus::Processing;
+                self.attempts += 1;
+            }
+            JobTransition::Complete(result) => {
+                self.status = JobStatus::Done;
+                self.processed_seconds = result.duration_s;
+                self.result = Some(result);
+                self.partial = None;
+            }
+            JobTransition::Fail(error) => {
+                self.status = JobStatus::Failed;
+                self.error = Some(error);
+            }
+            JobTransition::Retry => {
+                self.status = JobStatus::Queued;
+                self.abort = None;
+            }
+            JobTransition::Cancel => {
+                self.status = JobStatus::Cancelled;
+                if let Some(abort) = &self.abort {
+                    abort.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+            }
+        }
+        self.updated_at = gigastt_core::inference::now_timestamp();
+        if self.status.is_terminal() {
+            self.body = Bytes::new();
+            self.abort = None;
+        }
+        let event = self.terminal_event().unwrap_or(JobEvent::Progress {
+            percent: 0,
+            processed_seconds: 0.0,
+        });
+        self.broadcast(event);
+        TransitionOutcome::Applied
+    }
+
+    fn terminal_event(&self) -> Option<JobEvent> {
+        match self.status {
+            JobStatus::Done => Some(JobEvent::Done),
+            JobStatus::Failed => Some(JobEvent::Failed {
+                error: self
+                    .error
+                    .clone()
+                    .unwrap_or_else(|| "Transcription failed.".into()),
+            }),
+            JobStatus::Cancelled => Some(JobEvent::Cancelled),
+            _ => None,
+        }
+    }
+
+    /// Publish while holding the store mutation lock; never restore a stale
+    /// subscriber list or send progress after a terminal transition.
+    pub(crate) fn broadcast(&mut self, event: JobEvent) {
+        let compatible = matches!(
+            (&event, self.status),
+            (JobEvent::Done, JobStatus::Done)
+                | (JobEvent::Failed { .. }, JobStatus::Failed)
+                | (JobEvent::Cancelled, JobStatus::Cancelled)
+        ) || (!event.is_terminal() && !self.status.is_terminal());
+        if !compatible {
+            return;
+        }
+        self.event_channels
+            .retain(|tx| tx.send(event.clone()).is_ok() && !event.is_terminal());
+    }
+
     /// Register an SSE listener, pruning closed channels first. When the
     /// subscriber cap is reached, the oldest listener is evicted (its stream
     /// ends) so a connect/disconnect flood cannot grow the list without bound.
     pub(crate) fn subscribe(&mut self, tx: tokio::sync::mpsc::UnboundedSender<JobEvent>) {
+        if let Some(event) = self.terminal_event() {
+            let _ = tx.send(event);
+            return;
+        }
         self.event_channels.retain(|tx| !tx.is_closed());
         if self.event_channels.len() >= MAX_JOB_EVENT_SUBSCRIBERS {
             self.event_channels.remove(0);
@@ -185,6 +275,39 @@ impl Job {
     }
 }
 
+/// Guarded metadata transitions. Runtime handles are registered separately.
+pub enum JobTransition {
+    /// Claim a queued job and count this attempt.
+    Start,
+    /// Finish a processing job successfully.
+    Complete(gigastt_core::inference::TranscribeResult),
+    /// Fail a processing job with a sanitized public error.
+    Fail(String),
+    /// Requeue a processing job without releasing its upload.
+    Retry,
+    /// Cancel a queued or processing job and signal its runtime handle.
+    Cancel,
+}
+
+/// Result observed under the same lock as the attempted transition.
+#[derive(Debug, PartialEq, Eq)]
+pub enum TransitionOutcome {
+    Applied,
+    Rejected(JobStatus),
+    Missing,
+}
+
+/// Atomic admission rejected the upload because the queue is full.
+#[derive(Debug)]
+pub struct JobStoreFull;
+
+impl std::fmt::Display for JobStoreFull {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("job store is full")
+    }
+}
+impl std::error::Error for JobStoreFull {}
+
 /// Persistence boundary for jobs. Handlers talk to this trait; the in-memory
 /// implementation is the default, but a SQLite-backed store can be dropped in.
 pub trait JobStore: Send + Sync + 'static {
@@ -192,7 +315,63 @@ pub trait JobStore: Send + Sync + 'static {
     fn create<'a>(&'a self, job: Job) -> JobStoreFuture<'a, anyhow::Result<String>>;
     /// Return a clone of the job, if it exists.
     fn get<'a>(&'a self, id: &str) -> JobStoreFuture<'a, anyhow::Result<Option<Job>>>;
-    /// Apply an in-place mutation.
+    /// Read status metadata without requiring a completed transcript. The default
+    /// preserves existing stores; implementations can avoid cloning the result.
+    fn status<'a>(
+        &'a self,
+        id: &str,
+    ) -> JobStoreFuture<'a, anyhow::Result<Option<JobStatusResponse>>> {
+        let id = id.to_owned();
+        Box::pin(async move { Ok(self.get(&id).await?.as_ref().map(job_status_response)) })
+    }
+    /// Register a live listener or send the terminal event under one lock.
+    /// Returns false if the job does not exist.
+    fn subscribe<'a>(
+        &'a self,
+        id: &str,
+        tx: tokio::sync::mpsc::UnboundedSender<JobEvent>,
+    ) -> JobStoreFuture<'a, anyhow::Result<bool>> {
+        let id = id.to_owned();
+        Box::pin(async move {
+            if self.get(&id).await?.is_none() {
+                return Ok(false);
+            }
+            self.update(&id, Box::new(move |job| job.subscribe(tx)))
+                .await?;
+            Ok(true)
+        })
+    }
+    /// Apply a guarded lifecycle transition and publish its event atomically.
+    /// The default uses `update`; stores may override to also enqueue retries
+    /// in the same transaction. Legacy store lookup errors remain errors.
+    fn transition<'a>(
+        &'a self,
+        id: &str,
+        transition: JobTransition,
+    ) -> JobStoreFuture<'a, anyhow::Result<TransitionOutcome>> {
+        let id = id.to_owned();
+        Box::pin(async move {
+            if self.get(&id).await?.is_none() {
+                return Ok(TransitionOutcome::Missing);
+            }
+            let retry = matches!(transition, JobTransition::Retry);
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            self.update(
+                &id,
+                Box::new(move |job| {
+                    let _ = tx.send(job.transition(transition));
+                }),
+            )
+            .await?;
+            let outcome = rx.await?;
+            if retry && outcome == TransitionOutcome::Applied {
+                self.requeue(&id).await?;
+            }
+            Ok(outcome)
+        })
+    }
+    /// Apply an in-place runtime or metadata mutation. Lifecycle callers must
+    /// use `transition` so state and event publication remain indivisible.
     fn update<'a>(
         &'a self,
         id: &str,
@@ -267,11 +446,10 @@ impl JobStore for InMemoryJobStore {
             let mut jobs = self.jobs.lock();
             let mut queue = self.queue.lock();
             self.evict_expired_locked(&mut jobs, &mut queue);
-            // Race backstop behind the `is_full` gate in `submit_job` (which
-            // returns 429 + Retry-After): rejects on either the count or the
-            // byte budget so two concurrent submits can't both slip past the gate.
+            // Admission and insertion share the lock: concurrent uploads see
+            // the same count/byte budget and receive typed backpressure.
             if self.at_capacity(&jobs) {
-                return Err(anyhow::anyhow!("job store is full"));
+                return Err(JobStoreFull.into());
             }
             let id = job.id.clone();
             jobs.insert(id.clone(), job);
@@ -285,6 +463,62 @@ impl JobStore for InMemoryJobStore {
         Box::pin(async move {
             let jobs = self.jobs.lock();
             Ok(jobs.get(&id).cloned())
+        })
+    }
+
+    fn status<'a>(
+        &'a self,
+        id: &str,
+    ) -> JobStoreFuture<'a, anyhow::Result<Option<JobStatusResponse>>> {
+        let id = id.to_owned();
+        Box::pin(async move {
+            let snapshot = {
+                let jobs = self.jobs.lock();
+                jobs.get(&id)
+                    .map(|job| (job_status_metadata(job), job.partial.clone()))
+            };
+            // A snapshot can be updated by a blocking inference worker. Resolve
+            // its text after releasing the store lock, including after eviction.
+            Ok(snapshot.map(|(mut response, partial)| {
+                response.partial = partial.and_then(|partial| partial.get());
+                response
+            }))
+        })
+    }
+
+    fn subscribe<'a>(
+        &'a self,
+        id: &str,
+        tx: tokio::sync::mpsc::UnboundedSender<JobEvent>,
+    ) -> JobStoreFuture<'a, anyhow::Result<bool>> {
+        let id = id.to_owned();
+        Box::pin(async move {
+            let mut jobs = self.jobs.lock();
+            let Some(job) = jobs.get_mut(&id) else {
+                return Ok(false);
+            };
+            job.subscribe(tx);
+            Ok(true)
+        })
+    }
+
+    fn transition<'a>(
+        &'a self,
+        id: &str,
+        transition: JobTransition,
+    ) -> JobStoreFuture<'a, anyhow::Result<TransitionOutcome>> {
+        let id = id.to_owned();
+        Box::pin(async move {
+            let mut jobs = self.jobs.lock();
+            let Some(job) = jobs.get_mut(&id) else {
+                return Ok(TransitionOutcome::Missing);
+            };
+            let retry = matches!(transition, JobTransition::Retry);
+            let outcome = job.transition(transition);
+            if retry && outcome == TransitionOutcome::Applied {
+                self.queue.lock().push_back(id);
+            }
+            Ok(outcome)
         })
     }
 
@@ -347,6 +581,51 @@ impl InMemoryJobStore {
         let mut jobs = self.jobs.lock();
         if let Some(job) = jobs.get_mut(id) {
             job.updated_at -= seconds;
+        }
+    }
+}
+
+#[cfg(test)]
+mod polling_benchmark {
+    use super::*;
+
+    #[test]
+    #[ignore = "synthetic lock-hold benchmark; run explicitly with --nocapture"]
+    fn benchmark_completed_status_lock_hold() {
+        let store = InMemoryJobStore::new(RuntimeLimits::default());
+        let mut job = Job::queued(Bytes::new(), ExportParams::default());
+        job.status = JobStatus::Done;
+        job.result = Some(gigastt_core::inference::TranscribeResult {
+            text: "x".repeat(8 * 1024 * 1024),
+            words: vec![],
+            duration_s: 1.0,
+            confidence: None,
+        });
+        let id = job.id.clone();
+        store.jobs.lock().insert(id.clone(), job);
+        for legacy in [true, false] {
+            let mut elapsed = std::time::Duration::ZERO;
+            for _ in 0..200 {
+                let jobs = store.jobs.lock();
+                let started = std::time::Instant::now();
+                let job = jobs.get(&id).unwrap();
+                if legacy {
+                    let snapshot = std::hint::black_box(job.clone());
+                    elapsed += started.elapsed();
+                    drop(jobs);
+                    drop(snapshot);
+                } else {
+                    let snapshot =
+                        std::hint::black_box((job_status_metadata(job), job.partial.clone()));
+                    elapsed += started.elapsed();
+                    drop(jobs);
+                    drop(snapshot);
+                }
+            }
+            eprintln!(
+                "legacy={legacy} mean_lock_hold_ns={}",
+                elapsed.as_nanos() / 200
+            );
         }
     }
 }

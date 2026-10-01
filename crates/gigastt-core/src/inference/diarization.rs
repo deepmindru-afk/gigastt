@@ -46,6 +46,8 @@ impl Embedder for SharedExtractor {
     }
 
     fn embed(&self, samples: &[f32]) -> Result<Vec<f32>, EmbedderError> {
+        #[cfg(test)]
+        let _probe = crate::sidecar_probe::Probe::new("speaker_embedding_total");
         self.0.embed(samples)
     }
 }
@@ -90,6 +92,11 @@ enum SpeakerLoadSlot {
 }
 
 impl LazySpeakerEncoder {
+    #[cfg(test)]
+    pub(crate) fn is_pending(&self) -> bool {
+        matches!(*self.slot.lock(), SpeakerLoadSlot::Pending)
+    }
+
     /// True when the speaker encoder is resident.
     #[cfg(test)]
     pub(crate) fn is_loaded(&self) -> bool {
@@ -204,6 +211,8 @@ pub fn run_offline(
     encoder: &SpeakerEncoder,
     samples: &[f32],
 ) -> Result<Vec<LabeledTurn>, DiarizationOutcome> {
+    #[cfg(test)]
+    let _probe = crate::sidecar_probe::Probe::new("diarization_total");
     let config = DiaConfig::default();
     let vad_config = VadConfig::default();
     let pipeline = LegacyPipeline::new(config, vad_config);
@@ -220,6 +229,105 @@ pub fn run_offline(
             .collect()),
         Err(e) => Err(classify_offline_error(e)),
     }
+}
+
+/// Internal cancellation stays separate from capability/decode outcomes.
+pub(crate) enum OfflineRunError {
+    Cancelled,
+    Declined(DiarizationOutcome),
+}
+
+struct CancellableEmbedder<'a, E> {
+    inner: &'a E,
+    abort: &'a (dyn Fn() -> bool + Sync),
+}
+
+impl<E: Embedder> Embedder for CancellableEmbedder<'_, E> {
+    fn dim(&self) -> usize {
+        self.inner.dim()
+    }
+    fn embed(&self, samples: &[f32]) -> Result<Vec<f32>, EmbedderError> {
+        if (self.abort)() {
+            return Err(EmbedderError::InferenceFailed {
+                detail: "cancelled".into(),
+            });
+        }
+        let result = self.inner.embed(samples);
+        if (self.abort)() {
+            return Err(EmbedderError::InferenceFailed {
+                detail: "cancelled".into(),
+            });
+        }
+        result
+    }
+}
+
+struct CancellableVad<'a, V> {
+    inner: V,
+    abort: &'a (dyn Fn() -> bool + Sync),
+}
+
+impl<V: polyvoice::VoiceActivityDetector> polyvoice::VoiceActivityDetector
+    for CancellableVad<'_, V>
+{
+    fn reset(&mut self) {
+        self.inner.reset();
+    }
+    fn sample_rate(&self) -> u32 {
+        self.inner.sample_rate()
+    }
+    fn process(&mut self, samples: &[f32]) -> Result<Vec<f32>, polyvoice::VadError> {
+        if (self.abort)() {
+            return Err(polyvoice::VadError::Model("cancelled".into()));
+        }
+        let result = self.inner.process(samples);
+        if (self.abort)() {
+            return Err(polyvoice::VadError::Model("cancelled".into()));
+        }
+        result
+    }
+}
+
+/// The existing pipeline still owns clustering. Active model calls and the
+/// clustering call finish synchronously; checks prevent starting later stages.
+pub(crate) fn run_offline_with_abort(
+    encoder: &SpeakerEncoder,
+    samples: &[f32],
+    abort: Option<&(dyn Fn() -> bool + Sync)>,
+) -> Result<Vec<LabeledTurn>, OfflineRunError> {
+    let Some(abort) = abort else {
+        return run_offline(encoder, samples).map_err(OfflineRunError::Declined);
+    };
+    if abort() {
+        return Err(OfflineRunError::Cancelled);
+    }
+    let vad_config = VadConfig::default();
+    let pipeline = LegacyPipeline::new(DiaConfig::default(), vad_config);
+    let mut vad = CancellableVad {
+        inner: EnergyVad::new(-40.0, 16000, vad_config.frame_size),
+        abort,
+    };
+    let extractor = CancellableEmbedder {
+        inner: encoder.as_ref(),
+        abort,
+    };
+    let result = pipeline.run(samples, &extractor, &mut vad);
+    if abort() {
+        return Err(OfflineRunError::Cancelled);
+    }
+    result
+        .map(|result| {
+            result
+                .turns
+                .into_iter()
+                .map(|turn| LabeledTurn {
+                    start: turn.time.start,
+                    end: turn.time.end,
+                    speaker: turn.speaker.0,
+                })
+                .collect()
+        })
+        .map_err(|error| OfflineRunError::Declined(classify_offline_error(error)))
 }
 
 /// Map a polyvoice [`LegacyPipelineError`] to the client-facing [`DiarizationOutcome`].
@@ -243,11 +351,53 @@ fn classify_offline_error(e: LegacyPipelineError) -> DiarizationOutcome {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    static TURN_CONTAINMENT_CHECKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+fn turn_contains(turn: &LabeledTurn, midpoint: f64) -> bool {
+    #[cfg(test)]
+    TURN_CONTAINMENT_CHECKS.with(|count| count.set(count.get() + 1));
+    turn.start <= midpoint && turn.end >= midpoint
+}
+
 /// Assign `speaker` on each word by midpoint-in-turn lookup.
+/// Ordered, non-overlapping turns and ordered finite midpoints use a linear scan.
+/// Other inputs retain the original first-matching-turn behavior.
 pub fn assign_speakers_by_midpoint(turns: &[LabeledTurn], words: &mut [super::WordInfo]) {
+    if turns.is_empty() || words.is_empty() {
+        return;
+    }
+    let ordered_turns = turns
+        .iter()
+        .all(|t| t.start.is_finite() && t.end.is_finite() && t.start <= t.end)
+        && turns.windows(2).all(|pair| pair[0].end <= pair[1].start);
+    let ordered_words = words
+        .iter()
+        .try_fold(f64::NEG_INFINITY, |previous, word| {
+            let midpoint = (word.start + word.end) / 2.0;
+            (midpoint.is_finite() && midpoint >= previous).then_some(midpoint)
+        })
+        .is_some();
+    if ordered_turns && ordered_words {
+        let mut cursor = 0;
+        for word in words {
+            let mid = (word.start + word.end) / 2.0;
+            // Strict inequality preserves the earlier turn at a shared endpoint.
+            while cursor < turns.len() && turns[cursor].end < mid {
+                cursor += 1;
+            }
+            if let Some(turn) = turns.get(cursor).filter(|turn| turn_contains(turn, mid)) {
+                word.speaker = Some(turn.speaker);
+            }
+        }
+        return;
+    }
+    // Keep original first-match semantics for overlaps, unsorted or nonfinite data.
     for word in words {
         let mid = (word.start + word.end) / 2.0;
-        if let Some(turn) = turns.iter().find(|t| t.start <= mid && t.end >= mid) {
+        if let Some(turn) = turns.iter().find(|t| turn_contains(t, mid)) {
             word.speaker = Some(turn.speaker);
         }
     }
@@ -370,5 +520,212 @@ mod tests {
         // Second call returns the same Arc (shared session pool).
         let enc2 = lazy.get_or_load().expect("second get_or_load");
         assert!(Arc::ptr_eq(&enc, &enc2));
+    }
+}
+
+#[cfg(test)]
+mod assignment_tests {
+    use super::*;
+    use crate::inference::WordInfo;
+
+    fn meeting(size: usize) -> (Vec<LabeledTurn>, Vec<WordInfo>) {
+        let turns = (0..size)
+            .map(|i| LabeledTurn {
+                start: i as f64,
+                end: i as f64 + 1.0,
+                speaker: (i % 4) as u32,
+            })
+            .collect();
+        let words = (0..size)
+            .map(|i| WordInfo::new("word", i as f64 + 0.1, i as f64 + 0.9, 0.8, None))
+            .collect();
+        (turns, words)
+    }
+
+    #[test]
+    fn test_ordered_speaker_assignment_avoids_quadratic_turn_search() {
+        let (turns, mut words) = meeting(1000);
+        TURN_CONTAINMENT_CHECKS.with(|count| count.set(0));
+        assign_speakers_by_midpoint(&turns, &mut words);
+        assert!(
+            words
+                .iter()
+                .enumerate()
+                .all(|(i, w)| w.speaker == Some((i % 4) as u32))
+        );
+        let comparisons = TURN_CONTAINMENT_CHECKS.with(|count| count.get());
+        assert!(
+            comparisons <= 2 * (turns.len() + words.len()),
+            "{comparisons} turn containment checks"
+        );
+    }
+    fn legacy(turns: &[LabeledTurn], words: &mut [WordInfo]) {
+        for word in words {
+            let mid = (word.start + word.end) / 2.0;
+            if let Some(turn) = turns.iter().find(|t| t.start <= mid && t.end >= mid) {
+                word.speaker = Some(turn.speaker);
+            }
+        }
+    }
+
+    #[test]
+    fn test_speaker_assignment_preserves_boundaries_gaps_overlaps_and_unsorted_inputs() {
+        let cases = [
+            vec![],
+            vec![(0.0, 1.0), (1.0, 2.0), (3.0, 4.0)],
+            vec![(0.0, 3.0), (1.0, 2.0)],
+            vec![(3.0, 4.0), (0.0, 2.0)],
+            vec![(0.0, 0.0), (0.0, 1.0), (1.0, 1.0)],
+            vec![(f64::NAN, 2.0), (0.0, f64::INFINITY)],
+            vec![(2.0, 1.0), (0.0, 3.0)],
+        ];
+        for intervals in cases {
+            let turns: Vec<_> = intervals
+                .into_iter()
+                .enumerate()
+                .map(|(i, (start, end))| LabeledTurn {
+                    start,
+                    end,
+                    speaker: i as u32,
+                })
+                .collect();
+            for reverse in [false, true] {
+                for nonfinite in [false, true] {
+                    let mut mids = vec![-1.0, 0.0, 0.5, 1.0, 2.0, 2.5, 3.0, 4.0, 5.0];
+                    if nonfinite {
+                        mids.extend([f64::NAN, f64::INFINITY, f64::NEG_INFINITY]);
+                    }
+                    if reverse {
+                        mids.reverse();
+                    }
+                    let mut actual: Vec<_> = mids
+                        .into_iter()
+                        .map(|m| WordInfo::new("word", m, m, 0.8, Some(99)))
+                        .collect();
+                    let mut expected = actual.clone();
+                    legacy(&turns, &mut expected);
+                    assign_speakers_by_midpoint(&turns, &mut actual);
+                    assert_eq!(
+                        actual.iter().map(|w| w.speaker).collect::<Vec<_>>(),
+                        expected.iter().map(|w| w.speaker).collect::<Vec<_>>()
+                    );
+                }
+            }
+            assign_speakers_by_midpoint(&turns, &mut []);
+        }
+    }
+
+    #[test]
+    #[ignore = "synthetic assignment-only timing; run explicitly with --nocapture"]
+    fn benchmark_speaker_assignment_scaling() {
+        // The candidate includes the test-only containment counter; these
+        // debug timings are conservative and exclude embedding/clustering.
+        for size in [100, 1000, 5000] {
+            let (turns, template) = meeting(size);
+            let mut old = Vec::new();
+            let mut new = Vec::new();
+            for round in 0..6 {
+                for optimized in if round % 2 == 0 {
+                    [false, true]
+                } else {
+                    [true, false]
+                } {
+                    let mut words = template.clone();
+                    let start = std::time::Instant::now();
+                    if optimized {
+                        assign_speakers_by_midpoint(&turns, &mut words);
+                    } else {
+                        legacy(&turns, &mut words);
+                    }
+                    let nanos = start.elapsed().as_nanos();
+                    std::hint::black_box(words);
+                    if optimized {
+                        new.push(nanos);
+                    } else {
+                        old.push(nanos);
+                    }
+                }
+            }
+            old.sort_unstable();
+            new.sort_unstable();
+            eprintln!(
+                "words={size} turns={size} legacy_median_ns={} ordered_median_ns={}",
+                old[old.len() / 2],
+                new[new.len() / 2]
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod cancellation_tests {
+    use super::*;
+    use polyvoice::VoiceActivityDetector;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+    struct CountingEmbedder<'a> {
+        calls: &'a AtomicUsize,
+        cancelled: &'a AtomicBool,
+    }
+    impl Embedder for CountingEmbedder<'_> {
+        fn dim(&self) -> usize {
+            2
+        }
+        fn embed(&self, _: &[f32]) -> Result<Vec<f32>, EmbedderError> {
+            self.calls.fetch_add(1, Ordering::Relaxed);
+            self.cancelled.store(true, Ordering::Relaxed);
+            Ok(vec![1.0, 0.0])
+        }
+    }
+    #[test]
+    fn test_diarization_embed_cancellation_stops_before_next_window() {
+        let calls = AtomicUsize::new(0);
+        let cancelled = AtomicBool::new(false);
+        let inner = CountingEmbedder {
+            calls: &calls,
+            cancelled: &cancelled,
+        };
+        let abort = || cancelled.load(Ordering::Relaxed);
+        let guarded = CancellableEmbedder {
+            inner: &inner,
+            abort: &abort,
+        };
+        let config = VadConfig::default();
+        let pipeline = LegacyPipeline::new(DiaConfig::default(), config);
+        let samples = vec![0.5; 16000 * 8];
+        let mut vad = EnergyVad::new(-40.0, 16000, config.frame_size);
+        assert!(pipeline.run(&samples, &guarded, &mut vad).is_err());
+        assert!(guarded.embed(&samples).is_err());
+        assert_eq!(calls.load(Ordering::Relaxed), 1);
+
+        // Without cancellation the unchanged pipeline reaches later windows.
+        calls.store(0, Ordering::Relaxed);
+        let expected = pipeline.run(&samples, &inner, &mut vad).unwrap();
+        assert!(calls.load(Ordering::Relaxed) > 1);
+        let guarded = CancellableEmbedder {
+            inner: &inner,
+            abort: &|| false,
+        };
+        let mut vad = CancellableVad {
+            inner: EnergyVad::new(-40.0, 16000, config.frame_size),
+            abort: &|| false,
+        };
+        let actual = pipeline.run(&samples, &guarded, &mut vad).unwrap();
+        assert_eq!(actual.turns.len(), expected.turns.len());
+        for (actual, expected) in actual.turns.iter().zip(&expected.turns) {
+            assert_eq!(actual.time.start, expected.time.start);
+            assert_eq!(actual.time.end, expected.time.end);
+            assert_eq!(actual.speaker, expected.speaker);
+        }
+    }
+
+    #[test]
+    fn test_diarization_vad_cancellation_prevents_processing() {
+        let mut guarded = CancellableVad {
+            inner: EnergyVad::new(-40.0, 16000, 512),
+            abort: &|| true,
+        };
+        // Empty input normally succeeds, so the error proves the boundary check.
+        assert!(guarded.process(&[]).is_err());
     }
 }

@@ -4,9 +4,9 @@
 
 | Version | Supported |
 |---------|-----------|
-| 2.21.x  | Yes (current)  |
-| 2.20.x  | Yes (previous) |
-| < 2.20  | No             |
+| 2.22.x  | Yes (current)  |
+| 2.21.x  | Yes (previous) |
+| < 2.21  | No             |
 
 ## Reporting a Vulnerability
 

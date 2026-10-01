@@ -13,13 +13,58 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 
 ## [Unreleased]
 
+## [2.22.0] - 2026-10-01
+
+### Performance
+
+- Skip confidence normalization for discarded CTC blanks and repeated labels,
+  and RNN-T blanks and tokens beyond the per-frame cap. Emitted confidence still
+  uses the original model logits.
+
 ### Changed
+
+- Prepare raw PCMU/PCMA/G.722 uploads with duration checks before codec allocation
+  and cancellation checks during resampling. Clips up to 30 seconds bypass the
+  temporary WAV container with identical PCM16 precision; longer clips retain
+  compact PCM16 WAV storage to avoid doubling retained audio memory. See
+  [raw telephony measurements](docs/raw-telephony-pcm.md).
+- Add cross-mode transcription contract checks for observable REST/job overrides, cancelled job registration, and real RNN-T numerical parity across file and channel source representations.
+
+- Poll cancellation during channel scanning and buffered audio decode, between offline diarization steps, and across speaker-loading and text-postprocessing boundaries. Preserve readable partial transcripts and document the synchronous calls that can delay worker/resource release.
 
 - Run a bounded, serial model smoke gate on every PR: pinned CPU encoder and
   exact transcription oracle plus real-speech WebSocket finalization coverage.
 - Keep internal planning files local, publish benchmark and edge protocols under
   `docs/`, and check public content and Git metadata for internal identifiers.
+- Reuse FFT scratch storage during mel feature extraction instead of allocating
+  it for every audio frame; streaming keeps the storage in its existing buffer.
+- Withhold primary four-domain `rnnt` WER and ranking claims until raw results
+  and complete run provenance are retrievable; distinguish historical reports
+  from the older published `e2e_rnnt` artifacts.
+- Reuse RNN-T decoder and joiner output buffers directly at the ONNX Runtime
+  boundary, removing intermediate owned tensor copies during token decoding.
+- Assign speakers with a linear cursor for ordered, non-overlapping turns;
+  preserve first-match behavior for overlaps, unsorted inputs and boundaries.
+- Publish file-transcription snapshots from replacement suffixes instead of
+  rebuilding the accumulated transcript after every window. Readers still get
+  complete owned transcripts; completed split channels share their stored words.
+  See [snapshot allocation measurements](docs/transcript-snapshot-memory.md).
+- Reuse the stereo Opus PCM already decoded during channel detection for VAD
+  transcription. Mono fallback, streaming scans for other formats, duration
+  limits and speaker mapping are unchanged.
+- Job status polling copies only status metadata, avoiding completed transcript
+  copies under the shared queue lock. Result downloads retain owned snapshots.
+- Clarify that stable-prefix streaming windows have a soft slide trigger, not
+  a hard retained-audio bound; document deterministic counterexamples and a
+  resource-limit correction contract without changing commitment behavior.
+- Add opt-in live-window research measurements for decode cadence, window
+  geometry, concurrency and frontend reuse; production defaults are unchanged.
+- Add opt-in [sidecar contention measurements](docs/sidecar-contention.md) for
+  mixed interactive and batch recognition, separating cold use, lock waits and warm execution. Production
+  sidecar sharing and inference defaults are unchanged.
 
+- Document Linux OpenSSL build prerequisites and custom-prefix discovery for
+  the ONNX Runtime downloader, including the environment used by Git hooks.
 - Require Symphonia 0.6.1 and remove the vendored metadata and Matroska
   patches. Upstream now handles APEv2 size overflow and unknown-size WebM
   Clusters; the fuzz workspace uses the same upstream fixes.
@@ -36,6 +81,13 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
   revision does not include a rerun.
 
 ### Added
+
+- Reproducible CTC hotword beam allocation profiling with real speech logits,
+  separate encoder timings and an ambiguity stress case; the eight-beam
+  decoder remains unchanged. See [the profile](docs/ctc-beam-profile.md).
+- Reproducible file-window thread-launch and mixed live/batch scheduling
+  measurements, including shared-pool waiting and dedicated-pool tradeoffs.
+  See [the scheduling profile](docs/file-window-scheduling.md).
 
 - **`gigastt quantize --skip-conv`.** Packaging rebuild that leaves
   convolutions in FP32 and still quantizes `MatMul` and `Gemm`. The
@@ -78,11 +130,72 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 
 ### Fixed
 
+- Keep CPU and CUDA Docker dependency-cache stubs aligned with the new benchmark
+  targets, with a fast manifest regression check before image builds.
+
+- Resolve Homebrew updates from validated release-run metadata so a manual Release
+  dispatched from main can publish a different existing tag and still propose its
+  formula pins. Reject stale attempt metadata and retain the manual fallback.
+
+- Wait for operational readiness in the CLI server smoke test before checking
+  metrics, and reap the owned subprocess on assertion failures. Startup and
+  metrics time budgets are unchanged.
+- Package Android ONNX Runtime 1.27.0 to satisfy the Rust binding API, with
+  checksum, C header, ABI archive checks, and a dependency compatibility CI gate.
+
+- Build Android release AARs from the validated tag commit and use its version
+  consistently for native source, Gradle publication, and release filenames.
+  Tagged runs require an existing release; untagged dispatches build artifacts only.
+- Allow releases without the optional minisign secret while keeping mandatory
+  artifact checks; signed releases require every expected detached signature.
+
+- Resolve and validate release tags before building artifacts. Manual dispatch,
+  binary packages, SBOMs and container images now share one immutable source
+  commit, with workflow and artifact source recorded separately in provenance.
+- Propose validated Homebrew release pins through a protected pull request instead
+  of pushing directly to main; document the required bot-PR workflow approval.
+- Apply the no-progress timeout to native and OpenAI file streams, close timed-out responses independently of native calls, and retain upload and pool ownership until the worker exits.
+
 - Provision punctuation and VAD sidecars before model-backed coverage tests,
   including recognition-only cache hits. Pin the encoder oracle to CPU/rnnt,
   record model provenance, and calibrate its maximum-error bound against the
   observed CI runner while retaining cosine and exact-transcript checks.
+- Enforce request duration limits for predecoded mono and split-channel PCM
+  before inference, matching encoded-source boundaries without imposing an
+  encoded-buffer allocation ceiling on caller-owned samples.
 
+- Preserve per-request punctuation, ITN, VAD, and hotword settings when channel
+  splitting falls back to mono or uses per-channel VAD processing.
+- Keep split-channel transcription progress monotonic across channels so healthy
+  long requests do not hit false inference timeouts. Jobs retain processed time
+  for unknown-duration files and scale split-channel completion correctly.
+  The no-progress watchdog now checks every 100 ms instead of once per timeout.
+- Make asynchronous job transitions and SSE subscriptions atomic so cancellation,
+  completion and concurrent listeners cannot produce conflicting or missing terminal
+  events. Concurrent queue-capacity rejections now return HTTP 429 with retry hints.
+- Load the lazy speaker model for WebSocket Configure on a blocking worker,
+  keeping async workers responsive and honoring shutdown and disconnect while
+  initialization is in progress.
+- Preserve streaming tail-decode failures instead of reporting successful completion.
+  WebSocket and file SSE return an error while retaining readable partial text;
+  failed OpenAI streams no longer emit completion markers. The additive
+  `Engine::try_finish_stream` exposes finalization errors, and C, Node, and UniFFI
+  flush calls decode pending audio and propagate failures. Successful flushes
+  remain reusable.
+- Bound concurrent HTTP uploads before body buffering across REST, SSE, OpenAI
+  multipart and jobs. Excess uploads receive 503 with a retry hint; retained
+  inputs keep their admission permit until blocking work finishes.
+
+- Cancel stalled native and OpenAI file SSE producers after a 30-second output
+  wait, and interrupt full-queue sends on shutdown or disconnect so unread
+  responses cannot indefinitely retain inference slots.
+- Bind CPU optimized graph caches to encoder content and ORT configuration,
+  preventing stale inference after same-name or timestamp-preserving model
+  replacements. Legacy caches are rebuilt; cache GC retains installed content
+  across configurations. Models with possible external tensors bypass caching.
+
+- Clear reused mel output for empty and sub-frame audio so it matches fresh
+  computation instead of retaining features from the previous input.
 - **WebSocket sessions no longer panic on startup when
   `GIGASTT_MAX_SESSION_SECS=0`.** Previously, the unlimited-session deadline
   was computed as `Instant::now() + Duration::from_secs(u64::MAX / 2)`, which
@@ -1455,6 +1568,10 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 
 ## [2.3.0] - 2026-06-20
 
+> Accuracy claims below are historical release reports. The primary `rnnt`
+> results and complete provenance have not been recovered; current documentation
+> withholds those claims. See [benchmark evidence](docs/benchmarks.md#evidence-required-to-restore-the-primary-scores).
+
 This release makes the lower-WER `rnnt` head the default and lands the INT8
 integer-compute speed fix, voice activity detection, contextual hotword biasing,
 punctuation/ITN restoration for the `rnnt` head, export formats, dual-WER benchmark
@@ -2807,7 +2924,8 @@ _Release candidate for v0.9.0 — bundles five P0 fixes plus two supporting item
 - Multi-format audio support: WAV, MP3, M4A/AAC, OGG/Vorbis, FLAC (via symphonia).
 - 39 unit tests (tokenizer, features, decode, inference, protocol).
 
-[Unreleased]: https://github.com/ekhodzitsky/gigastt/compare/v2.21.0...HEAD
+[Unreleased]: https://github.com/ekhodzitsky/gigastt/compare/v2.22.0...HEAD
+[2.22.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.21.0...v2.22.0
 [2.21.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.20.0...v2.21.0
 [2.20.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.19.0...v2.20.0
 [2.19.0]: https://github.com/ekhodzitsky/gigastt/compare/v2.18.0...v2.19.0

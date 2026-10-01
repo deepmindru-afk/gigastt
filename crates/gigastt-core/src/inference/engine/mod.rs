@@ -24,7 +24,7 @@ use super::state::{
     CommitPolicy, DecoderState, EndpointMode, EndpointReason, FeatureExtractor, StreamingState,
     TranscriptAssembler, TranscriptSegment, WordInfo, aggregate_confidence,
 };
-use super::token_format::{TokenFormatter, seam_seconds, stitch_chunk_words};
+use super::token_format::{TokenFormatter, seam_seconds, stitch_chunk_words_retained};
 use super::tokenizer::Tokenizer;
 use super::types::{
     DEFAULT_HOTWORDS_BOOST, DiarizationOutcome, HotwordError, HotwordOverride,
@@ -40,14 +40,21 @@ use super::{ENCODER_SUBSAMPLING, HOP_LENGTH, N_FFT, N_MELS, SECONDS_PER_FRAME, n
 #[cfg(feature = "diarization")]
 use super::diarization::{self, LazySpeakerEncoder};
 
-type PartialSink<'a> = &'a dyn Fn(&[WordInfo]);
+pub(crate) struct WordUpdate {
+    pub(crate) retained: usize,
+    pub(crate) words: Vec<WordInfo>,
+    pub(crate) channel: Option<usize>,
+}
+
+type PartialSink<'a> = &'a dyn Fn(WordUpdate);
 
 /// Cooperative-run hooks threaded through the decode call chain.
 ///
 /// Absent hooks preserve the historical decode path. `abort` is polled before
 /// encoding and between tokens/frames; a native encoder Run is not interrupted.
 /// `on_progress` receives cumulative processed 16 kHz samples after each whole
-/// window; `on_partial` receives provisional words, including on cancellation.
+/// window, summed across channels; `on_partial` receives provisional words,
+/// including on cancellation.
 #[derive(Clone, Copy, Default)]
 pub(crate) struct DecodeControls<'a> {
     pub(crate) abort: Option<&'a (dyn Fn() -> bool + Sync)>,
@@ -57,8 +64,18 @@ pub(crate) struct DecodeControls<'a> {
 
 impl DecodeControls<'_> {
     pub(crate) fn publish(&self, words: &[WordInfo]) {
+        if self.on_partial.is_some() {
+            self.publish_update(WordUpdate {
+                retained: 0,
+                words: words.to_vec(),
+                channel: None,
+            });
+        }
+    }
+
+    pub(crate) fn publish_update(&self, update: WordUpdate) {
         if let Some(on_partial) = self.on_partial {
-            on_partial(words);
+            on_partial(update);
         }
     }
 
@@ -80,18 +97,6 @@ impl DecodeControls<'_> {
     pub(crate) fn report(&self, processed_16k_samples: u64) {
         if let Some(on_progress) = self.on_progress {
             on_progress(processed_16k_samples);
-        }
-    }
-
-    /// Drop the progress sink but keep the abort hook. Used for the
-    /// `channels=split` path, where each channel restarts the sample clock and a
-    /// shared monotonic progress counter would go backwards.
-    #[inline]
-    pub(crate) fn abort_only(&self) -> Self {
-        Self {
-            abort: self.abort,
-            on_progress: None,
-            on_partial: self.on_partial,
         }
     }
 }
@@ -211,6 +216,8 @@ mod channels;
 mod config;
 mod file_stream;
 mod infer;
+#[cfg(test)]
+mod live_probe;
 mod load;
 mod stream;
 #[cfg(test)]

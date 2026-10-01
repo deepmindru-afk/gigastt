@@ -204,7 +204,9 @@ impl Stream {
         })
     }
 
-    /// Flush remaining buffered audio and return any final segment(s).
+    /// Decode remaining buffered audio and return any final segment(s).
+    /// Failure leaves previously returned text incomplete and requires a new stream.
+    /// Successful flushes allow further chunks.
     #[napi(ts_return_type = "Promise<TranscriptSegment[]>")]
     pub fn flush(&self) -> AsyncTask<FlushTask> {
         AsyncTask::new(FlushTask {
@@ -281,11 +283,54 @@ impl Task for FlushTask {
 
     fn compute(&mut self) -> Result<Self::Output> {
         let mut guard = self.inner.lock().map_err(|_| lock_poisoned())?;
-        let seg = self.engine.flush_state(&mut guard.state);
+        let StreamInner { state, reservation } = &mut *guard;
+        let seg = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.engine.try_finish_stream(state, reservation)
+        }))
+        .map_err(|_| inference_err("Final transcription panicked"))?
+        .map_err(inference_err)?;
         Ok(seg.into_iter().map(segment_from).collect())
     }
 
     fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
         Ok(output)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_flush_task_tail_failure_returns_error_without_poisoning_mutex() {
+        for joiner in [false, true] {
+            for panic in [false, true] {
+                let tmp = tempfile::tempdir().unwrap();
+                gigastt_core::test_support::write_rnnt_layout(tmp.path()).unwrap();
+                let factory = gigastt_core::test_support::FailingStreamFactory::new(joiner, panic);
+                let engine = Arc::new(
+                    gigastt_core::test_support::load_rnnt_engine_with_factory(
+                        tmp.path(),
+                        1,
+                        Box::new(factory.clone()),
+                    )
+                    .unwrap(),
+                );
+                factory.arm(1);
+                let mut reservation = engine.pool.checkout_blocking().unwrap().into_owned();
+                let mut state = engine.create_state(false);
+                engine
+                    .process_chunk(&[0.0; 1600], &mut state, &mut reservation)
+                    .unwrap();
+                let inner = Arc::new(Mutex::new(StreamInner { state, reservation }));
+                let mut task = FlushTask {
+                    engine,
+                    inner: inner.clone(),
+                };
+                assert!(task.compute().is_err());
+                assert!(inner.lock().unwrap().state.is_failed());
+                assert!(task.compute().is_err());
+            }
+        }
     }
 }

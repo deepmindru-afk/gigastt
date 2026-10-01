@@ -309,8 +309,8 @@ async fn test_max_session_duration_cap() {
 // 6. shutdown while pool is saturated returns 503, not 500
 // ---------------------------------------------------------------------------
 
-/// Pool saturation + shutdown: occupy every triplet with a long-running REST
-/// transcribe, queue a waiter that's blocked in `pool.checkout()`, fire the
+/// Pool saturation + shutdown: occupy every triplet with a WebSocket session,
+/// queue a waiter that's blocked in `pool.checkout()`, fire the
 /// shutdown signal, and assert the waiter resolves to a 503 `pool_closed`
 /// response — not the legacy 500 cascade caused by the
 /// `.expect("Pool sender dropped")` panic.
@@ -320,32 +320,29 @@ async fn test_shutdown_during_pool_saturation_returns_503_not_500() {
     let model_dir = common::model_dir();
     let (port, shutdown) = common::start_server(&model_dir).await;
 
-    // Build a 60s WAV so the inference holds the pool slot well past the
-    // moment we fire shutdown.
-    let long_wav = common::generate_wav(60, 16000);
-
-    // Saturate the default pool (DEFAULT_POOL_SIZE triplets). Send more
-    // long-running REST jobs than there are slots so they fill the pool and
-    // the rest queue; they won't return before shutdown. We don't care about
-    // the result — only that they keep the pool busy.
     let client = reqwest::Client::new();
+    // WebSockets occupy the live inference pool without consuming upload
+    // admission, so the REST waiter must reach pool checkout before shutdown.
+    let model: serde_json::Value = client
+        .get(format!("http://127.0.0.1:{port}/v1/models"))
+        .send()
+        .await
+        .expect("model info request")
+        .json()
+        .await
+        .expect("model info JSON");
+    let pool_size = model["pool_size"].as_u64().expect("pool size") as usize;
+    assert!(pool_size > 0);
     let mut occupiers = Vec::new();
-    for _ in 0..4 {
-        let url = format!("http://127.0.0.1:{port}/v1/transcribe");
-        let body = long_wav.clone();
-        let c = client.clone();
-        occupiers.push(tokio::spawn(async move {
-            let _ = c.post(&url).body(body).send().await;
-        }));
+    for _ in 0..pool_size {
+        let (sink, stream, _ready) = common::ws_connect(port).await;
+        occupiers.push((sink, stream));
     }
 
-    // Give the occupiers a moment to acquire their pool slots.
-    tokio::time::sleep(Duration::from_millis(500)).await;
-
-    // Now fire a 5th request that has to wait in `pool.checkout()`.
+    // A REST upload can enter admission but must wait in `pool.checkout()`.
     let waiter_url = format!("http://127.0.0.1:{port}/v1/transcribe");
-    let waiter_body = long_wav.clone();
-    let waiter = tokio::spawn(async move {
+    let waiter_body = common::generate_wav(1, 16000);
+    let mut waiter = tokio::spawn(async move {
         reqwest::Client::new()
             .post(&waiter_url)
             .body(waiter_body)
@@ -353,8 +350,14 @@ async fn test_shutdown_during_pool_saturation_returns_503_not_500() {
             .await
     });
 
-    // Park briefly so the waiter is actually inside the checkout future.
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    // A premature response (including upload_busy) must not masquerade as a
+    // pool-close result. Borrowing the handle preserves the queued request.
+    assert!(
+        tokio::time::timeout(Duration::from_millis(500), &mut waiter)
+            .await
+            .is_err(),
+        "REST waiter must remain pending on the occupied pool before shutdown"
+    );
 
     // Trigger shutdown. The pool's `close()` should wake the waiter with
     // `PoolError::Closed`, which the REST handler turns into 503 + body
@@ -378,10 +381,7 @@ async fn test_shutdown_during_pool_saturation_returns_503_not_500() {
     let body: serde_json::Value = serde_json::from_str(&body_text).expect("invalid JSON body");
     assert_eq!(body["code"], "pool_closed");
 
-    // Drain the occupier tasks so the runtime exits cleanly.
-    for h in occupiers {
-        let _ = h.await;
-    }
+    drop(occupiers);
 }
 
 // ---------------------------------------------------------------------------
@@ -467,30 +467,40 @@ async fn test_shutdown_after_reload_closes_new_engine_pool() {
         .expect("reload request failed");
     assert_eq!(reload.status(), 200, "reload should succeed");
 
-    // Saturate the (new) default pool with long-running REST jobs.
-    let long_wav = common::generate_wav(60, 16000);
+    // WebSockets occupy the live inference pool without consuming upload
+    // admission, so the REST waiter must reach pool checkout before shutdown.
+    let model: serde_json::Value = client
+        .get(format!("http://127.0.0.1:{port}/v1/models"))
+        .send()
+        .await
+        .expect("model info request")
+        .json()
+        .await
+        .expect("model info JSON");
+    let pool_size = model["pool_size"].as_u64().expect("pool size") as usize;
+    assert!(pool_size > 0);
     let mut occupiers = Vec::new();
-    for _ in 0..4 {
-        let url = format!("http://127.0.0.1:{port}/v1/transcribe");
-        let body = long_wav.clone();
-        let c = client.clone();
-        occupiers.push(tokio::spawn(async move {
-            let _ = c.post(&url).body(body).send().await;
-        }));
+    for _ in 0..pool_size {
+        let (sink, stream, _ready) = common::ws_connect(port).await;
+        occupiers.push((sink, stream));
     }
-    tokio::time::sleep(Duration::from_millis(500)).await;
 
     // A waiter blocked inside the new pool's `checkout()`.
     let waiter_url = format!("http://127.0.0.1:{port}/v1/transcribe");
-    let waiter_body = long_wav.clone();
-    let waiter = tokio::spawn(async move {
+    let waiter_body = common::generate_wav(1, 16000);
+    let mut waiter = tokio::spawn(async move {
         reqwest::Client::new()
             .post(&waiter_url)
             .body(waiter_body)
             .send()
             .await
     });
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert!(
+        tokio::time::timeout(Duration::from_millis(500), &mut waiter)
+            .await
+            .is_err(),
+        "REST waiter must remain pending on the reloaded pool before shutdown"
+    );
 
     // Shutdown must close the reloaded engine's pools.
     let _ = shutdown.send(());
@@ -509,7 +519,5 @@ async fn test_shutdown_after_reload_closes_new_engine_pool() {
     let body: serde_json::Value = serde_json::from_str(&body_text).expect("invalid JSON body");
     assert_eq!(body["code"], "pool_closed");
 
-    for h in occupiers {
-        let _ = h.await;
-    }
+    drop(occupiers);
 }

@@ -11,9 +11,13 @@ mod author_oracle;
 mod backends;
 mod cancellation;
 mod commit_policy;
+mod finalization;
 mod load;
 mod mock;
 mod paths;
 mod predictor_probe;
 mod stream;
 mod transcribe;
+
+#[cfg(feature = "file-decode")]
+mod runtime_workspace;

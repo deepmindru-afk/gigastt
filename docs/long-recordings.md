@@ -37,7 +37,7 @@ That is two bodies overlapping a warm engine, not the cost of one file.
 | Knob | Default | What it bounds |
 |---|---|---|
 | `--body-limit-bytes` | 50 MiB | One REST or jobs upload |
-| `--jobs-max-bytes` | 512 MiB | Sum of upload bytes still queued or processing |
+| `--jobs-max-bytes` | 512 MiB | Store-held upload bytes; one newly admitted body can cross this threshold |
 | `--jobs-max` | 100 | How many job records are kept, not their size |
 | `--jobs-ttl-secs` | 3600 | How long a finished, failed, or cancelled record stays |
 | `--max-audio-secs` | 0 | Duration. `0` means no duration cap |
@@ -56,6 +56,49 @@ A chunked body with no `Content-Length` is cut off once the buffered amount
 passes the cap; the client in this run saw a broken pipe. Either way the
 file is not transcribed. Raising the cap is `--body-limit-bytes` together
 with `--jobs-max-bytes` if jobs are on.
+
+## Aggregate upload admission
+
+The server admits at most **N active uploads**, where N is the number of
+successfully loaded sessions in the batch pool at boot (the shared pool when
+`--batch-pool-size` is zero). Admission happens before reading the body on
+`/v1/transcribe`, `/v1/transcribe/stream`, `/v1/audio/transcriptions` (including
+multipart streaming), and `/v1/jobs`. There is no queue of uploads waiting for
+admission: excess requests receive **503 `upload_busy`**, with `Retry-After` and
+`retry_after_ms`. Retry after that delay. Health, readiness, WebSocket and admin
+requests do not consume upload permits.
+
+Together with the per-request body limit B, this bounds the total admitted
+encoded input to **N × B**: normally 2 × 50 MiB = 100 MiB. These are boot-time
+limits; restart to resize admission after changing the model pool or body cap.
+For file transcription, the permit stays with the input through pool waiting
+and blocking work, including raw-codec/channel expansion and SSE production.
+A timeout or disconnect cannot free admission while detached work still holds
+its input. Malformed and interrupted uploads release their permits on cleanup.
+
+Jobs transfer accounting to the existing `--jobs-max-bytes` threshold once
+store insertion completes, so queued jobs do not occupy upload permits. The
+store checks its current total before insertion: one body can cross the
+threshold, giving a store-held bound of the threshold plus one body cap
+(up to 562 MiB with defaults), separately from the 100 MiB ingress bound.
+Job count limits and queue-full 429 responses still apply separately.
+Cancelled or timed-out job workers may retain input after the store clears its
+reference; budget those outstanding worker/pool-held inputs separately until
+cooperative cancellation finishes. The jobs threshold is not a strict cap on
+all live payload references.
+
+This is **not a process RSS cap**. Multipart/parser buffering, allocator
+capacity, raw-codec rewrapped audio, decoded PCM, model memory, native inference scratch, transcript
+results and socket buffers need additional memory. No temporary files are
+created. Slow clients occupy admission until their request ends; an operator
+who needs an upload read deadline should configure it at the reverse proxy.
+The inference watchdog starts after upload and pool checkout.
+
+The Linux model-free test `test_upload_admission_bounds_server_memory_at_pool_saturation`
+starts a separate mock server process, saturates its inference pool with a
+WebSocket, and reports that server's `VmRSS`/`VmHWM` while rejecting concurrent
+uploads. Its client allocations stay in the parent process; the measurement
+validates admission behavior and is not a model inference RAM benchmark.
 
 ## What is not resumed
 

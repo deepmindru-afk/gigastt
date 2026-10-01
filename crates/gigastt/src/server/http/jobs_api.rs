@@ -12,7 +12,9 @@ use serde::Serialize;
 use std::sync::Arc;
 
 use super::super::config::{pool_retry_after_ms, pool_retry_after_secs};
-use super::super::jobs::{JobEvent, JobStatus, JobStore};
+use super::super::jobs::{
+    JobEvent, JobStatus, JobStore, JobStoreFull, JobTransition, TransitionOutcome,
+};
 
 use super::error::{ApiError, api_error};
 use super::export::{ExportParams, render_export_response};
@@ -41,7 +43,12 @@ fn require_jobs(state: &AppState) -> Result<&JobServerState, ApiError> {
 
 /// Fetch a job by id, mapping store errors to the standard HTTP responses.
 async fn load_job(store: &dyn JobStore, id: &str) -> Result<super::super::jobs::Job, ApiError> {
-    match store.get(id).await {
+    map_job_read(store.get(id).await, id)
+}
+
+#[allow(clippy::result_large_err)]
+fn map_job_read<T>(result: anyhow::Result<Option<T>>, id: &str) -> Result<T, ApiError> {
+    match result {
         Ok(Some(job)) => Ok(job),
         Ok(None) => Err(api_error(
             StatusCode::NOT_FOUND,
@@ -57,6 +64,23 @@ async fn load_job(store: &dyn JobStore, id: &str) -> Result<super::super::jobs::
             ))
         }
     }
+}
+
+#[allow(clippy::result_large_err)]
+fn queue_full(limits: &super::super::config::RuntimeLimits) -> ApiError {
+    (
+        StatusCode::TOO_MANY_REQUESTS,
+        [(
+            header::RETRY_AFTER,
+            pool_retry_after_secs(limits).to_string(),
+        )],
+        Json(serde_json::json!({
+            "error": "Job queue is full", "code": "queue_full",
+            "retry_after_ms": pool_retry_after_ms(limits),
+        })),
+    )
+        .into_response()
+        .into()
 }
 
 /// POST /v1/jobs — enqueue a long audio file for asynchronous transcription.
@@ -85,21 +109,10 @@ pub async fn submit_job(
             "payload_too_large",
         ));
     }
+    // Preserve advisory backpressure for stores using the original error
+    // contract; typed create errors below cover concurrent admission races.
     if jobs.store.is_full().await {
-        return Err((
-            StatusCode::TOO_MANY_REQUESTS,
-            [(
-                header::RETRY_AFTER,
-                pool_retry_after_secs(&limits).to_string(),
-            )],
-            Json(serde_json::json!({
-                "error": "Job queue is full",
-                "code": "queue_full",
-                "retry_after_ms": pool_retry_after_ms(&limits),
-            })),
-        )
-            .into_response()
-            .into());
+        return Err(queue_full(&limits));
     }
     let split_channels = params.channels.as_deref() == Some("split");
     let request_diarization = params.diarization == Some(true);
@@ -115,6 +128,7 @@ pub async fn submit_job(
     let created_at = job.created_at;
     let id = match jobs.store.create(job).await {
         Ok(id) => id,
+        Err(e) if e.is::<JobStoreFull>() => return Err(queue_full(&limits)),
         Err(e) => {
             tracing::error!("Failed to create job: {e:#}");
             return Err(api_error(
@@ -141,8 +155,8 @@ pub async fn get_job(
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Result<Response, ApiError> {
     let jobs = require_jobs(&state)?;
-    let job = load_job(&*jobs.store, &id).await?;
-    Ok(Json(super::super::jobs::job_status_response(&job)).into_response())
+    let status = map_job_read(jobs.store.status(&id).await, &id)?;
+    Ok(Json(status).into_response())
 }
 
 /// GET /v1/jobs/{id}/result — fetch the finished transcription.
@@ -197,35 +211,31 @@ pub async fn cancel_job(
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Result<Response, ApiError> {
     let jobs = require_jobs(&state)?;
-    let job = load_job(&*jobs.store, &id).await?;
-    if !matches!(job.status, JobStatus::Queued | JobStatus::Processing) {
-        return Err(api_error(
-            StatusCode::CONFLICT,
-            "Job cannot be cancelled",
-            "job_not_cancellable",
-        ));
+    match jobs.store.transition(&id, JobTransition::Cancel).await {
+        Ok(TransitionOutcome::Applied) => {}
+        Ok(TransitionOutcome::Rejected(_)) => {
+            return Err(api_error(
+                StatusCode::CONFLICT,
+                "Job cannot be cancelled",
+                "job_not_cancellable",
+            ));
+        }
+        Ok(TransitionOutcome::Missing) => {
+            return Err(api_error(
+                StatusCode::NOT_FOUND,
+                "Job not found",
+                "job_not_found",
+            ));
+        }
+        Err(e) => {
+            tracing::error!("Failed to cancel job {id}: {e:#}");
+            return Err(api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to cancel job",
+                "internal",
+            ));
+        }
     }
-    let _ = jobs
-        .store
-        .update(
-            &id,
-            Box::new(|j| {
-                if matches!(j.status, JobStatus::Queued | JobStatus::Processing) {
-                    j.status = JobStatus::Cancelled;
-                    // Flip the in-flight run's abort flag (set by the executor
-                    // while Processing) so the engine stops at its next decode step
-                    // and releases its pooled triplet in bounded time, rather
-                    // than transcribing the rest of the file into a result the
-                    // worker will discard. `None` for a still-queued job.
-                    if let Some(abort) = &j.abort {
-                        abort.store(true, std::sync::atomic::Ordering::Relaxed);
-                    }
-                    j.body = axum::body::Bytes::new();
-                }
-            }),
-        )
-        .await;
-    super::super::jobs::broadcast_event(&*jobs.store, &id, JobEvent::Cancelled).await;
     Ok(StatusCode::NO_CONTENT.into_response())
 }
 
@@ -235,32 +245,24 @@ pub async fn job_events(
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>, ApiError> {
     let jobs = require_jobs(&state)?;
-    let job = load_job(&*jobs.store, &id).await?;
-
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<JobEvent>();
-    if job.status.is_terminal() {
-        let event = match job.status {
-            JobStatus::Done => JobEvent::Done,
-            JobStatus::Failed => JobEvent::Failed {
-                error: job
-                    .error
-                    .clone()
-                    .unwrap_or_else(|| "Transcription failed.".into()),
-            },
-            JobStatus::Cancelled => JobEvent::Cancelled,
-            _ => unreachable!(),
-        };
-        let _ = tx.send(event);
-    } else {
-        let _ = jobs
-            .store
-            .update(
-                &id,
-                Box::new(move |j| {
-                    j.subscribe(tx);
-                }),
-            )
-            .await;
+    match jobs.store.subscribe(&id, tx).await {
+        Ok(true) => {}
+        Ok(false) => {
+            return Err(api_error(
+                StatusCode::NOT_FOUND,
+                "Job not found",
+                "job_not_found",
+            ));
+        }
+        Err(e) => {
+            tracing::error!("Failed to subscribe to job {id}: {e:#}");
+            return Err(api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to subscribe to job",
+                "internal",
+            ));
+        }
     }
 
     let stream = tokio_stream::wrappers::UnboundedReceiverStream::new(rx)

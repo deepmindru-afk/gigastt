@@ -1,15 +1,13 @@
 # Build + publish the gigastt Android library (AAR) via UniFFI Kotlin.
 #
-# EXPERIMENTAL — this pipeline has NOT been validated end-to-end on a real
-# Android toolchain (no NDK/Gradle in the authoring environment). The Rust side
-# is proven (the `Android FFI Build` CI already cross-builds gigastt-ffi via
-# cargo-ndk, and gigastt-uniffi is the same kind of cdylib); the Gradle/Maven
-# assembly + publish steps below follow the canonical UniFFI-Android pattern but
-# should be verified by a maintainer with an Android environment before relying
-# on a published AAR. Manual (`workflow_dispatch`).
+# EXPERIMENTAL — nonpublishing CI run 36887391146 verified all three native
+# ABIs, Kotlin generation and Gradle AAR assembly. Android device execution,
+# Maven publication and release attachment remain untested.
+# Evidence: https://github.com/ekhodzitsky/gigastt/actions/runs/36887391146
+# Manual (`workflow_dispatch`).
 #
-# Packages, per ABI, libgigastt_uniffi.so (onnxruntime statically linked, so
-# self-contained) + the UniFFI-generated Kotlin into an AAR. The ~215 MB model
+# Packages, per ABI, libgigastt_uniffi.so + libonnxruntime.so
+# + the UniFFI-generated Kotlin into a self-contained AAR. The ~215 MB model
 # is side-loaded at runtime, not bundled.
 name: Android AAR
 
@@ -30,12 +28,51 @@ permissions:
   contents: write
 
 jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.source.outputs.tag }}
+      commit: ${{ steps.source.outputs.commit }}
+      version: ${{ steps.source.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Resolve Android source and version
+        id: source
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          ANDROID_PUBLISH: ${{ inputs.publish }}
+        run: python3 scripts/resolve-android.py
+      - name: Require existing release for attachment
+        if: ${{ inputs.tag != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.source.outputs.tag }}
+        run: gh release view "$RELEASE_TAG" > /dev/null
+
   aar:
+    needs: resolve
     runs-on: ubuntu-latest
     env:
+      ANDROID_VERSION: ${{ needs.resolve.outputs.version }}
+      RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
       HAS_MAVEN_CREDS: ${{ secrets.MAVEN_CENTRAL_USERNAME != '' && 'true' || 'false' }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.resolve.outputs.commit }}
+      # Old source tags need not contain the current runtime validator or pin.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .workflow-tools
+          sparse-checkout: |
+            scripts/check-android-runtime.py
+            packaging/android/onnxruntime.json
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
 
       - uses: actions/setup-java@v6
         with:
@@ -69,17 +106,21 @@ jobs:
       # ort's pyke prebuilts cover only aarch64-linux-android for Android;
       # armeabi-v7a and x86_64-linux-android have no prebuilt, so the plain
       # `cargo ndk` build fails on those ABIs. Pull the ABI-matched official
-      # Microsoft AAR (onnxruntime 1.24.2 — the version ort 2.0.0-rc.12 pins) and
+      # Microsoft AAR pinned in packaging/android/onnxruntime.json and
       # expose one lib dir per ABI. ort then dynamic-links libonnxruntime.so via
       # ORT_LIB_LOCATION + ORT_PREFER_DYNAMIC_LINK, and the .so is packaged into
       # jniLibs next to our cdylib. Using the AAR for all three ABIs keeps them
       # on one ABI-identical onnxruntime build.
-      - name: Fetch onnxruntime 1.24.2 Android libs
+      - name: Fetch and validate Android runtime libs
         run: |
           set -euo pipefail
-          ORT_VER=1.24.2
+          PIN=.workflow-tools/packaging/android/onnxruntime.json
+          ORT_VER=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$PIN")
           curl -fsSL -o ort-android.aar \
-            "https://repo1.maven.org/maven2/com/microsoft/onnxruntime/onnxruntime-android/${ORT_VER}/onnxruntime-android-${ORT_VER}.aar"
+            "https://repo.maven.apache.org/maven2/com/microsoft/onnxruntime/onnxruntime-android/${ORT_VER}/onnxruntime-android-${ORT_VER}.aar"
+          cargo metadata --locked --format-version 1 > "$RUNNER_TEMP/android-cargo-metadata.json"
+          python3 .workflow-tools/scripts/check-android-runtime.py \
+            --metadata "$RUNNER_TEMP/android-cargo-metadata.json" --pin "$PIN" --aar ort-android.aar
           for abi in arm64-v8a armeabi-v7a x86_64; do
             d="$RUNNER_TEMP/ort-lib/$abi"
             mkdir -p "$d"
@@ -128,7 +169,7 @@ jobs:
 
       - name: Assemble AAR
         working-directory: packaging/android
-        run: gradle :gigastt:assembleRelease --no-daemon
+        run: gradle :gigastt:assembleRelease -PVERSION_NAME="$ANDROID_VERSION" --no-daemon
 
       - name: Upload AAR
         uses: actions/upload-artifact@v4
@@ -140,23 +181,17 @@ jobs:
       # Attach the built AAR to the given GitHub release (mirrors the iOS
       # xcframework distribution). Consumers download the .aar directly — no
       # Maven Central / Sonatype namespace / GPG signing required.
-      - name: Stage AAR for release
-        if: ${{ inputs.tag != '' }}
+      - name: Attach AAR to existing release
+        if: ${{ needs.resolve.outputs.tag != '' }}
         env:
-          TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          VERSION="${TAG#v}"
-          cp "$(ls packaging/android/gigastt/build/outputs/aar/*.aar | head -1)" "gigastt-${VERSION}.aar"
-          ls -la gigastt-*.aar
-
-      - name: Attach AAR to release
-        if: ${{ inputs.tag != '' }}
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ inputs.tag }}
-          fail_on_unmatched_files: true
-          files: gigastt-*.aar
+          files=(packaging/android/gigastt/build/outputs/aar/*.aar)
+          test "${#files[@]}" -eq 1
+          cp "${files[0]}" "$RUNNER_TEMP/gigastt-${ANDROID_VERSION}.aar"
+          gh release upload "$RELEASE_TAG" "$RUNNER_TEMP/gigastt-${ANDROID_VERSION}.aar" --clobber
 
       - name: Warn on missing Maven credentials
         if: ${{ inputs.publish && env.HAS_MAVEN_CREDS != 'true' }}
@@ -168,4 +203,4 @@ jobs:
         env:
           MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
-        run: gradle :gigastt:publish --no-daemon
+        run: gradle :gigastt:publish -PVERSION_NAME="$ANDROID_VERSION" --no-daemon

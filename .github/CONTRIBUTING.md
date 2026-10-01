@@ -2,6 +2,44 @@
 
 ## Development
 
+Use Rust 1.94 or newer, a native C/C++ toolchain, and `protoc`. On Debian or
+Ubuntu, install the native prerequisites before running Cargo:
+
+```sh
+sudo apt-get install build-essential pkg-config protobuf-compiler libssl-dev
+```
+
+On macOS, install the Xcode command-line tools and `brew install protobuf`.
+The default build downloads ONNX Runtime. Its locked build dependency chain
+is `ort-sys` → `ureq` → `native-tls`; on Linux this requires OpenSSL development
+headers and libraries through `openssl-sys`. This is a build prerequisite even
+though the application's HTTP client uses Rustls. Inspect the active chain with
+`cargo tree --workspace -i openssl-sys --edges normal,build`.
+
+For a Linux OpenSSL installation outside the system search path, put the following
+exports in your local shell setup, substituting the actual development prefix:
+
+```sh
+export OPENSSL_INCLUDE_DIR=/path/to/openssl/include
+export OPENSSL_LIB_DIR=/path/to/openssl/lib
+test -f "$OPENSSL_INCLUDE_DIR/openssl/opensslv.h"
+```
+
+Use `lib64` or the architecture-specific library directory when that is where
+the installation keeps its libraries. An unpacked Debian development package
+also keeps generated headers under `include/<multiarch>`; expose that directory
+to the C compiler as well, for example on x86_64:
+
+```sh
+export CFLAGS="${CFLAGS:+$CFLAGS }-I$OPENSSL_INCLUDE_DIR/x86_64-linux-gnu"
+```
+
+Only add that flag when the directory exists. Both headers and link libraries
+must come from a compatible OpenSSL installation. With system packages, leave
+these overrides unset and let `pkg-config --cflags --libs openssl` discover them.
+The same environment must be available to Git's pre-commit hook. No temporary
+helper script or dependency-feature change is required.
+
 ```sh
 cargo build                            # CPU debug build
 cargo build --features coreml          # macOS ARM64 with CoreML
@@ -72,7 +110,9 @@ source of truth, and out-of-band uploads break SHA-pinned clients (e.g. Murmur).
 
    The same workflow also publishes multi-arch GHCR images (`:x.y.z` / `:latest`, plus
    `:x.y.z-cuda` / `:cuda`), offline bundles and `.deb` packages, an SBOM, SLSA provenance
-   and minisign signatures. Homebrew's Formula is pinned automatically by `homebrew.yml`.
+   and minisign signatures. Homebrew's Formula update is proposed by `homebrew.yml` as a PR. Approve its
+   workflows when prompted, wait for green checks and merge it; see
+   [Homebrew release updates](../docs/homebrew-release.md).
 7. **Verify the release page** on GitHub — all assets attached, release notes generated.
 8. **Publish to crates.io** (only after step 7):
    ```sh

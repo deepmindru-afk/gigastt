@@ -58,7 +58,6 @@ impl JobExecution for RealJobExecutor {
         // and ~73 MB on a 20-min 48 kHz file). Peak RSS is roughly unchanged —
         // the old pre-decode buffer was already freed before the engine decode,
         // so the two never coexisted — but the redundant CPU pass is gone.
-        const TARGET_SAMPLE_RATE: f64 = 16_000.0;
         let probed = tokio::task::spawn_blocking({
             let body = body.clone();
             move || gigastt_core::inference::audio::probe_duration_bytes(body)
@@ -105,6 +104,7 @@ impl JobExecution for RealJobExecutor {
         let abort = Arc::new(AtomicBool::new(false));
         let partial = Arc::new(gigastt_core::inference::TranscriptSnapshot::default());
         let progress = Arc::new(AtomicU64::new(0));
+        let progress_channels = Arc::new(AtomicU64::new(1));
         let _ = store
             .update(id, {
                 let abort = abort.clone();
@@ -117,8 +117,10 @@ impl JobExecution for RealJobExecutor {
                     if matches!(j.status, JobStatus::Cancelled) {
                         abort.store(true, Ordering::Relaxed);
                     }
-                    j.abort = Some(abort);
-                    j.partial = Some(partial);
+                    if j.status == JobStatus::Processing {
+                        j.abort = Some(abort);
+                        j.partial = Some(partial);
+                    }
                 })
             })
             .await;
@@ -135,6 +137,7 @@ impl JobExecution for RealJobExecutor {
             let cancel = progress_cancel.clone();
             let total = total_seconds;
             let progress = progress.clone();
+            let progress_channels = progress_channels.clone();
             tokio::spawn(async move {
                 let mut interval = tokio::time::interval(std::time::Duration::from_millis(500));
                 interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -143,15 +146,22 @@ impl JobExecution for RealJobExecutor {
                     if cancel.is_cancelled() {
                         break;
                     }
-                    let processed =
-                        (progress.load(Ordering::Relaxed) as f64 / TARGET_SAMPLE_RATE).min(total);
-                    let percent = if total > 0.0 {
-                        ((processed / total) * 100.0) as u32
-                    } else {
-                        0
-                    };
+                    let (processed, percent) = progress_fields(
+                        // Acquire pairs with the engine's sample publication,
+                        // so the routing channel count is visible before any work.
+                        progress.load(Ordering::Acquire),
+                        progress_channels.load(Ordering::Relaxed),
+                        total,
+                    );
                     let _ = store
-                        .update(&id, Box::new(move |j| j.processed_seconds = processed))
+                        .update(
+                            &id,
+                            Box::new(move |j| {
+                                if j.status == JobStatus::Processing {
+                                    j.processed_seconds = processed;
+                                }
+                            }),
+                        )
                         .await;
                     broadcast_event(
                         &*store,
@@ -200,6 +210,7 @@ impl JobExecution for RealJobExecutor {
                 abort: Some(abort.clone()),
                 partial: Some(partial.clone()),
                 progress: Some(progress.clone()),
+                progress_channels: Some(progress_channels.clone()),
                 // Same sink the synchronous endpoint uses, so an async job that
                 // produces no speaker labels can say why instead of returning a
                 // transcript with silently empty speaker fields. Only armed when
@@ -264,5 +275,50 @@ impl JobExecution for RealJobExecutor {
         }
 
         inference_result
+    }
+}
+
+fn progress_fields(samples: u64, channels: u64, total: f64) -> (f64, u32) {
+    let processed = samples as f64 / 16_000.0 / channels.max(1) as f64;
+    let processed = if total > 0.0 {
+        processed.min(total)
+    } else {
+        processed
+    };
+    let percent = if total > 0.0 {
+        ((processed / total) * 100.0) as u32
+    } else {
+        0
+    };
+    (processed, percent)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::progress_fields;
+
+    #[test]
+    fn test_unknown_duration_progress_keeps_processed_work() {
+        assert_eq!(progress_fields(160_000, 1, 0.0), (10.0, 0));
+        assert_eq!(progress_fields(320_000, 2, 0.0), (10.0, 0));
+    }
+
+    #[test]
+    fn test_channel_completion_is_bounded_and_monotonic() {
+        let fields: Vec<_> = [0, 160_000, 320_000, 480_000, 640_000, 800_000]
+            .into_iter()
+            .map(|n| progress_fields(n, 2, 20.0))
+            .collect();
+        assert_eq!(
+            fields,
+            vec![
+                (0.0, 0),
+                (5.0, 25),
+                (10.0, 50),
+                (15.0, 75),
+                (20.0, 100),
+                (20.0, 100)
+            ]
+        );
     }
 }

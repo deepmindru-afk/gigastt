@@ -39,11 +39,25 @@ fn test_engine_config_getters_and_builders() {
         VadConfig::default().threshold
     );
     assert_eq!(
-        engine.apply_text_postprocess("двадцать один".into(), true, false),
+        engine
+            .apply_text_postprocess(
+                "двадцать один".into(),
+                true,
+                false,
+                DecodeControls::default()
+            )
+            .unwrap(),
         "21"
     );
     assert_eq!(
-        engine.apply_text_postprocess("двадцать один".into(), false, true),
+        engine
+            .apply_text_postprocess(
+                "двадцать один".into(),
+                false,
+                true,
+                DecodeControls::default()
+            )
+            .unwrap(),
         "двадцать один"
     );
 }
@@ -180,4 +194,131 @@ fn test_transcribe_request_abort_flag() {
 fn test_stream_eligible_without_diarization_request() {
     let (engine, _tmp) = test_support::rnnt_engine();
     assert!(engine.stream_eligible(false));
+}
+
+#[test]
+fn test_channel_progress_accumulates_across_sample_buffers() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    let (engine, _tmp) = test_support::rnnt_engine();
+    let mut guard = engine.pool.checkout_blocking().expect("checkout");
+    let channels = vec![vec![0.0; 320], vec![0.0; 480]];
+    let progress = Arc::new(AtomicU64::new(0));
+    engine
+        .transcribe_request(
+            TranscribeRequest::new(TranscribeSource::Channels(&channels))
+                .with_progress(Some(progress.clone())),
+            &mut guard,
+        )
+        .expect("channels");
+    assert_eq!(progress.load(Ordering::Relaxed), 800);
+
+    // Watchdog work retains even one-sample increments across channels.
+    let tiny = vec![vec![0.0; 1], vec![0.0; 1]];
+    progress.store(0, Ordering::Relaxed);
+    engine
+        .transcribe_request(
+            TranscribeRequest::new(TranscribeSource::Channels(&tiny))
+                .with_progress(Some(progress.clone())),
+            &mut guard,
+        )
+        .expect("tiny channels");
+    assert_eq!(progress.load(Ordering::Relaxed), 2);
+
+    let observed = std::cell::RefCell::new(Vec::new());
+    let report = |n| observed.borrow_mut().push(n);
+    engine
+        .transcribe_channels_inner(
+            &channels,
+            &mut guard,
+            &TranscribeOverrides::default(),
+            None,
+            DecodeControls {
+                on_progress: Some(&report),
+                ..Default::default()
+            },
+        )
+        .expect("channel progress");
+    let observed = observed.into_inner();
+    assert!(
+        observed.windows(2).all(|pair| pair[0] <= pair[1]),
+        "{observed:?}"
+    );
+    assert!(observed.contains(&320));
+    assert_eq!(observed.last(), Some(&800));
+}
+
+#[test]
+fn test_channel_progress_accumulates_across_file_streams() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    let (engine, _tmp) = test_support::rnnt_engine();
+    let mut guard = engine.pool.checkout_blocking().expect("checkout");
+    let mut wav = test_support::pcm16_wav(&[0; 640], 16_000);
+    wav[22..24].copy_from_slice(&2u16.to_le_bytes());
+    wav[28..32].copy_from_slice(&64_000u32.to_le_bytes());
+    wav[32..34].copy_from_slice(&4u16.to_le_bytes());
+    let progress = Arc::new(AtomicU64::new(0));
+    let data = bytes::Bytes::from(wav);
+    engine
+        .transcribe_request(
+            TranscribeRequest::new(TranscribeSource::ChannelStreams {
+                data: data.clone(),
+                channels: 2,
+            })
+            .with_progress(Some(progress.clone())),
+            &mut guard,
+        )
+        .expect("channel streams");
+    assert_eq!(progress.load(Ordering::Relaxed), 640);
+    let observed = std::cell::RefCell::new(Vec::new());
+    let report = |n| observed.borrow_mut().push(n);
+    engine
+        .transcribe_channel_streams(
+            data,
+            2,
+            None,
+            &mut guard,
+            &TranscribeOverrides::default(),
+            None,
+            DecodeControls {
+                on_progress: Some(&report),
+                ..Default::default()
+            },
+        )
+        .expect("streamed channel progress");
+    let observed = observed.into_inner();
+    assert!(
+        observed.windows(2).all(|pair| pair[0] <= pair[1]),
+        "{observed:?}"
+    );
+    assert!(observed.contains(&320));
+    assert_eq!(observed.last(), Some(&640));
+}
+
+#[test]
+fn test_channel_progress_does_not_advance_cancelled_channels() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let (engine, _tmp) = test_support::rnnt_engine();
+    let mut guard = engine.pool.checkout_blocking().expect("checkout");
+    let cancelled = AtomicBool::new(false);
+    let observed = std::cell::RefCell::new(Vec::new());
+    let report = |n| {
+        observed.borrow_mut().push(n);
+        cancelled.store(true, Ordering::Relaxed);
+    };
+    let abort = || cancelled.load(Ordering::Relaxed);
+    let result = engine.transcribe_channels_inner(
+        &[vec![0.0; 320], vec![0.0; 480]],
+        &mut guard,
+        &TranscribeOverrides::default(),
+        None,
+        DecodeControls {
+            on_progress: Some(&report),
+            abort: Some(&abort),
+            ..Default::default()
+        },
+    );
+    assert!(matches!(result, Err(GigasttError::Cancelled)));
+    assert_eq!(observed.into_inner(), vec![320]);
 }

@@ -24,6 +24,7 @@ pub use cache::{
     CoremlCachePruneReport, DedupeReport, OptimizedCachePruneReport, dedupe_model_dir,
     optimized_cache_basename, prune_coreml_cache, prune_optimized_cache, prune_optimized_cache_dir,
 };
+pub(crate) use cache::{optimized_content_basename, optimized_source_hash};
 pub use manifest::{MANIFEST_FILE, ManifestFiles, ModelManifest};
 
 #[cfg(all(feature = "net", feature = "ane"))]

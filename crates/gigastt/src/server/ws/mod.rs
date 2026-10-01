@@ -470,6 +470,7 @@ async fn handle_ws_inner(
                                 min_silence_ms,
                                 commit_policy,
                                 peer,
+                                &control,
                             )
                             .await
                         }

@@ -1847,3 +1847,94 @@ async fn test_transcribe_stream_sse_operator_limit_is_a_clean_413() {
 
     let _ = shutdown.send(());
 }
+
+/// Same short offline audio through each supported source representation. This
+/// pins word timing/confidence as well as text; live streaming is a distinct contract.
+#[test]
+#[ignore = "requires the installed four-file INT8 RNN-T bundle"]
+fn test_offline_source_contracts_preserve_numerical_output() {
+    use gigastt::inference::{Engine, TranscribeOverrides, TranscribeRequest, TranscribeSource};
+    use std::sync::atomic::{AtomicU64, Ordering};
+    let started = std::time::Instant::now();
+    let model_dir = common::model_dir();
+    for name in [
+        "v3_rnnt_encoder_int8.onnx",
+        "v3_rnnt_decoder.onnx",
+        "v3_rnnt_joint.onnx",
+        "v3_vocab.txt",
+    ] {
+        assert!(
+            std::path::Path::new(&model_dir).join(name).is_file(),
+            "required RNN-T model file missing: {name}"
+        );
+    }
+    let engine = Engine::load_with_pools_threads_variant(
+        &model_dir,
+        Some(gigastt::model::ModelVariant::Rnnt),
+        1,
+        1,
+        0,
+        0,
+    )
+    .unwrap();
+    let overrides = TranscribeOverrides {
+        vad: Some(false),
+        itn: Some(false),
+        punctuation: Some(false),
+    };
+    let run = |source: TranscribeSource<'_>, expected_samples: usize| {
+        let progress = std::sync::Arc::new(AtomicU64::new(0));
+        let mut guard = engine.pool.checkout_blocking().unwrap();
+        let result = engine
+            .transcribe_request(
+                TranscribeRequest::new(source)
+                    .with_overrides(overrides)
+                    .with_progress(Some(progress.clone())),
+                &mut guard,
+            )
+            .unwrap();
+        assert_eq!(progress.load(Ordering::Relaxed), expected_samples as u64);
+        assert!(
+            !result.words.is_empty(),
+            "parity must compare recognized speech"
+        );
+        serde_json::to_value(result).unwrap()
+    };
+    let mono_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/golos_00.wav");
+    let mono = axum::body::Bytes::from(std::fs::read(mono_path).unwrap());
+    let samples = gigastt::inference::audio::decode_audio_bytes_shared(mono.clone()).unwrap();
+    let expected = run(TranscribeSource::Samples(&samples), samples.len());
+    assert_eq!(
+        run(TranscribeSource::Path(mono_path), samples.len()),
+        expected
+    );
+    assert_eq!(run(TranscribeSource::Bytes(mono), samples.len()), expected);
+
+    let stereo = axum::body::Bytes::from(common::generate_stereo_wav_split(
+        mono_path,
+        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/golos_01.wav"),
+    ));
+    let channels =
+        gigastt::inference::audio::decode_audio_bytes_shared_channels(stereo.clone()).unwrap();
+    let sample_work = channels.iter().map(Vec::len).sum();
+    let buffered = run(TranscribeSource::Channels(&channels), sample_work);
+    let streamed = run(
+        TranscribeSource::ChannelStreams {
+            data: stereo,
+            channels: 2,
+        },
+        sample_work,
+    );
+    assert_eq!(buffered, streamed);
+    let speakers: std::collections::BTreeSet<_> = buffered["words"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|word| word["speaker"].as_u64().unwrap())
+        .collect();
+    assert_eq!(speakers, [0, 1].into());
+    eprintln!(
+        "offline source contract parity: 5 requests, {:.3}s including engine load",
+        started.elapsed().as_secs_f64()
+    );
+}

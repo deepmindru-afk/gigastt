@@ -5,6 +5,8 @@
 pub mod audio;
 mod bias;
 mod ctc;
+#[cfg(feature = "__internals")]
+pub use ctc::profile as ctc_profile;
 mod decode;
 /// Speaker diarization (polyvoice). Feature-gated; see module docs for why the
 /// deprecated polyvoice embedder surface is contained here rather than migrated.
@@ -16,6 +18,8 @@ mod load_files;
 mod pool;
 mod sizing;
 mod state;
+#[cfg(any(test, feature = "__internals"))]
+pub(crate) use state::SnapshotPublisher;
 mod token_format;
 mod types;
 mod windows;
