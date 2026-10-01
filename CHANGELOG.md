@@ -48,6 +48,9 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
   resource-limit correction contract without changing commitment behavior.
 - Add opt-in live-window research measurements for decode cadence, window
   geometry, concurrency and frontend reuse; production defaults are unchanged.
+- Add opt-in [sidecar contention measurements](docs/sidecar-contention.md) for
+  mixed interactive and batch recognition, separating cold use, lock waits and warm execution. Production
+  sidecar sharing and inference defaults are unchanged.
 
 - Document Linux OpenSSL build prerequisites and custom-prefix discovery for
   the ONNX Runtime downloader, including the environment used by Git hooks.
