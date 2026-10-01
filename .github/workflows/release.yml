@@ -70,7 +70,7 @@ jobs:
             # prebuilt x86_64 Windows onnxruntime in `ort` (download-binaries).
           # linux-x86_64-cuda is intentionally omitted until the CUDA install
           # path is stabilized (Jimver/cuda-toolkit breaks on ubuntu-latest for
-          # 12.4.x package names). Tracked in specs/todo.md.
+          # 12.4.x package names).
     steps:
       - uses: actions/checkout@v7
 

@@ -1,6 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
+echo "[pre-commit] Checking public content..."
+python3 scripts/check-publication.py
+
 echo "[pre-commit] Running format check..."
 cargo fmt --all --check
 

@@ -17,6 +17,8 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 
 - Run a bounded, serial model smoke gate on every PR: pinned CPU encoder and
   exact transcription oracle plus real-speech WebSocket finalization coverage.
+- Keep internal planning files local, publish benchmark and edge protocols under
+  `docs/`, and check public content and Git metadata for internal identifiers.
 
 - Require Symphonia 0.6.1 and remove the vendored metadata and Matroska
   patches. Upstream now handles APEv2 size overflow and unknown-size WebM
@@ -2351,13 +2353,9 @@ v0.9.2. Dockerfile was broken since v0.9.0 — this release fixes it.
   RFC 8594 `Deprecation: true` plus `Link: </v1/ws>; rel="successor-version"`
   so client libraries can surface the migration warning before v1.0
   drops the alias. Server-side warn log was already in place.
-- **Docs + specs housekeeping:**
-  - `specs/design-v1.0-{pool-and-rate-limit,rest-streaming,ws-lifecycle}.md`
-    → `specs/archive/design-v1.0/` (all three shipped in v0.9.0-rc.1).
+- **Documentation housekeeping:**
   - `docs/superpowers/` (v0.4 pre-ship plans) → `docs/archive/superpowers-v0.4/`.
   - `missions/gigastt-wer/` scratchpad deleted.
-  - `specs/prod-readiness-v1.0.md` now carries a v0.9.0 rollup banner
-    listing the closed IDs; detail rows left for historical trail.
   - `README_RU.md` synced to English README (`/v1/ws`, `/metrics` row,
     `125 unit tests`, INT8 section rewritten for the no-feature-flag
     behaviour shipped in v0.9.0).
@@ -2431,12 +2429,12 @@ full rollup; no functional regressions since rc.2._
 
 ## [0.9.0-rc.1] - 2026-04-20
 
-_Release candidate for v0.9.0 — bundles five P0 fixes plus two supporting items (`PoolGuard` Drop, strict 413 assertion) from `specs/prod-readiness-v1.0.md`. RuntimeLimits gained two fields (`max_session_secs`, `shutdown_drain_secs`) — external callers constructing the struct literally must update their call sites. SessionPool checkout API replaced (`checkout() -> PoolGuard`)._
+_Release candidate for v0.9.0 — bundles five P0 fixes plus two supporting items (`PoolGuard` Drop, strict 413 assertion). RuntimeLimits gained two fields (`max_session_secs`, `shutdown_drain_secs`) — external callers constructing the struct literally must update their call sites. SessionPool checkout API replaced (`checkout() -> PoolGuard`)._
 
 ### Added
 
-- **Graceful WebSocket / SSE drain on shutdown** (closes `specs/prod-readiness-v1.0.md` P0). `axum::serve.with_graceful_shutdown` only tracks the HTTP router — WebSocket upgrades and SSE `spawn_blocking` tasks used to outlive the signal, so clients lost their `Final` frame on deploy. New `CancellationToken` + `TaskTracker` cascade through every handler; on SIGTERM each live session flushes, emits an empty-if-needed `Final`, and closes with `Close(1001 Going Away)`. After `axum::serve` returns, `run_with_config` waits up to `shutdown_drain_secs` for the tracker to drain.
-- **Wall-clock max-session cap** (closes `specs/prod-readiness-v1.0.md` P0). `idle_timeout` is reset on every frame, so a client that streams silence every 100 ms held a `SessionTriplet` forever. New `max_session_secs` limit closes the session with `Close(1008 Policy Violation)` + `Error { code: "max_session_duration_exceeded" }`. `0` disables the cap (not recommended).
+- **Graceful WebSocket / SSE drain on shutdown**. `axum::serve.with_graceful_shutdown` only tracks the HTTP router — WebSocket upgrades and SSE `spawn_blocking` tasks used to outlive the signal, so clients lost their `Final` frame on deploy. New `CancellationToken` + `TaskTracker` cascade through every handler; on SIGTERM each live session flushes, emits an empty-if-needed `Final`, and closes with `Close(1001 Going Away)`. After `axum::serve` returns, `run_with_config` waits up to `shutdown_drain_secs` for the tracker to drain.
+- **Wall-clock max-session cap**. `idle_timeout` is reset on every frame, so a client that streams silence every 100 ms held a `SessionTriplet` forever. New `max_session_secs` limit closes the session with `Close(1008 Policy Violation)` + `Error { code: "max_session_duration_exceeded" }`. `0` disables the cap (not recommended).
 - **CLI flags.**
   - `--max-session-secs` / `GIGASTT_MAX_SESSION_SECS` (default `3600`).
   - `--shutdown-drain-secs` / `GIGASTT_SHUTDOWN_DRAIN_SECS` (default `10`, clamped to `>= 1`).
@@ -2476,12 +2474,12 @@ _Release candidate for v0.9.0 — bundles five P0 fixes plus two supporting item
 
 ### Added
 
-- **Prometheus `/metrics` endpoint** (closes `specs/todo.md` item 7). Enabled via `--metrics` (env `GIGASTT_METRICS=1`); off by default. Exposes
+- **Prometheus `/metrics` endpoint**. Enabled via `--metrics` (env `GIGASTT_METRICS=1`); off by default. Exposes
   - `gigastt_http_requests_total{method,path,status}` (counter)
   - `gigastt_http_request_duration_seconds{method,path}` (histogram).
   The endpoint sits behind the Origin allowlist and (when configured) the per-IP rate limiter. Recorder install is tolerant of double-install: emits a warning and keeps the server running instead of failing.
-- **Per-IP rate limiting** (closes `specs/todo.md` item 17). `--rate-limit-per-minute N` (env `GIGASTT_RATE_LIMIT_PER_MINUTE`) + `--rate-limit-burst N` (env `GIGASTT_RATE_LIMIT_BURST`). Off by default. Applies to `/v1/*` and `/v1/ws`; `/health` is exempt. Implemented with `tower_governor` using `SmartIpKeyExtractor`. Returns 429 on violations. A background task evicts expired token buckets every 60 s.
-- **`docs/deployment.md`** (closes `specs/todo.md` item 20). Reverse-proxy recipes for Caddy and nginx (certbot + `auth_basic`), Origin header behaviour, Docker binding strategy, health-check target, and a hardening checklist for remote deployments.
+- **Per-IP rate limiting**. `--rate-limit-per-minute N` (env `GIGASTT_RATE_LIMIT_PER_MINUTE`) + `--rate-limit-burst N` (env `GIGASTT_RATE_LIMIT_BURST`). Off by default. Applies to `/v1/*` and `/v1/ws`; `/health` is exempt. Implemented with `tower_governor` using `SmartIpKeyExtractor`. Returns 429 on violations. A background task evicts expired token buckets every 60 s.
+- **`docs/deployment.md`**. Reverse-proxy recipes for Caddy and nginx (certbot + `auth_basic`), Origin header behaviour, Docker binding strategy, health-check target, and a hardening checklist for remote deployments.
 
 ### Changed
 
@@ -2513,15 +2511,15 @@ _Release candidate for v0.9.0 — bundles five P0 fixes plus two supporting item
 
 ### Added
 
-- **Configurable runtime limits** (`gigastt::server::RuntimeLimits`, closes `specs/todo.md` item 6). Three knobs exposed via CLI + environment variables:
+- **Configurable runtime limits** (`gigastt::server::RuntimeLimits`). Three knobs exposed via CLI + environment variables:
   - `--idle-timeout-secs` / `GIGASTT_IDLE_TIMEOUT_SECS` — WebSocket idle timeout (default 300).
   - `--ws-frame-max-bytes` / `GIGASTT_WS_FRAME_MAX_BYTES` — max WS frame / message (default 512 KiB).
   - `--body-limit-bytes` / `GIGASTT_BODY_LIMIT_BYTES` — max REST body (default 50 MiB).
   Delivered via a new `RuntimeLimits` field on `ServerConfig` and `http::AppState`; TOML config file support stays for a follow-up.
-- **Canonical WebSocket path `/v1/ws`** (closes `specs/todo.md` item 11). Versioned path aligned with REST; legacy `/ws` remains as an alias with a warn-level deprecation log on every upgrade. Removal planned for v1.0.
-- **`diarization` capability in `GET /v1/models`** (closes `specs/todo.md` item 12). Mirrors the WebSocket `Ready` field so clients can probe capabilities without opening a WS.
-- **Docker `GIGASTT_BAKE_MODEL=1` build-arg** (closes `specs/todo.md` item 10). When set, a dedicated `model-fetcher` stage runs `gigastt download` during image build and the runtime stage copies the model into `/home/gigastt/.gigastt/models/`. Default (`0`) preserves the slim image.
-- **`cargo deny check` in CI + `deny.toml`** (closes first half of `specs/todo.md` item 14 — SBOM stays for later). Enforces license allowlist + advisory scan + crates.io-only source + wildcard ban on every PR via `EmbarkStudios/cargo-deny-action@v2`.
+- **Canonical WebSocket path `/v1/ws`**. Versioned path aligned with REST; legacy `/ws` remains as an alias with a warn-level deprecation log on every upgrade. Removal planned for v1.0.
+- **`diarization` capability in `GET /v1/models`**. Mirrors the WebSocket `Ready` field so clients can probe capabilities without opening a WS.
+- **Docker `GIGASTT_BAKE_MODEL=1` build-arg**. When set, a dedicated `model-fetcher` stage runs `gigastt download` during image build and the runtime stage copies the model into `/home/gigastt/.gigastt/models/`. Default (`0`) preserves the slim image.
+- **`cargo deny check` in CI + `deny.toml`**. Enforces license allowlist + advisory scan + crates.io-only source + wildcard ban on every PR via `EmbarkStudios/cargo-deny-action@v2`.
 
 ### Changed
 
@@ -2564,7 +2562,7 @@ _Release candidate for v0.9.0 — bundles five P0 fixes plus two supporting item
 
 ### Security
 
-- Closes `specs/todo.md` P1 items 4, 5, 8, 9. Reduces the risk that a malicious webpage can drive-by-connect to the local transcription server and exfiltrate microphone audio.
+- Reduces the risk that a malicious webpage can drive-by-connect to the local transcription server and exfiltrate microphone audio.
 
 ## [0.5.3] - 2026-04-17
 
@@ -2577,7 +2575,7 @@ _Release candidate for v0.9.0 — bundles five P0 fixes plus two supporting item
 ### Fixed
 
 - **CI clippy** (`src/model/mod.rs:29`) — replaced manual `if self.total > 0` division guard with `checked_div`, satisfying Rust 1.95's new `clippy::manual_checked_ops` lint that broke CI on v0.5.1.
-- **Release workflow** (`.github/workflows/release.yml`) — removed the `linux-x86_64-cuda` matrix entry: `Jimver/cuda-toolkit@v0.2.19` cannot resolve the `cuda-nvcc-12-4` / `cuda-cudart-12-4` packages on `ubuntu-latest`. Tracked for re-enabling in `specs/todo.md`. Until then CUDA users build from source.
+- **Release workflow** (`.github/workflows/release.yml`) — removed the `linux-x86_64-cuda` matrix entry: `Jimver/cuda-toolkit@v0.2.19` cannot resolve the `cuda-nvcc-12-4` / `cuda-cudart-12-4` packages on `ubuntu-latest`. Until then CUDA users build from source.
 
 ## [0.5.1] - 2026-04-17
 
@@ -2586,7 +2584,6 @@ _Release candidate for v0.9.0 — bundles five P0 fixes plus two supporting item
 - **Release automation** (`.github/workflows/release.yml`) — tag-triggered matrix workflow that produces `gigastt-<ver>-aarch64-apple-darwin.tar.gz` (coreml), `gigastt-<ver>-x86_64-unknown-linux-gnu.tar.gz` (cpu), `gigastt-<ver>-x86_64-unknown-linux-gnu-cuda.tar.gz`, per-asset `.sha256` files, and aggregated `SHA256SUMS.txt`. Replaces ad-hoc manual uploads that previously broke SHA-pinned downstream clients.
 - **`CONTRIBUTING.md`** — release checklist and contribution guidelines, including an explicit prohibition on manual `gh release upload` of binary assets.
 - **`examples/bun_client.ts`, `examples/go_client.go`, `examples/KotlinClient.kt`** — WebSocket client samples in Go, Kotlin (OkHttp), and Bun-native TypeScript.
-- **`specs/todo.md` + `specs/plan.md`** — 20-item follow-up list from the v0.5.0 critique, ranked P0/P1/P2 and sequenced into six phases through v1.0.0.
 
 ### Fixed
 

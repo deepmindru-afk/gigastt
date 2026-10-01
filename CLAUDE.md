@@ -209,7 +209,7 @@ OpenSLR download that does not fit the CI cache budget, so these never run in CI
 - Shared constants in `crates/gigastt-core/src/inference/mod.rs`, referenced by sub-modules
 - `ort` errors are converted to typed `RuntimeError` at the `runtime/ort` seam (no `anyhow` wrapping)
 - Execution provider / backend selection lives in `crates/gigastt-core/src/runtime/ort/factory.rs` (`#[cfg(feature = "…")]` blocks for coreml / cuda / nnapi / ane / candle); default falls through to CPU EP. `runtime/factory.rs` is the trait surface only. It is **not** in `inference/`
-- **No internal task-tracker IDs outside the tracker itself.** Never write tracker indices (`TTX-NN`, `T-NNN`, `V1-NN`, `SUS-NN`, `TODO-NN`, ticket keys, etc.) into source comments/code, `CHANGELOG.md`, `docs/`, CI/workflows, README, user-facing text, **git branch names**, **commit subjects/bodies**, or **PR titles/descriptions**. They are noise without the tracker. Use conventional language only (e.g. branch `ttx/lazy-speaker`, commit `feat(core): lazy-load speaker encoder…`). Link work to a tracked item only inside tracker docs: anything under `specs/` (notably `specs/todo.md`, `specs/plan.md`, `specs/prod-readiness-v1.0.md`, `specs/resource-ttx-roadmap.md`, and lab notes under `specs/research/`) or `roadmap/` — both are the tracker. Everything outside those two directories must stay index-free.
+- **Keep internal planning private.** Internal task identifiers and tracker contents must never appear in tracked files, source comments, changelogs, public documentation, branch or tag names, commit messages, or PR titles/descriptions. There are no directory exceptions. Keep work-to-tracker mappings only in the ignored local backlog or an external private backup. Describe the change and its reason in plain English on every public surface. Run `python3 scripts/check-publication.py` before publication; the Git hooks and CI enforce this rule.
 
 ### Audio format support
 - File transcription: WAV family via `ryf` (PCM/IEEE, G.711, G.722, GSM 06.10, ADPCM, RF64); M4A/AAC, MP3, OGG/Vorbis, FLAC (via symphonia); OGG/Opus and WebM/Opus (symphonia demux + the pure-Rust `opus-rs` decoder)
@@ -288,7 +288,7 @@ So both stay self-contained on the essentials, and the two overlap on purpose:
 - **This file** — the operational minimum an agent needs without opening anything
   else: build/test commands, the code map, key constants, and the hard rules
   (safe test invocation, no `unwrap()` in production paths, loopback-only bind,
-  no tracker indices outside `specs/` and `roadmap/`).
+  no internal planning identifiers on any public surface).
 - **[`AGENTS.md`](AGENTS.md)** — the canonical long form: full crate layout,
   dependency and feature matrix, test tiers, CI structure, release process.
 
