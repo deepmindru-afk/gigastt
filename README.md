@@ -83,12 +83,14 @@ Golos/OpenSTT slices, 1,000 samples per domain (992 clean references).
 
 | Engine | Clean read | Far-field | Phone | YouTube |
 |---|---:|---:|---:|---:|
-| gigastt (`rnnt`, INT8) | 3.55 | 4.08 | 18.50 | 10.91 |
+| gigastt (`rnnt`, INT8) | pending evidence | pending evidence | pending evidence | pending evidence |
 | Vosk 0.54 | 2.97 | 6.29 | 22.74 | 17.24 |
 | faster-whisper (Large v3) | 15.53 | 17.34 | 24.93 | 15.45 |
 
-Clean-read confidence intervals overlap. These datasets are close to
-GigaAM's training distribution; results on held-out sets differ. Full
+The previously reported primary `rnnt` scores are withheld until their raw
+results and complete run provenance are available. Competitor rows remain
+historical measurements. These datasets are close to GigaAM's training
+distribution; results on held-out sets differ. Full
 comparisons, confidence intervals and artifact provenance:
 [benchmarks](docs/benchmarks.md).
 
@@ -116,11 +118,13 @@ cargo install gigastt
 ```
 
 Building requires Rust 1.94+ and `protoc`; ONNX Runtime is downloaded at
-build time by default. [Prebuilt releases](https://github.com/ekhodzitsky/gigastt/releases)
+build time by default. Linux source builds also need OpenSSL development files;
+see [native build prerequisites](.github/CONTRIBUTING.md#development).
+[Prebuilt releases](https://github.com/ekhodzitsky/gigastt/releases)
 cover macOS Apple Silicon, Linux x86_64/aarch64 and Windows x86_64.
 [Docker instructions](docs/deployment.md#docker) use the published GHCR images.
 
-For Rust embedding: `gigastt-core = "2.21"`. Node: `npm install gigastt`.
+For Rust embedding: `gigastt-core = "2.22"`. Node: `npm install gigastt`.
 Python: `pip install gigastt`. Model setup and platform packaging:
 [quickstarts](docs/quickstarts.md).
 

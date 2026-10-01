@@ -2,21 +2,6 @@
 
 use super::*;
 
-fn publish_channel_partial(
-    completed: &[TranscribeResult],
-    words: &[WordInfo],
-    ctl: DecodeControls<'_>,
-) {
-    let mut channels = completed.to_vec();
-    channels.push(TranscribeResult {
-        text: String::new(),
-        words: words.to_vec(),
-        duration_s: 0.0,
-        confidence: None,
-    });
-    ctl.publish(&merge_channel_results(channels).words);
-}
-
 impl Engine {
     /// Transcribe a multi-channel recording with one speaker label per channel.
     ///
@@ -62,10 +47,18 @@ impl Engine {
         }
 
         let mut per_channel = Vec::with_capacity(channels.len());
-        for channel_samples in channels {
-            let publish = |words: &[WordInfo]| publish_channel_partial(&per_channel, words, ctl);
+        let mut completed_samples = 0u64;
+        for (channel, channel_samples) in channels.iter().enumerate() {
+            let publish = |update: WordUpdate| {
+                ctl.publish_update(WordUpdate {
+                    channel: Some(channel),
+                    ..update
+                })
+            };
+            let report = |n| ctl.report(completed_samples.saturating_add(n));
             let channel_ctl = DecodeControls {
-                on_partial: ctl.on_partial.map(|_| &publish as &dyn Fn(&[WordInfo])),
+                on_progress: ctl.on_progress.map(|_| &report as &dyn Fn(u64)),
+                on_partial: ctl.on_partial.map(|_| &publish as &dyn Fn(WordUpdate)),
                 ..ctl
             };
             let words = self.decode_words_for_samples(
@@ -75,6 +68,9 @@ impl Engine {
                 hotwords,
                 channel_ctl,
             )?;
+            channel_ctl.check_abort()?;
+            completed_samples = completed_samples.saturating_add(channel_samples.len() as u64);
+            ctl.report(completed_samples);
             let duration_s = channel_samples.len() as f64 / 16000.0;
             per_channel.push(TranscribeResult {
                 confidence: aggregate_confidence(&words),
@@ -85,7 +81,7 @@ impl Engine {
         }
 
         let merged = merge_channel_results(per_channel);
-        Ok(self.finish_transcribe_result(merged.words, merged.duration_s, overrides))
+        self.finish_transcribe_result(merged.words, merged.duration_s, overrides, ctl)
     }
 
     /// Streaming twin of the `channels=split` decode.
@@ -101,9 +97,8 @@ impl Engine {
     /// [`scan_channels`](crate::inference::audio::scan_channels), which answers
     /// that in one pass without materializing anything.
     ///
-    /// No progress sink is threaded through: each channel restarts the sample
-    /// clock, so a shared monotonic counter would go backwards — the same
-    /// reason the whole-buffer twin passes `abort_only`.
+    /// Progress sums decoded samples across channels. Each channel's local clock
+    /// is offset by the completed channels, so the watchdog never sees a reset.
     // Bundling these behind `&TranscribeRequest` is what one would want, but the
     // caller's match moves `data` out of `req.source`, so the request cannot be
     // borrowed whole afterwards. Same shape as `run_inference` above.
@@ -124,16 +119,28 @@ impl Engine {
 
         let spec = window_spec(self.ane_encoder, self.variant.is_ctc());
         let mut per_channel = Vec::with_capacity(channels);
+        let mut completed_samples = 0u64;
         for k in 0..channels {
-            let publish = |words: &[WordInfo]| publish_channel_partial(&per_channel, words, ctl);
+            let publish = |update: WordUpdate| {
+                ctl.publish_update(WordUpdate {
+                    channel: Some(k),
+                    ..update
+                })
+            };
+            let report = |n| ctl.report(completed_samples.saturating_add(n));
             let channel_ctl = DecodeControls {
-                on_partial: ctl.on_partial.map(|_| &publish as &dyn Fn(&[WordInfo])),
+                on_progress: ctl.on_progress.map(|_| &report as &dyn Fn(u64)),
+                on_partial: ctl.on_partial.map(|_| &publish as &dyn Fn(WordUpdate)),
                 ..ctl
             };
             let mut windows =
                 audio::FileWindows::from_bytes_channel(data.clone(), spec, max_audio_secs, k)
                     .map_err(audio::decode_error)?;
             let words = self.decode_words_streaming(&mut windows, triplet, biaser, channel_ctl)?;
+            channel_ctl.check_abort()?;
+            completed_samples =
+                completed_samples.saturating_add(windows.total_16k_samples() as u64);
+            ctl.report(completed_samples);
             per_channel.push(TranscribeResult {
                 confidence: aggregate_confidence(&words),
                 text: String::new(),
@@ -143,6 +150,6 @@ impl Engine {
         }
 
         let merged = merge_channel_results(per_channel);
-        Ok(self.finish_transcribe_result(merged.words, merged.duration_s, overrides))
+        self.finish_transcribe_result(merged.words, merged.duration_s, overrides, ctl)
     }
 }

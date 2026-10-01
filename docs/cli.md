@@ -376,8 +376,9 @@ gigastt cache-gc [OPTIONS]
 
   Removes *_optimized.{ort,onnx} graphs (from optimized_cache/, or the
   --optimized-cache-dir directory when given) that no installed head can
-  load, keeping the graph for the preferred encoder of every head whose
-  weights are present in the directory (INT8 preferred). Also prunes stale
+  load, keeping all configuration variants matching the contents of each
+  installed preferred encoder (INT8 preferred). Legacy basename-only
+  graphs are removed. Also prunes stale
   CoreML compiled-model caches under coreml_cache/: keeps only the current
   ort-<minor>/ version dir, removes dirs left by other ONNX Runtime builds
   and legacy unversioned hash dirs.

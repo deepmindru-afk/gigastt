@@ -20,6 +20,19 @@ jobs:
           components: rustfmt
       - run: cargo fmt --all --check
 
+  release-source:
+    runs-on: ubuntu-latest
+    name: Release source validation
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - run: python3 scripts/test-resolve-release.py
+      - run: python3 scripts/test-resolve-android.py
+      - run: python3 scripts/test-release-assets.py
+      - run: python3 scripts/test_homebrew_release_metadata.py
+      - run: python3 scripts/test_android_runtime.py
+
   runtime-isolation:
     runs-on: ubuntu-latest
     name: Runtime Isolation
@@ -174,6 +187,8 @@ jobs:
           python-version: "3.12"
       - name: Install test deps
         run: python -m pip install pytest websockets
+      - name: Validate Homebrew release pins
+        run: python scripts/test_homebrew_formula.py
       - name: Run benchmark unit tests
         working-directory: benchmark
         run: |
@@ -196,6 +211,10 @@ jobs:
           shared-key: ci
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Check Android runtime API compatibility
+        run: |
+          cargo metadata --locked --offline --filter-platform x86_64-unknown-linux-gnu --format-version 1 > "$RUNNER_TEMP/android-cargo-metadata.json"
+          python3 scripts/check-android-runtime.py --metadata "$RUNNER_TEMP/android-cargo-metadata.json"
 
   unit-tests:
     runs-on: ubuntu-latest
@@ -203,6 +222,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
+      - name: Validate Docker dependency-cache targets
+        run: python3 scripts/test_docker_cache.py
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - uses: Swatinem/rust-cache@v2
@@ -210,6 +231,10 @@ jobs:
           shared-key: ci
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo test --workspace --lib --bins
+      - name: Runtime output allocation regression
+        run: cargo test -p gigastt-core --test runtime_output_workspace
+      - name: Completed-job status allocation regression
+        run: cargo test -p gigastt --test job_status_allocations
       # Long-duration resampler equivalence gate (~50 s in debug): the staged
       # decode path must not drift more than a whole-buffer resample over 300 s
       # of 44.1 kHz audio. Too slow for every PR, so it runs on main push only.

@@ -11,7 +11,7 @@
 //! `[1, D, T]` layout (see [`super::decode::extract_encoder_frame`]).
 
 use super::bias::{BiasPath, Biaser};
-use super::decode::{TokenInfo, argmax_with_confidence};
+use super::decode::{TokenInfo, argmax, token_confidence};
 use super::tokenizer::{Tokenizer, WORD_BOUNDARY};
 use super::{SECONDS_PER_FRAME, WordInfo};
 
@@ -106,6 +106,25 @@ pub(crate) fn ctc_prefix_beam_decode_with_abort(
     biaser: &Biaser,
     abort: Option<&(dyn Fn() -> bool + Sync)>,
 ) -> Vec<TokenInfo> {
+    beam_decode(log_probs, t_len, vocab, blank_id, biaser, abort, &mut ())
+}
+
+/// A separate profiling instantiation can observe frame bounds. The production
+/// unit observer is statically dispatched and optimized out of normal decoding.
+trait BeamObserver {
+    fn frame(&mut self, _candidates: usize, _next: &[(Vec<usize>, Hypothesis)]) {}
+}
+impl BeamObserver for () {}
+
+fn beam_decode(
+    log_probs: &[f32],
+    t_len: usize,
+    vocab: usize,
+    blank_id: usize,
+    biaser: &Biaser,
+    abort: Option<&(dyn Fn() -> bool + Sync)>,
+    observer: &mut impl BeamObserver,
+) -> Vec<TokenInfo> {
     if vocab == 0 {
         return Vec::new();
     }
@@ -180,6 +199,7 @@ pub(crate) fn ctc_prefix_beam_decode_with_abort(
             }
         }
 
+        observer.frame(candidates.len(), &next);
         if next.is_empty() {
             break;
         }
@@ -341,7 +361,7 @@ pub(crate) fn ctc_greedy_decode_with_abort(
             break;
         }
         let row = &log_probs[t * vocab..(t + 1) * vocab];
-        let (id, confidence) = argmax_with_confidence(row, blank_id);
+        let id = argmax(row, blank_id);
         // Collapse: skip a frame whose argmax equals the previous frame's argmax
         // (blank or not). Tracking the raw argmax — not the last *emitted* token —
         // is what makes a blank between two identical labels keep both.
@@ -355,7 +375,7 @@ pub(crate) fn ctc_greedy_decode_with_abort(
         out.push(TokenInfo {
             token_id: id,
             frame_index: t,
-            confidence,
+            confidence: token_confidence(row, id),
         });
     }
     out
@@ -435,6 +455,10 @@ pub(crate) fn ctc_tokens_to_words(
 
     words
 }
+
+/// Private benchmark access; not part of the stable library API.
+#[cfg(feature = "__internals")]
+pub mod profile;
 
 #[cfg(test)]
 mod tests;

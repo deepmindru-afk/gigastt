@@ -59,6 +59,10 @@ RUN mkdir -p crates/gigastt-core/src crates/gigastt-quantize/src crates/gigastt-
     echo 'fn main() {}' > crates/gigastt-core/benches/resample.rs && \
     echo 'fn main() {}' > crates/gigastt-core/benches/tokenizer.rs && \
     echo 'fn main() {}' > crates/gigastt-core/benches/decode.rs && \
+    echo 'fn main() {}' > crates/gigastt-core/benches/transcript_snapshot.rs && \
+    echo 'fn main() {}' > crates/gigastt-core/benches/ctc_beam.rs && \
+    echo 'fn main() {}' > crates/gigastt-core/benches/file_scheduling.rs && \
+    echo 'fn main() {}' > crates/gigastt-core/benches/raw_telephony.rs && \
     echo 'fn main() {}' > crates/gigastt-core/examples/quantize_file.rs && \
     echo 'fn main() {}' > crates/gigastt/tests/benchmark.rs && \
     echo '# stub' > crates/gigastt-quantize/README.md && \

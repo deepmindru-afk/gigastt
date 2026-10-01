@@ -915,3 +915,215 @@ fn test_slide_anchored_no_anchor_is_noop() {
     assert_eq!(st.audio_buffer.len(), 16000 * 3);
     assert_eq!(st.context_samples, 0);
 }
+
+#[test]
+fn test_predecoded_source_budget_rejects_before_inference() {
+    use crate::error::GigasttError;
+    use crate::inference::{TranscribeRequest, TranscribeSource};
+    let (engine, _tmp) = tiny_mock_engine();
+    let mut guard = engine.pool.checkout_blocking().unwrap();
+    let samples = vec![0.0; 101];
+    let channels = vec![vec![0.0; 50], samples.clone()];
+    for source in [
+        TranscribeSource::Samples(&samples),
+        TranscribeSource::Channels(&channels),
+    ] {
+        let req = TranscribeRequest::new(source).with_max_audio_secs(Some(100.0 / 16000.0));
+        assert!(matches!(
+            engine.transcribe_request(req, &mut guard),
+            Err(GigasttError::AudioTooLong { .. })
+        ));
+    }
+}
+
+#[test]
+fn test_predecoded_source_budget_accepts_exact_limit_and_default_conventions() {
+    use crate::inference::{TranscribeRequest, TranscribeSource};
+    let (engine, _tmp) = tiny_mock_engine();
+    let mut guard = engine.pool.checkout_blocking().unwrap();
+    let samples = vec![0.0; 100];
+    let channels = vec![samples.clone(), samples.clone()];
+    for limit in [
+        None,
+        Some(100.0 / 16000.0),
+        Some(0.0),
+        Some(-1.0),
+        Some(f64::NAN),
+        Some(f64::INFINITY),
+    ] {
+        for source in [
+            TranscribeSource::Samples(&samples),
+            TranscribeSource::Channels(&channels),
+        ] {
+            engine
+                .transcribe_request(
+                    TranscribeRequest::new(source).with_max_audio_secs(limit),
+                    &mut guard,
+                )
+                .unwrap();
+        }
+    }
+}
+
+#[test]
+fn test_predecoded_source_budget_preserves_controls_on_rejection() {
+    use crate::error::GigasttError;
+    use crate::inference::{TranscribeRequest, TranscribeSource, TranscriptSnapshot};
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+    let (engine, _tmp) = tiny_mock_engine();
+    let mut guard = engine.pool.checkout_blocking().unwrap();
+    let samples = vec![0.0; 101];
+    let progress = Arc::new(AtomicU64::new(77));
+    let partial = Arc::new(TranscriptSnapshot::default());
+    partial.store(crate::inference::TranscriptSegment::empty_final());
+    let prior = serde_json::to_value(partial.get().unwrap()).unwrap();
+    for cancelled in [false, true] {
+        let req = TranscribeRequest::new(TranscribeSource::Samples(&samples))
+            .with_max_audio_secs(Some(100.0 / 16000.0))
+            .with_progress(Some(progress.clone()))
+            .with_partial(Some(partial.clone()))
+            .with_abort(Some(Arc::new(AtomicBool::new(cancelled))));
+        let err = engine.transcribe_request(req, &mut guard).unwrap_err();
+        if cancelled {
+            assert!(matches!(err, GigasttError::Cancelled));
+        } else {
+            assert!(matches!(err, GigasttError::AudioTooLong { .. }));
+        }
+        assert_eq!(progress.load(Ordering::Relaxed), 77);
+        assert_eq!(serde_json::to_value(partial.get().unwrap()).unwrap(), prior);
+    }
+}
+
+#[test]
+#[cfg(feature = "file-decode")]
+fn test_source_budget_encoded_and_predecoded_boundaries_match() {
+    use crate::error::GigasttError;
+    use crate::inference::{TranscribeRequest, TranscribeSource};
+    let (engine, _tmp) = tiny_mock_engine();
+    let mut guard = engine.pool.checkout_blocking().unwrap();
+    for count in [100, 101] {
+        let pcm = vec![0.0; count];
+        let channels = vec![pcm.clone()];
+        let wav = bytes::Bytes::from(crate::test_support::pcm16_wav(&vec![0; count], 16000));
+        let file = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(file.path(), &wav).unwrap();
+        let path = file.path().to_str().unwrap();
+        for source in [
+            TranscribeSource::Path(path),
+            TranscribeSource::Bytes(wav.clone()),
+            TranscribeSource::Samples(&pcm),
+            TranscribeSource::Channels(&channels),
+            TranscribeSource::ChannelStreams {
+                data: wav.clone(),
+                channels: 1,
+            },
+        ] {
+            let result = engine.transcribe_request(
+                TranscribeRequest::new(source).with_max_audio_secs(Some(100.0 / 16000.0)),
+                &mut guard,
+            );
+            if count == 100 {
+                assert!(result.is_ok(), "{result:?}");
+            } else {
+                assert!(
+                    matches!(result, Err(GigasttError::AudioTooLong { .. })),
+                    "{result:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn test_moving_edge_hypotheses_disprove_retained_audio_cap() {
+    use crate::inference::windows::{STREAM_DECODE_STRIDE_SAMPLES, STREAM_MAX_WINDOW_SAMPLES};
+    let mut state = bare_state(vec![], 0, STREAM_MAX_WINDOW_SAMPLES, 0);
+    state.endpoint_mode = EndpointMode::Manual;
+    for step in 0..120 {
+        state
+            .audio_buffer
+            .resize(state.audio_buffer.len() + STREAM_DECODE_STRIDE_SAMPLES, 0.0);
+        let edge = state.audio_buffer.len() as f64 / 16000.0;
+        state.assembler.set_words(vec![w(
+            if step % 2 == 0 { "a" } else { "b" },
+            edge - 0.3,
+            edge - 0.1,
+        )]);
+        state.agreed_prefix = 0;
+        let committed = Engine::cap_commit_stable_prefix(&mut state);
+        assert_eq!(committed, 0);
+        assert!(!Engine::speech_endpoint(
+            state.endpoint_mode,
+            true,
+            true,
+            true
+        ));
+        assert_eq!(state.window_start_samples, 0);
+    }
+    // A constructive counterexample: every word remains inside the moving
+    // horizon, so even the streak fallback has nothing it may commit.
+    assert_eq!(
+        state.audio_buffer.len(),
+        STREAM_MAX_WINDOW_SAMPLES + 120 * STREAM_DECODE_STRIDE_SAMPLES
+    );
+    assert_eq!(state.assembler.live_word_count(), 1);
+    assert_eq!(state.assembler.committed_coverage_end(), None);
+}
+
+#[test]
+fn test_retention_fixed_timestamp_eventually_leaves_horizon() {
+    use crate::inference::windows::{STREAM_DECODE_STRIDE_SAMPLES, STREAM_MAX_WINDOW_SAMPLES};
+    let mut state = bare_state(vec![w("word", 2.0, 2.4)], 0, STREAM_MAX_WINDOW_SAMPLES, 0);
+    for _ in 0..3 {
+        state
+            .audio_buffer
+            .resize(state.audio_buffer.len() + STREAM_DECODE_STRIDE_SAMPLES, 0.0);
+        state.agreed_prefix = 0;
+        if Engine::cap_commit_stable_prefix(&mut state) > 0 {
+            Engine::slide_streaming_window_anchored(&mut state, None);
+        }
+    }
+    assert_eq!(state.assembler.committed_coverage_end(), Some(2.4));
+    assert!(state.window_start_samples > 0);
+}
+
+#[test]
+fn test_retention_drifting_agreed_word_remains_uncommittable() {
+    use crate::inference::windows::{STREAM_DECODE_STRIDE_SAMPLES, STREAM_MAX_WINDOW_SAMPLES};
+    let mut state = bare_state(vec![], 0, STREAM_MAX_WINDOW_SAMPLES, 0);
+    for _ in 0..60 {
+        state
+            .audio_buffer
+            .resize(state.audio_buffer.len() + STREAM_DECODE_STRIDE_SAMPLES, 0.0);
+        let edge = state.audio_buffer.len() as f64 / 16000.0;
+        state.assembler.set_words(vec![w("same", 0.0, edge - 0.1)]);
+        state.agreed_prefix = 1;
+        assert_eq!(Engine::cap_commit_stable_prefix(&mut state), 0);
+    }
+    assert_eq!(
+        state.audio_buffer.len(),
+        STREAM_MAX_WINDOW_SAMPLES + 60 * STREAM_DECODE_STRIDE_SAMPLES
+    );
+}
+
+#[test]
+fn test_retention_silence_slides_to_left_context() {
+    use crate::inference::windows::{
+        STREAM_DECODE_STRIDE_SAMPLES, STREAM_LEFT_CONTEXT_SAMPLES, STREAM_MAX_WINDOW_SAMPLES,
+    };
+    let mut state = bare_state(vec![], 0, 0, 0);
+    state.endpoint_mode = EndpointMode::Manual;
+    for _ in 0..120 {
+        state
+            .audio_buffer
+            .resize(state.audio_buffer.len() + STREAM_DECODE_STRIDE_SAMPLES, 0.0);
+        if state.audio_buffer.len() >= STREAM_MAX_WINDOW_SAMPLES {
+            assert_eq!(Engine::cap_commit_stable_prefix(&mut state), 0);
+            assert_eq!(state.assembler.live_word_count(), 0);
+            Engine::slide_streaming_window(&mut state);
+            assert_eq!(state.audio_buffer.len(), STREAM_LEFT_CONTEXT_SAMPLES);
+        }
+        assert!(state.audio_buffer.len() < STREAM_MAX_WINDOW_SAMPLES);
+    }
+    assert!(state.window_start_samples > STREAM_MAX_WINDOW_SAMPLES);
+}

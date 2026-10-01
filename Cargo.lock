@@ -1711,7 +1711,7 @@ dependencies = [
 
 [[package]]
 name = "gigastt"
-version = "2.21.0"
+version = "2.22.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -1737,7 +1737,7 @@ dependencies = [
 
 [[package]]
 name = "gigastt-core"
-version = "2.21.0"
+version = "2.22.0"
 dependencies = [
  "anyhow",
  "audio-codec",
@@ -1776,27 +1776,29 @@ dependencies = [
 
 [[package]]
 name = "gigastt-ffi"
-version = "2.21.0"
+version = "2.22.0"
 dependencies = [
  "cbindgen",
  "gigastt-core",
  "serde_json",
+ "tempfile",
  "tracing",
 ]
 
 [[package]]
 name = "gigastt-node"
-version = "2.21.0"
+version = "2.22.0"
 dependencies = [
  "gigastt-core",
  "napi",
  "napi-build",
  "napi-derive",
+ "tempfile",
 ]
 
 [[package]]
 name = "gigastt-quantize"
-version = "2.21.0"
+version = "2.22.0"
 dependencies = [
  "anyhow",
  "prost",
@@ -1807,9 +1809,10 @@ dependencies = [
 
 [[package]]
 name = "gigastt-uniffi"
-version = "2.21.0"
+version = "2.22.0"
 dependencies = [
  "gigastt-core",
+ "tempfile",
  "thiserror 2.0.21",
  "uniffi",
 ]

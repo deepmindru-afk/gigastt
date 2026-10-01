@@ -102,7 +102,7 @@ pub(crate) fn aggregate_confidence(words: &[WordInfo]) -> Option<f32> {
 /// Created via [`crate::inference::Engine::create_state`]. Holds the decoder LSTM state, an audio
 /// sample buffer for incomplete frames, and accumulated transcript text/words.
 /// Pass this to [`crate::inference::Engine::process_chunk`] for each incoming audio chunk and
-/// [`crate::inference::Engine::flush_state`] when the stream ends.
+/// [`crate::inference::Engine::try_finish_stream`] when the stream ends.
 #[non_exhaustive]
 pub struct StreamingState {
     /// Public text commitment policy, scoped to the current utterance.
@@ -170,7 +170,7 @@ pub struct StreamingState {
 }
 
 impl StreamingState {
-    /// Whether cooperative cancellation has made this stream terminal.
+    /// Whether cancellation or a finalization failure made this stream terminal.
     pub fn is_failed(&self) -> bool {
         self.failed
     }
@@ -184,35 +184,9 @@ impl StreamingState {
     }
 }
 
-/// Last readable transcript, shared with the caller of a blocking decode.
-/// Updated after each file window, streaming hypothesis, or interrupted decode.
-/// A snapshot is provisional and never represents successful completion.
-#[derive(Debug, Default)]
-pub struct TranscriptSnapshot(parking_lot::Mutex<Option<TranscriptSegment>>);
-
-impl TranscriptSnapshot {
-    pub(crate) fn clear(&self) {
-        *self.0.lock() = None;
-    }
-
-    /// Read the latest snapshot, including after cancellation or timeout.
-    pub fn get(&self) -> Option<TranscriptSegment> {
-        self.0.lock().clone()
-    }
-
-    pub(crate) fn store(&self, mut segment: TranscriptSegment) {
-        segment.is_final = false;
-        segment.speech_final = false;
-        segment.endpoint_reason = None;
-        *self.0.lock() = Some(segment);
-    }
-
-    pub(crate) fn store_words(&self, words: &[WordInfo]) {
-        let mut assembler = TranscriptAssembler::new();
-        assembler.append(words.to_vec());
-        self.store(assembler.partial(now_timestamp()));
-    }
-}
+mod snapshot;
+pub(crate) use snapshot::SnapshotPublisher;
+pub use snapshot::TranscriptSnapshot;
 
 /// Audio feature extraction pipeline.
 ///
@@ -243,6 +217,7 @@ impl FeatureExtractor {
     }
 
     /// Compute log-mel features from 16 kHz f32 samples, reusing state buffers.
+    /// The complex buffer retains the FFT input followed by plan-specific scratch.
     pub fn compute_mel(
         &self,
         samples: &[f32],
@@ -514,18 +489,19 @@ impl TranscriptAssembler {
     pub fn partial(&self, timestamp: f64) -> TranscriptSegment {
         let words = self.full_words();
         let text = self.full_text();
+        let confidence = aggregate_confidence(&words);
         TranscriptSegment {
             committed: self.committed_text.clone(),
             // The separator belongs to the tentative tail so concatenation
             // needs no trimming, and the committed bytes never change.
             tentative: text[self.committed_text.len()..].to_owned(),
             text,
-            words: words.clone(),
+            words,
             is_final: false,
             speech_final: false,
             endpoint_reason: None,
             timestamp,
-            confidence: aggregate_confidence(&words),
+            confidence,
             truncated: false,
         }
     }

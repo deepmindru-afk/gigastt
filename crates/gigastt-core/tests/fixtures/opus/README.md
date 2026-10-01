@@ -26,3 +26,11 @@
   `opus_head16.ogg` `c706e192c69f01f8630ead3882d497f3a3dd5daf1b81af3dd87432e126696471`,
   `opus_rate48.webm` `54e08e96b1ffb56edf68b6b98edf6235b1590fcd83226784341206a2229bdbd0`,
   `opus_sf16.webm` `adf073992626744cd19162ac3156de361c64ac19ae0c1eb31e4acf40a7dacea9`.
+
+- `dual.ogg` / `late_stereo.ogg` — generated two-second 48 kHz PCM16 stereo
+  tones, encoded with `ffmpeg -map_metadata -1 -c:a libopus -b:a 48k`.
+  Both start with identical 440 Hz channels (amplitude 12000). `dual.ogg`
+  stays identical; after one second `late_stereo.ogg` switches the right
+  channel to 710 Hz (amplitude 10000). Samples use
+  `int(amplitude * sin(i * 2 * pi * frequency / 48000))`.
+  The late divergence verifies that channel classification reads the full file.

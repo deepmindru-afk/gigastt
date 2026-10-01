@@ -43,7 +43,7 @@ WER is unchanged by this switch: whisper.cpp still uses the same `large-v3` Russ
 
 WER is computed after symmetric text normalization so that Russian number words and Arabic digits become comparable tokens. The same pipeline is applied to the reference and the hypothesis for every engine; there are no per-engine branches.
 
-**Caveat — the benefit of normalization is not engine-neutral.** *(Historical: the gigastt numbers in this block were measured with the `e2e_rnnt` head, pre-v2.3; the current default `rnnt` head reaches 3.55% clean-read WER — see the root README.)* Although the *same* function runs on reference and hypothesis with no per-engine branches, the words-to-digits ITN and the anglicism map can only fire on hypotheses that contain Arabic digits or Latin tokens. Engines that emit digits/Latin (gigastt, whisper) get a large WER reduction from normalization; a word-only engine like Vosk gets none (and even loses a little). Measured on `golos_crowd_1k`, recomputed from the committed `results_full/*.json` (not a new run):
+**Caveat — the benefit of normalization is not engine-neutral.** *(Historical: the gigastt numbers in this block were measured with the `e2e_rnnt` head, pre-v2.3; the current default `rnnt` primary scores are withheld pending complete evidence — see the root README.)* Although the *same* function runs on reference and hypothesis with no per-engine branches, the words-to-digits ITN and the anglicism map can only fire on hypotheses that contain Arabic digits or Latin tokens. Engines that emit digits/Latin (gigastt, whisper) get a large WER reduction from normalization; a word-only engine like Vosk gets none (and even loses a little). Measured on `golos_crowd_1k`, recomputed from the committed `results_full/*.json` (not a new run):
 
 | Engine | naive WER | ITN WER | Δ |
 |---|---|---|---|
@@ -93,7 +93,7 @@ The Rust CI harness in `crates/gigastt/tests/benchmark.rs` uses a simpler digit-
 
 ### Dataset contamination
 
-GigaAM v3 is a SberDevices model whose fine-tuning is dominated by Golos, and Common Voice / OpenSTT-style corpora are commonly part of Russian ASR training mixes. The Golos / OpenSTT / Common Voice slices used here therefore very likely overlap GigaAM v3's training distribution, so the in-domain WER should be read as a **best-case upper bound**, not a WER on unseen data. Golos ships an official train/test split (distribution overlap, not row-level leakage); the renormalized matrix below — measured with the `e2e_rnnt` head against **Vosk 0.42** — still shows Vosk ahead on clean read speech. With the current `rnnt` head, clean read is instead a **statistical tie** against Vosk 0.54 (3.55% vs 2.97%, overlapping 95% CIs — see the root README).
+GigaAM v3 is a SberDevices model whose fine-tuning is dominated by Golos, and Common Voice / OpenSTT-style corpora are commonly part of Russian ASR training mixes. The Golos / OpenSTT / Common Voice slices used here therefore very likely overlap GigaAM v3's training distribution, so the in-domain WER should be read as a **best-case upper bound**, not a WER on unseen data. Golos ships an official train/test split (distribution overlap, not row-level leakage); the renormalized matrix below — measured with the `e2e_rnnt` head against **Vosk 0.42** — still shows Vosk ahead on clean read speech. The primary `rnnt` comparison with Vosk 0.54 is withheld pending complete raw results and provenance; overlapping confidence intervals alone would not establish equivalence.
 
 ## Quick Start
 
@@ -411,7 +411,7 @@ If the external dataset is missing, the benchmark falls back to the bundled fixt
 
 ## Renormalized WER results
 
-*(Historical: every gigastt row below is the `e2e_rnnt` head, pre-v2.3. The current default is the `rnnt` head — 3.55% clean read on `golos_crowd_1k`; see the root README and [`docs/benchmarks.md`](../docs/benchmarks.md).)*
+*(Historical: every gigastt row below is the `e2e_rnnt` head, pre-v2.3. The current default is the `rnnt` head; its primary scores are withheld pending complete evidence; see the root README and [`docs/benchmarks.md`](../docs/benchmarks.md).)*
 
 Existing result files were recomputed with the new symmetric words-to-digits normalization (`benchmark/recompute_wer.py`). The full 4×4 matrix below now includes the previously missing `openstt_calls` and `openstt_youtube` pairs, generated with the new normalization.
 
@@ -436,7 +436,7 @@ Existing result files were recomputed with the new symmetric words-to-digits nor
 
 ### Residual errors
 
-On `golos_crowd_1k` gigastt reaches 8.60% WER after renormalization (down from 10.77%) — the flagship README number *at the time*, measured on the `e2e_rnnt` head (1000 samples, 95% CI [7.51%, 9.66%]). The current README flagship is **3.55%** on the default `rnnt` head. The residual errors are dominated by:
+On `golos_crowd_1k` gigastt reaches 8.60% WER after renormalization (down from 10.77%) — the flagship README number *at the time*, measured on the `e2e_rnnt` head (1000 samples, 95% CI [7.51%, 9.66%]). The current README withholds primary `rnnt` scores pending complete evidence. The residual errors are dominated by:
 
 - **Foreign brand / artist / product names** output in original Latin spelling by gigastt (and whisper) while the reference uses Russian transliteration, e.g. "Fashion TV" vs "фэшн ти ви", "Okko" vs "окко", "Bon Jovi" vs "бона джови". Roughly 45–50% of remaining error tokens fall in this category.
 - **Real ASR errors or partial hypotheses**, including mis-heard words, substitutions, and truncated outputs on long digit strings. About half of the residual errors are genuine recognition mistakes rather than normalization mismatches.

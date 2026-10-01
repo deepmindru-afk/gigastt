@@ -1,20 +1,36 @@
 # Benchmarks
 
-Honest, reproducible comparison of gigastt against current Russian-ASR engines.
-Measured on an **Apple M1, CPU** execution provider (INT8 / greedy where applicable),
-1000-sample manifests per domain (992 scored on `golos_crowd_1k` after dropping empty
-references), failures counted as 100% WER, 95% bootstrap confidence
-intervals. Competitor numbers come from the committed artifacts in
-[`benchmark/results_full/`](../benchmark/results_full/); the **gigastt** rows are the
-default **`rnnt`** head (since v2.3), re-measured through the *same* Python harness,
-manifests, and normalization as the competitors — so they are like-for-like. Methodology
-and dataset prep are in [`benchmark/README.md`](../benchmark/README.md).
+Historical comparisons of gigastt against Russian-ASR engines. The primary
+comparison used Apple M1 CPU, 1,000-sample manifests per domain (992 nonempty
+clean-read references), failures included in scoring, and bootstrap intervals.
+Competitor and older `e2e_rnnt` results are retained in
+[`benchmark/results_full/`](../benchmark/results_full/). Methodology and dataset
+preparation are in [`benchmark/README.md`](../benchmark/README.md).
 
-> **Provenance (gigastt rows).** The committed `results_full/*_gigastt*.json` artifacts
-> are the pre-v2.3 `e2e_rnnt` run (gigastt 2.0.13, 2026-06; normalized WER 8.60 / 5.90 /
-> 19.28 / 11.35 across the four domains — the `e2e_rnnt` numbers quoted further down).
-> The `rnnt` re-measurement behind the headline gigastt rows (3.55 / 4.08 / 18.50 /
-> 10.91) is **not committed** to `results_full/`; the competitor rows are.
+> **Primary `rnnt` scores withheld.** The previously reported WER values
+> 3.55 / 4.08 / 18.50 / 10.91 and their intervals cannot currently be traced to
+> the original per-sample results and complete run configuration. They are
+> historical reports, not substantiated headline measurements or a basis for
+> ranking engines. The committed `*_gigastt*.json` files for these four domains
+> describe the older gigastt 2.0.13 `e2e_rnnt` run, not that `rnnt` measurement.
+
+### Evidence required to restore the primary scores
+
+Each score must link to a retrievable raw result and a content checksum, together
+with the exact corpus manifest and audio revision/checksums, code revision and
+binary build configuration, model filenames and SHA-256 hashes, hardware,
+ONNX Runtime version/provider, thread/pool settings, and all transcription
+options (including punctuation, ITN, VAD and hotwords). Record per-sample
+hypotheses, references, failures and exclusions; version the normalization and
+scoring code, aggregation rule, bootstrap method, seed and number of resamples.
+Publish verbatim and normalized scores together, with failure counts and timing.
+
+The local September Linux clean-read result also reports 3.55%, but lacks that
+complete provenance and is not the original M1 run. Its far-field result is
+4.32%, not the former 4.08% headline. Neither restores the four-domain comparison.
+The public benchmark-results branch contains a different 15-fixture smoke run.
+A new fully documented run may replace the missing evidence; older `e2e_rnnt`,
+multilingual, held-out and streaming measurements must remain separately labelled.
 
 > **Contamination caveat.** GigaAM v3 (gigastt) is a SberDevices model whose training is
 > dominated by Golos, and OpenSTT-style corpora are common in Russian ASR training mixes.
@@ -30,7 +46,7 @@ Domains: **Clean read** `golos_crowd_1k` · **Far-field** `golos_farfield` ·
 
 | Engine | Clean read | Far-field | Phone calls | YouTube |
 |---|---|---|---|---|
-| **gigastt** (GigaAM v3 `rnnt`, INT8) | 3.55 (2.9–4.2) | **4.08 (3.4–4.8)** | **18.50 (17.1–19.9)** | **10.91 (9.9–11.8)** |
+| **gigastt** (GigaAM v3 `rnnt`, INT8) | pending evidence | pending evidence | pending evidence | pending evidence |
 | gigastt (GigaAM Multilingual `ml_ctc_large`, 600M, INT8) | 4.44 (3.7–5.2) | 5.70 (4.9–6.6) | — ² | — ² |
 | gigastt (GigaAM Multilingual `ml_ctc`, 220M, INT8) | 6.15 (5.4–7.0) | 8.28 (7.3–9.4) | — ² | — ² |
 | Vosk 0.54 (Zipformer2) | **2.97 (2.4–3.6)** | 6.29 (5.4–7.3) | 22.74 (21.3–24.2) | 17.24 (16.0–18.4) |
@@ -145,24 +161,23 @@ absent. FLEURS-ru is skipped until `scripts/prepare_fleurs.py --config ru_ru`
 has written the manifest and the wavs.
 
 > The pre-v2.3 default was the `e2e_rnnt` head (clean read 8.60%, far-field 5.90,
-> phone 19.28, YouTube 11.35); the `rnnt` head above more than halves clean-read WER
-> and edges the others. Both heads share the encoder — `rnnt` emits bare lowercase
+> phone 19.28, YouTube 11.35). The missing primary `rnnt` artifacts prevent a
+> supported comparison with those scores. Both heads share the encoder — `rnnt` emits bare lowercase
 > text (pair with `--punctuation` / `--itn` for readable output), `e2e_rnnt` bakes in
-> punctuation/casing. WER is identical whether `rnnt` is run with `--itn` or not: the
-> harness normalizes number-words ↔ digits symmetrically on every engine, so word vs
-> digit output is neither rewarded nor penalized.
+> punctuation/casing. The harness applies the same normalization to references
+> and hypotheses, but this does not imply equal benefit across engines; see the
+> normalization caveat in the benchmark guide.
 
 > **Multilingual heads.** `ml_ctc` (220M) and `ml_ctc_large` (600M) are the opt-in GigaAM
-> Multilingual charwise-CTC heads (ru/en/kk/ky/uz). On Russian they trade some accuracy for
-> language coverage: the 600M head (4.44% clean / 5.70% far-field) approaches the
-> Russian-specialized `rnnt` and comfortably beats the old `e2e_rnnt` (8.60% clean), while
+> Multilingual charwise-CTC heads (ru/en/kk/ky/uz). The 600M head reports
+> 4.44% clean / 5.70% far-field against the old `e2e_rnnt` 8.60% clean result, while
 > the 220M head (6.15% / 8.28%) is the smaller, faster option. Measured through the same
 > harness, manifests, and normalization as the rows above; bare lowercase output, so pair
 > with `--punctuation` / `--itn` for readable text.
 
 ### Punctuation quality — `e2e_rnnt` vs `rnnt` + RuPunct restore
 
-The low-WER `rnnt` head is bare lowercase, so readable Russian comes two ways: bake it in
+The `rnnt` head is bare lowercase, so readable Russian comes two ways: bake it in
 with the `e2e_rnnt` head (one pass), or restore it on top of `rnnt` with the `--punctuation`
 RuPunct model plus `--itn` (two passes). Measured on **775 punctuated FLEURS-ru references**
 (the `raw_transcription` field; numbers are written as digits, so both configs run `--itn on`
@@ -174,28 +189,16 @@ to match), position-based F1 with the same metric as
 | `e2e_rnnt` (one pass, baked in) | **0.540** | **0.726** |
 | `rnnt` + RuPunct restore (two passes) | 0.355 | 0.656 |
 
-`e2e_rnnt` wins on both — and the gap is a **lower bound**: the metric is position-based, so
-`e2e_rnnt`'s higher WER (more misrecognized words shift downstream positions) handicaps *its*
-own score, yet it still leads. This is why both heads are kept: `rnnt` for lowest WER on raw
-text, `e2e_rnnt` as the single-pass path to punctuated / cased / ITN'd Russian whose
-punctuation is better than restoring it after the fact.
+The reported `e2e_rnnt` scores are higher on both metrics. Position-based F1
+also depends on word alignment; these measurements do not establish a lower
+bound on the punctuation-quality gap or validate the missing four-domain WER
+comparison. `rnnt` provides bare text with optional restoration; `e2e_rnnt`
+provides punctuation, casing and ITN in one pass.
 
-**Honest reading:**
-
-- **Clean read** → a **statistical tie**: gigastt-rnnt (3.55%) vs **Vosk 0.54 (2.97%)** —
-  the CIs overlap (2.9–4.2 vs 2.4–3.6) and Vosk's point estimate is slightly ahead.
-  (The old `e2e` head trailed badly here at 8.60%.)
-- **Far-field** → **gigastt wins** (4.08 vs Vosk 0.54 6.29) — CI-separated.
-- **Phone calls** → **gigastt wins** (18.50): beats Vosk 0.54 (22.74) and even T-one's
-  production beam+LM (21.73). Note the contamination caveat — and that T-one's
-  *published* telephony strength is on its own call-center set, not this one.
-- **YouTube** → **gigastt wins** (10.91 vs all; next best faster-whisper 15.45).
-
-So gigastt-rnnt is **the most accurate engine on three of four domains** (far-field,
-phone, YouTube — CI-separated) and **statistically ties the best (Vosk 0.54) on clean
-read**. It is not a runaway leader on clean read — Vosk's point estimate still edges it —
-but the head switch turned the old "concedes clean read" story into a near-tie. The
-durable advantage remains the packaging — see Footprint and the
+**Interpretation:** the primary `rnnt` evidence gap prevents a supported
+four-domain ranking or a clean-read equivalence claim. Overlapping marginal
+confidence intervals alone would not establish statistical equivalence either.
+Packaging and resource measurements are discussed separately below and in the
 [README](../README.md#performance).
 
 ## English — WER % (LibriSpeech test-clean)
@@ -413,7 +416,7 @@ timeouts. On this run, typical stream errors were dropped / truncated words
 of a full sentence.
 
 This 100-clip batch WER (4.97 / 4.82) is a **different n** from the 1000-row
-table (3.55 / 4.08). Do not splice them.
+table, whose `rnnt` scores are now withheld. Do not splice them.
 
 **No current corpus number.** A replacement claim needs the same protocol
 with stable-prefix **on**, and a retrievable raw artifact naming the code
@@ -566,17 +569,13 @@ GitHub may require a maintainer to approve a first-time contributor's run.
 
 ## Headline single-engine metrics
 
-All gigastt numbers are the default **`rnnt`** head (since v2.3; INT8), measured through the
-cross-engine Python harness so they line up with the table above. As noted in the
-provenance note up top, this `rnnt` re-measurement is not committed to
-`benchmark/results_full/` — the committed gigastt artifacts there are the older
-`e2e_rnnt` run.
+The primary four-domain `rnnt` WER claims are withheld pending the evidence
+specified above. Resource measurements below have their own measurement context;
+they do not validate the missing accuracy run.
 
 | Metric | Value |
 |---|---|
-| **WER — clean read** | **3.55%** (`golos_crowd_1k`, 992 samples, 95% CI 2.9–4.2%) |
-| WER — other domains | far-field **4.08%** · phone **18.50%** · YouTube **10.91%** |
-| Verbatim → normalized WER | clean 9.73→3.55 · far-field 4.69→4.08 · phone 19.39→18.50 · YouTube 12.19→10.91. The gap is number/filler formatting, normalized **symmetrically for every engine** (so it neither helps nor hurts gigastt relative to competitors). |
+| WER — primary four-domain comparison | Pending complete raw results and provenance |
 | RTF (`rnnt` INT8, M1 CPU) | ~0.10 |
 | RAM (default `--pool-size 2`) | ~66 MB resident / ~510 MB `ps` RSS (single session ~46 MB / ~277 MB — RSS counts the shared memory-mapped model; resident is the honest figure) |
 | INT8 encoder (only runtime path) | ~215 MB on disk |
@@ -609,3 +608,39 @@ python benchmark.py --runners gigastt --dataset golos_crowd_1k --max-samples 0 -
 New competitor runners (Vosk 0.54, faster-whisper-turbo, T-one) live under
 [`benchmark/runners/`](../benchmark/runners/); each gracefully skips if its optional
 dependency/model is absent. T-one beam+LM needs the 5.5 GB KenLM (`BENCHMARK_TONE_KENLM`).
+
+## Stereo container decode work
+
+For `channels=split`, the full recording determines whether stereo channels
+are duplicates. Non-Opus formats use a bounded streaming scan. Mono inputs need
+only a header probe before transcription; dual-mono inputs keep the original
+container for mono mixing, preserving mix-before-resample behavior.
+
+Opus channel detection already materializes the channels under the existing
+whole-buffer duration ceiling. With VAD enabled, genuine stereo now reuses that
+PCM instead of decoding and resampling the entire container again. This reduces
+two whole-channel Opus passes to one without adding a buffer or changing the
+ceiling. Dual-mono still uses its original mono fallback. WAV/FLAC VAD splitting
+keeps its scan plus channel decode; non-VAD genuine stereo keeps a scan plus one
+windowed pass per channel. Avoiding those passes would require a different
+memory/storage policy, so this optimization does not change them.
+
+The ignored `benchmark_split_channel_decode` unit test measures container work
+without ASR or VAD inference. Supply `GIGASTT_STEREO_BENCH_FILE` and
+`GIGASTT_STEREO_BENCH_VAD=0|1`; with VAD, `GIGASTT_STEREO_BENCH_REUSE=1` selects
+the retained scan path and `0` selects the previous scan-then-decode path. Run
+one test process per case with `/usr/bin/time -v` for peak RSS, including the
+encoded input and test runtime. Use mono, duplicate-channel and distinct-channel
+fixtures at the same rate/duration across WAV, FLAC and Opus. The test reports
+sample counts, scan/total time and whole-channel Opus decoder invocations.
+These measurements isolate container work and do not establish an end-to-end
+transcription speedup. Without an explicit fixture, the manual test prints a
+skip message so the full ignored model-test suite can still run in CI.
+
+```sh
+GIGASTT_STEREO_BENCH_FILE=/path/to/stereo.opus \
+GIGASTT_STEREO_BENCH_VAD=1 GIGASTT_STEREO_BENCH_REUSE=1 \
+cargo test -p gigastt-core --lib \
+  inference::audio::tests::stream::benchmark_split_channel_decode \
+  -- --ignored --exact --nocapture
+```

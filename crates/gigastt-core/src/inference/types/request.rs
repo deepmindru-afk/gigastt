@@ -79,7 +79,10 @@ pub struct TranscribeRequest<'a> {
     pub partial: Option<Arc<crate::inference::TranscriptSnapshot>>,
     /// Optional progress sink. When set, the long-form decode stores the number
     /// of 16 kHz samples processed so far (monotonically increasing, ending at
-    /// the decoded length) after each window completes. A server watchdog reads
+    /// the decoded length for mono, or the sum of channel lengths for split
+    /// channels) after each window completes. This measures work, not a completion
+    /// percentage: divide by the number of channels when presenting audio time.
+    /// A server watchdog reads
     /// it both to reset its no-progress deadline and to drive a real per-window
     /// job progress bar. `None` (the default) reports nothing.
     pub progress: Option<Arc<AtomicU64>>,
@@ -90,21 +93,44 @@ pub struct TranscribeRequest<'a> {
     /// returning an all-empty-speaker transcript silently. `None` (the default)
     /// records nothing, reproducing the historical behaviour.
     pub diarization_outcome: Option<Arc<OnceLock<DiarizationOutcome>>>,
-    /// Optional opt-in maximum decoded audio length, in seconds. `None` (the
-    /// default) leaves the streaming file path unbounded — a file of any length
-    /// transcribes with O(one window) peak memory. When `Some(secs)`, audio
-    /// longer than `secs` is rejected with
-    /// [`GigasttError::AudioTooLong`](crate::error::GigasttError::AudioTooLong).
-    /// The whole-buffer paths (diarization, `channels=split` — including its
-    /// per-channel Opus decode — and the raw telephony codecs)
-    /// additionally clamp to a fixed safety ceiling regardless of this value,
-    /// so they refuse rather than exhaust memory. The VAD file path,
-    /// WAVE ingest, and streamed OGG/Opus decode in bounded windows and stay
-    /// unbounded.
+    /// Optional maximum audio duration in seconds, applied to every source.
+    /// Only positive finite values enable this operator limit. Split channels
+    /// are checked independently: duration is the longest channel, not summed
+    /// recognition work. Borrowed Samples/Channels are checked before inference.
+    /// Encoded Path/Bytes/ChannelStreams enforce the budget while decoding.
+    /// Whole-buffer encoded decoding also has a fixed allocation safety ceiling;
+    /// already-decoded caller-owned PCM is not subject to that extra ceiling.
+    /// Windowed decoding has bounded PCM working storage, while upload bytes and
+    /// accumulated transcript still occupy memory proportional to input/output.
     pub max_audio_secs: Option<f64>,
 }
 
 impl<'a> TranscribeRequest<'a> {
+    /// Check borrowed PCM before inference. Encoded sources enforce the same
+    /// operator budget in their source-rate decode loops; their allocation
+    /// safety ceiling does not apply to PCM already owned by the caller.
+    pub(crate) fn validate_source_budget(&self) -> Result<(), crate::error::GigasttError> {
+        let Some(limit_secs) = self.max_audio_secs.filter(|s| s.is_finite() && *s > 0.0) else {
+            return Ok(());
+        };
+        let samples = match &self.source {
+            TranscribeSource::Samples(samples) => samples.len(),
+            TranscribeSource::Channels(channels) => {
+                channels.iter().map(Vec::len).max().unwrap_or(0)
+            }
+            #[cfg(feature = "file-decode")]
+            _ => return Ok(()),
+        };
+        let budget = (limit_secs * 16000.0) as usize;
+        if samples > budget {
+            return Err(crate::error::GigasttError::AudioTooLong {
+                observed_secs: samples as f64 / 16000.0,
+                limit_secs,
+            });
+        }
+        Ok(())
+    }
+
     /// Build a request with default overrides, no hotwords, and diarization off.
     pub fn new(source: TranscribeSource<'a>) -> Self {
         Self {
@@ -174,9 +200,9 @@ impl<'a> TranscribeRequest<'a> {
         self
     }
 
-    /// Set an opt-in maximum decoded audio length in seconds. `None` (the
-    /// default) leaves the streaming path unbounded; the whole-buffer paths keep
-    /// their fixed safety ceiling either way.
+    /// Set the operator duration limit for every source. Non-positive or
+    /// non-finite values act like `None`; encoded whole-buffer decoders still
+    /// enforce their separate allocation ceiling.
     pub fn with_max_audio_secs(mut self, max_audio_secs: Option<f64>) -> Self {
         self.max_audio_secs = max_audio_secs;
         self

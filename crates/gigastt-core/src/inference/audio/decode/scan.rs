@@ -12,9 +12,10 @@ use symphonia::core::meta::MetadataOptions;
 use super::super::MAX_SAMPLE_RATE;
 use super::super::opus::next_demux_packet;
 use super::super::resample::{ResampleTo16k, SampleRate};
-use super::super::{audio_too_long_err, resolve_budget};
+use super::super::{audio_too_long_err, check_decode_abort, resolve_budget};
 use super::{
-    BytesMediaSource, DualMonoDetector, decode_audio_bytes_shared_channels_bounded, is_dual_mono,
+    BytesMediaSource, DualMonoDetector, decode_audio_bytes_shared_channels_bounded_with_abort,
+    is_dual_mono,
 };
 
 /// What a one-pass scan of a container's channels found.
@@ -57,10 +58,20 @@ impl ChannelScan {
 /// per-packet staging cadence the whole-buffer decode used, so it is the same
 /// statistic on the same numbers — the verdict does not move.
 ///
-/// OGG/Opus is the exception: it has no packet-wise decoder here, so it keeps
-/// the whole-buffer decode (and its ceiling) for this decision.
+/// OGG/Opus is the exception: this scan materializes its decoded channels
+/// before correlation, retaining the whole-buffer decode ceiling.
 #[cfg(feature = "file-decode")]
 pub fn scan_channels(data: Bytes, max_audio_secs: Option<f64>) -> Result<ChannelScan> {
+    scan_channels_inner(data, max_audio_secs, false, None).map(|prepared| prepared.scan)
+}
+
+fn scan_channels_inner(
+    data: Bytes,
+    max_audio_secs: Option<f64>,
+    retain_decoded: bool,
+    abort: Option<&(dyn Fn() -> bool + Sync)>,
+) -> Result<PreparedChannels> {
+    check_decode_abort(abort)?;
     let source = BytesMediaSource::new(data.clone());
     let mss = MediaSourceStream::new(Box::new(source), Default::default());
     let mut format = symphonia::default::get_probe()
@@ -72,6 +83,7 @@ pub fn scan_channels(data: Bytes, max_audio_secs: Option<f64>) -> Result<Channel
         )
         .context("Unsupported audio format")?;
 
+    check_decode_abort(abort)?;
     let (track_id, sample_rate, channels, is_opus) = {
         let track = format
             .default_track(TrackType::Audio)
@@ -95,18 +107,30 @@ pub fn scan_channels(data: Bytes, max_audio_secs: Option<f64>) -> Result<Channel
 
     // Header-only verdict: no decode, whatever the file's length.
     if channels != 2 {
-        return Ok(ChannelScan {
-            channels,
-            dual_mono: false,
+        return Ok(PreparedChannels {
+            scan: ChannelScan {
+                channels,
+                dual_mono: false,
+            },
+            decoded: None,
         });
     }
 
     if is_opus {
-        let decoded = decode_audio_bytes_shared_channels_bounded(data, max_audio_secs)?;
-        return Ok(ChannelScan {
+        let decoded =
+            decode_audio_bytes_shared_channels_bounded_with_abort(data, max_audio_secs, abort)?;
+        check_decode_abort(abort)?;
+        let scan = ChannelScan {
             channels: decoded.len(),
             dual_mono: is_dual_mono(&decoded),
-        });
+        };
+        check_decode_abort(abort)?;
+        let decoded = if retain_decoded && scan.mono_fallback_reason().is_none() {
+            Some(decoded)
+        } else {
+            None
+        };
+        return Ok(PreparedChannels { scan, decoded });
     }
 
     let (max_samples, limit_secs) = resolve_budget(max_audio_secs, sample_rate);
@@ -136,6 +160,7 @@ pub fn scan_channels(data: Bytes, max_audio_secs: Option<f64>) -> Result<Channel
     let mut source_frames: usize = 0;
 
     loop {
+        check_decode_abort(abort)?;
         let Some(packet) = next_demux_packet(&mut *format, source_frames > 0)? else {
             break;
         };
@@ -143,6 +168,7 @@ pub fn scan_channels(data: Bytes, max_audio_secs: Option<f64>) -> Result<Channel
             continue;
         }
         let decoded = decoder.decode(&packet).context("Decode error")?;
+        check_decode_abort(abort)?;
         let num_frames = decoded.frames();
         let ch = decoded.spec().channels().count();
         if ch < 2 {
@@ -163,6 +189,7 @@ pub fn scan_channels(data: Bytes, max_audio_secs: Option<f64>) -> Result<Channel
             return Err(audio_too_long_err(source_frames, sample_rate, limit_secs));
         }
         for (c, chan) in acc.iter_mut().enumerate() {
+            check_decode_abort(abort)?;
             chan.flush_full()?;
             chan.drain_ready_into(&mut ready[c]);
         }
@@ -173,6 +200,7 @@ pub fn scan_channels(data: Bytes, max_audio_secs: Option<f64>) -> Result<Channel
     }
 
     for (c, chan) in acc.into_iter().enumerate() {
+        check_decode_abort(abort)?;
         let mut tail = Vec::new();
         let mut chan = chan;
         chan.finish_into(&mut tail)?;
@@ -180,9 +208,59 @@ pub fn scan_channels(data: Bytes, max_audio_secs: Option<f64>) -> Result<Channel
     }
     let (left, right) = ready.split_at_mut(1);
     detector.push(&left[0], &right[0]);
+    check_decode_abort(abort)?;
 
-    Ok(ChannelScan {
-        channels: 2,
-        dual_mono: detector.is_dual_mono(),
+    Ok(PreparedChannels {
+        scan: ChannelScan {
+            channels: 2,
+            dual_mono: detector.is_dual_mono(),
+        },
+        decoded: None,
     })
+}
+
+/// Channel decision with reusable PCM when the scan already decoded it in full.
+#[derive(Debug)]
+pub struct PreparedChannels {
+    /// Full-recording channel decision.
+    pub scan: ChannelScan,
+    /// Existing scan PCM for genuine stereo VAD; absent for streaming scans and mono fallback.
+    pub decoded: Option<Vec<Vec<f32>>>,
+}
+
+/// Prepare the channel decision for a VAD-enabled split request.
+/// Retains genuine stereo Opus PCM that the scan already materializes, under
+/// the same whole-buffer duration ceiling. Other formats keep their streaming
+/// scan and return no PCM. Mono fallback always uses the original container,
+/// preserving its mix-before-resample behavior.
+///
+/// # Errors
+/// Returns the same probe, decode and duration-limit errors as [`scan_channels`].
+pub fn prepare_channels_for_vad(
+    data: Bytes,
+    max_audio_secs: Option<f64>,
+) -> Result<PreparedChannels> {
+    scan_channels_inner(data, max_audio_secs, true, None)
+}
+
+/// Scan channels with cooperative cancellation between decode steps.
+/// `None` preserves [`scan_channels`] behavior. A true predicate returns typed
+/// [`GigasttError::Cancelled`](crate::error::GigasttError::Cancelled); active
+/// codec/resampler calls and full-buffer Opus correlation are not interrupted.
+pub fn scan_channels_with_abort(
+    data: Bytes,
+    max_audio_secs: Option<f64>,
+    abort: Option<&(dyn Fn() -> bool + Sync)>,
+) -> Result<ChannelScan> {
+    scan_channels_inner(data, max_audio_secs, false, abort).map(|prepared| prepared.scan)
+}
+
+/// Prepare VAD channels with the cancellation contract of [`scan_channels_with_abort`].
+/// `None` preserves [`prepare_channels_for_vad`] behavior.
+pub fn prepare_channels_for_vad_with_abort(
+    data: Bytes,
+    max_audio_secs: Option<f64>,
+    abort: Option<&(dyn Fn() -> bool + Sync)>,
+) -> Result<PreparedChannels> {
+    scan_channels_inner(data, max_audio_secs, true, abort)
 }

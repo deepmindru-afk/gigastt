@@ -1,0 +1,77 @@
+{
+  "baseline-c1": {
+    "config": {
+      "chunk_ms": 100,
+      "concurrent": 1,
+      "encoder_threads_per_slot": 4,
+      "itn": true,
+      "punctuation": true,
+      "stride_ms": 800,
+      "vad": false,
+      "window_secs": 2.5
+    },
+    "corpus_clips": 15,
+    "errors": 1,
+    "reference_words": 71,
+    "wer_percent": 1.408450704225352,
+    "process_thread_cpu_during_stage_seconds": {
+      "decode": 1.3046144400000002,
+      "encoder": 58.61098906800001,
+      "mel": 1.3549607590000003,
+      "postprocess": 0.031396218000000004
+    },
+    "stage_elapsed_seconds": {
+      "decode": 1.356434733,
+      "encoder": 31.901884993,
+      "mel": 1.652548464,
+      "postprocess": 0.03132114999999999
+    },
+    "process_cpu_seconds": 61.5,
+    "audio_seconds": 82.3153125,
+    "wall_seconds": 89.03,
+    "first_partial_median_ms": 869,
+    "no_partial": 1,
+    "last_final_relative_audio_end_median_ms": 308.0,
+    "final_after_stop_median_ms": 298.066059,
+    "partial_retracted_words": 19,
+    "final_retracted_words": 1,
+    "partial_events": 68,
+    "peak_rss_kib": 466508,
+    "decode_windows": 112,
+    "encoded_audio_seconds": 261.4553125,
+    "max_window_seconds": 4.1,
+    "off_grid_windows": 0,
+    "focused": [
+      {
+        "file": "silence_padded_02",
+        "worker": 0,
+        "errors": 0,
+        "reference_words": 3,
+        "text": "Заказать яблоки зеленые.",
+        "final_endpoints": [
+          "blank"
+        ]
+      },
+      {
+        "file": "silence_only",
+        "worker": 0,
+        "errors": 0,
+        "reference_words": 0,
+        "text": "",
+        "final_endpoints": []
+      },
+      {
+        "file": "concatenated_00_01_02",
+        "worker": 0,
+        "errors": 0,
+        "reference_words": 15,
+        "text": "60000 тенге. Сколько будет стоить? покажи мне на смотрешке телеканал Синергия ТВ. Заказать яблоки. Зеленые.",
+        "final_endpoints": [
+          "blank",
+          "blank",
+          "stop"
+        ]
+      }
+    ]
+  }
+}

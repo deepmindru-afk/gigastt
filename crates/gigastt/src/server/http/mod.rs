@@ -8,6 +8,7 @@ mod jobs_api;
 mod openai_api;
 mod state;
 mod stream;
+mod stream_watchdog;
 mod transcribe;
 
 #[cfg(test)]
@@ -36,6 +37,7 @@ pub use stream::transcribe_stream;
 
 // --- openai ---
 pub use openai_api::openai_transcriptions;
+pub(crate) use openai_api::openai_transcriptions_admitted;
 
 // --- admin ---
 pub use admin::reload;

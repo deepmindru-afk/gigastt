@@ -5,9 +5,8 @@
 #   brew install gigastt
 #
 # The `sha256` values below are pinned to the v<version> release tarballs.
-# They are refreshed automatically by the `.github/workflows/homebrew.yml`
-# workflow after every successful `release.yml` run — do not hand-edit
-# unless you are backfilling a release that predated that automation.
+# Updates are proposed by `.github/workflows/homebrew.yml` after successful
+# version-tag releases, then reviewed and merged through a pull request.
 
 class Gigastt < Formula
   desc "On-device Russian speech recognition server powered by GigaAM v3"

@@ -24,9 +24,38 @@ When the server receives `SIGTERM` (or the `run_with_shutdown` oneshot fires):
 
 1. A process-wide `CancellationToken` is cancelled.
 2. Every live WebSocket session observes shutdown even while waiting for a blocking decode. An in-flight run receives the shared abort flag; the client receives its last available `Partial`, a `cancelled` error, `Final`, and `Close(1001 Going Away)`. Idle sessions flush and close as before.
-3. SSE producers also link shutdown and receiver disconnect to their decode abort flag. Cancellation ends the stream; any partial already received remains usable.
+3. SSE producers also link shutdown and receiver disconnect to their decode abort flag. Cancellation ends the stream; any partial already received remains usable. A full output queue is interrupted immediately by shutdown or disconnect; terminal events are best effort and never delay shutdown.
 4. After `axum::serve` returns, the main task waits up to `shutdown_drain_secs` seconds for the `TaskTracker` to report all tracked WS / SSE futures complete.
 5. If the drain window expires with tracked tasks still running, a WARN is emitted (`Drain window expired with tracked tasks still running`) and the process exits anyway.
+
+File-stream output backpressure (`/v1/transcribe/stream` and OpenAI
+`stream=true`) has a separate **30-second send limit**. The native stream keeps
+at most 16 queued events and the OpenAI stream at most 32; events remain in FIFO
+order and are not coalesced. If a full queue cannot accept the next event within
+30 seconds, only that transcription is cancelled and its inference reservation
+is released. Pending final/error events may be omitted; OpenAI `[DONE]` is never
+queued after a failed preceding completion event. Already queued events can
+still drain if the reader resumes.
+
+File streams also apply `--inference-timeout-secs` to the initial container
+probe and to processing without a completed chunk (`0` disables this timeout).
+The watchdog samples every 100 ms; runtime scheduling can add delay. A pending
+output send suspends the inference timer and retains the separate 30-second
+backpressure limit. Progress restarts the processing deadline.
+
+A probe timeout returns HTTP 504. After SSE headers have been sent, timeout
+emits one `inference_timeout` error and closes the response, independently of
+the blocking worker. Native SSE first emits the latest available partial;
+OpenAI includes an optional `partial` snapshot in its error object. Buffered
+ordinary events are discarded on timeout and no terminal success or `[DONE]`
+is emitted. A completed request that already claimed terminal delivery instead
+finishes under the output-send bound.
+
+Timeout requests cooperative cancellation: it cannot interrupt an active codec
+or native inference call. The tracked worker retains its pool reservation and
+upload admission guard until it actually exits, including during probing. A
+client disconnect likewise requests cancellation without returning an in-use
+session to the pool.
 
 ### Rollback: disable graceful drain
 
@@ -94,7 +123,10 @@ For REST and jobs, this is a **no-progress watchdog**. The deadline
 resets every time a decode window completes, so a file that keeps making
 progress never trips it no matter how long it is — do not raise this value
 "for long files". Audio length is governed by `--max-audio-secs` (default
-`0` = unlimited) instead.
+`0` = unlimited) instead. Split-channel decoding accumulates work across
+channels, so starting the next channel does not reset the watchdog. Progress is
+sampled every 100 ms. With prompt runtime scheduling, a stalled run is detected
+within the timeout plus at most 100 ms after its last progress update.
 
 WebSocket applies the timeout to each chunk decode and the Stop/finalize decode.
 On timeout, disconnect, job DELETE, or shutdown, the same per-run abort flag
@@ -105,6 +137,46 @@ beam search). The blocking worker returns its triplet when it observes abort.
 a native encoder call already in progress must return before the flag can be
 observed. A wedged native call can therefore retain its slot after the client
 has received the timeout. There is no fixed cancellation-latency guarantee.
+
+### Cancellation boundaries and resource ownership
+
+A cancellation flag prevents later work when the worker next checks it. It is
+not a thread kill. HTTP timeout closes the response independently of worker
+termination; disconnect and shutdown request the same cooperative stop.
+
+| Stage | Cancellation boundary | Work that must finish before the next check |
+|---|---|---|
+| Source probing and raw telephony conversion | Before preparation, after probe/decode, and before invoking recognition | Active container probe, raw codec call, or WAV encoding |
+| Split-channel scan and buffered decode | Before each container packet and after codec calls; between resampler blocks and before final drain | Active codec/resampler call; Opus full-buffer correlation runs synchronously between checks |
+| Flat mono decode for offline diarization | Between container packets or WAVE blocks, preserving the normal mixing/resampling order | Active packet decode or WAVE block receive; dropping the WAVE source joins its decoder worker |
+| Windowed file decode and VAD | Between requested windows; streaming VAD polls every 16 two-second blocks, buffered VAD every 64 frames (about two seconds of audio) | Active source fill or VAD call; audio duration between checks is not elapsed wall time |
+| Recognition | Before encoding and between decoder tokens/frames; after completed recognition | Active feature extraction or native encoder/decoder call |
+| Lazy speaker model loading | Before loading and immediately after it returns | Concurrent load lock wait and native model construction |
+| Offline speaker diarization | Before/after each VAD and embedding call; after the pipeline returns and before speaker assignment | Active embedding call and the pipeline's synchronous clustering/assembly stage |
+| Speaker assignment and text postprocessing | Before/after assignment; before ITN, between ITN and punctuation, and after punctuation | Active assignment, ITN pass, or punctuation restoration call |
+| Response output | Disconnect/shutdown and bounded output-send checks | A send may wait up to the separate 30-second backpressure bound |
+
+Packet/block regression tests cancel after a known checkpoint and verify that
+no later checkpoint or inference callback is reached. Diarization adapter tests
+cancel inside one embedding call and verify that the next embedding never
+starts. These are cooperative step bounds, not maximum wall-clock latency:
+container/native calls, speaker loading, clustering, and decoder-thread joins
+have no interrupt hook. A permanently stuck call can retain resources until
+process termination.
+
+The detached blocking worker owns its inference reservation throughout source
+preparation, recognition, diarization, and finalization. It also keeps the
+upload admission guard when encoded bytes are replaced by PCM or a raw-codec
+WAV. Stream probe workers retain these owners even if the async handler is
+dropped. Reservations and admitted upload bytes become available only when the
+owning worker exits and drops them, which may be later than the client timeout.
+Do not interpret a completed error response as proof that pool capacity has
+already recovered.
+
+A file-stream timeout uses the latest available provisional snapshot. Successfully
+finalized segments whose snapshots were already cleared, and native results
+produced after timeout, are not reconstructed into that error response.
+Previously delivered text remains readable by the client.
 
 The latest provisional text survives interruption. REST errors may include
 `partial`; WebSocket sends its last available `partial` before an error when
@@ -156,6 +228,24 @@ state for a new stream.
 The CPU encoder writes an ORT optimized-graph cache (`*_optimized.ort`,
 ~224 MiB) to `--optimized-cache-dir` (default `<model-dir>/optimized_cache`;
 `/var/cache/gigastt` under the shipped systemd unit).
+
+Filenames contain the source SHA-256 and a digest of the ORT build/API version,
+CPU session configuration, optimization policy, target platform and detected
+x86/ARM64 vector capabilities. Other architectures use their platform identity;
+do not share their optimized cache across different CPU implementations. Replacing
+weights invalidates the graph even when the basename, size and timestamp stay
+the same. Old basename-only caches are ignored and rebuilt once; `cache-gc`
+removes them and entries for obsolete weights, retaining all configuration
+variants of installed encoders. Use a separate cache directory per model
+installation when running GC.
+
+Pinned encoder digests are reused from the existing startup integrity check
+across pool slots. Custom self-contained sources are hashed before cache lookup;
+a cold write rechecks the source before atomic publication. Keep model files
+immutable while loading; install replacements between engine loads. A possible
+ONNX external-data `location` marker disables graph caching because hashing the
+main protobuf cannot identify separately stored weights. This conservative scan
+can also disable caching for self-contained models containing that byte string.
 
 **Symptoms** — WARN lines in the journal (once per engine load):
 - `optimized graph cache directory cannot be created; loading source model without the cache (slower cold start, higher per-session RAM)`
@@ -221,9 +311,12 @@ length (a few minutes of 16 kHz can add tens of MiB).
 - On edge hosts, leave punctuation off (`--punctuation off`) if you do not need
   restored casing — the RuPunct model adds a small ready-RSS tax when present
   (see [Optional model ready tax](#optional-model-ready-tax)).
-- The REST upload path is zero-copy (`bytes::Bytes` end-to-end), so concurrent
-  large uploads no longer multiply the body in RAM — but the decoded PCM and
-  encoder scratch still scale with audio length and `--pool-size`.
+- Upload admission bounds concurrent encoded inputs before body collection;
+  the limit is the boot-time batch/shared pool capacity times the body cap,
+  plus the separate jobs-store byte budget. See
+  [aggregate upload admission](long-recordings.md#aggregate-upload-admission).
+  Buffering overhead, prepared/decoded audio and encoder scratch still require
+  additional memory.
 
 **Triage**
 1. Check `terminationGracePeriodSeconds` isn't masking an OOM-kill as a slow
@@ -331,7 +424,8 @@ than default `rnnt` in lab — e.g. RTF **~0.023** vs **~0.034**), **not** a
 low-memory SKU. Ready RSS for `ml_ctc` is **about the same class as `rnnt`**
 on multi-head installs (both ~225 MB INT8 encoder class). For less RAM use
 **`--pool-size 1`**, not a head switch. Use `ml_ctc` / `ml_ctc_large` when you
-need **ru/en/kk/ky/uz** or higher encode speed; keep `rnnt` for best Russian WER.
+need **ru/en/kk/ky/uz** or higher encode speed; `rnnt` remains the Russian-only
+default. Its primary accuracy comparison awaits complete benchmark evidence.
 
 ### Optional model ready tax
 
@@ -355,3 +449,11 @@ restoration is skipped.
 3. Confirm orchestrator `terminationGracePeriodSeconds` ≥ `shutdown_drain_secs + 5` (see `docs/deployment.md`).
 4. If clients are seeing unexpected 503 `shutting_down`, the proxy LB may still be routing traffic after the pod started draining — add a `preStop` sleep to the k8s manifest so the LB deregisters the pod before the app sees `SIGTERM`.
 5. If the cap is firing for legitimate long sessions, raise it — there's no correctness downside to `max_session_secs = 14400` (4 h), only a weaker guarantee against wedged sessions.
+
+### Streaming retained audio
+
+The streaming window setting is a soft slide trigger when stable-prefix
+commits are enabled. Uncommittable moving-edge hypotheses can retain audio
+beyond it. See [streaming retention](stream-retention.md) for the reproduced
+policy counterexample, server-limit limitations and the bounded correction
+contract.

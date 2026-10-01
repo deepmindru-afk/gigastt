@@ -513,7 +513,7 @@ fn test_dual_mono_detector_uses_the_overlap_only() {
 
 /// Two-channel PCM16 WAV with the given channels.
 #[cfg(feature = "file-decode")]
-fn stereo_wav(left: &[f32], right: &[f32], rate: u32) -> bytes::Bytes {
+pub(super) fn stereo_wav(left: &[f32], right: &[f32], rate: u32) -> bytes::Bytes {
     let frames = left.len().min(right.len());
     let data_bytes = (frames * 4) as u32;
     let mut w = Vec::with_capacity(44 + data_bytes as usize);
@@ -612,4 +612,142 @@ fn test_channel_scan_fallback_reasons() {
     assert_eq!(r(2, true), Some("dual-mono audio"));
     assert_eq!(r(2, false), None);
     assert_eq!(r(6, false), Some("more than two channels"));
+}
+
+/// Run one process per case so `/usr/bin/time -v` reports comparable peak RSS.
+/// Set GIGASTT_STEREO_BENCH_FILE to a fixture and GIGASTT_STEREO_BENCH_VAD to 0 or 1.
+#[cfg(feature = "file-decode")]
+#[test]
+#[ignore = "manual container decode benchmark; requires an explicit fixture"]
+fn benchmark_split_channel_decode() {
+    use super::super::stream::{FileWindows, PcmWindows, WindowSpec};
+    let Ok(path) = std::env::var("GIGASTT_STEREO_BENCH_FILE") else {
+        eprintln!("Skipping manual container benchmark: set GIGASTT_STEREO_BENCH_FILE");
+        return;
+    };
+    let vad = std::env::var("GIGASTT_STEREO_BENCH_VAD").expect("VAD mode required") == "1";
+    let body = bytes::Bytes::from(std::fs::read(&path).expect("read fixture"));
+    let started = std::time::Instant::now();
+    let reuse = std::env::var("GIGASTT_STEREO_BENCH_REUSE").is_ok_and(|value| value == "1");
+    let mut retained = None;
+    super::super::opus::CHANNEL_DECODE_PASSES.with(|count| count.set(0));
+    let scan = if reuse {
+        assert!(vad, "retained preparation is only for VAD");
+        let prepared = prepare_channels_for_vad(body.clone(), None).expect("prepare");
+        retained = prepared.decoded;
+        prepared.scan
+    } else {
+        scan_channels(body.clone(), None).expect("scan")
+    };
+    let scanned = started.elapsed();
+    let mut samples = 0;
+    if scan.mono_fallback_reason().is_some() {
+        // Measure container decoding only; VAD inference and its speech-window buffer
+        // are excluded. Its raw source uses this same two-second pull geometry.
+        let mut source = AudioChunks::from_bytes(body, 32_000, None).expect("mono source");
+        while let Some(chunk) = source.next_chunk().expect("mono chunk") {
+            samples += chunk.len();
+        }
+    } else if vad {
+        samples = retained
+            .unwrap_or_else(|| decode_audio_bytes_shared_channels(body).expect("channel decode"))
+            .iter()
+            .map(Vec::len)
+            .sum();
+    } else {
+        for channel in 0..scan.channels {
+            let mut source = FileWindows::from_bytes_channel(
+                body.clone(),
+                WindowSpec::new(480_000, 384_000, 32_000),
+                None,
+                channel,
+            )
+            .expect("channel source");
+            while let Some(window) = source.next_window().expect("channel window") {
+                std::hint::black_box(window.samples);
+            }
+            samples += source.total_16k_samples();
+        }
+    }
+    println!(
+        "vad={vad} channels={} dual_mono={} samples={samples} opus_whole_passes={} scan_ms={:.3} total_ms={:.3}",
+        scan.channels,
+        scan.dual_mono,
+        super::super::opus::CHANNEL_DECODE_PASSES.with(|count| count.get()),
+        scanned.as_secs_f64() * 1000.,
+        started.elapsed().as_secs_f64() * 1000.
+    );
+}
+
+#[cfg(feature = "file-decode")]
+#[test]
+#[cfg_attr(miri, ignore = "Opus decoding is too slow under Miri")]
+fn test_opus_preparation_reuses_one_channel_decode() {
+    use super::super::opus::CHANNEL_DECODE_PASSES;
+    let bytes = bytes::Bytes::from_static(include_bytes!(
+        "../../../../tests/fixtures/opus/late_stereo.ogg"
+    ));
+    let expected = decode_audio_bytes_shared_channels(bytes.clone()).unwrap();
+    assert!(
+        is_dual_mono(&[expected[0][..8000].to_vec(), expected[1][..8000].to_vec(),]),
+        "the opening half second alone would choose mono fallback"
+    );
+    CHANNEL_DECODE_PASSES.with(|count| count.set(0));
+    let prepared = prepare_channels_for_vad(bytes, None).unwrap();
+    assert_eq!(
+        prepared.scan,
+        ChannelScan {
+            channels: 2,
+            dual_mono: false
+        }
+    );
+    assert_eq!(prepared.decoded.unwrap(), expected);
+    assert_eq!(CHANNEL_DECODE_PASSES.with(|count| count.get()), 1);
+}
+
+#[cfg(feature = "file-decode")]
+#[test]
+#[cfg_attr(miri, ignore = "Opus decoding is too slow under Miri")]
+fn test_opus_preparation_preserves_dual_mono_and_limits() {
+    let bytes =
+        bytes::Bytes::from_static(include_bytes!("../../../../tests/fixtures/opus/dual.ogg"));
+    let expected = scan_channels(bytes.clone(), None).unwrap();
+    assert!(expected.dual_mono);
+    let prepared = prepare_channels_for_vad(bytes.clone(), None).unwrap();
+    assert_eq!(prepared.scan, expected);
+    assert!(prepared.decoded.is_none());
+    for prepare in [false, true] {
+        let error = if prepare {
+            prepare_channels_for_vad(bytes.clone(), Some(0.01)).unwrap_err()
+        } else {
+            scan_channels(bytes.clone(), Some(0.01)).unwrap_err()
+        };
+        assert!(matches!(
+            decode_error(error),
+            crate::error::GigasttError::AudioTooLong { .. }
+        ));
+    }
+    assert!(prepare_channels_for_vad(bytes::Bytes::from_static(b"not audio"), None).is_err());
+    assert!(prepare_channels_for_vad(bytes.slice(..20), None).is_err());
+}
+
+#[cfg(feature = "file-decode")]
+#[test]
+fn test_vad_preparation_keeps_non_opus_scans_streaming() {
+    let mono = bytes::Bytes::from(encode_wav_pcm16(&vec![0.2; 1600], 16000));
+    // Non-stereo headers are still enough to choose fallback, regardless of budget.
+    let prepared = prepare_channels_for_vad(mono, Some(0.001)).unwrap();
+    assert_eq!(prepared.scan.channels, 1);
+    assert!(prepared.decoded.is_none());
+    let left: Vec<_> = (0..1600).map(|i| (i as f32 * 0.1).sin()).collect();
+    let right: Vec<_> = (0..1600).map(|i| (i as f32 * 0.2).sin()).collect();
+    let bytes = stereo_wav(&left, &right, 16000);
+    let expected = scan_channels(bytes.clone(), None).unwrap();
+    let prepared = prepare_channels_for_vad(bytes, None).unwrap();
+    assert_eq!(prepared.scan, expected);
+    assert!(!prepared.scan.dual_mono);
+    assert!(
+        prepared.decoded.is_none(),
+        "streaming scan must not retain whole PCM"
+    );
 }

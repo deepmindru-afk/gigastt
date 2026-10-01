@@ -242,8 +242,8 @@ frame). The same enum is declared in [`docs/asyncapi.yaml`](asyncapi.yaml).
 | `policy_violation` | ends (close 1008) | Empty-frame spam (over 1000 empty binary frames) |
 | `inference_timeout` | ends | One inference run exceeded `--inference-timeout-secs` (default 600 s) |
 | `cancelled` | ends | In-flight decoding was cancelled by disconnect or shutdown; the last available `partial` is sent first when the socket is writable |
-| `inference_error` | continues | Inference failed on the last chunk (bad audio format, etc.); the session state is intact |
-| `inference_panic` | continues, state reset | Inference panicked; the decoder state was reset, so earlier audio context is lost — already-received `final`s remain valid |
+| `inference_error` | continues for chunk errors; closes on failed stop | A failed stop preserves readable partial text, emits this error, and closes with code 1011 without a successful `final` |
+| `inference_panic` | continues for chunk panics, state reset; closes on failed stop | A chunk panic resets decoder context; already-received `final`s remain valid. A stop panic preserves readable partial text and closes with code 1011 without a successful `final` |
 | `configure_too_late` | continues | `configure` arrived after the first audio frame; previous settings kept |
 | `invalid_commit_policy` | continues | Unknown text commitment policy; previous settings kept. Native SSE returns HTTP 400 before decoding |
 | `invalid_sample_rate` | continues | Rate not in `supported_rates`; previous rate kept |
@@ -484,6 +484,13 @@ There is no `speaker` on `words[]` or `segments[]`. Default
 `stream=true` ends with `transcript.text.done` and then `data: [DONE]`; that
 stream is text-only as well.
 
+If final tail decoding fails, native SSE emits any readable partial followed by
+an `error` event and closes without a successful final for that tail. WebSocket
+`stop` similarly sends a partial (if available), an existing `error` message,
+and close code 1011. Runtime panics use `inference_panic`; ordinary inference
+failures use `inference_error`. Already delivered text remains partial, not proof
+that the entire input was decoded.
+
 ### OpenAI-compatible transcriptions
 
 `POST /v1/audio/transcriptions` is a compatibility layer over the same
@@ -511,6 +518,19 @@ including audio-specific credentials, private-network settings, and verification
 | `text` | plain text (`text/plain`) |
 | `srt` / `vtt` | captions |
 | `verbose_json` | Whisper-style: `task`, `language`, `duration`, `text`, optional `segments` / `words` |
+
+Both file SSE endpoints require clients to keep reading the response. When an
+output queue stays full for 30 seconds, the server cancels that transcription.
+Shutdown or disconnect interrupts the wait immediately. Final/error events are
+best effort on these paths; a stalled stream may close without them, and OpenAI
+completion is not confirmed without `[DONE]`.
+
+On decoding/inference failure, the OpenAI-compatible stream sends the gigastt
+error extension `{"type":"error","code":"inference_error","message":"..."}`
+(with the appropriate error code), then closes without `transcript.text.done`
+or `[DONE]`. Previously emitted deltas remain readable but incomplete. This
+error extension is specific to gigastt; clients must also treat a stream ending
+without completion markers as incomplete.
 
 **Streaming (`stream=true`).** Response is `text/event-stream`:
 
@@ -611,6 +631,11 @@ Poll for status:
 curl http://127.0.0.1:9876/v1/jobs/{job_id}
 # {"job_id":"...","status":"processing","processed_seconds":12.5,"percent":42}
 ```
+
+For split-channel jobs, `processed_seconds` averages completed sample work
+across the channels, and `percent` is bounded by 100. If the container does not
+provide a duration, processed time still advances but `percent` remains 0 while
+the job is running because the total is unknown.
 
 Fetch the result once `status` is `done`:
 
@@ -945,6 +970,7 @@ mid-job.
 | 422 | `transcription_error` | Audio decoded but inference failed |
 | 429 | `queue_full` | In-memory job store is full; `Retry-After` header included |
 | 429 | `rate_limited` | Per-IP token bucket exhausted; `Retry-After` header included |
+| 503 | `upload_busy` | Active upload limit reached before body collection; `Retry-After` + `retry_after_ms`; see [upload budgets](long-recordings.md#aggregate-upload-admission) |
 | 503 | `timeout` | All inference sessions busy; `Retry-After` + `retry_after_ms` |
 | 503 | `pool_closed` | Server is shutting down, pool closed to new checkouts |
 | 503 | `cancelled` | The run was aborted cooperatively — client disconnect, `DELETE /v1/jobs/{id}`, or shutdown |
