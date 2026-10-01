@@ -121,6 +121,9 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
   `Engine::try_finish_stream` exposes finalization errors, and C, Node, and UniFFI
   flush calls decode pending audio and propagate failures. Successful flushes
   remain reusable.
+- Bound concurrent HTTP uploads before body buffering across REST, SSE, OpenAI
+  multipart and jobs. Excess uploads receive 503 with a retry hint; retained
+  inputs keep their admission permit until blocking work finishes.
 
 - Cancel stalled native and OpenAI file SSE producers after a 30-second output
   wait, and interrupt full-queue sends on shutdown or disconnect so unread

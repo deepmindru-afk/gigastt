@@ -228,6 +228,9 @@ fn with_file_transcribe_request<T>(
     if let Some(channels) = &opts.progress_channels {
         channels.store(1, Ordering::Relaxed);
     }
+    // Keep upload admission alive even if raw-codec or channel decoding replaces
+    // the encoded buffer with prepared audio inside this detached worker.
+    let _upload_lifetime = body.clone();
     let body = match opts.raw_codec {
         Some((codec, rate)) => raw_codec_to_wav(&body, codec, rate)?,
         None => body,
