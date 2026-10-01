@@ -62,7 +62,21 @@ cd packaging/android && gradle :gigastt:assembleRelease
 CI: `.github/workflows/android-aar.yml` (`workflow_dispatch`) runs the same
 per-ABI flow above (fetch the onnxruntime-android AAR, build each ABI with
 `ORT_LIB_LOCATION`, copy `libonnxruntime.so` into each `jniLibs/<abi>/`) and,
-with `publish: true` + Maven credentials, publishes the AAR.
+with `publish: true` + Maven credentials, runs the Maven publication step.
+
+An empty `tag` performs a build of the dispatch commit and uploads a workflow
+artifact only. Publication requires an explicit existing version tag such as
+`v2.22.0`. The workflow resolves that tag to a commit before compilation and
+rejects a mismatch with the Rust workspace or member versions. Native libraries
+and generated Kotlin bindings are built from that exact commit; both Gradle
+assembly and publication receive its version through `-PVERSION_NAME`, overriding
+stale properties in older source tags. The AAR filename uses the same version.
+
+A tagged run also requires the GitHub release to exist before building. Attachment
+uses an upload-only operation and never creates a release. Selecting `main` as the
+workflow dispatch ref therefore cannot substitute its native source for the chosen
+tag. These provenance checks do not validate the Android toolchain or configure a
+Maven repository; the experimental status above still applies.
 
 ## Usage
 
