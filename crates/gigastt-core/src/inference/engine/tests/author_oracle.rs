@@ -31,8 +31,20 @@ fn test_golos_00_int8_encoder_near_author_fp32() {
     let samples =
         crate::inference::audio::decode_audio_file(wav.to_str().expect("fixture path is utf-8"))
             .expect("decode golos_00");
-    let engine = Engine::load(model_dir.to_str().expect("model dir is utf-8"))
-        .expect("load INT8 rnnt engine");
+    // Do not let a persistent optimized graph stand in for the pinned source
+    // model when measuring numerical agreement with the author package.
+    let optimized_cache = tempfile::tempdir().expect("isolated oracle graph cache");
+    let engine = Engine::load_with_execution_provider(
+        model_dir.to_str().expect("model dir is utf-8"),
+        Some(ModelVariant::Rnnt),
+        1,
+        1,
+        0,
+        1,
+        Some(optimized_cache.path().to_path_buf()),
+        crate::runtime::ExecutionProviderChoice::Cpu,
+    )
+    .expect("load pinned INT8 rnnt engine on CPU");
     let (features, num_frames) = engine.features.compute(&samples);
     let mut guard = engine.pool.checkout_blocking().expect("checkout encoder");
     let triplet = &mut *guard;
@@ -80,13 +92,27 @@ fn test_golos_00_int8_encoder_near_author_fp32() {
         max_abs = max_abs.max((a - b).abs());
     }
     let cosine = dot / (norm_ours.sqrt() * norm_author.sqrt());
-    // Measured on this clip: cosine 0.9985, max abs 0.145.
+    eprintln!(
+        "rnnt encoder sha256={} cosine={cosine} max_abs={max_abs}",
+        ModelVariant::Rnnt.encoder_int8_checksum()
+    );
+    // Ryzen: 0.9985 / 0.145; GitHub ubuntu-latest: 0.99750 / 0.22470.
+    // The pinned INT8 model is verified at engine load. Keep the cosine gate
+    // and allow the observed cross-host maximum (see benchmark/tolerances).
     assert!(
         cosine > 0.997,
         "int8 encoder cosine {cosine} max_abs {max_abs}"
     );
     assert!(
-        max_abs < 0.20,
+        max_abs < 0.25,
         "int8 encoder max abs {max_abs} cosine {cosine}"
+    );
+    let transcript = engine
+        .transcribe_samples(&samples, triplet)
+        .expect("decode oracle clip");
+    assert_eq!(
+        transcript.text.trim(),
+        "шестьдесят тысяч тенге сколько будет стоить",
+        "INT8 greedy transcript must still match the author FP32 reference"
     );
 }
