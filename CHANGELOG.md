@@ -78,6 +78,9 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 
 ### Fixed
 
+- Propose validated Homebrew release pins through a protected pull request instead
+  of pushing directly to main; document the required bot-PR workflow approval.
+
 - Provision punctuation and VAD sidecars before model-backed coverage tests,
   including recognition-only cache hits. Pin the encoder oracle to CPU/rnnt,
   record model provenance, and calibrate its maximum-error bound against the
