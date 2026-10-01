@@ -408,6 +408,7 @@ async fn test_inference_watchdog_frees_pool_slot_within_one_window() {
         inference_timeout_secs: 1,
         ..Default::default()
     };
+    let retry_after_secs = limits.pool_checkout_timeout_secs;
     let (port, shutdown) = common::start_server_with_pool_and_limits(&model_dir, 1, limits).await;
 
     // ~5 minutes of audio: a full decode is tens of seconds, so if the slot were
@@ -429,24 +430,40 @@ async fn test_inference_watchdog_frees_pool_slot_within_one_window() {
         "a stalled run must trip the no-progress watchdog with 504"
     );
 
-    // Measure how long the single freed slot takes to serve a fresh request.
+    // Admission remains held until the cancelled native worker exits. Probe
+    // recovery instead of assuming the next upload can queue behind that worker.
     let reclaim_start = std::time::Instant::now();
-    let resp2 = tokio::time::timeout(
-        Duration::from_secs(20),
-        client
-            .post(format!("http://127.0.0.1:{port}/v1/transcribe"))
-            .body(short)
-            .send(),
-    )
+    tokio::time::timeout(Duration::from_secs(15), async {
+        loop {
+            let response = client
+                .post(format!("http://127.0.0.1:{port}/v1/transcribe"))
+                .body(short.clone())
+                .send()
+                .await
+                .expect("follow-up request");
+            if response.status().is_success() {
+                break;
+            }
+            assert_eq!(
+                response.status(),
+                reqwest::StatusCode::SERVICE_UNAVAILABLE,
+                "only upload admission backpressure may precede recovery"
+            );
+            assert_eq!(
+                response.headers()[reqwest::header::RETRY_AFTER],
+                retry_after_secs.to_string()
+            );
+            let error: serde_json::Value = response.json().await.expect("backpressure JSON");
+            assert_eq!(error["code"], "upload_busy", "{error}");
+            assert_eq!(error["retry_after_ms"], retry_after_secs * 1000);
+            // This local recovery probe intentionally polls more often than the
+            // client retry hint so the original 15-second bound remains tested.
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    })
     .await
-    .expect("follow-up returned before the test timeout")
-    .expect("follow-up request");
+    .expect("upload admission and pool slot must recover within 15 seconds");
     let reclaimed = reclaim_start.elapsed();
-    assert!(
-        resp2.status().is_success(),
-        "follow-up must get the freed slot, got {}",
-        resp2.status()
-    );
     assert!(
         reclaimed < Duration::from_secs(15),
         "slot should free within ~one window; follow-up took {reclaimed:?}"
