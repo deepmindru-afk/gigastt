@@ -260,11 +260,24 @@ pub async fn transcribe_stream(
         let _enter = span.enter();
         let runtime = tokio::runtime::Handle::current();
         let send = |item| runtime.block_on(send_stream_item(&tx, item, &cancel, &abort));
+        let partial = Arc::new(gigastt_core::inference::TranscriptSnapshot::default());
+        let report_error = |code, message: &str| {
+            if let Some(segment) = partial.get()
+                && !send(Ok(segment))
+            {
+                return;
+            }
+            let _ = send(Err(StreamError {
+                code,
+                message: message.into(),
+            }));
+        };
         // catch_unwind ensures the triplet is returned to the pool even on panic.
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let mut stream_state = engine.create_state(false);
             stream_state.commit_policy = commit_policy;
             stream_state.abort = Some(abort.clone());
+            stream_state.partial = Some(partial.clone());
             let mut chunks = chunks;
 
             // Fixed-size chunks (STREAM_CHUNK_SAMPLES), last one short — so the
@@ -306,15 +319,7 @@ pub async fn transcribe_stream(
                         }
                     }
                     Err(e) => {
-                        if let Some(partial) = engine.flush_state(&mut stream_state)
-                            && !send(Ok(partial))
-                        {
-                            return;
-                        }
-                        let _ = send(Err(StreamError {
-                            code: e.code(),
-                            message: "Transcription failed. Please check audio format.".into(),
-                        }));
+                        report_error(e.code(), "Transcription failed. Please check audio format.");
                         return;
                     }
                 }
@@ -322,8 +327,15 @@ pub async fn transcribe_stream(
 
             // Final decode of the sub-stride remainder, then flush. Terminal
             // delivery follows the same bounded wait as ordinary segments.
-            if let Some(seg) = engine.finish_stream(&mut stream_state, &mut reservation) {
-                let _ = send(Ok(seg));
+            match engine.try_finish_stream(&mut stream_state, &mut reservation) {
+                Ok(Some(segment)) => {
+                    let _ = send(Ok(segment));
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    tracing::error!("Final SSE decode failed: {error:#}");
+                    report_error(error.code(), "Failed to finish transcription.");
+                }
             }
         }));
 
@@ -331,10 +343,7 @@ pub async fn transcribe_stream(
             tracing::error!("Panic in SSE inference task — triplet recovered");
             // Mirror the WebSocket contract: surface a distinct `inference_panic`
             // code instead of ending the stream silently.
-            let _ = send(Err(StreamError {
-                code: "inference_panic",
-                message: "Inference failed unexpectedly.".into(),
-            }));
+            report_error("inference_panic", "Inference failed unexpectedly.");
         }
         // reservation dropped here automatically returns the triplet to the pool
     });
