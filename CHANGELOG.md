@@ -84,6 +84,10 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
   observed CI runner while retaining cosine and exact-transcript checks.
 - Preserve per-request punctuation, ITN, VAD, and hotword settings when channel
   splitting falls back to mono or uses per-channel VAD processing.
+- Keep split-channel transcription progress monotonic across channels so healthy
+  long requests do not hit false inference timeouts. Jobs retain processed time
+  for unknown-duration files and scale split-channel completion correctly.
+  The no-progress watchdog now checks every 100 ms instead of once per timeout.
 
 - **WebSocket sessions no longer panic on startup when
   `GIGASTT_MAX_SESSION_SECS=0`.** Previously, the unlimited-session deadline

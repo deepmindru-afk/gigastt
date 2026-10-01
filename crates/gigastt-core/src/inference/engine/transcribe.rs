@@ -20,7 +20,10 @@ impl Engine {
         });
         let progress_fn: Option<Box<dyn Fn(u64)>> = req.progress.as_ref().map(|counter| {
             let counter = counter.clone();
-            Box::new(move |n: u64| counter.store(n, Relaxed)) as Box<dyn Fn(u64)>
+            // Publish routing metadata established before the first decode along
+            // with sample work; observers can read the counter with Acquire.
+            Box::new(move |n: u64| counter.store(n, std::sync::atomic::Ordering::Release))
+                as Box<dyn Fn(u64)>
         });
         let partial_fn = |words: &[WordInfo]| {
             if let Some(partial) = &req.partial {
@@ -115,15 +118,11 @@ impl Engine {
                 triplet,
                 &req.overrides,
                 req.hotwords,
-                ctl.abort_only(),
+                ctl,
             ),
-            TranscribeSource::Channels(channels) => self.transcribe_channels_inner(
-                channels,
-                triplet,
-                &req.overrides,
-                req.hotwords,
-                ctl.abort_only(),
-            ),
+            TranscribeSource::Channels(channels) => {
+                self.transcribe_channels_inner(channels, triplet, &req.overrides, req.hotwords, ctl)
+            }
         }
     }
 
