@@ -50,7 +50,7 @@
 
 ## Phase 0 — Scaffold (default build stays byte-identical)
 
-### Task 0.1: Add the `candle` feature and optional deps
+### Add the `candle` feature and optional deps
 
 **Files:**
 - Modify: `crates/gigastt-core/Cargo.toml`
@@ -99,7 +99,7 @@ git add crates/gigastt-core/Cargo.toml crates/gigastt-core/src/lib.rs Cargo.lock
 git commit -m "feat(candle): add optional candle feature + deps (no code yet)"
 ```
 
-### Task 0.2: Empty backend module behind the seam
+### Empty backend module behind the seam
 
 **Files:**
 - Create: `crates/gigastt-core/src/runtime/candle/mod.rs`
@@ -195,7 +195,7 @@ git add crates/gigastt-core/src/runtime
 git commit -m "feat(candle): scaffold runtime/candle backend module (stub load_session)"
 ```
 
-### Task 0.3: Select CandleFactory in `default_factory()` under the feature
+### Select CandleFactory in `default_factory()` under the feature
 
 **Files:**
 - Modify: `crates/gigastt-core/src/runtime/ort/factory.rs`
@@ -236,7 +236,7 @@ git add crates/gigastt-core/src/runtime/ort/factory.rs
 git commit -m "feat(candle): route default_factory to CandleFactory under feature"
 ```
 
-### Task 0.4: Extend the Runtime Isolation guard + CI lane
+### Extend the Runtime Isolation guard + CI lane
 
 **Files:**
 - Modify: the isolation-guard config (find it: `rg -n 'OrtRuntime|Runtime Isolation' .github crates scripts`)
@@ -277,7 +277,7 @@ git commit -m "ci(candle): add Candle/Metal build lane + isolation guard rule"
 
 ## Phase 1 — Encoder (vendor + weights + numeric parity)
 
-### Task 1.1: Vendor the conformer encoder + config
+### Vendor the conformer encoder + config
 
 **Files:**
 - Create: `crates/gigastt-core/src/runtime/candle/config.rs`
@@ -307,7 +307,7 @@ Prepend:
   (CTC) and `GigaAmConfig` fields we don't need, OR keep them — but add a
   `v3_rnnt()` encoder config constructor mirroring `v3_e2e_ctc()`'s
   `EncoderConfig` (same encoder: 16 layers, d_model 768, 16 heads, conv1d ×4,
-  conv_kernel 5, rotary). Confirm against the converted checkpoint in Task 1.2.
+  conv_kernel 5, rotary). Confirm against the converted checkpoint in the weight conversion section.
 
 - [ ] **Step 4: Verify it compiles under the feature**
 
@@ -321,7 +321,7 @@ git add crates/gigastt-core/src/runtime/candle/{config.rs,conformer.rs}
 git commit -m "feat(candle): vendor GigaAM v3 conformer encoder from RustASR (MIT/Apache)"
 ```
 
-### Task 1.2: Weight conversion script (encoder first)
+### Weight conversion script (encoder first)
 
 **Files:**
 - Create: `scripts/convert_gigaam_candle.py`
@@ -349,7 +349,7 @@ git add scripts/convert_gigaam_candle.py
 git commit -m "feat(candle): PyTorch->safetensors converter for GigaAM v3 rnnt encoder"
 ```
 
-### Task 1.3: `tensor.rs` bridge
+### `tensor.rs` bridge
 
 **Files:**
 - Create: `crates/gigastt-core/src/runtime/candle/tensor.rs`
@@ -422,7 +422,7 @@ git add crates/gigastt-core/src/runtime/candle/tensor.rs
 git commit -m "feat(candle): Tensor<->candle bridge with roundtrip test"
 ```
 
-### Task 1.4: `EncoderSession` + parity test vs ort
+### `EncoderSession` + parity test vs ort
 
 **Files:**
 - Modify: `crates/gigastt-core/src/runtime/candle/session.rs`
@@ -484,7 +484,7 @@ vendored encoder + weight conversion are correct on our checkpoint.
 
 ## Phase 2 — RNN-T head (decoder + joiner) + WER parity
 
-### Task 2.1: Inspect the rnnt decoder/joiner PyTorch structure
+### Inspect the rnnt decoder/joiner PyTorch structure
 
 **Files:**
 - Modify: `scripts/convert_gigaam_candle.py`
@@ -498,7 +498,7 @@ RustASR's `scripts/analyze_joint.py` / `compare_lstm_joint.py` as the reference
 shape probes.
 
 - [ ] **Step 2: Export decoder.safetensors + joiner.safetensors** with keys
-  chosen to match the modules written in Task 2.2.
+  chosen to match the modules written in the prediction LSTM section.
 
 - [ ] **Step 3: Commit**
 
@@ -507,7 +507,7 @@ git add scripts/convert_gigaam_candle.py
 git commit -m "feat(candle): export rnnt decoder+joiner weights to safetensors"
 ```
 
-### Task 2.2: `DecoderSession` (prediction LSTM) honoring the contract
+### `DecoderSession` (prediction LSTM) honoring the contract
 
 **Files:**
 - Create: `crates/gigastt-core/src/runtime/candle/rnnt.rs`
@@ -559,7 +559,7 @@ git add crates/gigastt-core/src/runtime/candle/rnnt.rs crates/gigastt-core/src/r
 git commit -m "feat(candle): rnnt prediction LSTM decoder session"
 ```
 
-### Task 2.3: `JoinerSession` honoring the contract
+### `JoinerSession` honoring the contract
 
 **Files:**
 - Modify: `crates/gigastt-core/src/runtime/candle/rnnt.rs`, `session.rs`, `runtime.rs`
@@ -594,7 +594,7 @@ git add crates/gigastt-core/src/runtime/candle/rnnt.rs crates/gigastt-core/src/r
 git commit -m "feat(candle): rnnt joiner session"
 ```
 
-### Task 2.4: End-to-end file transcription + WER parity
+### End-to-end file transcription + WER parity
 
 **Files:**
 - Test: `crates/gigastt-core/tests/candle_wer_parity.rs` (model-gated)
@@ -632,7 +632,7 @@ git commit -m "test(candle): end-to-end WER parity vs ort rnnt baseline"
 
 ## Phase 3 — Streaming + pool
 
-### Task 3.1: Streaming decode through `StreamingState`
+### Streaming decode through `StreamingState`
 
 **Files:**
 - Test: `crates/gigastt-core/tests/candle_streaming.rs` (model-gated)
@@ -660,7 +660,7 @@ git commit -m "test(candle): streaming parity + pool/warmup smoke"
 
 ## Phase 4 — CI/docs (and optional quantization follow-up)
 
-### Task 4.1: Quickstart docs
+### Quickstart docs
 
 **Files:**
 - Modify: `docs/quickstarts.md` (and `README.md` build matrix if it lists features)
@@ -677,7 +677,7 @@ git add docs/quickstarts.md README.md
 git commit -m "docs(candle): quickstart for the opt-in Candle/Metal backend"
 ```
 
-### Task 4.2: (Optional, separate) Candle-native quantization
+### (Optional, separate) Candle-native quantization
 
 - [ ] Investigate GGUF Q8/Q6 weight loading in Candle for the encoder; gate
   behind a sub-option; re-run WER parity. Out of scope for the first merge.
@@ -688,17 +688,17 @@ git commit -m "docs(candle): quickstart for the opt-in Candle/Metal backend"
 
 **Spec coverage:**
 - "optional, doesn't break default" → Phase 0 (optional deps, feature gate, mutual exclusion, default-build verification steps). ✓
-- "behind #115 seam" → factory/runtime/session implement the three traits; contracts table drives Tasks 1.4/2.2/2.3. ✓
-- "reuse encoder" → Task 1.1 vendor + attribution. ✓
-- "hand-write rnnt head" → Tasks 2.2/2.3. ✓
+- "behind #115 seam" → factory/runtime/session implement the three traits; contracts table drives the encoder parity, prediction LSTM, and joiner sections. ✓
+- "reuse encoder" → conformer encoder vendoring and attribution. ✓
+- "hand-write rnnt head" → the prediction LSTM and joiner sections. ✓
 - "rnnt head first, FP32, Metal" → config `v3_rnnt()`, FP32 bridge, CandleDevice::Metal. ✓
-- "weight conversion" → Tasks 1.2/2.1. ✓
-- "numeric + WER parity gates" → Tasks 1.4/2.4. ✓
-- "CI + isolation guard" → Task 0.4. ✓
+- "weight conversion" → the weight conversion and PyTorch structure inspection sections. ✓
+- "numeric + WER parity gates" → the encoder and full-file parity sections. ✓
+- "CI + isolation guard" → the Runtime Isolation guard and CI lane section. ✓
 
 **Placeholder scan:** Model-port internals (exact PyTorch→Candle weight-key
-renames, decoder/joiner submodule layout) are intentionally derived in Tasks 1.2
-and 2.1 by inspecting the real checkpoint, because they are facts that live in
+renames, decoder/joiner submodule layout) are intentionally derived in the weight conversion
+and PyTorch structure inspection sections by inspecting the real checkpoint, because they are facts that live in
 the model, not assumptions — each such task has a concrete inspect-and-match
 step and command, not a "TODO". Vendored encoder code is referenced by exact
 source path rather than re-pasted (600 LOC). These are deliberate, not gaps.
@@ -709,6 +709,6 @@ are used consistently across tasks. Tensor contracts (PRED_HIDDEN=320,
 ENC_DIM=768, N_MELS=64, vocab=34) match `decode.rs`/`inference/mod.rs` on `main`.
 
 **Risk note (no silent caps):** the plan assumes our v3 rnnt encoder is the same
-RoPE conformer as RustASR's v3 CTC encoder (shared v3 backbone). Task 1.2 Step 2
-and Task 1.4 verify this empirically before any head work; if the encoder differs,
+RoPE conformer as RustASR's v3 CTC encoder (shared v3 backbone). The weight conversion checkpoint inspection
+and encoder parity test verify this empirically before any head work; if the encoder differs,
 the converter's key-mapping (not the vendored module) is where it surfaces.

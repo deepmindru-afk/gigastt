@@ -39,7 +39,7 @@ def test_phone_number_word_and_symbol_form():
 def test_grouped_digits_and_minus():
     # The thousands scale must survive: 'минус тысяча девятьсот семьдесят два'
     # normalizes to 1972 (not the mathematically wrong 972), so it matches the
-    # correct digit form '-1972' with zero edit distance (task 12).
+    # correct digit form '-1972' with zero edit distance.
     ref = "джой две тысячи двадцать минус тысяча девятьсот семьдесят два"
     hyp = "2020 -1972"
     wer, errors, ref_count, ref_words, hyp_words = _wer_info(ref, hyp)
@@ -51,7 +51,7 @@ def test_grouped_digits_and_minus():
 
 
 def test_minus_thousand_preserves_scale():
-    # Regression (task 12): the removed _drop_bare_thousand_after_minus special
+    # Regression: the removed _drop_bare_thousand_after_minus special
     # case used to swallow the thousands digit, aligning the spoken subtrahend
     # with the WRONG '-972'. The scale must be preserved and match '-1972'.
     assert normalize_for_wer("минус тысяча девятьсот семьдесят два") == ["1972"]

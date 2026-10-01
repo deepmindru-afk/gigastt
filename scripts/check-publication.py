@@ -9,9 +9,24 @@ import re
 import subprocess
 import sys
 
-PREFIXES = ("TASK", "TTX", "T", "V1", "SUS", "TODO")
+PREFIXES = ("TASK", "TTX", "T", "V1", "SUS", "TODO", "DOC")
 IDENTIFIER = re.compile(
-    r"(?<![A-Za-z0-9_])(?:" + "|".join(PREFIXES) + r")-\d+(?![A-Za-z0-9_])",
+    r"(?<![A-Za-z0-9_])(?:" + "|".join(PREFIXES) + r")-\d+(?:\.\d+)*(?![A-Za-z0-9_])",
+    re.IGNORECASE,
+)
+LABEL_NUMBER = r"\d+(?:\.\d+)*(?:/\d+(?:\.\d+)*)*"
+# Keep numeric matching available separately for audited history tooling;
+# prose labels require descriptive replacement rather than blind deletion.
+PLANNING_LABEL = re.compile(
+    IDENTIFIER.pattern + r"|(?<![A-Za-z0-9_])(?:"
+    r"(?:" + "|".join(PREFIXES) + r")-(?:N{2,3}|X{2,3}|<>)"
+    r"|" + "TODO" + "-" + "CUDA"
+    r"|tasks?[ \t-]+(?:" + LABEL_NUMBER
+    + r"|\*\*" + LABEL_NUMBER + r"(?:[ \t]+[^*\r\n]*)?\*\*"
+    + r"|`" + LABEL_NUMBER + r"(?:[ \t]+[^`\r\n]*)?`"
+    + r"|\(" + LABEL_NUMBER + r"(?:[ \t]+[^)\r\n]*)?\))"
+    r"|Part[ \t]+\d+[ \t]+item[ \t]+\d+"
+    r")(?![A-Za-z0-9_])",
     re.IGNORECASE,
 )
 # This vendored ONNX reference names an upstream format version, not local work.
@@ -22,11 +37,11 @@ PRIVATE_DIRS = {"backlog", "specs", "roadmap"}
 
 
 def scan_text(label, text):
-    safe_label = IDENTIFIER.sub("[private identifier]", label)
+    safe_label = PLANNING_LABEL.sub("[private identifier]", label)
     return [
         f"{safe_label}:{number}: internal planning identifier"
         for number, line in enumerate(text.splitlines(), 1)
-        if IDENTIFIER.search(line.replace(UPSTREAM_SPEC, ""))
+        if PLANNING_LABEL.search(line.replace(UPSTREAM_SPEC, ""))
     ]
 
 

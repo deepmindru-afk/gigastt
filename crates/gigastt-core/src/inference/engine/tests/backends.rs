@@ -343,7 +343,7 @@ fn encoder_emitted_len(engine: &Engine, features: &[f32], num_frames: usize) -> 
     }
 }
 
-/// FULL-GOLOS WER + frame-count-equality measurement (Part 2a + frame pin).
+/// FULL-GOLOS WER + frame-count-equality measurement (frame pin).
 ///
 /// For every Golos fixture, transcribes through BOTH the composite ANE engine
 /// and the pure-ort baseline, records mel length `T`, the bucket fill % and
@@ -500,7 +500,7 @@ fn ane_ort_transcription_parity() {
     }
 }
 
-/// END-TO-END RTFx measurement (Part 2b).
+/// END-TO-END RTFx measurement.
 ///
 /// For the fixtures that take the ANE path (>= 384 mel frames, >= 50% fill),
 /// measures FULL-PIPELINE wall time (audio decode -> mel -> encoder -> RNN-T
@@ -586,7 +586,7 @@ fn ane_e2e_rtfx() {
     );
 }
 
-/// CONCURRENT-PREDICTION test (Part 1 item 2).
+/// CONCURRENT-PREDICTION test.
 ///
 /// Builds ONE `AneEncoderSession` backed by a single shared `Arc<SharedModel>`
 /// and fires concurrent `run` calls from N >= 4 threads on the SAME model,

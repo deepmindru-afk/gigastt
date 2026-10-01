@@ -35,7 +35,8 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 - Run a bounded, serial model smoke gate on every PR: pinned CPU encoder and
   exact transcription oracle plus real-speech WebSocket finalization coverage.
 - Keep internal planning files local, publish benchmark and edge protocols under
-  `docs/`, and check public content and Git metadata for internal identifiers.
+  `docs/`, and check public content and Git metadata for internal identifiers,
+  including prose labels and placeholders.
 - Reuse FFT scratch storage during mel feature extraction instead of allocating
   it for every audio frame; streaming keeps the storage in its existing buffer.
 - Withhold primary four-domain `rnnt` WER and ranking claims until raw results
