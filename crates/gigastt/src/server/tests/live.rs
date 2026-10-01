@@ -181,3 +181,101 @@ where
     let text = msg.into_text().expect("text");
     serde_json::from_str(&text).unwrap_or_else(|_| panic!("json: {text}"))
 }
+
+#[tokio::test]
+async fn test_live_ws_tail_error_preserves_partial_without_final() {
+    for prior in [false, true] {
+        for joiner in [false, true] {
+            for panic in [false, true] {
+                let tmp = tempfile::tempdir().unwrap();
+                gigastt_core::test_support::write_rnnt_layout(tmp.path()).unwrap();
+                let factory = gigastt_core::test_support::FailingStreamFactory::new(joiner, panic);
+                let engine = gigastt_core::test_support::load_rnnt_engine_with_factory(
+                    tmp.path(),
+                    1,
+                    Box::new(factory.clone()),
+                )
+                .unwrap();
+                let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+                let port = listener.local_addr().unwrap().port();
+                let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+                let server = tokio::spawn(run_with_config_listener(
+                    engine,
+                    ServerConfig::local(port),
+                    Some(shutdown_rx),
+                    listener,
+                ));
+                let (mut ws, _) =
+                    tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/v1/ws"))
+                        .await
+                        .unwrap();
+                assert!(matches!(
+                    ws.next().await.unwrap().unwrap(),
+                    Message::Text(_)
+                ));
+                factory.arm(if prior { 2 } else { 1 });
+                ws.send(Message::Text(
+                    serde_json::json!({"type":"configure","sample_rate":16000})
+                        .to_string()
+                        .into(),
+                ))
+                .await
+                .unwrap();
+                if prior {
+                    ws.send(Message::Binary(vec![0; 32_000].into()))
+                        .await
+                        .unwrap();
+                }
+                ws.send(Message::Binary(vec![0; 3_200].into()))
+                    .await
+                    .unwrap();
+                ws.send(Message::Text(
+                    serde_json::json!({"type":"stop"}).to_string().into(),
+                ))
+                .await
+                .unwrap();
+                let mut saw_error = false;
+                let mut saw_partial = false;
+                loop {
+                    match tokio::time::timeout(Duration::from_secs(5), ws.next())
+                        .await
+                        .unwrap()
+                        .unwrap()
+                        .unwrap()
+                    {
+                        Message::Text(text) => {
+                            let json: serde_json::Value = serde_json::from_str(&text).unwrap();
+                            match json["type"].as_str() {
+                                Some("partial") => {
+                                    saw_partial = true;
+                                    assert!(json["text"].as_str().unwrap().contains("hi"));
+                                }
+                                Some("error") => {
+                                    saw_error = true;
+                                    assert_eq!(
+                                        json["code"],
+                                        if panic {
+                                            "inference_panic"
+                                        } else {
+                                            "inference_error"
+                                        }
+                                    );
+                                }
+                                other => panic!("unexpected tail response {other:?}: {json}"),
+                            }
+                        }
+                        Message::Close(frame) => {
+                            assert_eq!(u16::from(frame.unwrap().code), 1011);
+                            break;
+                        }
+                        other => panic!("unexpected frame: {other:?}"),
+                    }
+                }
+                assert!(saw_error);
+                assert_eq!(saw_partial, prior);
+                let _ = shutdown_tx.send(());
+                server.await.unwrap().unwrap();
+            }
+        }
+    }
+}

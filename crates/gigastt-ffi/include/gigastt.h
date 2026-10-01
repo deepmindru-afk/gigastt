@@ -127,7 +127,9 @@ char *gigastt_stream_process_chunk(struct GigasttEngine *engine,
                                    uint32_t sample_rate);
 
 /**
- * Flush the streaming state and return the final segment(s).
+ * Decode pending audio and return the final segment(s).
+ * Successful flushes allow further chunks. A failed flush requires a new
+ * stream; previously returned text remains incomplete.
  *
  * # Safety
  * `stream` must be a pointer returned by `gigastt_stream_new`. Concurrent

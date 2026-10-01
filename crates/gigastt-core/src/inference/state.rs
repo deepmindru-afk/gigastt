@@ -102,7 +102,7 @@ pub(crate) fn aggregate_confidence(words: &[WordInfo]) -> Option<f32> {
 /// Created via [`crate::inference::Engine::create_state`]. Holds the decoder LSTM state, an audio
 /// sample buffer for incomplete frames, and accumulated transcript text/words.
 /// Pass this to [`crate::inference::Engine::process_chunk`] for each incoming audio chunk and
-/// [`crate::inference::Engine::flush_state`] when the stream ends.
+/// [`crate::inference::Engine::try_finish_stream`] when the stream ends.
 #[non_exhaustive]
 pub struct StreamingState {
     /// Public text commitment policy, scoped to the current utterance.
@@ -170,7 +170,7 @@ pub struct StreamingState {
 }
 
 impl StreamingState {
-    /// Whether cooperative cancellation has made this stream terminal.
+    /// Whether cancellation or a finalization failure made this stream terminal.
     pub fn is_failed(&self) -> bool {
         self.failed
     }

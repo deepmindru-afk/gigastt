@@ -11,6 +11,7 @@ mod author_oracle;
 mod backends;
 mod cancellation;
 mod commit_policy;
+mod finalization;
 mod load;
 mod mock;
 mod paths;

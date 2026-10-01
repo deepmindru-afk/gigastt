@@ -490,32 +490,70 @@ impl Engine {
         }
     }
 
-    /// Decode any audio buffered since the last strided decode, then finalize.
-    /// Call when the stream ends (Stop / EOF) so the decode-stride batching does
-    /// not drop trailing words. Best-effort: on decode failure, falls back to a
-    /// plain flush of whatever the assembler already holds.
+    /// Decode pending audio and finalize, preserving the historical return type.
+    /// On failure, returns only a non-final readable partial (if any) and marks
+    /// the state failed. Use [`Self::try_finish_stream`] to receive the error.
     pub fn finish_stream(
         &self,
         state: &mut StreamingState,
         triplet: &mut SessionTriplet,
     ) -> Option<TranscriptSegment> {
-        if state.abort_requested() {
-            state.failed = true;
-            self.publish_stream_partial(state);
-            return (!state.assembler.is_empty())
-                .then(|| self.stream_partial(state, now_timestamp()));
+        match self.try_finish_stream(state, triplet) {
+            Ok(segment) => segment,
+            Err(error) => {
+                tracing::warn!("finish_stream failed: {error:#}");
+                self.flush_state(state)
+            }
         }
-        let has_pending = state.pending_samples > 0 && state.audio_buffer.len() >= N_FFT;
-        if has_pending && let Err(e) = self.decode_window(state, triplet) {
-            tracing::warn!("finish_stream decode failed: {e:#}");
+    }
+
+    /// Decode sub-stride tail audio and return a successful final, or an error.
+    /// Failed/cancelled states cannot resume decoding; their existing text stays
+    /// available through `state.partial` and [`Self::flush_state`] as a partial.
+    /// Successful flushes remain reusable and do not decode the same tail twice.
+    ///
+    /// Runtime panics mark the state failed and preserve its partial before
+    /// resuming the unwind, so transport/binding boundaries can report a panic.
+    pub fn try_finish_stream(
+        &self,
+        state: &mut StreamingState,
+        triplet: &mut SessionTriplet,
+    ) -> Result<Option<TranscriptSegment>, GigasttError> {
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            if state.abort_requested() {
+                return Err(GigasttError::Cancelled);
+            }
+            if state.pending_samples > 0 && state.audio_buffer.len() >= N_FFT {
+                self.decode_window(state, triplet)
+                    .map_err(|error| GigasttError::Inference {
+                        source: error.into(),
+                    })?;
+            }
+            if state.abort_requested() {
+                return Err(GigasttError::Cancelled);
+            }
+            let segment = self.flush_state(state);
+            // A sub-frame tail cannot be decoded yet. Keep it pending so a
+            // reusable flush can combine it with the next chunk.
+            if state.audio_buffer.len() >= N_FFT {
+                state.pending_samples = 0;
+                Self::slide_streaming_window(state);
+            }
+            Ok(segment)
+        }));
+        match outcome {
+            Ok(Ok(segment)) => Ok(segment),
+            Ok(Err(error)) => {
+                state.failed = true;
+                self.publish_stream_partial(state);
+                Err(error)
+            }
+            Err(panic) => {
+                state.failed = true;
+                self.publish_stream_partial(state);
+                std::panic::resume_unwind(panic)
+            }
         }
-        if state.abort_requested() {
-            state.failed = true;
-            self.publish_stream_partial(state);
-            return (!state.assembler.is_empty())
-                .then(|| self.stream_partial(state, now_timestamp()));
-        }
-        self.flush_state(state)
     }
 
     /// Flush accumulated text as a Final segment (called on Stop/Close).
@@ -586,12 +624,13 @@ impl Engine {
         reason: EndpointReason,
     ) -> TranscriptSegment {
         let partial = self.stream_partial(state, timestamp);
-        let mut segment = state.assembler.finalize_with_reason(timestamp, reason);
         let tail = self.apply_text_postprocess(
             partial.tentative.trim_start().to_owned(),
             state.itn.unwrap_or(self.itn),
             state.punctuation.unwrap_or(true),
         );
+        // Preserve the readable assembler if post-processing panics.
+        let mut segment = state.assembler.finalize_with_reason(timestamp, reason);
         segment.text = if partial.committed.is_empty() {
             tail
         } else if tail.is_empty() {

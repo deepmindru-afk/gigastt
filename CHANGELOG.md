@@ -82,6 +82,13 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
   including recognition-only cache hits. Pin the encoder oracle to CPU/rnnt,
   record model provenance, and calibrate its maximum-error bound against the
   observed CI runner while retaining cosine and exact-transcript checks.
+- Preserve streaming tail-decode failures instead of reporting successful completion.
+  WebSocket and file SSE return an error while retaining readable partial text;
+  failed OpenAI streams no longer emit completion markers. The additive
+  `Engine::try_finish_stream` exposes finalization errors, and C, Node, and UniFFI
+  flush calls decode pending audio and propagate failures. Successful flushes
+  remain reusable.
+
 - Cancel stalled native and OpenAI file SSE producers after a 30-second output
   wait, and interrupt full-queue sends on shutdown or disconnect so unread
   responses cannot indefinitely retain inference slots.

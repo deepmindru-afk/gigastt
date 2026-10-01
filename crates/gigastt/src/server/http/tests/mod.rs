@@ -115,3 +115,5 @@ mod serde_contract;
 mod sse;
 
 mod stream_backpressure;
+
+mod stream_finalization;
