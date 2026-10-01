@@ -96,9 +96,10 @@ pub(crate) fn argmax_with_confidence(logits: &[f32], blank_id: usize) -> (usize,
 /// During blank runs, decoder inputs (prev_token, h, c) are unchanged, so the
 /// output is deterministic and the buffers are reused (read-only) without
 /// re-calling the decoder. On a non-blank token the decoder runs again and
-/// overwrites these buffers in place ([`copy_from_slice`]), so steady-state
-/// decoding allocates nothing per token. The buffers are sized once on the
-/// first decode call and stay stable for the rest of the loop.
+/// copies directly into these buffers on ORT, avoiding intermediate owned
+/// output tensors. Buffer capacity is retained for this decode invocation;
+/// runtime input wrappers and native inference allocations still remain.
+/// Other backends may use the compatibility path through owned outputs.
 #[derive(Default)]
 pub(crate) struct DecoderOutput {
     /// Decoder output vector [PRED_HIDDEN].
@@ -109,6 +110,7 @@ pub(crate) struct DecoderOutput {
     new_c: Vec<f32>,
 }
 
+#[cfg(test)]
 impl DecoderOutput {
     /// Overwrite `dst` in place with `src`, resizing only if the length differs
     /// (first call / shape change). Steady-state calls hit the `copy_from_slice`
@@ -183,29 +185,12 @@ fn run_decoder(
         .context("decoder c tensor is not f32")?
         .copy_from_slice(&state.c);
 
-    let decoder_outputs = decoder
-        .run(&bufs.decoder_inputs)
+    decoder
+        .run_f32_into(
+            &bufs.decoder_inputs,
+            &mut [&mut out.dec_data, &mut out.new_h, &mut out.new_c],
+        )
         .context("Decoder inference failed")?;
-
-    let dec_data = decoder_outputs[0]
-        .view()
-        .data()
-        .as_f32()
-        .context("Failed to extract decoder output")?;
-    let new_h_data = decoder_outputs[1]
-        .view()
-        .data()
-        .as_f32()
-        .context("Failed to extract decoder h state")?;
-    let new_c_data = decoder_outputs[2]
-        .view()
-        .data()
-        .as_f32()
-        .context("Failed to extract decoder c state")?;
-
-    DecoderOutput::fill(&mut out.dec_data, dec_data);
-    DecoderOutput::fill(&mut out.new_h, new_h_data);
-    DecoderOutput::fill(&mut out.new_c, new_c_data);
     Ok(())
 }
 
@@ -229,19 +214,9 @@ fn run_joiner_single(
         .context("joiner dec_data tensor is not f32")?
         .copy_from_slice(dec_data);
 
-    let joiner_outputs = joiner
-        .run(&bufs.joiner_inputs)
+    joiner
+        .run_f32_into(&bufs.joiner_inputs, &mut [logits_buf])
         .context("Joiner inference failed")?;
-
-    let logits = joiner_outputs[0]
-        .view()
-        .data()
-        .as_f32()
-        .context("Failed to extract joiner output")?;
-
-    // Reuse the buffer's capacity: copy in place after a one-time size match,
-    // so steady-state joiner calls allocate nothing.
-    DecoderOutput::fill(logits_buf, logits);
     Ok(())
 }
 
