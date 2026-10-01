@@ -134,6 +134,8 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 - Build Android release AARs from the validated tag commit and use its version
   consistently for native source, Gradle publication, and release filenames.
   Tagged runs require an existing release; untagged dispatches build artifacts only.
+- Allow releases without the optional minisign secret while keeping mandatory
+  artifact checks; signed releases require every expected detached signature.
 
 - Resolve and validate release tags before building artifacts. Manual dispatch,
   binary packages, SBOMs and container images now share one immutable source
