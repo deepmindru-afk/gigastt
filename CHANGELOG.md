@@ -135,6 +135,9 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 - Wait for operational readiness in the CLI server smoke test before checking
   metrics, and reap the owned subprocess on assertion failures. Startup and
   metrics time budgets are unchanged.
+- Package Android ONNX Runtime 1.27.0 to satisfy the Rust binding API, with
+  checksum, C header, ABI archive checks, and a dependency compatibility CI gate.
+
 - Build Android release AARs from the validated tag commit and use its version
   consistently for native source, Gradle publication, and release filenames.
   Tagged runs require an existing release; untagged dispatches build artifacts only.
