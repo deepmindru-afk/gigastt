@@ -152,7 +152,7 @@ pub(super) fn resolve_raw_codec(
 }
 
 #[cfg(test)]
-pub(super) use super::super::file_transcribe::raw_codec_to_wav;
+pub(super) use super::super::file_transcribe::prepare_raw_audio;
 
 /// Check out a session triplet from the engine's batch pool with the configured
 /// timeout and record the pool metrics, returning an owned reservation whose

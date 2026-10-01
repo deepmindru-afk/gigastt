@@ -178,3 +178,8 @@ required-features = ["__internals", "file-decode"]
 name = "file_scheduling"
 harness = false
 required-features = ["__internals", "file-decode"]
+
+[[bench]]
+name = "raw_telephony"
+harness = false
+required-features = ["file-decode"]
