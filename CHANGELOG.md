@@ -21,6 +21,9 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
   `docs/`, and check public content and Git metadata for internal identifiers.
 - Reuse FFT scratch storage during mel feature extraction instead of allocating
   it for every audio frame; streaming keeps the storage in its existing buffer.
+- Withhold primary four-domain `rnnt` WER and ranking claims until raw results
+  and complete run provenance are retrievable; distinguish historical reports
+  from the older published `e2e_rnnt` artifacts.
 
 - Document Linux OpenSSL build prerequisites and custom-prefix discovery for
   the ONNX Runtime downloader, including the environment used by Git hooks.
@@ -1473,6 +1476,10 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
   are additive (existing clients unaffected); OpenAPI updated to match.
 
 ## [2.3.0] - 2026-06-20
+
+> Accuracy claims below are historical release reports. The primary `rnnt`
+> results and complete provenance have not been recovered; current documentation
+> withholds those claims. See [benchmark evidence](docs/benchmarks.md#evidence-required-to-restore-the-primary-scores).
 
 This release makes the lower-WER `rnnt` head the default and lands the INT8
 integer-compute speed fix, voice activity detection, contextual hotword biasing,

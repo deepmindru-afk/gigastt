@@ -83,12 +83,14 @@ Golos/OpenSTT slices, 1,000 samples per domain (992 clean references).
 
 | Engine | Clean read | Far-field | Phone | YouTube |
 |---|---:|---:|---:|---:|
-| gigastt (`rnnt`, INT8) | 3.55 | 4.08 | 18.50 | 10.91 |
+| gigastt (`rnnt`, INT8) | pending evidence | pending evidence | pending evidence | pending evidence |
 | Vosk 0.54 | 2.97 | 6.29 | 22.74 | 17.24 |
 | faster-whisper (Large v3) | 15.53 | 17.34 | 24.93 | 15.45 |
 
-Clean-read confidence intervals overlap. These datasets are close to
-GigaAM's training distribution; results on held-out sets differ. Full
+The previously reported primary `rnnt` scores are withheld until their raw
+results and complete run provenance are available. Competitor rows remain
+historical measurements. These datasets are close to GigaAM's training
+distribution; results on held-out sets differ. Full
 comparisons, confidence intervals and artifact provenance:
 [benchmarks](docs/benchmarks.md).
 
