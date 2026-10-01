@@ -37,6 +37,10 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 
 ### Added
 
+- Reproducible file-window thread-launch and mixed live/batch scheduling
+  measurements, including shared-pool waiting and dedicated-pool tradeoffs.
+  See [the scheduling profile](docs/file-window-scheduling.md).
+
 - **`gigastt quantize --skip-conv`.** Packaging rebuild that leaves
   convolutions in FP32 and still quantizes `MatMul` and `Gemm`. The
   published INT8 bundle is unchanged. If an INT8 encoder is already in
