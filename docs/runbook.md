@@ -221,9 +221,12 @@ length (a few minutes of 16 kHz can add tens of MiB).
 - On edge hosts, leave punctuation off (`--punctuation off`) if you do not need
   restored casing — the RuPunct model adds a small ready-RSS tax when present
   (see [Optional model ready tax](#optional-model-ready-tax)).
-- The REST upload path is zero-copy (`bytes::Bytes` end-to-end), so concurrent
-  large uploads no longer multiply the body in RAM — but the decoded PCM and
-  encoder scratch still scale with audio length and `--pool-size`.
+- Upload admission bounds concurrent encoded inputs before body collection;
+  the limit is the boot-time batch/shared pool capacity times the body cap,
+  plus the separate jobs-store byte budget. See
+  [aggregate upload admission](long-recordings.md#aggregate-upload-admission).
+  Buffering overhead, prepared/decoded audio and encoder scratch still require
+  additional memory.
 
 **Triage**
 1. Check `terminationGracePeriodSeconds` isn't masking an OOM-kill as a slow
