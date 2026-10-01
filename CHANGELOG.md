@@ -38,6 +38,9 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
   rebuilding the accumulated transcript after every window. Readers still get
   complete owned transcripts; completed split channels share their stored words.
   See [snapshot allocation measurements](docs/transcript-snapshot-memory.md).
+- Reuse the stereo Opus PCM already decoded during channel detection for VAD
+  transcription. Mono fallback, streaming scans for other formats, duration
+  limits and speaker mapping are unchanged.
 
 - Document Linux OpenSSL build prerequisites and custom-prefix discovery for
   the ONNX Runtime downloader, including the environment used by Git hooks.

@@ -147,7 +147,7 @@ pub fn decode_audio_bytes_shared_bounded(
 #[cfg(feature = "file-decode")]
 mod scan;
 #[cfg(feature = "file-decode")]
-pub use scan::{ChannelScan, scan_channels};
+pub use scan::{ChannelScan, PreparedChannels, prepare_channels_for_vad, scan_channels};
 mod dual_mono;
 #[cfg(test)]
 pub(crate) use dual_mono::normalized_correlation_for_test;

@@ -137,7 +137,7 @@ pub(crate) fn audio_too_long_err(
 #[cfg(test)]
 pub(crate) use decode::BytesMediaSource;
 #[cfg(feature = "file-decode")]
-pub use decode::{ChannelScan, scan_channels};
+pub use decode::{ChannelScan, PreparedChannels, prepare_channels_for_vad, scan_channels};
 #[cfg(feature = "file-decode")]
 pub use decode::{
     decode_audio_bytes, decode_audio_bytes_shared, decode_audio_bytes_shared_bounded,

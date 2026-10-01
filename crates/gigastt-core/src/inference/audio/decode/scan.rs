@@ -61,6 +61,14 @@ impl ChannelScan {
 /// the whole-buffer decode (and its ceiling) for this decision.
 #[cfg(feature = "file-decode")]
 pub fn scan_channels(data: Bytes, max_audio_secs: Option<f64>) -> Result<ChannelScan> {
+    scan_channels_inner(data, max_audio_secs, false).map(|prepared| prepared.scan)
+}
+
+fn scan_channels_inner(
+    data: Bytes,
+    max_audio_secs: Option<f64>,
+    retain_decoded: bool,
+) -> Result<PreparedChannels> {
     let source = BytesMediaSource::new(data.clone());
     let mss = MediaSourceStream::new(Box::new(source), Default::default());
     let mut format = symphonia::default::get_probe()
@@ -95,18 +103,27 @@ pub fn scan_channels(data: Bytes, max_audio_secs: Option<f64>) -> Result<Channel
 
     // Header-only verdict: no decode, whatever the file's length.
     if channels != 2 {
-        return Ok(ChannelScan {
-            channels,
-            dual_mono: false,
+        return Ok(PreparedChannels {
+            scan: ChannelScan {
+                channels,
+                dual_mono: false,
+            },
+            decoded: None,
         });
     }
 
     if is_opus {
         let decoded = decode_audio_bytes_shared_channels_bounded(data, max_audio_secs)?;
-        return Ok(ChannelScan {
+        let scan = ChannelScan {
             channels: decoded.len(),
             dual_mono: is_dual_mono(&decoded),
-        });
+        };
+        let decoded = if retain_decoded && scan.mono_fallback_reason().is_none() {
+            Some(decoded)
+        } else {
+            None
+        };
+        return Ok(PreparedChannels { scan, decoded });
     }
 
     let (max_samples, limit_secs) = resolve_budget(max_audio_secs, sample_rate);
@@ -181,8 +198,35 @@ pub fn scan_channels(data: Bytes, max_audio_secs: Option<f64>) -> Result<Channel
     let (left, right) = ready.split_at_mut(1);
     detector.push(&left[0], &right[0]);
 
-    Ok(ChannelScan {
-        channels: 2,
-        dual_mono: detector.is_dual_mono(),
+    Ok(PreparedChannels {
+        scan: ChannelScan {
+            channels: 2,
+            dual_mono: detector.is_dual_mono(),
+        },
+        decoded: None,
     })
+}
+
+/// Channel decision with reusable PCM when the scan already decoded it in full.
+#[derive(Debug)]
+pub struct PreparedChannels {
+    /// Full-recording channel decision.
+    pub scan: ChannelScan,
+    /// Existing scan PCM for genuine stereo VAD; absent for streaming scans and mono fallback.
+    pub decoded: Option<Vec<Vec<f32>>>,
+}
+
+/// Prepare the channel decision for a VAD-enabled split request.
+/// Retains genuine stereo Opus PCM that the scan already materializes, under
+/// the same whole-buffer duration ceiling. Other formats keep their streaming
+/// scan and return no PCM. Mono fallback always uses the original container,
+/// preserving its mix-before-resample behavior.
+///
+/// # Errors
+/// Returns the same probe, decode and duration-limit errors as [`scan_channels`].
+pub fn prepare_channels_for_vad(
+    data: Bytes,
+    max_audio_secs: Option<f64>,
+) -> Result<PreparedChannels> {
+    scan_channels_inner(data, max_audio_secs, true)
 }
