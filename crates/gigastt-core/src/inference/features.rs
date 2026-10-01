@@ -153,7 +153,7 @@ impl MelSpectrogram {
     /// Returns features in shape [n_mels, num_frames] as a flat Vec.
     pub fn compute(&self, samples: &[f32]) -> (Vec<f32>, usize) {
         let n_freqs = self.n_fft / 2 + 1;
-        let mut fft_input = vec![Complex::new(0.0_f32, 0.0); self.n_fft];
+        let mut fft_input = Vec::new();
         let mut power = vec![0.0_f32; n_freqs];
         let mut output = Vec::new();
         let num_frames =
@@ -161,10 +161,10 @@ impl MelSpectrogram {
         (output, num_frames)
     }
 
-    /// Compute log-mel spectrogram reusing pre-allocated `fft_input` and `power` buffers.
+    /// Compute log-mel spectrogram reusing pre-allocated FFT and power buffers.
     ///
-    /// `fft_input` must have length >= `self.n_fft`; `power` must have length >= `n_freqs`.
-    /// Both buffers are resized automatically if too small.
+    /// `fft_input` retains both the FFT input and the plan-specific scratch storage;
+    /// `power` retains the power spectrum. Both grow automatically when needed.
     pub fn compute_with_buffers(
         &self,
         samples: &[f32],
@@ -185,9 +185,11 @@ impl MelSpectrogram {
         output.resize(n_mels * num_frames, 0.0_f32);
 
         // Ensure reusable buffers are large enough
-        if fft_input.len() < self.n_fft {
-            fft_input.resize(self.n_fft, Complex::new(0.0_f32, 0.0));
+        let fft_buffer_len = self.n_fft + self.fft.get_inplace_scratch_len();
+        if fft_input.len() < fft_buffer_len {
+            fft_input.resize(fft_buffer_len, Complex::new(0.0_f32, 0.0));
         }
+        let (fft_input, scratch) = fft_input.split_at_mut(self.n_fft);
         if power.len() < n_freqs {
             power.resize(n_freqs, 0.0_f32);
         }
@@ -206,7 +208,7 @@ impl MelSpectrogram {
             }
 
             // FFT
-            self.fft.process(&mut fft_input[..self.n_fft]);
+            self.fft.process_with_scratch(fft_input, scratch);
 
             // Power spectrum (first n_fft/2 + 1 bins)
             for k in 0..n_freqs {
