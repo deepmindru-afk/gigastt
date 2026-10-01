@@ -33,9 +33,11 @@ The native libs + Kotlin are generated before assembling (not committed):
 # the other two ABIs have no prebuilt. Instead (mirrors android-aar.yml):
 # 1. Fetch the official Microsoft onnxruntime-android AAR and unpack one
 #    libonnxruntime.so per ABI:
-ORT_VER=1.24.2
+ORT_VER=$(python3 -c 'import json; print(json.load(open("packaging/android/onnxruntime.json"))["version"])')
 curl -fsSL -o ort-android.aar \
-  "https://repo1.maven.org/maven2/com/microsoft/onnxruntime/onnxruntime-android/${ORT_VER}/onnxruntime-android-${ORT_VER}.aar"
+  "https://repo.maven.apache.org/maven2/com/microsoft/onnxruntime/onnxruntime-android/${ORT_VER}/onnxruntime-android-${ORT_VER}.aar"
+cargo metadata --locked --format-version 1 > android-cargo-metadata.json
+python3 scripts/check-android-runtime.py --metadata android-cargo-metadata.json --aar ort-android.aar
 for abi in arm64-v8a armeabi-v7a x86_64; do
   mkdir -p "ort-lib/$abi"
   unzip -p ort-android.aar "jni/$abi/libonnxruntime.so" > "ort-lib/$abi/libonnxruntime.so"
@@ -89,3 +91,22 @@ println(t.text)
 ## License
 
 MIT.
+
+## Native runtime compatibility
+
+The official Microsoft AAR is pinned to **1.27.0** with its SHA-256 in
+[`onnxruntime.json`](onnxruntime.json). Its C header provides API 27, matching
+`ort` 2.0.0-rc.13 default features. The previous 1.24.2 library could not satisfy
+that API request. The archive contains ELF libraries for all three packaged ABIs:
+`arm64-v8a`, `armeabi-v7a`, and `x86_64`.
+
+Before cross-compilation, the workflow compares the resolved `ort-sys` API features
+from Cargo metadata with the pin, verifies the archive checksum and C API header,
+and checks each ABI library. PR CI checks dependency-versus-pin drift without
+downloading the AAR. Tagged builds use the validator and pin from the invoking
+workflow revision, even when the selected source tag predates those files.
+
+Archive/header checks and x86_64 symbol inspection establish the supplied API;
+they are not Android device execution or an end-to-end Gradle build. Those still
+need the Android toolchain and remain subject to the experimental status above.
+Official installation guidance: [ONNX Runtime for Android](https://onnxruntime.ai/docs/install/#install-on-android).
