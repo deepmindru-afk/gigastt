@@ -91,6 +91,8 @@ fn test_json_text_fallback_on_serialization_error() {
 }
 
 mod live;
+#[cfg(target_os = "linux")]
+mod upload_admission;
 
 fn mock_engine() -> (gigastt_core::inference::Engine, tempfile::TempDir) {
     let tmp = tempfile::tempdir().expect("tempdir");

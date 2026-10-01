@@ -39,7 +39,26 @@ pub async fn openai_transcriptions(
     State(state): State<Arc<AppState>>,
     multipart: Multipart,
 ) -> Result<Response, ApiError> {
-    let req = super::super::openai::parse_openai_multipart(multipart).await?;
+    transcribe_multipart(state, multipart, None).await
+}
+
+pub(crate) async fn openai_transcriptions_admitted(
+    State(state): State<Arc<AppState>>,
+    axum::Extension(permit): axum::Extension<super::super::upload::UploadPermit>,
+    multipart: Multipart,
+) -> Result<Response, ApiError> {
+    transcribe_multipart(state, multipart, Some(permit)).await
+}
+
+async fn transcribe_multipart(
+    state: Arc<AppState>,
+    multipart: Multipart,
+    permit: Option<super::super::upload::UploadPermit>,
+) -> Result<Response, ApiError> {
+    let mut req = super::super::openai::parse_openai_multipart(multipart).await?;
+    if let Some(permit) = permit {
+        req.file = permit.retain(req.file);
+    }
     if req.options.stream {
         return openai_transcriptions_stream(state, req.file).await;
     }
@@ -82,11 +101,12 @@ async fn openai_transcriptions_stream(
         reserve_batch_slot(&engine, &limits, state.metrics_registry.as_ref()).await?;
 
     let max_audio_secs = limits.max_audio_secs_opt();
-    let chunks = tokio::task::spawn_blocking(move || {
+    let (chunks, upload_lifetime) = tokio::task::spawn_blocking(move || {
+        let upload_lifetime = body.clone();
         match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             super::stream::open_stream_chunks_blocking(body, max_audio_secs)
         })) {
-            Ok(inner) => inner,
+            Ok(inner) => inner.map(|chunks| (chunks, upload_lifetime)),
             Err(_) => {
                 tracing::error!("Panic in OpenAI SSE audio probe — treated as decode error");
                 Err(anyhow::anyhow!("Audio decode thread panicked"))
@@ -113,6 +133,7 @@ async fn openai_transcriptions_stream(
         super::super::file_transcribe::stream_abort(&tx, cancel.clone(), &tracker);
     let span = tracing::Span::current();
     tracker.spawn_blocking(move || {
+        let _upload_lifetime = upload_lifetime;
         let _finished = finished;
         let _enter = span.enter();
         use super::super::openai::{OpenAIStreamAssembler, sse_delta_payload, sse_done_payload};
