@@ -393,3 +393,11 @@ restoration is skipped.
 3. Confirm orchestrator `terminationGracePeriodSeconds` ≥ `shutdown_drain_secs + 5` (see `docs/deployment.md`).
 4. If clients are seeing unexpected 503 `shutting_down`, the proxy LB may still be routing traffic after the pod started draining — add a `preStop` sleep to the k8s manifest so the LB deregisters the pod before the app sees `SIGTERM`.
 5. If the cap is firing for legitimate long sessions, raise it — there's no correctness downside to `max_session_secs = 14400` (4 h), only a weaker guarantee against wedged sessions.
+
+### Streaming retained audio
+
+The streaming window setting is a soft slide trigger when stable-prefix
+commits are enabled. Uncommittable moving-edge hypotheses can retain audio
+beyond it. See [streaming retention](stream-retention.md) for the reproduced
+policy counterexample, server-limit limitations and the bounded correction
+contract.
