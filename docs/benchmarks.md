@@ -53,7 +53,7 @@ measured here (no reference set).
 Same harness and machine (Apple M1, CPU, `rnnt` INT8). These are **not** the
 Golos/OpenSTT slices above (still may overlap train mixes in general — see the
 contamination caveat). Protocol:
-[`specs/held-out-datasets-roadmap.md`](../specs/held-out-datasets-roadmap.md).
+[`docs/held-out-datasets-roadmap.md`](held-out-datasets-roadmap.md).
 Prep commands and per-dataset notes:
 [`benchmark/README.md` § Datasets](../benchmark/README.md#datasets).
 
@@ -474,7 +474,7 @@ Vosk-server and T-one (300 ms chunks) are also genuine streaming designs. Whispe
 No Raspberry Pi measurements exist yet — every cell below is a placeholder, and
 nothing on this page is extrapolated from the Apple M1 numbers above. The full
 measurement protocol (boards, storage variants, warm-up, metrics) lives in
-[`specs/edge-raspberry-pi-roadmap.md`](../specs/edge-raspberry-pi-roadmap.md);
+[`docs/edge-raspberry-pi-roadmap.md`](edge-raspberry-pi-roadmap.md);
 operators run it on-device with
 [`scripts/bench_edge_pi.sh`](../scripts/bench_edge_pi.sh), which wraps
 [`benchmark/bench_edge.py`](../benchmark/bench_edge.py) (cold-start, RSS@ready,
@@ -596,7 +596,7 @@ Full 3-engine table (gigastt · Vosk 0.54 · faster-whisper L3) is above. Status
 | 7 | optional | Phone-sim on a held-out set | telephony proxy |
 
 Full queue, prep scripts, protocol, and definition of done:
-[`specs/held-out-datasets-roadmap.md`](../specs/held-out-datasets-roadmap.md).
+[`docs/held-out-datasets-roadmap.md`](held-out-datasets-roadmap.md).
 
 ## Reproduce
 

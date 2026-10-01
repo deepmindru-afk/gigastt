@@ -278,8 +278,8 @@ pub(crate) async fn run_transcribe(
         // 153 token edits on a 9-minute call), so reproduce that quantization
         // in place — clamp to [-1, 1], round via 32767, normalise via 32768,
         // matching `encode_wav_pcm16` and the PCM decode path. Whether
-        // full-precision f32 is better is an open WER question tracked in
-        // roadmap/ (telephony precision); do not silently drop this snap.
+        // full-precision f32 is better requires telephony WER measurements;
+        // do not silently drop this snap.
         for s in samples.iter_mut() {
             let v = if s.is_finite() {
                 s.clamp(-1.0, 1.0)

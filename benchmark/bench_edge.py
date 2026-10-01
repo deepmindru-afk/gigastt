@@ -10,7 +10,7 @@ Collects host metadata and measures, for each selected model variant:
     the ``websockets`` package is available
 
 This does **not** invent numbers. Run it on the target board and paste the
-JSON into docs (see ``specs/edge-raspberry-pi-roadmap.md``).
+JSON into docs (see ``docs/edge-raspberry-pi-roadmap.md``).
 
 Example::
 
@@ -497,7 +497,7 @@ def main(argv: list[str] | None = None) -> int:
 
     payload = {
         "schema": "gigastt.edge_bench.v1",
-        "protocol": "specs/edge-raspberry-pi-roadmap.md",
+        "protocol": "docs/edge-raspberry-pi-roadmap.md",
         "host": host,
         "runs": runs,
     }

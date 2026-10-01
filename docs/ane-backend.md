@@ -126,8 +126,8 @@ pointing at the conversion / `gigastt download --ane` step.
 Measured on an Apple M1 Pro at the v2.5.0 ship gate (`rnnt` head, Golos clips).
 The v2.5.0 CHANGELOG entry carries the rounded figures (≈ 10× warm e2e, encoder
 ~15×, WER ≈ 1.11%); the precise numbers quoted below (112 RTFx warm,
-23.6 ms / 369 ms per window) come from the ship-gate measurement notes in
-`specs/todo.md`, not from the CHANGELOG. An earlier revision of this section
+23.6 ms / 369 ms per window) come from local ship-gate measurement notes,
+which are not published artifacts. An earlier revision of this section
 quoted a pre-ship measurement round (≈ 3.7× e2e, ~230× encoder); it is
 superseded by the shipped figures below.
 
