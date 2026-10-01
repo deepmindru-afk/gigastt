@@ -106,6 +106,25 @@ pub(crate) fn ctc_prefix_beam_decode_with_abort(
     biaser: &Biaser,
     abort: Option<&(dyn Fn() -> bool + Sync)>,
 ) -> Vec<TokenInfo> {
+    beam_decode(log_probs, t_len, vocab, blank_id, biaser, abort, &mut ())
+}
+
+/// A separate profiling instantiation can observe frame bounds. The production
+/// unit observer is statically dispatched and optimized out of normal decoding.
+trait BeamObserver {
+    fn frame(&mut self, _candidates: usize, _next: &[(Vec<usize>, Hypothesis)]) {}
+}
+impl BeamObserver for () {}
+
+fn beam_decode(
+    log_probs: &[f32],
+    t_len: usize,
+    vocab: usize,
+    blank_id: usize,
+    biaser: &Biaser,
+    abort: Option<&(dyn Fn() -> bool + Sync)>,
+    observer: &mut impl BeamObserver,
+) -> Vec<TokenInfo> {
     if vocab == 0 {
         return Vec::new();
     }
@@ -180,6 +199,7 @@ pub(crate) fn ctc_prefix_beam_decode_with_abort(
             }
         }
 
+        observer.frame(candidates.len(), &next);
         if next.is_empty() {
             break;
         }
@@ -435,6 +455,10 @@ pub(crate) fn ctc_tokens_to_words(
 
     words
 }
+
+/// Private benchmark access; not part of the stable library API.
+#[cfg(feature = "__internals")]
+pub mod profile;
 
 #[cfg(test)]
 mod tests;
