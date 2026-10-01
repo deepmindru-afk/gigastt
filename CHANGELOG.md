@@ -136,6 +136,10 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 
 ### Fixed
 
+- Validate the complete replacement history when a push event references an old
+  commit unavailable after a history rewrite, including reverted private content.
+  Missing or invalid new commit tips still fail the publication check.
+
 - Keep CPU and CUDA Docker dependency-cache stubs aligned with the new benchmark
   targets, with a fast manifest regression check before image builds.
 
