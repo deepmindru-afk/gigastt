@@ -210,6 +210,8 @@ jobs:
           shared-key: ci
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo test --workspace --lib --bins
+      - name: Completed-job status allocation regression
+        run: cargo test -p gigastt --test job_status_allocations
       # Long-duration resampler equivalence gate (~50 s in debug): the staged
       # decode path must not drift more than a whole-buffer resample over 300 s
       # of 44.1 kHz audio. Too slow for every PR, so it runs on main push only.

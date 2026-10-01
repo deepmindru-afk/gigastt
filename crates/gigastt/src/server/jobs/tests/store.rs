@@ -241,6 +241,7 @@ impl JobStore for LegacyStore {
 #[tokio::test]
 async fn test_legacy_store_defaults_preserve_lifecycle_and_retry() {
     let store = LegacyStore(InMemoryJobStore::new(test_limits()));
+    assert!(store.status("missing").await.unwrap().is_none());
     assert_eq!(
         store
             .transition("missing", JobTransition::Cancel)
@@ -284,4 +285,78 @@ async fn test_legacy_store_defaults_preserve_lifecycle_and_retry() {
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     assert!(store.subscribe(&id, tx).await.unwrap());
     assert!(matches!(rx.try_recv(), Ok(JobEvent::Failed { .. })));
+    let owned = store.get(&id).await.unwrap().unwrap();
+    assert_eq!(
+        serde_json::to_value(store.status(&id).await.unwrap().unwrap()).unwrap(),
+        serde_json::to_value(job_status_response(&owned)).unwrap(),
+    );
+}
+
+#[tokio::test]
+async fn test_status_matches_job_projection_and_retains_result_ownership() {
+    let store = Arc::new(InMemoryJobStore::new(test_limits()));
+    for status in [
+        JobStatus::Queued,
+        JobStatus::Processing,
+        JobStatus::Done,
+        JobStatus::Failed,
+        JobStatus::Cancelled,
+    ] {
+        let mut job = Job::queued(Bytes::new(), ExportParams::default());
+        job.status = status;
+        job.processed_seconds = 2.5;
+        job.total_seconds = 10.0;
+        job.error = Some("sanitized error".into());
+        job.result = Some(ok_result().unwrap());
+        let id = store.create(job).await.unwrap();
+        let owned = store.get(&id).await.unwrap().unwrap();
+        let status = store.status(&id).await.unwrap().unwrap();
+        assert_eq!(
+            serde_json::to_value(status).unwrap(),
+            serde_json::to_value(job_status_response(&owned)).unwrap()
+        );
+        if owned.status.is_terminal() {
+            store.backdate(&id, 7200.0).await;
+            store.is_full().await;
+            assert!(store.status(&id).await.unwrap().is_none());
+            assert_eq!(owned.result.unwrap().text, "ok");
+        }
+    }
+    assert!(store.status("missing").await.unwrap().is_none());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_result_snapshot_survives_concurrent_poll_cancel_and_eviction() {
+    let store = Arc::new(InMemoryJobStore::new(test_limits()));
+    let mut job = Job::queued(Bytes::new(), ExportParams::default());
+    job.status = JobStatus::Done;
+    let mut result = ok_result().unwrap();
+    result.text = "transcript ".repeat(100_000);
+    job.result = Some(result);
+    let id = store.create(job).await.unwrap();
+    let owned = store.get(&id).await.unwrap().unwrap();
+    let reader = {
+        let store = store.clone();
+        let id = id.clone();
+        tokio::spawn(async move {
+            for _ in 0..100 {
+                if let Some(status) = store.status(&id).await.unwrap() {
+                    assert_eq!(status.status, JobStatus::Done);
+                }
+                if let Some(job) = store.get(&id).await.unwrap() {
+                    assert_eq!(job.result.unwrap().text.len(), 1_100_000);
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+    };
+    assert_eq!(
+        store.transition(&id, JobTransition::Cancel).await.unwrap(),
+        TransitionOutcome::Rejected(JobStatus::Done)
+    );
+    store.backdate(&id, 7200.0).await;
+    store.is_full().await;
+    reader.await.unwrap();
+    assert!(store.get(&id).await.unwrap().is_none());
+    assert_eq!(owned.result.unwrap().text, "transcript ".repeat(100_000));
 }

@@ -16,6 +16,7 @@ pub use store::{
 
 #[cfg(test)]
 pub(crate) use queue::broadcast_event;
+#[cfg(test)]
 pub(crate) use store::job_status_response;
 pub use store::{JobStoreFull, JobTransition, TransitionOutcome};
 

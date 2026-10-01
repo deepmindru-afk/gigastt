@@ -43,7 +43,12 @@ fn require_jobs(state: &AppState) -> Result<&JobServerState, ApiError> {
 
 /// Fetch a job by id, mapping store errors to the standard HTTP responses.
 async fn load_job(store: &dyn JobStore, id: &str) -> Result<super::super::jobs::Job, ApiError> {
-    match store.get(id).await {
+    map_job_read(store.get(id).await, id)
+}
+
+#[allow(clippy::result_large_err)]
+fn map_job_read<T>(result: anyhow::Result<Option<T>>, id: &str) -> Result<T, ApiError> {
+    match result {
         Ok(Some(job)) => Ok(job),
         Ok(None) => Err(api_error(
             StatusCode::NOT_FOUND,
@@ -150,8 +155,8 @@ pub async fn get_job(
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Result<Response, ApiError> {
     let jobs = require_jobs(&state)?;
-    let job = load_job(&*jobs.store, &id).await?;
-    Ok(Json(super::super::jobs::job_status_response(&job)).into_response())
+    let status = map_job_read(jobs.store.status(&id).await, &id)?;
+    Ok(Json(status).into_response())
 }
 
 /// GET /v1/jobs/{id}/result — fetch the finished transcription.
