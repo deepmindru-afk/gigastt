@@ -78,6 +78,9 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 
 ### Fixed
 
+- Allow releases without the optional minisign secret while keeping mandatory
+  artifact checks; signed releases require every expected detached signature.
+
 - Resolve and validate release tags before building artifacts. Manual dispatch,
   binary packages, SBOMs and container images now share one immutable source
   commit, with workflow and artifact source recorded separately in provenance.
