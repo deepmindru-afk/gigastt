@@ -1,0 +1,861 @@
+{
+  "baseline-c1": {
+    "config": {
+      "chunk_ms": 100,
+      "concurrent": 1,
+      "encoder_threads_per_slot": 4,
+      "itn": true,
+      "punctuation": true,
+      "stride_ms": 800,
+      "vad": false,
+      "window_secs": 2.5
+    },
+    "corpus_clips": 15,
+    "errors": 1,
+    "reference_words": 71,
+    "wer_percent": 1.408450704225352,
+    "process_thread_cpu_during_stage_seconds": {},
+    "stage_elapsed_seconds": {
+      "decode": 0.45397209999999993,
+      "encoder": 11.280923298,
+      "mel": 0.8482501520000001,
+      "postprocess": 0.011834195000000002
+    },
+    "process_cpu_seconds": 33.38,
+    "audio_seconds": 82.3153125,
+    "wall_seconds": 84.298,
+    "first_partial_median_ms": 772,
+    "no_partial": 1,
+    "last_final_relative_audio_end_median_ms": 77.0,
+    "final_after_stop_median_ms": 91.143553,
+    "partial_retracted_words": 19,
+    "final_retracted_words": 1,
+    "partial_events": 68,
+    "peak_rss_kib": 463536,
+    "decode_windows": 112,
+    "encoded_audio_seconds": 261.4553125,
+    "max_window_seconds": 4.1,
+    "off_grid_windows": 0,
+    "focused": [
+      {
+        "file": "silence_padded_02",
+        "worker": 0,
+        "errors": 0,
+        "reference_words": 3,
+        "text": "Заказать яблоки зеленые.",
+        "final_endpoints": [
+          "blank"
+        ]
+      },
+      {
+        "file": "silence_only",
+        "worker": 0,
+        "errors": 0,
+        "reference_words": 0,
+        "text": "",
+        "final_endpoints": []
+      },
+      {
+        "file": "concatenated_00_01_02",
+        "worker": 0,
+        "errors": 0,
+        "reference_words": 15,
+        "text": "60000 тенге. Сколько будет стоить? покажи мне на смотрешке телеканал Синергия ТВ. Заказать яблоки. Зеленые.",
+        "final_endpoints": [
+          "blank",
+          "blank",
+          "stop"
+        ]
+      }
+    ]
+  },
+  "baseline-c2": {
+    "config": {
+      "chunk_ms": 100,
+      "concurrent": 2,
+      "encoder_threads_per_slot": 4,
+      "itn": true,
+      "punctuation": true,
+      "stride_ms": 800,
+      "vad": false,
+      "window_secs": 2.5
+    },
+    "corpus_clips": 30,
+    "errors": 2,
+    "reference_words": 142,
+    "wer_percent": 1.408450704225352,
+    "process_thread_cpu_during_stage_seconds": {},
+    "stage_elapsed_seconds": {
+      "decode": 0.940546098,
+      "encoder": 25.593048319999998,
+      "mel": 1.7534485839999998,
+      "postprocess": 0.024579927999999997
+    },
+    "process_cpu_seconds": 78.22,
+    "audio_seconds": 164.630625,
+    "wall_seconds": 84.62,
+    "first_partial_median_ms": 758.0,
+    "no_partial": 2,
+    "last_final_relative_audio_end_median_ms": 88.5,
+    "final_after_stop_median_ms": 109.8968155,
+    "partial_retracted_words": 38,
+    "final_retracted_words": 2,
+    "partial_events": 136,
+    "peak_rss_kib": 835076,
+    "decode_windows": 224,
+    "encoded_audio_seconds": 522.910625,
+    "max_window_seconds": 4.1,
+    "off_grid_windows": 0,
+    "focused": [
+      {
+        "file": "silence_padded_02",
+        "worker": 0,
+        "errors": 0,
+        "reference_words": 3,
+        "text": "Заказать яблоки зеленые.",
+        "final_endpoints": [
+          "blank"
+        ]
+      },
+      {
+        "file": "silence_only",
+        "worker": 0,
+        "errors": 0,
+        "reference_words": 0,
+        "text": "",
+        "final_endpoints": []
+      },
+      {
+        "file": "concatenated_00_01_02",
+        "worker": 0,
+        "errors": 0,
+        "reference_words": 15,
+        "text": "60000 тенге. Сколько будет стоить? покажи мне на смотрешке телеканал Синергия ТВ. Заказать яблоки. Зеленые.",
+        "final_endpoints": [
+          "blank",
+          "blank",
+          "stop"
+        ]
+      },
+      {
+        "file": "silence_padded_02",
+        "worker": 1,
+        "errors": 0,
+        "reference_words": 3,
+        "text": "Заказать яблоки зеленые.",
+        "final_endpoints": [
+          "blank"
+        ]
+      },
+      {
+        "file": "silence_only",
+        "worker": 1,
+        "errors": 0,
+        "reference_words": 0,
+        "text": "",
+        "final_endpoints": []
+      },
+      {
+        "file": "concatenated_00_01_02",
+        "worker": 1,
+        "errors": 0,
+        "reference_words": 15,
+        "text": "60000 тенге. Сколько будет стоить? покажи мне на смотрешке телеканал Синергия ТВ. Заказать яблоки. Зеленые.",
+        "final_endpoints": [
+          "blank",
+          "blank",
+          "stop"
+        ]
+      }
+    ]
+  },
+  "stride1200-c1": {
+    "config": {
+      "chunk_ms": 100,
+      "concurrent": 1,
+      "encoder_threads_per_slot": 4,
+      "itn": true,
+      "punctuation": true,
+      "stride_ms": 1200,
+      "vad": false,
+      "window_secs": 2.5
+    },
+    "corpus_clips": 15,
+    "errors": 1,
+    "reference_words": 71,
+    "wer_percent": 1.408450704225352,
+    "process_thread_cpu_during_stage_seconds": {},
+    "stage_elapsed_seconds": {
+      "decode": 0.893738143,
+      "encoder": 22.980487689999997,
+      "mel": 1.369384829,
+      "postprocess": 0.024795186999999996
+    },
+    "process_cpu_seconds": 40.92,
+    "audio_seconds": 82.3153125,
+    "wall_seconds": 88.559,
+    "first_partial_median_ms": 1261,
+    "no_partial": 1,
+    "last_final_relative_audio_end_median_ms": 235.0,
+    "final_after_stop_median_ms": 303.1586805,
+    "partial_retracted_words": 12,
+    "final_retracted_words": 6,
+    "partial_events": 43,
+    "peak_rss_kib": 464388,
+    "decode_windows": 76,
+    "encoded_audio_seconds": 203.0153125,
+    "max_window_seconds": 4.8,
+    "off_grid_windows": 0,
+    "focused": [
+      {
+        "file": "silence_padded_02",
+        "worker": 0,
+        "errors": 0,
+        "reference_words": 3,
+        "text": "Заказать яблоки зеленые.",
+        "final_endpoints": [
+          "blank"
+        ]
+      },
+      {
+        "file": "silence_only",
+        "worker": 0,
+        "errors": 0,
+        "reference_words": 0,
+        "text": "",
+        "final_endpoints": []
+      },
+      {
+        "file": "concatenated_00_01_02",
+        "worker": 0,
+        "errors": 1,
+        "reference_words": 15,
+        "text": "60000 тенге. Сколько будет стоить? покажи мне на смотрешке телеканал Синергия ТВ. Яблоки. Зеленые.",
+        "final_endpoints": [
+          "blank",
+          "blank",
+          "stop"
+        ]
+      }
+    ]
+  },
+  "stride1200-c2": {
+    "config": {
+      "chunk_ms": 100,
+      "concurrent": 2,
+      "encoder_threads_per_slot": 4,
+      "itn": true,
+      "punctuation": true,
+      "stride_ms": 1200,
+      "vad": false,
+      "window_secs": 2.5
+    },
+    "corpus_clips": 30,
+    "errors": 2,
+    "reference_words": 142,
+    "wer_percent": 1.408450704225352,
+    "process_thread_cpu_during_stage_seconds": {},
+    "stage_elapsed_seconds": {
+      "decode": 1.989163188,
+      "encoder": 53.17109319200001,
+      "mel": 2.7064276640000005,
+      "postprocess": 0.057785901
+    },
+    "process_cpu_seconds": 93.89,
+    "audio_seconds": 164.630625,
+    "wall_seconds": 90.621,
+    "first_partial_median_ms": 1351.0,
+    "no_partial": 2,
+    "last_final_relative_audio_end_median_ms": 374.375,
+    "final_after_stop_median_ms": 369.28824599999996,
+    "partial_retracted_words": 24,
+    "final_retracted_words": 12,
+    "partial_events": 86,
+    "peak_rss_kib": 827956,
+    "decode_windows": 152,
+    "encoded_audio_seconds": 406.030625,
+    "max_window_seconds": 4.8,
+    "off_grid_windows": 0,
+    "focused": [
+      {
+        "file": "silence_padded_02",
+        "worker": 0,
+        "errors": 0,
+        "reference_words": 3,
+        "text": "Заказать яблоки зеленые.",
+        "final_endpoints": [
+          "blank"
+        ]
+      },
+      {
+        "file": "silence_only",
+        "worker": 0,
+        "errors": 0,
+        "reference_words": 0,
+        "text": "",
+        "final_endpoints": []
+      },
+      {
+        "file": "concatenated_00_01_02",
+        "worker": 0,
+        "errors": 1,
+        "reference_words": 15,
+        "text": "60000 тенге. Сколько будет стоить? покажи мне на смотрешке телеканал Синергия ТВ. Яблоки. Зеленые.",
+        "final_endpoints": [
+          "blank",
+          "blank",
+          "stop"
+        ]
+      },
+      {
+        "file": "silence_padded_02",
+        "worker": 1,
+        "errors": 0,
+        "reference_words": 3,
+        "text": "Заказать яблоки зеленые.",
+        "final_endpoints": [
+          "blank"
+        ]
+      },
+      {
+        "file": "silence_only",
+        "worker": 1,
+        "errors": 0,
+        "reference_words": 0,
+        "text": "",
+        "final_endpoints": []
+      },
+      {
+        "file": "concatenated_00_01_02",
+        "worker": 1,
+        "errors": 1,
+        "reference_words": 15,
+        "text": "60000 тенге. Сколько будет стоить? покажи мне на смотрешке телеканал Синергия ТВ. Яблоки. Зеленые.",
+        "final_endpoints": [
+          "blank",
+          "blank",
+          "stop"
+        ]
+      }
+    ]
+  },
+  "stride400-c1": {
+    "config": {
+      "chunk_ms": 100,
+      "concurrent": 1,
+      "encoder_threads_per_slot": 4,
+      "itn": true,
+      "punctuation": true,
+      "stride_ms": 400,
+      "vad": false,
+      "window_secs": 2.5
+    },
+    "corpus_clips": 15,
+    "errors": 1,
+    "reference_words": 71,
+    "wer_percent": 1.408450704225352,
+    "process_thread_cpu_during_stage_seconds": {},
+    "stage_elapsed_seconds": {
+      "decode": 1.3230333909999998,
+      "encoder": 31.517729207,
+      "mel": 2.056765819,
+      "postprocess": 0.019799591000000002
+    },
+    "process_cpu_seconds": 78.19,
+    "audio_seconds": 82.3153125,
+    "wall_seconds": 86.216,
+    "first_partial_median_ms": 777,
+    "no_partial": 1,
+    "last_final_relative_audio_end_median_ms": 56.0,
+    "final_after_stop_median_ms": 130.8693505,
+    "partial_retracted_words": 41,
+    "final_retracted_words": 0,
+    "partial_events": 135,
+    "peak_rss_kib": 461660,
+    "decode_windows": 215,
+    "encoded_audio_seconds": 444.4753125,
+    "max_window_seconds": 3.9,
+    "off_grid_windows": 0,
+    "focused": [
+      {
+        "file": "silence_padded_02",
+        "worker": 0,
+        "errors": 0,
+        "reference_words": 3,
+        "text": "Заказать яблоки зеленые.",
+        "final_endpoints": [
+          "blank"
+        ]
+      },
+      {
+        "file": "silence_only",
+        "worker": 0,
+        "errors": 0,
+        "reference_words": 0,
+        "text": "",
+        "final_endpoints": []
+      },
+      {
+        "file": "concatenated_00_01_02",
+        "worker": 0,
+        "errors": 1,
+        "reference_words": 15,
+        "text": "60000 тенге, сколько будет стоить? Покажи мне на смотрешке телеканал Синергия ТВ. Яблоки. Зеленые.",
+        "final_endpoints": [
+          "blank",
+          "blank",
+          "blank",
+          "stop"
+        ]
+      }
+    ]
+  },
+  "stride400-c2": {
+    "config": {
+      "chunk_ms": 100,
+      "concurrent": 2,
+      "encoder_threads_per_slot": 4,
+      "itn": true,
+      "punctuation": true,
+      "stride_ms": 400,
+      "vad": false,
+      "window_secs": 2.5
+    },
+    "corpus_clips": 30,
+    "errors": 2,
+    "reference_words": 142,
+    "wer_percent": 1.408450704225352,
+    "process_thread_cpu_during_stage_seconds": {},
+    "stage_elapsed_seconds": {
+      "decode": 2.0056258139999996,
+      "encoder": 54.96085747000001,
+      "mel": 3.7068559469999984,
+      "postprocess": 0.029678912999999998
+    },
+    "process_cpu_seconds": 148.61,
+    "audio_seconds": 164.630625,
+    "wall_seconds": 84.924,
+    "first_partial_median_ms": 833.5,
+    "no_partial": 2,
+    "last_final_relative_audio_end_median_ms": 47.0625,
+    "final_after_stop_median_ms": 109.3442295,
+    "partial_retracted_words": 82,
+    "final_retracted_words": 0,
+    "partial_events": 270,
+    "peak_rss_kib": 836252,
+    "decode_windows": 430,
+    "encoded_audio_seconds": 888.950625,
+    "max_window_seconds": 3.9,
+    "off_grid_windows": 0,
+    "focused": [
+      {
+        "file": "silence_padded_02",
+        "worker": 0,
+        "errors": 0,
+        "reference_words": 3,
+        "text": "Заказать яблоки зеленые.",
+        "final_endpoints": [
+          "blank"
+        ]
+      },
+      {
+        "file": "silence_only",
+        "worker": 0,
+        "errors": 0,
+        "reference_words": 0,
+        "text": "",
+        "final_endpoints": []
+      },
+      {
+        "file": "concatenated_00_01_02",
+        "worker": 0,
+        "errors": 1,
+        "reference_words": 15,
+        "text": "60000 тенге, сколько будет стоить? Покажи мне на смотрешке телеканал Синергия ТВ. Яблоки. Зеленые.",
+        "final_endpoints": [
+          "blank",
+          "blank",
+          "blank",
+          "stop"
+        ]
+      },
+      {
+        "file": "silence_padded_02",
+        "worker": 1,
+        "errors": 0,
+        "reference_words": 3,
+        "text": "Заказать яблоки зеленые.",
+        "final_endpoints": [
+          "blank"
+        ]
+      },
+      {
+        "file": "silence_only",
+        "worker": 1,
+        "errors": 0,
+        "reference_words": 0,
+        "text": "",
+        "final_endpoints": []
+      },
+      {
+        "file": "concatenated_00_01_02",
+        "worker": 1,
+        "errors": 1,
+        "reference_words": 15,
+        "text": "60000 тенге, сколько будет стоить? Покажи мне на смотрешке телеканал Синергия ТВ. Яблоки. Зеленые.",
+        "final_endpoints": [
+          "blank",
+          "blank",
+          "blank",
+          "stop"
+        ]
+      }
+    ]
+  },
+  "vad-c1": {
+    "config": {
+      "chunk_ms": 100,
+      "concurrent": 1,
+      "encoder_threads_per_slot": 4,
+      "itn": true,
+      "punctuation": true,
+      "stride_ms": 800,
+      "vad": true,
+      "window_secs": 2.5
+    },
+    "corpus_clips": 15,
+    "errors": 2,
+    "reference_words": 71,
+    "wer_percent": 2.816901408450704,
+    "process_thread_cpu_during_stage_seconds": {},
+    "stage_elapsed_seconds": {
+      "decode": 1.1225885070000001,
+      "encoder": 26.436222496000003,
+      "mel": 1.4690802669999998,
+      "postprocess": 0.027362821000000002
+    },
+    "process_cpu_seconds": 67.07,
+    "audio_seconds": 82.3153125,
+    "wall_seconds": 88.05,
+    "first_partial_median_ms": 839,
+    "no_partial": 1,
+    "last_final_relative_audio_end_median_ms": 257.0,
+    "final_after_stop_median_ms": 246.5969005,
+    "partial_retracted_words": 20,
+    "final_retracted_words": 0,
+    "partial_events": 70,
+    "peak_rss_kib": 473824,
+    "decode_windows": 121,
+    "encoded_audio_seconds": 280.0353125,
+    "max_window_seconds": 4.0,
+    "off_grid_windows": 0,
+    "focused": [
+      {
+        "file": "silence_padded_02",
+        "worker": 0,
+        "errors": 0,
+        "reference_words": 3,
+        "text": "Заказать яблоки. Зеленые.",
+        "final_endpoints": [
+          "vad",
+          "vad"
+        ]
+      },
+      {
+        "file": "silence_only",
+        "worker": 0,
+        "errors": 0,
+        "reference_words": 0,
+        "text": "",
+        "final_endpoints": []
+      },
+      {
+        "file": "concatenated_00_01_02",
+        "worker": 0,
+        "errors": 0,
+        "reference_words": 15,
+        "text": "60000 тенге, сколько будет стоить? Покажи мне на смотрешке телеканал Синергия ТВ. Заказать яблоки. Зеленые.",
+        "final_endpoints": [
+          "vad",
+          "vad",
+          "vad",
+          "stop"
+        ]
+      }
+    ]
+  },
+  "vad-c2": {
+    "config": {
+      "chunk_ms": 100,
+      "concurrent": 2,
+      "encoder_threads_per_slot": 4,
+      "itn": true,
+      "punctuation": true,
+      "stride_ms": 800,
+      "vad": true,
+      "window_secs": 2.5
+    },
+    "corpus_clips": 30,
+    "errors": 4,
+    "reference_words": 142,
+    "wer_percent": 2.816901408450704,
+    "process_thread_cpu_during_stage_seconds": {},
+    "stage_elapsed_seconds": {
+      "decode": 2.4146722609999998,
+      "encoder": 55.39983650600001,
+      "mel": 2.880038838,
+      "postprocess": 0.05267920400000001
+    },
+    "process_cpu_seconds": 136.99,
+    "audio_seconds": 164.630625,
+    "wall_seconds": 88.418,
+    "first_partial_median_ms": 835.0,
+    "no_partial": 2,
+    "last_final_relative_audio_end_median_ms": 229.0,
+    "final_after_stop_median_ms": 246.1587965,
+    "partial_retracted_words": 40,
+    "final_retracted_words": 0,
+    "partial_events": 140,
+    "peak_rss_kib": 848584,
+    "decode_windows": 242,
+    "encoded_audio_seconds": 560.070625,
+    "max_window_seconds": 4.0,
+    "off_grid_windows": 0,
+    "focused": [
+      {
+        "file": "silence_padded_02",
+        "worker": 0,
+        "errors": 0,
+        "reference_words": 3,
+        "text": "Заказать яблоки. Зеленые.",
+        "final_endpoints": [
+          "vad",
+          "vad"
+        ]
+      },
+      {
+        "file": "silence_only",
+        "worker": 0,
+        "errors": 0,
+        "reference_words": 0,
+        "text": "",
+        "final_endpoints": []
+      },
+      {
+        "file": "concatenated_00_01_02",
+        "worker": 0,
+        "errors": 0,
+        "reference_words": 15,
+        "text": "60000 тенге, сколько будет стоить? Покажи мне на смотрешке телеканал Синергия ТВ. Заказать яблоки. Зеленые.",
+        "final_endpoints": [
+          "vad",
+          "vad",
+          "vad",
+          "stop"
+        ]
+      },
+      {
+        "file": "silence_padded_02",
+        "worker": 1,
+        "errors": 0,
+        "reference_words": 3,
+        "text": "Заказать яблоки. Зеленые.",
+        "final_endpoints": [
+          "vad",
+          "vad"
+        ]
+      },
+      {
+        "file": "silence_only",
+        "worker": 1,
+        "errors": 0,
+        "reference_words": 0,
+        "text": "",
+        "final_endpoints": []
+      },
+      {
+        "file": "concatenated_00_01_02",
+        "worker": 1,
+        "errors": 0,
+        "reference_words": 15,
+        "text": "60000 тенге, сколько будет стоить? Покажи мне на смотрешке телеканал Синергия ТВ. Заказать яблоки. Зеленые.",
+        "final_endpoints": [
+          "vad",
+          "vad",
+          "vad",
+          "stop"
+        ]
+      }
+    ]
+  },
+  "window5-c1": {
+    "config": {
+      "chunk_ms": 100,
+      "concurrent": 1,
+      "encoder_threads_per_slot": 4,
+      "itn": true,
+      "punctuation": true,
+      "stride_ms": 800,
+      "vad": false,
+      "window_secs": 5.0
+    },
+    "corpus_clips": 15,
+    "errors": 0,
+    "reference_words": 71,
+    "wer_percent": 0.0,
+    "process_thread_cpu_during_stage_seconds": {},
+    "stage_elapsed_seconds": {
+      "decode": 1.338811472,
+      "encoder": 35.65367152,
+      "mel": 1.774380029,
+      "postprocess": 0.029125033000000005
+    },
+    "process_cpu_seconds": 67.77,
+    "audio_seconds": 82.3153125,
+    "wall_seconds": 89.786,
+    "first_partial_median_ms": 917,
+    "no_partial": 1,
+    "last_final_relative_audio_end_median_ms": 330.0,
+    "final_after_stop_median_ms": 295.903969,
+    "partial_retracted_words": 20,
+    "final_retracted_words": 0,
+    "partial_events": 68,
+    "peak_rss_kib": 468132,
+    "decode_windows": 112,
+    "encoded_audio_seconds": 287.3753125,
+    "max_window_seconds": 5.6,
+    "off_grid_windows": 0,
+    "focused": [
+      {
+        "file": "silence_padded_02",
+        "worker": 0,
+        "errors": 0,
+        "reference_words": 3,
+        "text": "Заказать яблоки зеленые.",
+        "final_endpoints": [
+          "blank"
+        ]
+      },
+      {
+        "file": "silence_only",
+        "worker": 0,
+        "errors": 0,
+        "reference_words": 0,
+        "text": "",
+        "final_endpoints": []
+      },
+      {
+        "file": "concatenated_00_01_02",
+        "worker": 0,
+        "errors": 0,
+        "reference_words": 15,
+        "text": "60000 тенге. Сколько будет стоить? покажи мне на смотрешке телеканал Синергия ТВ. Заказать яблоки. Зеленые.",
+        "final_endpoints": [
+          "blank",
+          "blank",
+          "stop"
+        ]
+      }
+    ]
+  },
+  "window5-c2": {
+    "config": {
+      "chunk_ms": 100,
+      "concurrent": 2,
+      "encoder_threads_per_slot": 4,
+      "itn": true,
+      "punctuation": true,
+      "stride_ms": 800,
+      "vad": false,
+      "window_secs": 5.0
+    },
+    "corpus_clips": 30,
+    "errors": 0,
+    "reference_words": 142,
+    "wer_percent": 0.0,
+    "process_thread_cpu_during_stage_seconds": {},
+    "stage_elapsed_seconds": {
+      "decode": 3.14639195,
+      "encoder": 85.13630374999998,
+      "mel": 4.369091335,
+      "postprocess": 0.05570700800000001
+    },
+    "process_cpu_seconds": 135.68,
+    "audio_seconds": 164.630625,
+    "wall_seconds": 93.008,
+    "first_partial_median_ms": 969.0,
+    "no_partial": 2,
+    "last_final_relative_audio_end_median_ms": 365.03125,
+    "final_after_stop_median_ms": 330.54002449999996,
+    "partial_retracted_words": 40,
+    "final_retracted_words": 0,
+    "partial_events": 136,
+    "peak_rss_kib": 827952,
+    "decode_windows": 224,
+    "encoded_audio_seconds": 574.750625,
+    "max_window_seconds": 5.6,
+    "off_grid_windows": 0,
+    "focused": [
+      {
+        "file": "silence_padded_02",
+        "worker": 0,
+        "errors": 0,
+        "reference_words": 3,
+        "text": "Заказать яблоки зеленые.",
+        "final_endpoints": [
+          "blank"
+        ]
+      },
+      {
+        "file": "silence_only",
+        "worker": 0,
+        "errors": 0,
+        "reference_words": 0,
+        "text": "",
+        "final_endpoints": []
+      },
+      {
+        "file": "concatenated_00_01_02",
+        "worker": 0,
+        "errors": 0,
+        "reference_words": 15,
+        "text": "60000 тенге. Сколько будет стоить? покажи мне на смотрешке телеканал Синергия ТВ. Заказать яблоки. Зеленые.",
+        "final_endpoints": [
+          "blank",
+          "blank",
+          "stop"
+        ]
+      },
+      {
+        "file": "silence_padded_02",
+        "worker": 1,
+        "errors": 0,
+        "reference_words": 3,
+        "text": "Заказать яблоки зеленые.",
+        "final_endpoints": [
+          "blank"
+        ]
+      },
+      {
+        "file": "silence_only",
+        "worker": 1,
+        "errors": 0,
+        "reference_words": 0,
+        "text": "",
+        "final_endpoints": []
+      },
+      {
+        "file": "concatenated_00_01_02",
+        "worker": 1,
+        "errors": 0,
+        "reference_words": 15,
+        "text": "60000 тенге. Сколько будет стоить? покажи мне на смотрешке телеканал Синергия ТВ. Заказать яблоки. Зеленые.",
+        "final_endpoints": [
+          "blank",
+          "blank",
+          "stop"
+        ]
+      }
+    ]
+  }
+}

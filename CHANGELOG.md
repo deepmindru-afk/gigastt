@@ -46,6 +46,8 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 - Clarify that stable-prefix streaming windows have a soft slide trigger, not
   a hard retained-audio bound; document deterministic counterexamples and a
   resource-limit correction contract without changing commitment behavior.
+- Add opt-in live-window research measurements for decode cadence, window
+  geometry, concurrency and frontend reuse; production defaults are unchanged.
 
 - Document Linux OpenSSL build prerequisites and custom-prefix discovery for
   the ONNX Runtime downloader, including the environment used by Git hooks.
