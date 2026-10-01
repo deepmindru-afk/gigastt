@@ -173,6 +173,24 @@ The CPU encoder writes an ORT optimized-graph cache (`*_optimized.ort`,
 ~224 MiB) to `--optimized-cache-dir` (default `<model-dir>/optimized_cache`;
 `/var/cache/gigastt` under the shipped systemd unit).
 
+Filenames contain the source SHA-256 and a digest of the ORT build/API version,
+CPU session configuration, optimization policy, target platform and detected
+x86/ARM64 vector capabilities. Other architectures use their platform identity;
+do not share their optimized cache across different CPU implementations. Replacing
+weights invalidates the graph even when the basename, size and timestamp stay
+the same. Old basename-only caches are ignored and rebuilt once; `cache-gc`
+removes them and entries for obsolete weights, retaining all configuration
+variants of installed encoders. Use a separate cache directory per model
+installation when running GC.
+
+Pinned encoder digests are reused from the existing startup integrity check
+across pool slots. Custom self-contained sources are hashed before cache lookup;
+a cold write rechecks the source before atomic publication. Keep model files
+immutable while loading; install replacements between engine loads. A possible
+ONNX external-data `location` marker disables graph caching because hashing the
+main protobuf cannot identify separately stored weights. This conservative scan
+can also disable caching for self-contained models containing that byte string.
+
 **Symptoms** — WARN lines in the journal (once per engine load):
 - `optimized graph cache directory cannot be created; loading source model without the cache (slower cold start, higher per-session RAM)`
 - `optimized graph cache directory is not writable; loading source model without the cache (slower cold start, higher per-session RAM)`

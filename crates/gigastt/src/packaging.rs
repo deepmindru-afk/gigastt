@@ -240,7 +240,10 @@ mod tests {
         std::fs::write(model_dir.join("v3_rnnt_encoder_int8.onnx"), b"int8").unwrap();
         let cache_dir = tmp.path().join("elsewhere");
         std::fs::create_dir_all(&cache_dir).unwrap();
-        let keep = cache_dir.join("v3_rnnt_encoder_int8_optimized.ort");
+        let keep = cache_dir.join(format!(
+            "cb1525bced78da2c03c42fe15bf15663b584566ef6244ff91d892caa011fec1e-{}_optimized.ort",
+            "a".repeat(64)
+        ));
         let zombie = cache_dir.join("v3_e2e_rnnt_encoder_int8_optimized.ort");
         std::fs::write(&keep, b"keep").unwrap();
         std::fs::write(&zombie, b"zombie").unwrap();

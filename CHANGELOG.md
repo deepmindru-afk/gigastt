@@ -110,6 +110,10 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 - Cancel stalled native and OpenAI file SSE producers after a 30-second output
   wait, and interrupt full-queue sends on shutdown or disconnect so unread
   responses cannot indefinitely retain inference slots.
+- Bind CPU optimized graph caches to encoder content and ORT configuration,
+  preventing stale inference after same-name or timestamp-preserving model
+  replacements. Legacy caches are rebuilt; cache GC retains installed content
+  across configurations. Models with possible external tensors bypass caching.
 
 - **WebSocket sessions no longer panic on startup when
   `GIGASTT_MAX_SESSION_SECS=0`.** Previously, the unlimited-session deadline
