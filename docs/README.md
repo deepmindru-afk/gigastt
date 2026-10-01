@@ -20,7 +20,8 @@ Use the references below for a specific API, command or deployment question.
 | **[OpenAPI](openapi.yaml)** | Machine-readable REST schema (`/health`, `/ready`, transcribe, jobs, admin) |
 | **[AsyncAPI](asyncapi.yaml)** | Machine-readable WebSocket schema (`/v1/ws`) |
 | **[Benchmarks](benchmarks.md)** | WER / RTF / footprint methodology and tables |
-| **[Held-out datasets roadmap](../specs/held-out-datasets-roadmap.md)** | Public RU sets beyond Golos/OpenSTT (CV, FLEURS, RuLS, SOVA, Podlodka, ToneWebinars) |
+| **[Held-out datasets roadmap](held-out-datasets-roadmap.md)** | Public RU sets beyond Golos/OpenSTT (CV, FLEURS, RuLS, SOVA, Podlodka, ToneWebinars) |
+| **[Edge / Raspberry Pi roadmap](edge-raspberry-pi-roadmap.md)** | Hardware measurement protocol and deployment scenarios |
 | **[Embedding & packaging](embedding-packaging.md)** | Static vs `ort-load-dynamic`, wheel/AAR notes |
 | **[Android / C ABI](android.md)** | Native library build, model bundling and Kotlin/JNI integration |
 
@@ -45,12 +46,8 @@ Use the references below for a specific API, command or deployment question.
 | **[ANE backend](ane-backend.md)** | `--features ane` (macOS ARM64 Neural Engine) |
 | **[Candle backend](candle-backend.md)** | `--features candle` (experimental parity path) |
 
-## Specs & history
+## Project history and policies
 
-- [`specs/prod-readiness-v1.0.md`](../specs/prod-readiness-v1.0.md) — production readiness tracker
-- [`specs/todo.md`](../specs/todo.md) — historical critique follow-ups
-- [`specs/held-out-datasets-roadmap.md`](../specs/held-out-datasets-roadmap.md) — extra public benchmark sets (one-by-one)
-- [`specs/resource-ttx-roadmap.md`](../specs/resource-ttx-roadmap.md) — completed resource program (lean INT8, pool defaults, cache GC, …)
 - [`CHANGELOG.md`](../CHANGELOG.md) — release notes
 - [Contributing](../.github/CONTRIBUTING.md) — development, pull requests and releases
 - [Security policy](../.github/SECURITY.md) — vulnerability reporting + supported versions

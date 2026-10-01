@@ -17,6 +17,8 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 
 - Run a bounded, serial model smoke gate on every PR: pinned CPU encoder and
   exact transcription oracle plus real-speech WebSocket finalization coverage.
+- Keep internal planning files local, publish benchmark and edge protocols under
+  `docs/`, and check public content and Git metadata for internal identifiers.
 
 - Require Symphonia 0.6.1 and remove the vendored metadata and Matroska
   patches. Upstream now handles APEv2 size overflow and unknown-size WebM
@@ -2351,13 +2353,9 @@ v0.9.2. Dockerfile was broken since v0.9.0 — this release fixes it.
   RFC 8594 `Deprecation: true` plus `Link: </v1/ws>; rel="successor-version"`
   so client libraries can surface the migration warning before v1.0
   drops the alias. Server-side warn log was already in place.
-- **Docs + specs housekeeping:**
-  - `specs/design-v1.0-{pool-and-rate-limit,rest-streaming,ws-lifecycle}.md`
-    → `specs/archive/design-v1.0/` (all three shipped in v0.9.0-rc.1).
+- **Documentation housekeeping:**
   - `docs/superpowers/` (v0.4 pre-ship plans) → `docs/archive/superpowers-v0.4/`.
   - `missions/gigastt-wer/` scratchpad deleted.
-  - `specs/prod-readiness-v1.0.md` now carries a v0.9.0 rollup banner
-    listing the closed IDs; detail rows left for historical trail.
   - `README_RU.md` synced to English README (`/v1/ws`, `/metrics` row,
     `125 unit tests`, INT8 section rewritten for the no-feature-flag
     behaviour shipped in v0.9.0).
@@ -2431,7 +2429,7 @@ full rollup; no functional regressions since rc.2._
 
 ## [0.9.0-rc.1] - 2026-04-20
 
-_Release candidate for v0.9.0 — bundles five P0 fixes plus two supporting items (`PoolGuard` Drop, strict 413 assertion) from `specs/prod-readiness-v1.0.md`. RuntimeLimits gained two fields (`max_session_secs`, `shutdown_drain_secs`) — external callers constructing the struct literally must update their call sites. SessionPool checkout API replaced (`checkout() -> PoolGuard`)._
+_Release candidate for v0.9.0 — bundles five P0 fixes plus two supporting items (`PoolGuard` Drop, strict 413 assertion). RuntimeLimits gained two fields (`max_session_secs`, `shutdown_drain_secs`) — external callers constructing the struct literally must update their call sites. SessionPool checkout API replaced (`checkout() -> PoolGuard`)._
 
 ### Added
 
@@ -2521,7 +2519,7 @@ _Release candidate for v0.9.0 — bundles five P0 fixes plus two supporting item
 - **Canonical WebSocket path `/v1/ws`**. Versioned path aligned with REST; legacy `/ws` remains as an alias with a warn-level deprecation log on every upgrade. Removal planned for v1.0.
 - **`diarization` capability in `GET /v1/models`**. Mirrors the WebSocket `Ready` field so clients can probe capabilities without opening a WS.
 - **Docker `GIGASTT_BAKE_MODEL=1` build-arg**. When set, a dedicated `model-fetcher` stage runs `gigastt download` during image build and the runtime stage copies the model into `/home/gigastt/.gigastt/models/`. Default (`0`) preserves the slim image.
-- **`cargo deny check` in CI + `deny.toml`** (SBOM generation remains a follow-up). Enforces license allowlist + advisory scan + crates.io-only source + wildcard ban on every PR via `EmbarkStudios/cargo-deny-action@v2`.
+- **`cargo deny check` in CI + `deny.toml`**. Enforces license allowlist + advisory scan + crates.io-only source + wildcard ban on every PR via `EmbarkStudios/cargo-deny-action@v2`.
 
 ### Changed
 
@@ -2577,7 +2575,7 @@ _Release candidate for v0.9.0 — bundles five P0 fixes plus two supporting item
 ### Fixed
 
 - **CI clippy** (`src/model/mod.rs:29`) — replaced manual `if self.total > 0` division guard with `checked_div`, satisfying Rust 1.95's new `clippy::manual_checked_ops` lint that broke CI on v0.5.1.
-- **Release workflow** (`.github/workflows/release.yml`) — removed the `linux-x86_64-cuda` matrix entry: `Jimver/cuda-toolkit@v0.2.19` cannot resolve the `cuda-nvcc-12-4` / `cuda-cudart-12-4` packages on `ubuntu-latest`. Tracked for re-enabling in `specs/todo.md`. Until then CUDA users build from source.
+- **Release workflow** (`.github/workflows/release.yml`) — removed the `linux-x86_64-cuda` matrix entry: `Jimver/cuda-toolkit@v0.2.19` cannot resolve the `cuda-nvcc-12-4` / `cuda-cudart-12-4` packages on `ubuntu-latest`. Until then CUDA users build from source.
 
 ## [0.5.1] - 2026-04-17
 

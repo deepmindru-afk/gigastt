@@ -269,13 +269,7 @@ The `e2e_rnnt` head (`--model-variant e2e_rnnt`) uses the parallel `v3_e2e_rnnt_
 - Execution provider / backend selection lives in `crates/gigastt-core/src/runtime/ort/factory.rs`
   (`#[cfg(feature = "…")]` blocks, default falls through to the CPU EP) — **not** in `inference/`.
   `runtime/factory.rs` holds only the `RuntimeFactory` / `Runtime` traits.
-- **No internal task-tracker IDs outside the tracker itself.** Never write tracker indices (``, ``, ``, ``, ``, ticket keys, etc.) into:
-  - source comments or code strings
-  - `CHANGELOG.md`, `docs/`, CI/workflows, README, user-facing text
-  - **git branch names**, **commit subjects/bodies**, **PR titles/descriptions**, tags
-  They mean nothing without the tracker and are not conventional git/product language.
-  - **Do** describe *what* and *why* in plain English (e.g. branch `ttx/lazy-speaker`, commit `feat(core): lazy-load speaker encoder until diarization is requested`).
-  - **Do** keep the link from work → tracked item only in tracker docs: anything under `specs/` (notably `specs/todo.md`, `specs/plan.md`, `specs/prod-readiness-v1.0.md`, `specs/resource-ttx-roadmap.md`, and lab notes under `specs/research/`) or `roadmap/`. Everything outside those two directories must stay index-free.
+- **Keep internal planning private.** Internal task identifiers and tracker contents must never appear in tracked files, source comments, changelogs, public documentation, branch or tag names, commit messages, or PR titles/descriptions. There are no directory exceptions. Keep work-to-tracker mappings only in the ignored local backlog or an external private backup. Describe the change and its reason in plain English on every public surface. Run `python3 scripts/check-publication.py` before publication; the Git hooks and CI enforce this rule.
 
 ### TDD workflow
 
