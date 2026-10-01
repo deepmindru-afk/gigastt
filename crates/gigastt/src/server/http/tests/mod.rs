@@ -117,3 +117,5 @@ mod sse;
 mod stream_backpressure;
 
 mod stream_finalization;
+
+mod transcription_contracts;
