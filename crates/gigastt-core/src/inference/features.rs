@@ -178,6 +178,7 @@ impl MelSpectrogram {
         let n_mels = self.mel_bands.len();
         if samples.len() < self.n_fft {
             output.resize(n_mels, 0.0);
+            output.fill(0.0);
             return 1;
         }
         let num_frames = (samples.len() - self.n_fft) / self.hop_length + 1;
