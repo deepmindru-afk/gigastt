@@ -116,9 +116,9 @@ impl Engine {
         // (an isolated ~100ms chunk decodes to garbage). Re-decoding is the cost,
         // so we only decode once STREAM_DECODE_STRIDE_SAMPLES of NEW audio have
         // arrived (or the window hit its cap) — this keeps the engine real-time.
-        // The window is bounded by `self.stream_max_window_samples` (default
-        // 2.5s, configurable at serve time); on endpoint or cap we finalize the
-        // tail and slide, retaining STREAM_LEFT_CONTEXT_SAMPLES.
+        // `stream_max_window_samples` is a slide trigger, not a hard memory
+        // bound: stable-prefix mode retains nonempty uncommittable hypotheses.
+        // See docs/stream-retention.md for the constructive counterexample.
         state.audio_buffer.extend_from_slice(samples);
         state.pending_samples += samples.len();
 
@@ -222,7 +222,8 @@ impl Engine {
                 // and sliding without a commit would cut audio under the live
                 // (uncommitted) tail — the next decode would suppress those
                 // words and lose them permanently. With no commit the buffer
-                // simply waits for agreement (bounded by the cap streak).
+                // waits for a committable prefix. The streak fallback cannot
+                // bound retention when all words stay inside the moving horizon.
                 // Exception: an empty tail (silence) slides as before, or a
                 // long silent stream would grow the buffer unboundedly.
                 if committed > 0 {
@@ -282,8 +283,8 @@ impl Engine {
     /// window's right edge (words decoded from the edge may still be revised by
     /// the next decode — or truncated mid-word by the buffer edge). Cap hits
     /// with nothing committable are counted; at [`STREAM_CAP_STREAK_MAX`] the
-    /// committable prefix is taken even without agreement so the retained
-    /// buffer stays bounded — but the horizon is still respected: committing a
+    /// committable prefix is taken even without agreement. This does not impose
+    /// a hard retained-audio bound: the horizon is still respected. Committing a
     /// word the buffer edge may have truncated locks the truncated form in
     /// permanently. Returns the number of committed words. The caller must NOT
     /// slide the window when this returns 0 — the uncommitted live words'
@@ -303,9 +304,9 @@ impl Engine {
         if n == 0 && !live.is_empty() {
             state.cap_streak += 1;
             if state.cap_streak >= STREAM_CAP_STREAK_MAX {
-                // Boundedness fallback: commit the pre-horizon prefix even
-                // without agreement. Edge words keep waiting; the moving buffer
-                // edge takes them out of the horizon within ~0.5 s of audio.
+                // Commit the pre-horizon prefix even without agreement.
+                // Edge words keep waiting; revised timestamps may keep them
+                // inside the horizon indefinitely.
                 while n < live.len() && live[n].end <= horizon_s {
                     n += 1;
                 }

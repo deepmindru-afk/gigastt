@@ -19,6 +19,9 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
   exact transcription oracle plus real-speech WebSocket finalization coverage.
 - Keep internal planning files local, publish benchmark and edge protocols under
   `docs/`, and check public content and Git metadata for internal identifiers.
+- Clarify that stable-prefix streaming windows have a soft slide trigger, not
+  a hard retained-audio bound; document deterministic counterexamples and a
+  resource-limit correction contract without changing commitment behavior.
 
 - Require Symphonia 0.6.1 and remove the vendored metadata and Matroska
   patches. Upstream now handles APEv2 size overflow and unknown-size WebM
