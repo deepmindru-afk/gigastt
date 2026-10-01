@@ -3,10 +3,10 @@
 Android library for [gigastt](https://github.com/ekhodzitsky/gigastt) —
 on-device Russian speech-to-text (GigaAM v3) — via the UniFFI Kotlin bindings.
 
-> **Status: experimental.** The Rust cross-build is proven (CI cross-compiles the
-> native library via cargo-ndk), but the Gradle/Maven AAR assembly and publish
-> have not yet been validated end-to-end on a real Android toolchain. Verify with
-> a local Android SDK/NDK before relying on a published artifact.
+> **Status: experimental.** A [nonpublishing CI run](https://github.com/ekhodzitsky/gigastt/actions/runs/36887391146)
+> verified native builds for all three ABIs, Kotlin generation, and Gradle AAR
+> assembly. Device execution, Maven publication, and release attachment have
+> not been tested. Validate device behavior before relying on a published artifact.
 
 ## What the AAR contains
 
@@ -106,7 +106,9 @@ and checks each ABI library. PR CI checks dependency-versus-pin drift without
 downloading the AAR. Tagged builds use the validator and pin from the invoking
 workflow revision, even when the selected source tag predates those files.
 
-Archive/header checks and x86_64 symbol inspection establish the supplied API;
-they are not Android device execution or an end-to-end Gradle build. Those still
-need the Android toolchain and remain subject to the experimental status above.
+Archive/header checks and x86_64 symbol inspection establish the supplied API.
+The nonpublishing CI run above also passed the runtime archive/API checks, native builds for
+all three ABIs, Kotlin generation, and Gradle assembly on source commit
+`673d1e2`. It did not execute the library on an Android device, publish to Maven,
+or attach an AAR to a release; those remain unverified.
 Official installation guidance: [ONNX Runtime for Android](https://onnxruntime.ai/docs/install/#install-on-android).
