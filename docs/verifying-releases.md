@@ -26,6 +26,11 @@ package + `SHA256SUMS.txt` + SBOM gets a detached `.minisig` signature. This
 protects against a compromised release (the attacker would also need
 the minisign private key).
 
+Signing is optional when the CI secret is absent. Unsigned releases still require
+all binary, checksum and SBOM asset categories. When signing is enabled, upload
+also requires a signature for every tarball, Debian package, checksum manifest
+and SBOM; an incomplete signature set stops publication.
+
 Public key (save as `gigastt.pub`; the two-line `untrusted comment:`
 header is part of the file format — keep it verbatim):
 
