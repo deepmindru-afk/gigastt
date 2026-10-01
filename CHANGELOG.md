@@ -30,6 +30,8 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 - Withhold primary four-domain `rnnt` WER and ranking claims until raw results
   and complete run provenance are retrievable; distinguish historical reports
   from the older published `e2e_rnnt` artifacts.
+- Reuse RNN-T decoder and joiner output buffers directly at the ONNX Runtime
+  boundary, removing intermediate owned tensor copies during token decoding.
 
 - Document Linux OpenSSL build prerequisites and custom-prefix discovery for
   the ONNX Runtime downloader, including the environment used by Git hooks.
