@@ -134,7 +134,16 @@ def check_event(path):
     elif event.get("before") and event.get("after"):
         before, after = event["before"], event["after"]
         if set(after) != {"0"}:
-            revisions = commit_range(after if set(before) == {"0"} else before + ".." + after)
+            after = git("rev-parse", "--verify", "--end-of-options", after + "^{commit}").decode().strip()
+            base = None
+            if set(before) != {"0"}:
+                try:
+                    base = git("rev-parse", "--verify", "--end-of-options", before + "^{commit}").decode().strip()
+                except subprocess.CalledProcessError:
+                    # A fresh checkout after a history rewrite lacks the old tip.
+                    # Check all new ancestry without fetching removed history.
+                    pass
+            revisions = commit_range(after if base is None else base + ".." + after)
         errors.extend(scan_text("pushed ref", event.get("ref", "")))
     return errors + check_commits(revisions)
 
