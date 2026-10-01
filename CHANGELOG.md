@@ -128,6 +128,10 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 
 ### Fixed
 
+- Resolve Homebrew updates from validated release-run metadata so a manual Release
+  dispatched from main can publish a different existing tag and still propose its
+  formula pins. Reject stale attempt metadata and retain the manual fallback.
+
 - Wait for operational readiness in the CLI server smoke test before checking
   metrics, and reap the owned subprocess on assertion failures. Startup and
   metrics time budgets are unchanged.

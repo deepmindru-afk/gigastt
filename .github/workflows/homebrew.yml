@@ -12,46 +12,67 @@ on:
         required: true
 
 permissions:
-  contents: write
-  pull-requests: write
-
-# Serialize updates to the same release branch, including manual reruns.
-concurrency:
-  group: homebrew-${{ inputs.tag || github.event.workflow_run.head_branch }}
-  cancel-in-progress: false
+  contents: read
+  actions: read
 
 jobs:
-  update-formula:
+  resolve-tag:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
-       startsWith(github.event.workflow_run.head_branch, 'v'))
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       (github.event.workflow_run.event == 'push' ||
+        github.event.workflow_run.event == 'workflow_dispatch'))
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      # Execute only trusted default-branch code, never artifact contents.
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: Download current release attempt metadata
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v8
+        with:
+          name: release-source-${{ github.event.workflow_run.run_attempt }}
+          path: ${{ runner.temp }}/release-selection
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Resolve and validate tag
+        id: tag
+        env:
+          MANUAL_TAG: ${{ inputs.tag }}
+          METADATA_PATH: ${{ runner.temp }}/release-selection/release-source.json
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            python3 scripts/resolve-homebrew-release.py --tag "$MANUAL_TAG" --output "$GITHUB_OUTPUT"
+          else
+            python3 scripts/resolve-homebrew-release.py --metadata "$METADATA_PATH" \
+              --event "$GITHUB_EVENT_PATH" --repository "$GITHUB_REPOSITORY" --output "$GITHUB_OUTPUT"
+          fi
+
+  update-formula:
+    needs: resolve-tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    # Serialize automatic and manual proposals for the same validated tag.
+    concurrency:
+      group: homebrew-${{ needs.resolve-tag.outputs.tag }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v7
         with:
           ref: main
 
-      - name: Resolve and validate tag
-        id: tag
-        env:
-          RELEASE_TAG: ${{ inputs.tag || github.event.workflow_run.head_branch }}
-        run: |
-          python3 - <<'PY'
-          import importlib.util, os
-          spec = importlib.util.spec_from_file_location('formula', 'scripts/update-homebrew-formula.py')
-          module = importlib.util.module_from_spec(spec)
-          spec.loader.exec_module(module)
-          tag = os.environ['RELEASE_TAG']
-          if not module.TAG.fullmatch(tag):
-              raise SystemExit('Expected a release version tag')
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
-              out.write(f'tag={tag}\n')
-          PY
-
       - name: Fetch and validate published checksums
         env:
-          TAG: ${{ steps.tag.outputs.tag }}
+          TAG: ${{ needs.resolve-tag.outputs.tag }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
@@ -65,11 +86,11 @@ jobs:
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
         with:
           token: ${{ github.token }}
-          branch: chore/homebrew-${{ steps.tag.outputs.tag }}
+          branch: chore/homebrew-${{ needs.resolve-tag.outputs.tag }}
           base: main
           add-paths: Formula/gigastt.rb
-          commit-message: 'chore(brew): pin formula to ${{ steps.tag.outputs.tag }}'
-          title: 'chore(brew): pin formula to ${{ steps.tag.outputs.tag }}'
+          commit-message: 'chore(brew): pin formula to ${{ needs.resolve-tag.outputs.tag }}'
+          title: 'chore(brew): pin formula to ${{ needs.resolve-tag.outputs.tag }}'
           body: |
             Update the formula from the published release SHA256SUMS.txt asset.
             Only Formula/gigastt.rb is included. Repeated runs update this same PR.
