@@ -137,3 +137,245 @@ fn test_subscribe_evicts_oldest_at_cap() {
         Err(tokio::sync::mpsc::error::TryRecvError::Disconnected)
     ));
 }
+
+#[tokio::test]
+async fn test_terminal_transition_and_subscription_in_both_orders() {
+    use crate::server::jobs::store::JobTransition;
+    for subscribe_first in [false, true] {
+        let store = InMemoryJobStore::new(test_limits());
+        let id = store
+            .create(Job::queued(Bytes::new(), ExportParams::default()))
+            .await
+            .unwrap();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        if subscribe_first {
+            store.subscribe(&id, tx).await.unwrap();
+            store.transition(&id, JobTransition::Cancel).await.unwrap();
+        } else {
+            store.transition(&id, JobTransition::Cancel).await.unwrap();
+            store.subscribe(&id, tx).await.unwrap();
+        }
+        assert!(matches!(rx.try_recv(), Ok(JobEvent::Cancelled)));
+        assert!(matches!(
+            rx.try_recv(),
+            Err(tokio::sync::mpsc::error::TryRecvError::Disconnected)
+        ));
+    }
+}
+
+#[tokio::test]
+async fn test_completion_and_cancellation_publish_only_winning_transition() {
+    use crate::server::jobs::store::{JobTransition, TransitionOutcome};
+    for cancel_first in [false, true] {
+        let store = InMemoryJobStore::new(test_limits());
+        let id = store
+            .create(Job::queued(Bytes::new(), ExportParams::default()))
+            .await
+            .unwrap();
+        store.transition(&id, JobTransition::Start).await.unwrap();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        store.subscribe(&id, tx).await.unwrap();
+        let completed = JobTransition::Complete(ok_result().unwrap());
+        let (first, second) = if cancel_first {
+            (JobTransition::Cancel, completed)
+        } else {
+            (completed, JobTransition::Cancel)
+        };
+        assert!(matches!(
+            store.transition(&id, first).await.unwrap(),
+            TransitionOutcome::Applied
+        ));
+        assert!(matches!(
+            store.transition(&id, second).await.unwrap(),
+            TransitionOutcome::Rejected(_)
+        ));
+        let event = rx.try_recv().unwrap();
+        assert_eq!(matches!(event, JobEvent::Cancelled), cancel_first);
+        assert!(matches!(
+            rx.try_recv(),
+            Err(tokio::sync::mpsc::error::TryRecvError::Disconnected)
+        ));
+    }
+}
+
+#[tokio::test]
+async fn test_broadcast_and_subscription_in_both_orders_retain_terminal_delivery() {
+    for subscribe_first in [false, true] {
+        let store = InMemoryJobStore::new(test_limits());
+        let id = store
+            .create(Job::queued(Bytes::new(), ExportParams::default()))
+            .await
+            .unwrap();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let event = JobEvent::Progress {
+            percent: 1,
+            processed_seconds: 0.1,
+        };
+        if subscribe_first {
+            store.subscribe(&id, tx).await.unwrap();
+            broadcast_event(&store, &id, event).await;
+            assert!(matches!(rx.try_recv(), Ok(JobEvent::Progress { .. })));
+        } else {
+            broadcast_event(&store, &id, event).await;
+            store.subscribe(&id, tx).await.unwrap();
+        }
+        store.transition(&id, JobTransition::Cancel).await.unwrap();
+        broadcast_event(&store, &id, JobEvent::Done).await;
+        assert!(matches!(rx.try_recv(), Ok(JobEvent::Cancelled)));
+        assert!(matches!(
+            rx.try_recv(),
+            Err(tokio::sync::mpsc::error::TryRecvError::Disconnected)
+        ));
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_concurrent_admission_reports_typed_backpressure() {
+    let store = Arc::new(InMemoryJobStore::new(RuntimeLimits {
+        jobs_max: 1,
+        ..test_limits()
+    }));
+    let barrier = Arc::new(tokio::sync::Barrier::new(2));
+    let mut tasks = Vec::new();
+    for _ in 0..2 {
+        let store = store.clone();
+        let barrier = barrier.clone();
+        tasks.push(tokio::spawn(async move {
+            assert!(!store.is_full().await);
+            barrier.wait().await;
+            store
+                .create(Job::queued(Bytes::new(), ExportParams::default()))
+                .await
+        }));
+    }
+    let mut admitted = 0;
+    let mut rejected = 0;
+    for task in tasks {
+        match task.await.unwrap() {
+            Ok(_) => admitted += 1,
+            Err(error) => {
+                assert!(error.is::<JobStoreFull>());
+                rejected += 1;
+            }
+        }
+    }
+    assert_eq!((admitted, rejected), (1, 1));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_concurrent_subscribe_broadcast_and_completion_deliver_terminal() {
+    let store = Arc::new(InMemoryJobStore::new(test_limits()));
+    let id = store
+        .create(Job::queued(Bytes::new(), ExportParams::default()))
+        .await
+        .unwrap();
+    store.transition(&id, JobTransition::Start).await.unwrap();
+    let barrier = Arc::new(tokio::sync::Barrier::new(3));
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let subscriber = tokio::spawn({
+        let (store, id, barrier) = (store.clone(), id.clone(), barrier.clone());
+        async move {
+            barrier.wait().await;
+            store.subscribe(&id, tx).await.unwrap()
+        }
+    });
+    let broadcaster = tokio::spawn({
+        let (store, id, barrier) = (store.clone(), id.clone(), barrier.clone());
+        async move {
+            barrier.wait().await;
+            broadcast_event(
+                &*store,
+                &id,
+                JobEvent::Progress {
+                    percent: 50,
+                    processed_seconds: 0.5,
+                },
+            )
+            .await;
+        }
+    });
+    barrier.wait().await;
+    store
+        .transition(&id, JobTransition::Complete(ok_result().unwrap()))
+        .await
+        .unwrap();
+    assert!(subscriber.await.unwrap());
+    broadcaster.await.unwrap();
+    let mut events = Vec::new();
+    while let Ok(event) = rx.try_recv() {
+        events.push(event);
+    }
+    assert!(matches!(events.last(), Some(JobEvent::Done)));
+    assert_eq!(events.iter().filter(|event| event.is_terminal()).count(), 1);
+    assert!(matches!(
+        rx.try_recv(),
+        Err(tokio::sync::mpsc::error::TryRecvError::Disconnected)
+    ));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_concurrent_cancel_and_complete_agree_with_final_state() {
+    let store = Arc::new(InMemoryJobStore::new(test_limits()));
+    let id = store
+        .create(Job::queued(
+            Bytes::from_static(b"audio"),
+            ExportParams::default(),
+        ))
+        .await
+        .unwrap();
+    store.transition(&id, JobTransition::Start).await.unwrap();
+    let abort = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let partial = Arc::new(gigastt_core::inference::TranscriptSnapshot::default());
+    store
+        .update(
+            &id,
+            Box::new({
+                let (abort, partial) = (abort.clone(), partial.clone());
+                move |j| {
+                    j.abort = Some(abort);
+                    j.partial = Some(partial);
+                }
+            }),
+        )
+        .await
+        .unwrap();
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    store.subscribe(&id, tx).await.unwrap();
+    let barrier = Arc::new(tokio::sync::Barrier::new(2));
+    let cancel = tokio::spawn({
+        let (store, id, barrier) = (store.clone(), id.clone(), barrier.clone());
+        async move {
+            barrier.wait().await;
+            store.transition(&id, JobTransition::Cancel).await.unwrap()
+        }
+    });
+    barrier.wait().await;
+    let completion = store
+        .transition(&id, JobTransition::Complete(ok_result().unwrap()))
+        .await
+        .unwrap();
+    let cancellation = cancel.await.unwrap();
+    let job = store.get(&id).await.unwrap().unwrap();
+    let event = rx.try_recv().unwrap();
+    match (completion, cancellation) {
+        (TransitionOutcome::Applied, TransitionOutcome::Rejected(JobStatus::Done)) => {
+            assert_eq!(job.status, JobStatus::Done);
+            assert!(matches!(event, JobEvent::Done));
+            assert!(job.result.is_some());
+        }
+        (TransitionOutcome::Rejected(JobStatus::Cancelled), TransitionOutcome::Applied) => {
+            assert_eq!(job.status, JobStatus::Cancelled);
+            assert!(matches!(event, JobEvent::Cancelled));
+            assert!(job.result.is_none());
+            assert!(abort.load(std::sync::atomic::Ordering::Relaxed));
+            assert!(Arc::ptr_eq(job.partial.as_ref().unwrap(), &partial));
+        }
+        outcomes => panic!("inconsistent outcomes: {outcomes:?}"),
+    }
+    assert!(job.body.is_empty());
+    assert!(job.abort.is_none());
+    assert!(matches!(
+        rx.try_recv(),
+        Err(tokio::sync::mpsc::error::TryRecvError::Disconnected)
+    ));
+}

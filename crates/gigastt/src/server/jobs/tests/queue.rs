@@ -131,10 +131,7 @@ async fn test_queue_cancellation_discards_result() {
         }
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
     }
-    store
-        .update(&id, Box::new(|j| j.status = JobStatus::Cancelled))
-        .await
-        .unwrap();
+    store.transition(&id, JobTransition::Cancel).await.unwrap();
 
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     let job = store.get(&id).await.unwrap().unwrap();

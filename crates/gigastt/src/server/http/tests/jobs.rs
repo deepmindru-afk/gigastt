@@ -6,6 +6,7 @@ use crate::server::http::{
 };
 use crate::server::jobs::{InMemoryJobStore, Job, JobQueue, JobStatus, JobStore};
 use axum::extract::Path;
+use axum::response::IntoResponse;
 
 fn jobs_state(engine: Arc<Engine>, limits: RuntimeLimits) -> Arc<AppState> {
     let store: Arc<dyn crate::server::jobs::JobStore> =
@@ -149,4 +150,147 @@ async fn test_get_job_result_returns_json_when_done() {
         .unwrap();
     let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(v["text"], "привет мир");
+}
+
+#[tokio::test]
+async fn test_submit_job_capacity_returns_retryable_backpressure() {
+    let state = jobs_state(
+        test_engine(),
+        RuntimeLimits {
+            jobs_max: 1,
+            ..RuntimeLimits::default()
+        },
+    );
+    submit_job(
+        State(state.clone()),
+        Query(ExportParams::default()),
+        short_wav(),
+    )
+    .await
+    .unwrap();
+    let error = submit_job(State(state), Query(ExportParams::default()), short_wav())
+        .await
+        .unwrap_err();
+    let response = error.into_response();
+    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert!(
+        response
+            .headers()
+            .contains_key(axum::http::header::RETRY_AFTER)
+    );
+    let bytes = axum::body::to_bytes(response.into_body(), 1024)
+        .await
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(json["code"], "queue_full");
+    assert!(json["retry_after_ms"].as_u64().unwrap() > 0);
+}
+
+#[tokio::test]
+async fn test_cancel_completed_job_preserves_terminal_event() {
+    use crate::server::jobs::{JobEvent, JobTransition};
+    let state = jobs_state(test_engine(), RuntimeLimits::default());
+    let store = &state.jobs.as_ref().unwrap().store;
+    let id = store
+        .create(Job::queued(short_wav(), ExportParams::default()))
+        .await
+        .unwrap();
+    store.transition(&id, JobTransition::Start).await.unwrap();
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    store.subscribe(&id, tx).await.unwrap();
+    store
+        .transition(&id, JobTransition::Complete(sample_export_result()))
+        .await
+        .unwrap();
+    let error = cancel_job(State(state.clone()), Path(id.clone()))
+        .await
+        .unwrap_err();
+    assert_eq!(error.status(), StatusCode::CONFLICT);
+    assert_eq!(
+        store.get(&id).await.unwrap().unwrap().status,
+        JobStatus::Done
+    );
+    assert!(matches!(rx.try_recv(), Ok(JobEvent::Done)));
+    assert!(matches!(
+        rx.try_recv(),
+        Err(tokio::sync::mpsc::error::TryRecvError::Disconnected)
+    ));
+}
+
+struct AdmissionStore {
+    inner: InMemoryJobStore,
+    advisory_full: bool,
+}
+
+impl JobStore for AdmissionStore {
+    fn create<'a>(
+        &'a self,
+        _job: Job,
+    ) -> crate::server::jobs::JobStoreFuture<'a, anyhow::Result<String>> {
+        Box::pin(async move {
+            assert!(
+                !self.advisory_full,
+                "legacy full stores must be rejected before create"
+            );
+            Err(crate::server::jobs::JobStoreFull.into())
+        })
+    }
+    fn get<'a>(
+        &'a self,
+        id: &str,
+    ) -> crate::server::jobs::JobStoreFuture<'a, anyhow::Result<Option<Job>>> {
+        self.inner.get(id)
+    }
+    fn update<'a>(
+        &'a self,
+        id: &str,
+        f: Box<dyn FnOnce(&mut Job) + Send>,
+    ) -> crate::server::jobs::JobStoreFuture<'a, anyhow::Result<()>> {
+        self.inner.update(id, f)
+    }
+    fn next_queued<'a>(
+        &'a self,
+    ) -> crate::server::jobs::JobStoreFuture<'a, anyhow::Result<Option<String>>> {
+        self.inner.next_queued()
+    }
+    fn requeue<'a>(
+        &'a self,
+        id: &str,
+    ) -> crate::server::jobs::JobStoreFuture<'a, anyhow::Result<()>> {
+        self.inner.requeue(id)
+    }
+    fn is_full<'a>(&'a self) -> crate::server::jobs::JobStoreFuture<'a, bool> {
+        Box::pin(async move { self.advisory_full })
+    }
+}
+
+#[tokio::test]
+async fn test_submit_job_handles_advisory_and_atomic_capacity_rejections() {
+    for advisory_full in [false, true] {
+        let mut state = jobs_state(test_engine(), RuntimeLimits::default());
+        Arc::get_mut(&mut state)
+            .unwrap()
+            .jobs
+            .as_mut()
+            .unwrap()
+            .store = Arc::new(AdmissionStore {
+            inner: InMemoryJobStore::new(RuntimeLimits::default()),
+            advisory_full,
+        });
+        let error = submit_job(State(state), Query(ExportParams::default()), short_wav())
+            .await
+            .unwrap_err();
+        let response = error.into_response();
+        assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert!(
+            response
+                .headers()
+                .contains_key(axum::http::header::RETRY_AFTER)
+        );
+        let bytes = axum::body::to_bytes(response.into_body(), 1024)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(json["code"], "queue_full");
+    }
 }
