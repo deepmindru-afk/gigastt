@@ -66,7 +66,7 @@ pub(crate) fn optimized_source_hash(path: &Path) -> std::io::Result<Option<Strin
         }
         hash.update(&buf[overlap..overlap + n]);
         let end = overlap + n;
-        external |= buf[..end].windows(8).any(|bytes| bytes == b"location");
+        external |= memchr::memmem::find(&buf[..end], b"location").is_some();
         overlap = end.min(7);
         buf.copy_within(end - overlap..end, 0);
     }

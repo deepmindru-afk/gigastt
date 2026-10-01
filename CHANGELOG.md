@@ -17,6 +17,11 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 
 ### Performance
 
+- Accelerate full model-content hashing and external-data marker scanning,
+  restoring fast startup while preserving optimized-cache invalidation for
+  same-size, same-timestamp replacements and locally quantized INT8 files.
+  See [startup measurements](docs/model-hashing.md).
+
 - Skip confidence normalization for discarded CTC blanks and repeated labels,
   and RNN-T blanks and tokens beyond the per-frame cap. Emitted confidence still
   uses the original model logits.
@@ -400,9 +405,10 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 
 ### Security
 
-- **Engine load re-checks pinned SHA-256** of the INT8 encoder (and any
-  other file with a table entry) before mapping it. Download already
-  verified; a tampered file in the model directory is now refused.
+- **Engine load re-checks pinned SHA-256** for resolved files in the legacy
+  checksum table. Correction: the standard RNN-T INT8 encoder names are outside
+  that table; their published digests are checked at download, not enforced
+  on every engine load. Locally quantized encoders remain supported.
 - **FFI handles are table ids, not raw `Box` pointers.** Free during an
   in-flight call keeps the engine alive via `Arc`; a call after free is a
   failed lookup, not a use-after-free.

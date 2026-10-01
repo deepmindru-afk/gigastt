@@ -25,3 +25,11 @@ strip = true
 [profile.wheel]
 inherits = "release"
 strip = false
+
+# Hashing full model files is part of startup, including debug/test builds.
+# Keep only these hot dependencies optimized; downstream workspaces own profiles.
+[profile.dev.package.sha2]
+opt-level = 3
+
+[profile.dev.package.memchr]
+opt-level = 3
