@@ -181,7 +181,10 @@ pub use chunks::AudioChunks;
 
 pub use telephony::TelephonyCodec;
 #[cfg(feature = "file-decode")]
-pub use telephony::{decode_telephony_raw, encode_wav_pcm16};
+pub use telephony::{
+    decode_telephony_raw, decode_telephony_raw_bounded_with_abort, encode_wav_pcm16,
+    quantize_wav_pcm16_in_place,
+};
 
 // Internals re-exported so unit tests (`use super::*`) keep resolving them.
 #[cfg(all(test, feature = "file-decode"))]

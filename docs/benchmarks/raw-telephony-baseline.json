@@ -1,0 +1,1748 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-01",
+  "base_commit": "75b8e98fedd2b31085c682b783bfbdee6abe6c04",
+  "precision_context": "clean base; narrowband overlay excluded",
+  "host": {
+    "cpu": "AMD Ryzen AI 9 HX 370",
+    "os": "Linux x86_64",
+    "rust": "1.98.1",
+    "contention": "Concurrent unrelated user inference; timing is descriptive, not an end-to-end claim"
+  },
+  "settings": {
+    "sample_rate_hint": 8000,
+    "output_sample_rate": 16000,
+    "threshold_samples": 480000,
+    "timing_passes": 5,
+    "model": "ml_ctc",
+    "pool_size": 1,
+    "encoder_threads": 4,
+    "punctuation": false,
+    "itn": false,
+    "rss_units": "KiB",
+    "artifact_result_hash": "SHA256 of sorted-key compact UTF-8 JSON; harness separately asserts original serde serialization equality"
+  },
+  "sha256": {
+    "speech.ulaw": "30419196ddd279591a5a01c8d1c2f182c1fac01bd6a29268f9e2dd2657c3c7db",
+    "speech.alaw": "3e868a48a2be4d1e5ab79e98b7372d4d3ed114287e58862636157a319797549c",
+    "speech.g722": "ab0a04e38121627c6a2958155bc1a8580b6cb6b851a3b2318d881769715438de",
+    "speech_mulaw.wav": "2f08881fbc2adc89393af9b06b49fad532ab7fe6610adeedb48cb8765688da62",
+    "speech_alaw.wav": "79abdea2c1544658a4d47db8b628bf67b506e10c0004f4b7896caa6d11c4b702",
+    "speech_g722.wav": "173bc292f5b3ae25e0f4e355f1907ddcc915a61cda8114322e394656bf91ee2e",
+    "multilingual_ctc.int8.onnx": "e08e27ae5669b39f0c378fae101bbbb9a80505f74f9b66719c309bf5b894a480",
+    "multilingual_vocab.txt": "4d130287892e1099fedfb3f93c4b4cf8a263151158801680b28977d1be4133f4",
+    "silero_vad.onnx": "2623a2953f6ff3d2c1e61740c6cdb7168133479b267dfef114a4a3cc5bdd788f"
+  },
+  "unpinned_rejected_candidate": [
+    {
+      "allocated_bytes": 2337937,
+      "allocations": 527,
+      "codec": "Pcmu",
+      "cpu_ms": [
+        8.102,
+        6.454000000000001,
+        6.879000000000001,
+        9.873000000000001,
+        6.643999999999998
+      ],
+      "fixture": "speech.ulaw",
+      "mode": "legacy",
+      "peak_live_bytes": 1560576,
+      "prepared_payload_bytes": 128036,
+      "process_max_rss_native_units": 12296,
+      "retained_capacity_bytes": 128036,
+      "seconds": 4,
+      "wall_ms": [
+        8.106501999999999,
+        6.452561,
+        6.876526,
+        9.92369,
+        6.692811
+      ]
+    },
+    {
+      "allocated_bytes": 2209901,
+      "allocations": 526,
+      "codec": "Pcmu",
+      "cpu_ms": [
+        7.754999999999999,
+        6.578999999999999,
+        8.215,
+        7.233999999999998,
+        8.093999999999994
+      ],
+      "fixture": "speech.ulaw",
+      "mode": "pcm",
+      "peak_live_bytes": 1560576,
+      "prepared_payload_bytes": 255984,
+      "process_max_rss_native_units": 12296,
+      "retained_capacity_bytes": 256000,
+      "seconds": 4,
+      "wall_ms": [
+        7.811799000000001,
+        6.575781999999999,
+        8.237929,
+        7.248894,
+        8.131620000000002
+      ]
+    },
+    {
+      "allocated_bytes": 2337937,
+      "allocations": 527,
+      "codec": "Pcma",
+      "cpu_ms": [
+        6.792,
+        7.186,
+        7.7719999999999985,
+        5.216000000000001,
+        4.7740000000000045
+      ],
+      "fixture": "speech.alaw",
+      "mode": "legacy",
+      "peak_live_bytes": 1560576,
+      "prepared_payload_bytes": 128036,
+      "process_max_rss_native_units": 12296,
+      "retained_capacity_bytes": 128036,
+      "seconds": 4,
+      "wall_ms": [
+        7.0197840000000005,
+        7.203379,
+        7.837647999999999,
+        5.275894,
+        4.8028070000000005
+      ]
+    },
+    {
+      "allocated_bytes": 2209901,
+      "allocations": 526,
+      "codec": "Pcma",
+      "cpu_ms": [
+        6.774,
+        7.106,
+        9.139000000000001,
+        9.711000000000002,
+        9.595000000000006
+      ],
+      "fixture": "speech.alaw",
+      "mode": "pcm",
+      "peak_live_bytes": 1560576,
+      "prepared_payload_bytes": 255984,
+      "process_max_rss_native_units": 12296,
+      "retained_capacity_bytes": 256000,
+      "seconds": 4,
+      "wall_ms": [
+        6.754266,
+        7.1138010000000005,
+        9.136704,
+        9.708707,
+        9.591937999999999
+      ]
+    },
+    {
+      "allocated_bytes": 640332,
+      "allocations": 5,
+      "codec": "G722",
+      "cpu_ms": [
+        2.585,
+        2.3629999999999995,
+        2.3759999999999994,
+        2.164999999999999,
+        1.1819999999999986
+      ],
+      "fixture": "speech.g722",
+      "mode": "legacy",
+      "peak_live_bytes": 512000,
+      "prepared_payload_bytes": 128044,
+      "process_max_rss_native_units": 12296,
+      "retained_capacity_bytes": 128044,
+      "seconds": 4,
+      "wall_ms": [
+        2.556284,
+        2.360878,
+        2.3735209999999998,
+        2.186651,
+        1.179792
+      ]
+    },
+    {
+      "allocated_bytes": 512288,
+      "allocations": 4,
+      "codec": "G722",
+      "cpu_ms": [
+        1.6260000000000003,
+        1.17,
+        1.0950000000000006,
+        1.255,
+        1.3640000000000008
+      ],
+      "fixture": "speech.g722",
+      "mode": "pcm",
+      "peak_live_bytes": 512000,
+      "prepared_payload_bytes": 256000,
+      "process_max_rss_native_units": 12296,
+      "retained_capacity_bytes": 256000,
+      "seconds": 4,
+      "wall_ms": [
+        1.71188,
+        1.185454,
+        1.10945,
+        1.2549830000000002,
+        1.443386
+      ]
+    },
+    {
+      "allocated_bytes": 12193905,
+      "allocations": 537,
+      "codec": "Pcmu",
+      "cpu_ms": [
+        59.266000000000005,
+        64.113,
+        87.90700000000001,
+        84.75300000000001,
+        84.656
+      ],
+      "fixture": "speech.ulaw",
+      "mode": "legacy",
+      "peak_live_bytes": 7375429,
+      "prepared_payload_bytes": 1920036,
+      "process_max_rss_native_units": 17032,
+      "retained_capacity_bytes": 1920036,
+      "seconds": 60,
+      "wall_ms": [
+        59.279428,
+        64.099197,
+        88.238154,
+        86.488915,
+        85.81453
+      ]
+    },
+    {
+      "allocated_bytes": 10273869,
+      "allocations": 536,
+      "codec": "Pcmu",
+      "cpu_ms": [
+        56.35,
+        50.852000000000004,
+        54.25200000000001,
+        57.07899999999998,
+        67.54499999999996
+      ],
+      "fixture": "speech.ulaw",
+      "mode": "pcm",
+      "peak_live_bytes": 7375429,
+      "prepared_payload_bytes": 3839984,
+      "process_max_rss_native_units": 16616,
+      "retained_capacity_bytes": 3840000,
+      "seconds": 60,
+      "wall_ms": [
+        175.076344,
+        126.118231,
+        61.391188,
+        61.503167999999995,
+        67.54086
+      ]
+    },
+    {
+      "allocated_bytes": 12193905,
+      "allocations": 537,
+      "codec": "Pcma",
+      "cpu_ms": [
+        64.84299999999999,
+        55.775999999999996,
+        56.17400000000001,
+        56.86500000000001,
+        60.61899999999997
+      ],
+      "fixture": "speech.alaw",
+      "mode": "legacy",
+      "peak_live_bytes": 7375429,
+      "prepared_payload_bytes": 1920036,
+      "process_max_rss_native_units": 17712,
+      "retained_capacity_bytes": 1920036,
+      "seconds": 60,
+      "wall_ms": [
+        68.334749,
+        57.039347,
+        56.467094,
+        61.524599,
+        63.292404
+      ]
+    },
+    {
+      "allocated_bytes": 10273869,
+      "allocations": 536,
+      "codec": "Pcma",
+      "cpu_ms": [
+        81.269,
+        73.63900000000001,
+        72.91,
+        71.04299999999998,
+        70.005
+      ],
+      "fixture": "speech.alaw",
+      "mode": "pcm",
+      "peak_live_bytes": 7375429,
+      "prepared_payload_bytes": 3839984,
+      "process_max_rss_native_units": 16460,
+      "retained_capacity_bytes": 3840000,
+      "seconds": 60,
+      "wall_ms": [
+        95.984923,
+        77.569688,
+        74.30068700000001,
+        73.647142,
+        74.267936
+      ]
+    },
+    {
+      "allocated_bytes": 9600332,
+      "allocations": 5,
+      "codec": "G722",
+      "cpu_ms": [
+        32.716,
+        34.549,
+        36.041,
+        35.882999999999996,
+        35.90299999999999
+      ],
+      "fixture": "speech.g722",
+      "mode": "legacy",
+      "peak_live_bytes": 7680000,
+      "prepared_payload_bytes": 1920044,
+      "process_max_rss_native_units": 18572,
+      "retained_capacity_bytes": 1920044,
+      "seconds": 60,
+      "wall_ms": [
+        32.974909,
+        40.122112,
+        38.750800000000005,
+        39.974626,
+        36.996169
+      ]
+    },
+    {
+      "allocated_bytes": 7680288,
+      "allocations": 4,
+      "codec": "G722",
+      "cpu_ms": [
+        34.715,
+        41.754,
+        36.29599999999999,
+        31.986999999999995,
+        33.01999999999998
+      ],
+      "fixture": "speech.g722",
+      "mode": "pcm",
+      "peak_live_bytes": 7680000,
+      "prepared_payload_bytes": 3840000,
+      "process_max_rss_native_units": 17212,
+      "retained_capacity_bytes": 3840000,
+      "seconds": 60,
+      "wall_ms": [
+        35.372364000000005,
+        42.526781,
+        36.534183999999996,
+        31.980394000000004,
+        33.051522999999996
+      ]
+    },
+    {
+      "allocated_bytes": 98593905,
+      "allocations": 627,
+      "codec": "Pcmu",
+      "cpu_ms": [
+        440.568,
+        423.888,
+        675.8419999999999,
+        771.1930000000002,
+        750.5639999999999
+      ],
+      "fixture": "speech.ulaw",
+      "mode": "legacy",
+      "peak_live_bytes": 59215429,
+      "prepared_payload_bytes": 19200036,
+      "process_max_rss_native_units": 71228,
+      "retained_capacity_bytes": 19200036,
+      "seconds": 600,
+      "wall_ms": [
+        446.227379,
+        424.512456,
+        752.314219,
+        917.960779,
+        1109.227586
+      ]
+    },
+    {
+      "allocated_bytes": 79393869,
+      "allocations": 626,
+      "codec": "Pcmu",
+      "cpu_ms": [
+        438.918,
+        637.5799999999999,
+        674.8220000000001,
+        604.1269999999997,
+        529.326
+      ],
+      "fixture": "speech.ulaw",
+      "mode": "pcm",
+      "peak_live_bytes": 59215429,
+      "prepared_payload_bytes": 38399984,
+      "process_max_rss_native_units": 71332,
+      "retained_capacity_bytes": 38400000,
+      "seconds": 600,
+      "wall_ms": [
+        451.799689,
+        652.69973,
+        678.644014,
+        606.774907,
+        531.121763
+      ]
+    },
+    {
+      "allocated_bytes": 98593905,
+      "allocations": 627,
+      "codec": "Pcma",
+      "cpu_ms": [
+        505.234,
+        468.79099999999994,
+        513.837,
+        517.3910000000001,
+        476.9720000000002
+      ],
+      "fixture": "speech.alaw",
+      "mode": "legacy",
+      "peak_live_bytes": 59215429,
+      "prepared_payload_bytes": 19200036,
+      "process_max_rss_native_units": 71468,
+      "retained_capacity_bytes": 19200036,
+      "seconds": 600,
+      "wall_ms": [
+        520.701983,
+        483.513943,
+        528.374141,
+        531.963111,
+        480.88318000000004
+      ]
+    },
+    {
+      "allocated_bytes": 79393869,
+      "allocations": 626,
+      "codec": "Pcma",
+      "cpu_ms": [
+        743.494,
+        721.0500000000001,
+        699.5289999999998,
+        640.0799999999999,
+        655.7719999999999
+      ],
+      "fixture": "speech.alaw",
+      "mode": "pcm",
+      "peak_live_bytes": 59215429,
+      "prepared_payload_bytes": 38399984,
+      "process_max_rss_native_units": 71368,
+      "retained_capacity_bytes": 38400000,
+      "seconds": 600,
+      "wall_ms": [
+        1146.7176109999998,
+        853.414204,
+        803.012856,
+        643.9991739999999,
+        669.550632
+      ]
+    },
+    {
+      "allocated_bytes": 96000332,
+      "allocations": 5,
+      "codec": "G722",
+      "cpu_ms": [
+        306.896,
+        292.52,
+        304.563,
+        279.308,
+        365.3890000000001
+      ],
+      "fixture": "speech.g722",
+      "mode": "legacy",
+      "peak_live_bytes": 76800000,
+      "prepared_payload_bytes": 19200044,
+      "process_max_rss_native_units": 106800,
+      "retained_capacity_bytes": 19200044,
+      "seconds": 600,
+      "wall_ms": [
+        323.650889,
+        303.435809,
+        411.632252,
+        296.521212,
+        394.02126599999997
+      ]
+    },
+    {
+      "allocated_bytes": 76800288,
+      "allocations": 4,
+      "codec": "G722",
+      "cpu_ms": [
+        309.841,
+        304.03899999999993,
+        274.24799999999993,
+        294.84299999999996,
+        268.828
+      ],
+      "fixture": "speech.g722",
+      "mode": "pcm",
+      "peak_live_bytes": 76800000,
+      "prepared_payload_bytes": 38400000,
+      "process_max_rss_native_units": 88332,
+      "retained_capacity_bytes": 38400000,
+      "seconds": 600,
+      "wall_ms": [
+        338.594603,
+        334.648793,
+        281.18249699999996,
+        312.182572,
+        285.614729
+      ]
+    }
+  ],
+  "pinned_cpu_0_rejected_candidate": [
+    {
+      "allocated_bytes": 2337937,
+      "allocations": 527,
+      "codec": "Pcmu",
+      "cpu_ms": [
+        7.412,
+        6.882999999999999,
+        7.252999999999997,
+        7.904,
+        6.436999999999998
+      ],
+      "fixture": "speech.ulaw",
+      "mode": "legacy",
+      "peak_live_bytes": 1560576,
+      "prepared_payload_bytes": 128036,
+      "process_max_rss_native_units": 11936,
+      "retained_capacity_bytes": 128036,
+      "seconds": 4,
+      "wall_ms": [
+        7.377675,
+        6.8810340000000005,
+        7.251148,
+        7.902660000000001,
+        6.433184
+      ]
+    },
+    {
+      "allocated_bytes": 2209901,
+      "allocations": 526,
+      "codec": "Pcmu",
+      "cpu_ms": [
+        8.510000000000002,
+        7.969999999999999,
+        7.721,
+        8.196000000000002,
+        7.901999999999994
+      ],
+      "fixture": "speech.ulaw",
+      "mode": "pcm",
+      "peak_live_bytes": 1560576,
+      "prepared_payload_bytes": 255984,
+      "process_max_rss_native_units": 11936,
+      "retained_capacity_bytes": 256000,
+      "seconds": 4,
+      "wall_ms": [
+        11.355566,
+        8.156416,
+        7.727602,
+        8.192253000000001,
+        7.896669
+      ]
+    },
+    {
+      "allocated_bytes": 2337937,
+      "allocations": 527,
+      "codec": "Pcma",
+      "cpu_ms": [
+        8.306000000000001,
+        7.550000000000001,
+        8.058999999999997,
+        7.667000000000002,
+        8.036999999999999
+      ],
+      "fixture": "speech.alaw",
+      "mode": "legacy",
+      "peak_live_bytes": 1560576,
+      "prepared_payload_bytes": 128036,
+      "process_max_rss_native_units": 11936,
+      "retained_capacity_bytes": 128036,
+      "seconds": 4,
+      "wall_ms": [
+        8.314722999999999,
+        7.568834,
+        8.058152000000002,
+        7.664263,
+        8.032874000000001
+      ]
+    },
+    {
+      "allocated_bytes": 2209901,
+      "allocations": 526,
+      "codec": "Pcma",
+      "cpu_ms": [
+        8.675,
+        8.324000000000002,
+        6.966000000000001,
+        6.742000000000001,
+        7.234000000000002
+      ],
+      "fixture": "speech.alaw",
+      "mode": "pcm",
+      "peak_live_bytes": 1560576,
+      "prepared_payload_bytes": 255984,
+      "process_max_rss_native_units": 11936,
+      "retained_capacity_bytes": 256000,
+      "seconds": 4,
+      "wall_ms": [
+        9.851815,
+        15.56519,
+        6.987023,
+        6.738727,
+        7.4464049999999995
+      ]
+    },
+    {
+      "allocated_bytes": 640332,
+      "allocations": 5,
+      "codec": "G722",
+      "cpu_ms": [
+        1.9980000000000002,
+        1.8739999999999997,
+        1.7990000000000013,
+        1.6500000000000004,
+        1.9159999999999986
+      ],
+      "fixture": "speech.g722",
+      "mode": "legacy",
+      "peak_live_bytes": 512000,
+      "prepared_payload_bytes": 128044,
+      "process_max_rss_native_units": 11936,
+      "retained_capacity_bytes": 128044,
+      "seconds": 4,
+      "wall_ms": [
+        1.9730709999999998,
+        1.8730120000000001,
+        1.798743,
+        1.649604,
+        1.9143000000000001
+      ]
+    },
+    {
+      "allocated_bytes": 512288,
+      "allocations": 4,
+      "codec": "G722",
+      "cpu_ms": [
+        2.136,
+        1.4040000000000008,
+        1.5860000000000003,
+        1.7240000000000002,
+        1.955
+      ],
+      "fixture": "speech.g722",
+      "mode": "pcm",
+      "peak_live_bytes": 512000,
+      "prepared_payload_bytes": 256000,
+      "process_max_rss_native_units": 11936,
+      "retained_capacity_bytes": 256000,
+      "seconds": 4,
+      "wall_ms": [
+        3.115132,
+        1.403673,
+        1.585804,
+        1.72255,
+        1.9541049999999998
+      ]
+    },
+    {
+      "allocated_bytes": 12193905,
+      "allocations": 537,
+      "codec": "Pcmu",
+      "cpu_ms": [
+        49.202,
+        50.726000000000006,
+        53.132000000000005,
+        49.899,
+        50.48600000000002
+      ],
+      "fixture": "speech.ulaw",
+      "mode": "legacy",
+      "peak_live_bytes": 7375429,
+      "prepared_payload_bytes": 1920036,
+      "process_max_rss_native_units": 17180,
+      "retained_capacity_bytes": 1920036,
+      "seconds": 60,
+      "wall_ms": [
+        49.200236000000004,
+        51.949883,
+        55.69744,
+        52.938106,
+        50.481379
+      ]
+    },
+    {
+      "allocated_bytes": 10273869,
+      "allocations": 536,
+      "codec": "Pcmu",
+      "cpu_ms": [
+        55.632999999999996,
+        56.971000000000004,
+        52.49900000000001,
+        60.508999999999986,
+        53.27699999999999
+      ],
+      "fixture": "speech.ulaw",
+      "mode": "pcm",
+      "peak_live_bytes": 7375429,
+      "prepared_payload_bytes": 3839984,
+      "process_max_rss_native_units": 16268,
+      "retained_capacity_bytes": 3840000,
+      "seconds": 60,
+      "wall_ms": [
+        57.99052,
+        57.520309,
+        52.672919,
+        60.508632999999996,
+        53.272082999999995
+      ]
+    },
+    {
+      "allocated_bytes": 12193905,
+      "allocations": 537,
+      "codec": "Pcma",
+      "cpu_ms": [
+        56.759,
+        48.373,
+        47.68299999999999,
+        52.275000000000006,
+        56.71400000000003
+      ],
+      "fixture": "speech.alaw",
+      "mode": "legacy",
+      "peak_live_bytes": 7375429,
+      "prepared_payload_bytes": 1920036,
+      "process_max_rss_native_units": 17380,
+      "retained_capacity_bytes": 1920036,
+      "seconds": 60,
+      "wall_ms": [
+        68.594537,
+        50.81286,
+        47.867207,
+        52.602727,
+        70.296178
+      ]
+    },
+    {
+      "allocated_bytes": 10273869,
+      "allocations": 536,
+      "codec": "Pcma",
+      "cpu_ms": [
+        55.84,
+        49.659,
+        50.316,
+        50.940999999999974,
+        48.23199999999997
+      ],
+      "fixture": "speech.alaw",
+      "mode": "pcm",
+      "peak_live_bytes": 7375429,
+      "prepared_payload_bytes": 3839984,
+      "process_max_rss_native_units": 15960,
+      "retained_capacity_bytes": 3840000,
+      "seconds": 60,
+      "wall_ms": [
+        62.860794,
+        54.139759000000005,
+        51.093287000000004,
+        51.385174,
+        63.079354
+      ]
+    },
+    {
+      "allocated_bytes": 9600332,
+      "allocations": 5,
+      "codec": "G722",
+      "cpu_ms": [
+        32.932,
+        29.090000000000003,
+        28.941999999999993,
+        29.828000000000003,
+        28.535999999999987
+      ],
+      "fixture": "speech.g722",
+      "mode": "legacy",
+      "peak_live_bytes": 7680000,
+      "prepared_payload_bytes": 1920044,
+      "process_max_rss_native_units": 18680,
+      "retained_capacity_bytes": 1920044,
+      "seconds": 60,
+      "wall_ms": [
+        40.753144999999996,
+        29.307662,
+        36.012886,
+        32.079599,
+        28.702716
+      ]
+    },
+    {
+      "allocated_bytes": 7680288,
+      "allocations": 4,
+      "codec": "G722",
+      "cpu_ms": [
+        25.032999999999998,
+        27.365000000000002,
+        27.67,
+        29.298000000000002,
+        28.689000000000007
+      ],
+      "fixture": "speech.g722",
+      "mode": "pcm",
+      "peak_live_bytes": 7680000,
+      "prepared_payload_bytes": 3840000,
+      "process_max_rss_native_units": 16792,
+      "retained_capacity_bytes": 3840000,
+      "seconds": 60,
+      "wall_ms": [
+        25.287291,
+        27.723100000000002,
+        27.857442,
+        29.489692,
+        28.936785
+      ]
+    },
+    {
+      "allocated_bytes": 98593905,
+      "allocations": 627,
+      "codec": "Pcmu",
+      "cpu_ms": [
+        509.582,
+        487.9190000000001,
+        505.8470000000001,
+        489.43100000000004,
+        479.8899999999999
+      ],
+      "fixture": "speech.ulaw",
+      "mode": "legacy",
+      "peak_live_bytes": 59215429,
+      "prepared_payload_bytes": 19200036,
+      "process_max_rss_native_units": 71340,
+      "retained_capacity_bytes": 19200036,
+      "seconds": 600,
+      "wall_ms": [
+        559.989599,
+        497.73355000000004,
+        508.017716,
+        489.92906400000004,
+        480.912395
+      ]
+    },
+    {
+      "allocated_bytes": 79393869,
+      "allocations": 626,
+      "codec": "Pcmu",
+      "cpu_ms": [
+        498.102,
+        473.47599999999994,
+        453.7539999999999,
+        451.6100000000001,
+        440.7190000000003
+      ],
+      "fixture": "speech.ulaw",
+      "mode": "pcm",
+      "peak_live_bytes": 59215429,
+      "prepared_payload_bytes": 38399984,
+      "process_max_rss_native_units": 71612,
+      "retained_capacity_bytes": 38400000,
+      "seconds": 600,
+      "wall_ms": [
+        506.1826740000001,
+        479.519031,
+        454.04536099999996,
+        452.563942,
+        441.312402
+      ]
+    },
+    {
+      "allocated_bytes": 98593905,
+      "allocations": 627,
+      "codec": "Pcma",
+      "cpu_ms": [
+        437.404,
+        423.666,
+        447.82900000000006,
+        560.335,
+        427.9470000000001
+      ],
+      "fixture": "speech.alaw",
+      "mode": "legacy",
+      "peak_live_bytes": 59215429,
+      "prepared_payload_bytes": 19200036,
+      "process_max_rss_native_units": 70804,
+      "retained_capacity_bytes": 19200036,
+      "seconds": 600,
+      "wall_ms": [
+        437.41074499999996,
+        425.23562300000003,
+        448.42489,
+        560.3304390000001,
+        428.723163
+      ]
+    },
+    {
+      "allocated_bytes": 79393869,
+      "allocations": 626,
+      "codec": "Pcma",
+      "cpu_ms": [
+        395.471,
+        412.37800000000004,
+        492.7260000000001,
+        475.7330000000002,
+        490.721
+      ],
+      "fixture": "speech.alaw",
+      "mode": "pcm",
+      "peak_live_bytes": 59215429,
+      "prepared_payload_bytes": 38399984,
+      "process_max_rss_native_units": 71528,
+      "retained_capacity_bytes": 38400000,
+      "seconds": 600,
+      "wall_ms": [
+        395.44657900000004,
+        457.323076,
+        526.1602290000001,
+        1070.3061759999998,
+        705.2737030000001
+      ]
+    },
+    {
+      "allocated_bytes": 96000332,
+      "allocations": 5,
+      "codec": "G722",
+      "cpu_ms": [
+        302.711,
+        246.635,
+        248.89700000000005,
+        288.11400000000003,
+        302.10699999999997
+      ],
+      "fixture": "speech.g722",
+      "mode": "legacy",
+      "peak_live_bytes": 76800000,
+      "prepared_payload_bytes": 19200044,
+      "process_max_rss_native_units": 107212,
+      "retained_capacity_bytes": 19200044,
+      "seconds": 600,
+      "wall_ms": [
+        519.838714,
+        279.592174,
+        252.07161500000004,
+        294.091566,
+        304.382525
+      ]
+    },
+    {
+      "allocated_bytes": 76800288,
+      "allocations": 4,
+      "codec": "G722",
+      "cpu_ms": [
+        289.285,
+        263.24899999999997,
+        270.9680000000001,
+        251.99500000000012,
+        270.0640000000001
+      ],
+      "fixture": "speech.g722",
+      "mode": "pcm",
+      "peak_live_bytes": 76800000,
+      "prepared_payload_bytes": 38400000,
+      "process_max_rss_native_units": 88396,
+      "retained_capacity_bytes": 38400000,
+      "seconds": 600,
+      "wall_ms": [
+        294.017657,
+        266.782894,
+        275.804993,
+        264.87622799999997,
+        274.98654799999997
+      ]
+    }
+  ],
+  "pinned_cpu_0_adopted_hybrid": [
+    {
+      "allocated_bytes": 2209901,
+      "allocations": 526,
+      "codec": "Pcmu",
+      "cpu_ms": [
+        7.124,
+        6.575999999999999,
+        6.157,
+        7.036000000000001,
+        6.975999999999999
+      ],
+      "fixture": "speech.ulaw",
+      "mode": "hybrid",
+      "peak_live_bytes": 1560576,
+      "prepared_payload_bytes": 255984,
+      "process_max_rss_native_units": 12228,
+      "retained_capacity_bytes": 256000,
+      "seconds": 4,
+      "wall_ms": [
+        10.242337000000001,
+        7.416137,
+        6.216719,
+        7.424893999999999,
+        9.087362
+      ]
+    },
+    {
+      "allocated_bytes": 2209901,
+      "allocations": 526,
+      "codec": "Pcma",
+      "cpu_ms": [
+        7.512,
+        7.058,
+        7.045999999999999,
+        7.297999999999998,
+        7.4239999999999995
+      ],
+      "fixture": "speech.alaw",
+      "mode": "hybrid",
+      "peak_live_bytes": 1560576,
+      "prepared_payload_bytes": 255984,
+      "process_max_rss_native_units": 12228,
+      "retained_capacity_bytes": 256000,
+      "seconds": 4,
+      "wall_ms": [
+        7.635048,
+        7.122046,
+        7.2236460000000005,
+        7.3898790000000005,
+        11.632304
+      ]
+    },
+    {
+      "allocated_bytes": 512288,
+      "allocations": 4,
+      "codec": "G722",
+      "cpu_ms": [
+        2.014,
+        1.6559999999999997,
+        1.5510000000000002,
+        1.7650000000000006,
+        1.7779999999999987
+      ],
+      "fixture": "speech.g722",
+      "mode": "hybrid",
+      "peak_live_bytes": 512000,
+      "prepared_payload_bytes": 256000,
+      "process_max_rss_native_units": 12228,
+      "retained_capacity_bytes": 256000,
+      "seconds": 4,
+      "wall_ms": [
+        1.992627,
+        1.705037,
+        1.8569820000000001,
+        1.763817,
+        1.950418
+      ]
+    },
+    {
+      "allocated_bytes": 12193905,
+      "allocations": 537,
+      "codec": "Pcmu",
+      "cpu_ms": [
+        50.155,
+        44.876,
+        56.62700000000001,
+        52.17699999999999,
+        58.69199999999998
+      ],
+      "fixture": "speech.ulaw",
+      "mode": "hybrid",
+      "peak_live_bytes": 7375429,
+      "prepared_payload_bytes": 1920036,
+      "process_max_rss_native_units": 17228,
+      "retained_capacity_bytes": 1920036,
+      "seconds": 60,
+      "wall_ms": [
+        58.045043,
+        49.85283,
+        57.410293,
+        54.000598,
+        62.400941
+      ]
+    },
+    {
+      "allocated_bytes": 12193905,
+      "allocations": 537,
+      "codec": "Pcma",
+      "cpu_ms": [
+        54.979,
+        54.702,
+        54.483000000000004,
+        53.90700000000001,
+        54.274
+      ],
+      "fixture": "speech.alaw",
+      "mode": "hybrid",
+      "peak_live_bytes": 7375429,
+      "prepared_payload_bytes": 1920036,
+      "process_max_rss_native_units": 17868,
+      "retained_capacity_bytes": 1920036,
+      "seconds": 60,
+      "wall_ms": [
+        71.77816700000001,
+        58.444663,
+        57.458423,
+        56.023812,
+        54.467945
+      ]
+    },
+    {
+      "allocated_bytes": 9600332,
+      "allocations": 5,
+      "codec": "G722",
+      "cpu_ms": [
+        31.565,
+        25.820999999999998,
+        27.296,
+        26.795,
+        26.557999999999993
+      ],
+      "fixture": "speech.g722",
+      "mode": "hybrid",
+      "peak_live_bytes": 7680000,
+      "prepared_payload_bytes": 1920044,
+      "process_max_rss_native_units": 19236,
+      "retained_capacity_bytes": 1920044,
+      "seconds": 60,
+      "wall_ms": [
+        34.424066,
+        25.953661,
+        27.94718,
+        27.290398,
+        30.719328
+      ]
+    },
+    {
+      "allocated_bytes": 98593905,
+      "allocations": 627,
+      "codec": "Pcmu",
+      "cpu_ms": [
+        478.1,
+        474.53800000000007,
+        523.5300000000001,
+        521.95,
+        462.88599999999997
+      ],
+      "fixture": "speech.ulaw",
+      "mode": "hybrid",
+      "peak_live_bytes": 59215429,
+      "prepared_payload_bytes": 19200036,
+      "process_max_rss_native_units": 71896,
+      "retained_capacity_bytes": 19200036,
+      "seconds": 600,
+      "wall_ms": [
+        542.7191409999999,
+        556.2644829999999,
+        627.737659,
+        653.557639,
+        512.215898
+      ]
+    },
+    {
+      "allocated_bytes": 98593905,
+      "allocations": 627,
+      "codec": "Pcma",
+      "cpu_ms": [
+        470.001,
+        497.10499999999996,
+        489.6170000000001,
+        508.3090000000002,
+        497.6869999999999
+      ],
+      "fixture": "speech.alaw",
+      "mode": "hybrid",
+      "peak_live_bytes": 59215429,
+      "prepared_payload_bytes": 19200036,
+      "process_max_rss_native_units": 71940,
+      "retained_capacity_bytes": 19200036,
+      "seconds": 600,
+      "wall_ms": [
+        580.328271,
+        538.08948,
+        536.0741399999999,
+        563.6571270000001,
+        515.199925
+      ]
+    },
+    {
+      "allocated_bytes": 96000332,
+      "allocations": 5,
+      "codec": "G722",
+      "cpu_ms": [
+        291.782,
+        288.19800000000004,
+        319.6070000000001,
+        332.2579999999999,
+        321.288
+      ],
+      "fixture": "speech.g722",
+      "mode": "hybrid",
+      "peak_live_bytes": 76800000,
+      "prepared_payload_bytes": 19200044,
+      "process_max_rss_native_units": 107580,
+      "retained_capacity_bytes": 19200044,
+      "seconds": 600,
+      "wall_ms": [
+        301.091312,
+        296.565205,
+        323.17832200000004,
+        349.755293,
+        341.68372600000004
+      ]
+    }
+  ],
+  "parity_clean": [
+    {
+      "codec": "Pcmu",
+      "features_bits_equal": true,
+      "kind": "parity",
+      "pcm_bits_equal": true,
+      "repetitions": 1,
+      "result_equal": true,
+      "route": "pcm",
+      "samples": 63996,
+      "vad": false,
+      "legacy_text": "шестьдесят тысяч тенге сколько будет стоить",
+      "legacy_serialized_sha256": "d39c8474a0f85b94f374e4887bb121104c20c866da7fb6a55a87585c99ade31e",
+      "candidate_text": "шестьдесят тысяч тенге сколько будет стоить",
+      "candidate_serialized_sha256": "d39c8474a0f85b94f374e4887bb121104c20c866da7fb6a55a87585c99ade31e"
+    },
+    {
+      "codec": "Pcmu",
+      "features_bits_equal": true,
+      "kind": "parity",
+      "pcm_bits_equal": true,
+      "repetitions": 1,
+      "result_equal": true,
+      "route": "pcm",
+      "samples": 63996,
+      "vad": true,
+      "legacy_text": "шестьдесят тысяч тенге сколько будет стоить",
+      "legacy_serialized_sha256": "414183d8322e99732f7cff657f766adb63823d567fb02a77e41ace61626bec9c",
+      "candidate_text": "шестьдесят тысяч тенге сколько будет стоить",
+      "candidate_serialized_sha256": "414183d8322e99732f7cff657f766adb63823d567fb02a77e41ace61626bec9c"
+    },
+    {
+      "file": "speech_mulaw.wav",
+      "kind": "native_container",
+      "result": {
+        "confidence": 0.9824590086936951,
+        "duration_s": 3.99975,
+        "text": "шестьдесят тысяч тенге сколько будет стоить",
+        "words": [
+          {
+            "confidence": 0.9758334159851074,
+            "end": 1.08,
+            "start": 0.6,
+            "word": "шестьдесят"
+          },
+          {
+            "confidence": 0.9929689168930054,
+            "end": 1.48,
+            "start": 1.28,
+            "word": "тысяч"
+          },
+          {
+            "confidence": 0.997485339641571,
+            "end": 2.0,
+            "start": 1.76,
+            "word": "тенге"
+          },
+          {
+            "confidence": 0.9648991823196411,
+            "end": 2.64,
+            "start": 2.32,
+            "word": "сколько"
+          },
+          {
+            "confidence": 0.9780762791633606,
+            "end": 2.96,
+            "start": 2.8000000000000003,
+            "word": "будет"
+          },
+          {
+            "confidence": 0.994310200214386,
+            "end": 3.48,
+            "start": 3.16,
+            "word": "стоить"
+          }
+        ]
+      }
+    },
+    {
+      "codec": "Pcma",
+      "features_bits_equal": true,
+      "kind": "parity",
+      "pcm_bits_equal": true,
+      "repetitions": 1,
+      "result_equal": true,
+      "route": "pcm",
+      "samples": 63996,
+      "vad": false,
+      "legacy_text": "шестьдесят тысяч тенге сколько будет стоить",
+      "legacy_serialized_sha256": "4a9d03b8bfeee2e6788c81e04618ce1a90d2b8788874eb64bdba306411f845b9",
+      "candidate_text": "шестьдесят тысяч тенге сколько будет стоить",
+      "candidate_serialized_sha256": "4a9d03b8bfeee2e6788c81e04618ce1a90d2b8788874eb64bdba306411f845b9"
+    },
+    {
+      "codec": "Pcma",
+      "features_bits_equal": true,
+      "kind": "parity",
+      "pcm_bits_equal": true,
+      "repetitions": 1,
+      "result_equal": true,
+      "route": "pcm",
+      "samples": 63996,
+      "vad": true,
+      "legacy_text": "шестьдесят тысяч тенге сколько будет стоить",
+      "legacy_serialized_sha256": "e1b727535c16dc80a97de20e9c8def6b1ba5ac9693830f4e37c5951e082a3173",
+      "candidate_text": "шестьдесят тысяч тенге сколько будет стоить",
+      "candidate_serialized_sha256": "e1b727535c16dc80a97de20e9c8def6b1ba5ac9693830f4e37c5951e082a3173"
+    },
+    {
+      "file": "speech_alaw.wav",
+      "kind": "native_container",
+      "result": {
+        "confidence": 0.9857629537582397,
+        "duration_s": 3.99975,
+        "text": "шестьдесят тысяч тенге сколько будет стоить",
+        "words": [
+          {
+            "confidence": 0.9906424283981323,
+            "end": 1.08,
+            "start": 0.6,
+            "word": "шестьдесят"
+          },
+          {
+            "confidence": 0.9872994422912598,
+            "end": 1.48,
+            "start": 1.28,
+            "word": "тысяч"
+          },
+          {
+            "confidence": 0.9993151426315308,
+            "end": 2.04,
+            "start": 1.76,
+            "word": "тенге"
+          },
+          {
+            "confidence": 0.979790985584259,
+            "end": 2.64,
+            "start": 2.32,
+            "word": "сколько"
+          },
+          {
+            "confidence": 0.9998968243598938,
+            "end": 3.0,
+            "start": 2.8000000000000003,
+            "word": "будет"
+          },
+          {
+            "confidence": 0.9627636075019836,
+            "end": 3.48,
+            "start": 3.16,
+            "word": "стоить"
+          }
+        ]
+      }
+    },
+    {
+      "codec": "G722",
+      "features_bits_equal": true,
+      "kind": "parity",
+      "pcm_bits_equal": true,
+      "repetitions": 1,
+      "result_equal": true,
+      "route": "pcm",
+      "samples": 64000,
+      "vad": false,
+      "legacy_text": "шестьдесят тысяч тенге сколько будет стоить",
+      "legacy_serialized_sha256": "bfcf1cf94480c4bd2ed53f1eb27d54e51be543eafba56de0e3abff7a40b791f1",
+      "candidate_text": "шестьдесят тысяч тенге сколько будет стоить",
+      "candidate_serialized_sha256": "bfcf1cf94480c4bd2ed53f1eb27d54e51be543eafba56de0e3abff7a40b791f1"
+    },
+    {
+      "codec": "G722",
+      "features_bits_equal": true,
+      "kind": "parity",
+      "pcm_bits_equal": true,
+      "repetitions": 1,
+      "result_equal": true,
+      "route": "pcm",
+      "samples": 64000,
+      "vad": true,
+      "legacy_text": "шестьдесят тысяч тенге сколько будет стоить",
+      "legacy_serialized_sha256": "3ecd5bf2c23d639de10300e0a542cf7dc9c1bcffa2daf05ec9412507bc72122d",
+      "candidate_text": "шестьдесят тысяч тенге сколько будет стоить",
+      "candidate_serialized_sha256": "3ecd5bf2c23d639de10300e0a542cf7dc9c1bcffa2daf05ec9412507bc72122d"
+    },
+    {
+      "file": "speech_g722.wav",
+      "kind": "native_container",
+      "result": {
+        "confidence": 0.9857783317565918,
+        "duration_s": 4.0,
+        "text": "шестьдесят тысяч тенге сколько будет стоить",
+        "words": [
+          {
+            "confidence": 0.9999421834945679,
+            "end": 1.04,
+            "start": 0.56,
+            "word": "шестьдесят"
+          },
+          {
+            "confidence": 0.995381236076355,
+            "end": 1.44,
+            "start": 1.24,
+            "word": "тысяч"
+          },
+          {
+            "confidence": 0.9995313882827759,
+            "end": 2.0,
+            "start": 1.72,
+            "word": "тенге"
+          },
+          {
+            "confidence": 0.9998803734779358,
+            "end": 2.6,
+            "start": 2.2800000000000002,
+            "word": "сколько"
+          },
+          {
+            "confidence": 0.9997590184211731,
+            "end": 2.96,
+            "start": 2.7600000000000002,
+            "word": "будет"
+          },
+          {
+            "confidence": 0.923656702041626,
+            "end": 3.48,
+            "start": 3.16,
+            "word": "стоить"
+          }
+        ]
+      }
+    },
+    {
+      "codec": "Pcmu",
+      "features_bits_equal": true,
+      "kind": "parity",
+      "pcm_bits_equal": true,
+      "repetitions": 12,
+      "result_equal": true,
+      "route": "wav",
+      "samples": 767996,
+      "vad": false,
+      "legacy_text": "шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить",
+      "legacy_serialized_sha256": "250c40e1a5ce5a45d410a20c58415b09751982fca4ce67e74da81046516542e7",
+      "candidate_text": "шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить",
+      "candidate_serialized_sha256": "250c40e1a5ce5a45d410a20c58415b09751982fca4ce67e74da81046516542e7"
+    },
+    {
+      "codec": "Pcmu",
+      "features_bits_equal": true,
+      "kind": "parity",
+      "pcm_bits_equal": true,
+      "repetitions": 12,
+      "result_equal": true,
+      "route": "wav",
+      "samples": 767996,
+      "vad": true,
+      "legacy_text": "шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить",
+      "legacy_serialized_sha256": "d7951f54a3aca8bb9d74f8c098965aabd1a66a9b1cddec40295e4b8c54a0bab3",
+      "candidate_text": "шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить",
+      "candidate_serialized_sha256": "d7951f54a3aca8bb9d74f8c098965aabd1a66a9b1cddec40295e4b8c54a0bab3"
+    }
+  ],
+  "additional_local_precision_validation": {
+    "base_commit": "75b8e98fedd2b31085c682b783bfbdee6abe6c04",
+    "overlay_patch_sha256": "ffafd66e06f02099b40c90296c1431093f299fbfc76e686a8c7cc67b1f10fcb0",
+    "overlay_status": "Existing local narrowband patch temporarily applied for validation and removed; not published as part of this change",
+    "overlay_behavior": "For 8000 to 16000 Hz conversion, round and clamp f32 * 32768 to [-32768,32767], then divide by 32768, before legacy raw PCM16 quantization",
+    "audio_tests": {
+      "passed": 113,
+      "ignored": 2
+    },
+    "parity": [
+      {
+        "codec": "Pcmu",
+        "features_bits_equal": true,
+        "kind": "parity",
+        "pcm_bits_equal": true,
+        "repetitions": 1,
+        "result_equal": true,
+        "route": "pcm",
+        "samples": 63996,
+        "vad": false,
+        "legacy_text": "шестьдесят тысяч тенге сколько будет стоить",
+        "legacy_serialized_sha256": "71f0ee27fc33a44b95aa56bbe047fd5bebf8ff2c9d49e558a1092b3ae1d33e98",
+        "candidate_text": "шестьдесят тысяч тенге сколько будет стоить",
+        "candidate_serialized_sha256": "71f0ee27fc33a44b95aa56bbe047fd5bebf8ff2c9d49e558a1092b3ae1d33e98"
+      },
+      {
+        "codec": "Pcmu",
+        "features_bits_equal": true,
+        "kind": "parity",
+        "pcm_bits_equal": true,
+        "repetitions": 1,
+        "result_equal": true,
+        "route": "pcm",
+        "samples": 63996,
+        "vad": true,
+        "legacy_text": "шестьдесят тысяч тенге сколько будет стоить",
+        "legacy_serialized_sha256": "f0b3f0d26ec611e232cf5e2fa8c1f7a1467a7ad2feecb4df34d5adb55c4ffa2c",
+        "candidate_text": "шестьдесят тысяч тенге сколько будет стоить",
+        "candidate_serialized_sha256": "f0b3f0d26ec611e232cf5e2fa8c1f7a1467a7ad2feecb4df34d5adb55c4ffa2c"
+      },
+      {
+        "file": "speech_mulaw.wav",
+        "kind": "native_container",
+        "result": {
+          "confidence": 0.986791729927063,
+          "duration_s": 3.99975,
+          "text": "шестьдесят тысяч тенге сколько будет стоить",
+          "words": [
+            {
+              "confidence": 0.9968422651290894,
+              "end": 1.08,
+              "start": 0.6,
+              "word": "шестьдесят"
+            },
+            {
+              "confidence": 0.9922387003898621,
+              "end": 1.48,
+              "start": 1.28,
+              "word": "тысяч"
+            },
+            {
+              "confidence": 0.9988892674446106,
+              "end": 2.04,
+              "start": 1.76,
+              "word": "тенге"
+            },
+            {
+              "confidence": 0.9372462630271912,
+              "end": 2.64,
+              "start": 2.32,
+              "word": "сколько"
+            },
+            {
+              "confidence": 0.9999526143074036,
+              "end": 3.0,
+              "start": 2.8000000000000003,
+              "word": "будет"
+            },
+            {
+              "confidence": 0.9990460872650146,
+              "end": 3.48,
+              "start": 3.16,
+              "word": "стоить"
+            }
+          ]
+        }
+      },
+      {
+        "codec": "Pcma",
+        "features_bits_equal": true,
+        "kind": "parity",
+        "pcm_bits_equal": true,
+        "repetitions": 1,
+        "result_equal": true,
+        "route": "pcm",
+        "samples": 63996,
+        "vad": false,
+        "legacy_text": "шестьдесят тысяч тенге сколько будет стоить",
+        "legacy_serialized_sha256": "ad73eafc93e34ac16471dc171e5fb0658e168feb7f36610a4e4b43f92d0faf33",
+        "candidate_text": "шестьдесят тысяч тенге сколько будет стоить",
+        "candidate_serialized_sha256": "ad73eafc93e34ac16471dc171e5fb0658e168feb7f36610a4e4b43f92d0faf33"
+      },
+      {
+        "codec": "Pcma",
+        "features_bits_equal": true,
+        "kind": "parity",
+        "pcm_bits_equal": true,
+        "repetitions": 1,
+        "result_equal": true,
+        "route": "pcm",
+        "samples": 63996,
+        "vad": true,
+        "legacy_text": "шестьдесят тысяч тенге сколько будет стоить",
+        "legacy_serialized_sha256": "a129405b16c9d9ee1cf541fbde0d67e4c063dd7033cdce1d8e0d5ebb355900a2",
+        "candidate_text": "шестьдесят тысяч тенге сколько будет стоить",
+        "candidate_serialized_sha256": "a129405b16c9d9ee1cf541fbde0d67e4c063dd7033cdce1d8e0d5ebb355900a2"
+      },
+      {
+        "file": "speech_alaw.wav",
+        "kind": "native_container",
+        "result": {
+          "confidence": 0.9874865412712097,
+          "duration_s": 3.99975,
+          "text": "шестьдесят тысяч тенге сколько будет стоить",
+          "words": [
+            {
+              "confidence": 0.9974063634872437,
+              "end": 1.08,
+              "start": 0.6,
+              "word": "шестьдесят"
+            },
+            {
+              "confidence": 0.9970229268074036,
+              "end": 1.48,
+              "start": 1.28,
+              "word": "тысяч"
+            },
+            {
+              "confidence": 0.9740697741508484,
+              "end": 2.04,
+              "start": 1.76,
+              "word": "тенге"
+            },
+            {
+              "confidence": 0.9599336981773376,
+              "end": 2.64,
+              "start": 2.32,
+              "word": "сколько"
+            },
+            {
+              "confidence": 0.9999467134475708,
+              "end": 3.0,
+              "start": 2.8000000000000003,
+              "word": "будет"
+            },
+            {
+              "confidence": 0.9981514811515808,
+              "end": 3.48,
+              "start": 3.16,
+              "word": "стоить"
+            }
+          ]
+        }
+      },
+      {
+        "codec": "G722",
+        "features_bits_equal": true,
+        "kind": "parity",
+        "pcm_bits_equal": true,
+        "repetitions": 1,
+        "result_equal": true,
+        "route": "pcm",
+        "samples": 64000,
+        "vad": false,
+        "legacy_text": "шестьдесят тысяч тенге сколько будет стоить",
+        "legacy_serialized_sha256": "bfcf1cf94480c4bd2ed53f1eb27d54e51be543eafba56de0e3abff7a40b791f1",
+        "candidate_text": "шестьдесят тысяч тенге сколько будет стоить",
+        "candidate_serialized_sha256": "bfcf1cf94480c4bd2ed53f1eb27d54e51be543eafba56de0e3abff7a40b791f1"
+      },
+      {
+        "codec": "G722",
+        "features_bits_equal": true,
+        "kind": "parity",
+        "pcm_bits_equal": true,
+        "repetitions": 1,
+        "result_equal": true,
+        "route": "pcm",
+        "samples": 64000,
+        "vad": true,
+        "legacy_text": "шестьдесят тысяч тенге сколько будет стоить",
+        "legacy_serialized_sha256": "3ecd5bf2c23d639de10300e0a542cf7dc9c1bcffa2daf05ec9412507bc72122d",
+        "candidate_text": "шестьдесят тысяч тенге сколько будет стоить",
+        "candidate_serialized_sha256": "3ecd5bf2c23d639de10300e0a542cf7dc9c1bcffa2daf05ec9412507bc72122d"
+      },
+      {
+        "file": "speech_g722.wav",
+        "kind": "native_container",
+        "result": {
+          "confidence": 0.9857783317565918,
+          "duration_s": 4.0,
+          "text": "шестьдесят тысяч тенге сколько будет стоить",
+          "words": [
+            {
+              "confidence": 0.9999421834945679,
+              "end": 1.04,
+              "start": 0.56,
+              "word": "шестьдесят"
+            },
+            {
+              "confidence": 0.995381236076355,
+              "end": 1.44,
+              "start": 1.24,
+              "word": "тысяч"
+            },
+            {
+              "confidence": 0.9995313882827759,
+              "end": 2.0,
+              "start": 1.72,
+              "word": "тенге"
+            },
+            {
+              "confidence": 0.9998803734779358,
+              "end": 2.6,
+              "start": 2.2800000000000002,
+              "word": "сколько"
+            },
+            {
+              "confidence": 0.9997590184211731,
+              "end": 2.96,
+              "start": 2.7600000000000002,
+              "word": "будет"
+            },
+            {
+              "confidence": 0.923656702041626,
+              "end": 3.48,
+              "start": 3.16,
+              "word": "стоить"
+            }
+          ]
+        }
+      },
+      {
+        "codec": "Pcmu",
+        "features_bits_equal": true,
+        "kind": "parity",
+        "pcm_bits_equal": true,
+        "repetitions": 12,
+        "result_equal": true,
+        "route": "wav",
+        "samples": 767996,
+        "vad": false,
+        "legacy_text": "шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить",
+        "legacy_serialized_sha256": "8e8c7d61b1c8f85a6892286a9e41e8f4f3f76def785cb9606e59ed792492fbca",
+        "candidate_text": "шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить",
+        "candidate_serialized_sha256": "8e8c7d61b1c8f85a6892286a9e41e8f4f3f76def785cb9606e59ed792492fbca"
+      },
+      {
+        "codec": "Pcmu",
+        "features_bits_equal": true,
+        "kind": "parity",
+        "pcm_bits_equal": true,
+        "repetitions": 12,
+        "result_equal": true,
+        "route": "wav",
+        "samples": 767996,
+        "vad": true,
+        "legacy_text": "шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить",
+        "legacy_serialized_sha256": "64709a62f8fa95deb9479c7427aad83d4bef46dade15648112bee30b8570c73b",
+        "candidate_text": "шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить шестьдесят тысяч тенге сколько будет стоить",
+        "candidate_serialized_sha256": "64709a62f8fa95deb9479c7427aad83d4bef46dade15648112bee30b8570c73b"
+      }
+    ]
+  }
+}

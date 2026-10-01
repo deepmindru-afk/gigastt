@@ -20,8 +20,9 @@ pub(crate) struct FileTranscribeOpts {
     pub hotwords: Option<HotwordOverride>,
     pub split_channels: bool,
     pub diarization: bool,
-    /// When set, decode the body as a raw telephony stream and re-wrap as WAV
-    /// before the engine path. REST-only today; jobs do not expose `?codec=`.
+    /// When set, decode the body as raw telephony with legacy PCM16 precision
+    /// using bounded PCM for short clips and compact WAV for longer ones.
+    /// REST-only today; jobs do not expose `?codec=`.
     pub raw_codec: Option<(gigastt_core::inference::audio::TelephonyCodec, u32)>,
     /// Cooperative-cancellation flag threaded into the engine's token/frame
     /// decode loop. Flipping it (client disconnect, `DELETE /v1/jobs/{id}`,
@@ -189,29 +190,60 @@ pub(crate) fn map_decode_error(e: anyhow::Error) -> GigasttError {
     }
 }
 
-/// Decode raw telephony bytes to an in-memory PCM16 WAV for engine paths.
-pub(crate) fn raw_codec_to_wav(
+// Limit direct PCM to 480,000 samples (1.92 MB of data, excluding spare capacity).
+// Longer clips retain PCM16
+// WAV (2 bytes/sample) and use the existing bounded window decoder.
+const RAW_PCM_MAX_SAMPLES: usize = 30 * 16_000;
+
+#[derive(Debug)]
+pub(crate) enum PreparedRawAudio {
+    Samples(Vec<f32>),
+    Wav(Vec<u8>),
+}
+
+/// Preserve the former WAV precision without doubling long-clip retained storage.
+pub(crate) fn prepare_raw_audio(
     body: &[u8],
     codec: gigastt_core::inference::audio::TelephonyCodec,
     sample_rate: u32,
+    max_audio_secs: Option<f64>,
     abort: Option<&(dyn Fn() -> bool + Sync)>,
-) -> Result<Bytes, GigasttError> {
+) -> Result<PreparedRawAudio, GigasttError> {
+    let mut samples = gigastt_core::inference::audio::decode_telephony_raw_bounded_with_abort(
+        body,
+        codec,
+        sample_rate,
+        max_audio_secs,
+        abort,
+    )
+    .map_err(map_decode_error)?;
+    if samples.len() > RAW_PCM_MAX_SAMPLES {
+        if abort.is_some_and(|abort| abort()) {
+            return Err(GigasttError::Cancelled);
+        }
+        // Encode original samples exactly once; quantizing before encoding
+        // would apply the legacy 32767 multiplier twice.
+        let wav = gigastt_core::inference::audio::encode_wav_pcm16(&samples, 16000);
+        if abort.is_some_and(|abort| abort()) {
+            return Err(GigasttError::Cancelled);
+        }
+        return Ok(PreparedRawAudio::Wav(wav));
+    }
+    for chunk in samples.chunks_mut(4096) {
+        if abort.is_some_and(|abort| abort()) {
+            return Err(GigasttError::Cancelled);
+        }
+        gigastt_core::inference::audio::quantize_wav_pcm16_in_place(chunk);
+    }
     if abort.is_some_and(|abort| abort()) {
         return Err(GigasttError::Cancelled);
     }
-    let samples = gigastt_core::inference::audio::decode_telephony_raw(body, codec, sample_rate)
-        .map_err(map_decode_error)?;
-    if abort.is_some_and(|abort| abort()) {
-        return Err(GigasttError::Cancelled);
-    }
-    Ok(Bytes::from(
-        gigastt_core::inference::audio::encode_wav_pcm16(&samples, 16000),
-    ))
+    Ok(PreparedRawAudio::Samples(samples))
 }
 
 /// Blocking file transcription against a reserved triplet.
 ///
-/// Handles raw-codec rewrap, `channels=split` with mono fallback, diarization,
+/// Handles raw-codec preparation, `channels=split` with mono fallback, diarization,
 /// and the default mono path. Callers own pool checkout, panic wrapping, and
 /// timeout policy.
 pub(crate) fn run_file_transcribe_blocking(
@@ -257,10 +289,22 @@ fn with_file_transcribe_request<T>(
     // Keep upload admission alive even if raw-codec or channel decoding replaces
     // the encoded buffer with prepared audio inside this detached worker.
     let _upload_lifetime = body.clone();
-    let body = match opts.raw_codec {
-        Some((codec, rate)) => raw_codec_to_wav(&body, codec, rate, abort)?,
-        None => body,
-    };
+    if let Some((codec, rate)) = opts.raw_codec {
+        let prepared = prepare_raw_audio(&body, codec, rate, opts.max_audio_secs, abort)?;
+        if opts.split_channels {
+            tracing::warn!(
+                "channels=split requested for raw mono audio; falling back to mono transcription"
+            );
+        }
+        return match prepared {
+            PreparedRawAudio::Samples(samples) => {
+                transcribe(opts.request(TranscribeSource::Samples(&samples)))
+            }
+            PreparedRawAudio::Wav(wav) => {
+                transcribe(opts.request(TranscribeSource::Bytes(wav.into())))
+            }
+        };
+    }
 
     check_abort()?;
     if opts.split_channels {
@@ -498,6 +542,167 @@ mod tests {
     }
 
     #[test]
+    fn test_raw_pcm_routing_preserves_legacy_samples_and_request_context() {
+        use gigastt_core::inference::audio::{
+            TelephonyCodec, decode_audio_bytes, decode_telephony_raw, encode_wav_pcm16,
+        };
+        let body: Bytes = (0..8000).map(|i| i as u8).collect::<Vec<_>>().into();
+        for codec in [
+            TelephonyCodec::Pcmu,
+            TelephonyCodec::Pcma,
+            TelephonyCodec::G722,
+        ] {
+            let decoded = decode_telephony_raw(&body, codec, 8000).unwrap();
+            let expected = decode_audio_bytes(&encode_wav_pcm16(&decoded, 16000)).unwrap();
+            for split_channels in [false, true] {
+                let opts = FileTranscribeOpts {
+                    raw_codec: Some((codec, 8000)),
+                    split_channels,
+                    diarization: true,
+                    overrides: TranscribeOverrides {
+                        punctuation: Some(false),
+                        itn: Some(true),
+                        vad: Some(true),
+                    },
+                    hotwords: Some(HotwordOverride::new(vec!["тест".into()], Some(3.0))),
+                    abort: Some(Arc::new(AtomicBool::new(false))),
+                    partial: Some(Arc::new(Default::default())),
+                    progress: Some(Arc::new(AtomicU64::new(17))),
+                    progress_channels: Some(Arc::new(AtomicU64::new(0))),
+                    diarization_outcome: Some(Arc::new(Default::default())),
+                    max_audio_secs: Some(2.0),
+                };
+                with_file_transcribe_request(body.clone(), &opts, true, |request| {
+                    let TranscribeSource::Samples(samples) = request.source else {
+                        panic!("raw audio should bypass the WAV container");
+                    };
+                    assert_eq!(
+                        samples.iter().map(|s| s.to_bits()).collect::<Vec<_>>(),
+                        expected.iter().map(|s| s.to_bits()).collect::<Vec<_>>()
+                    );
+                    assert_eq!(request.overrides.punctuation, Some(false));
+                    assert_eq!(request.overrides.itn, Some(true));
+                    assert_eq!(request.overrides.vad, Some(true));
+                    assert!(std::ptr::eq(
+                        request.hotwords.unwrap(),
+                        opts.hotwords.as_ref().unwrap()
+                    ));
+                    assert!(Arc::ptr_eq(
+                        request.abort.as_ref().unwrap(),
+                        opts.abort.as_ref().unwrap()
+                    ));
+                    assert!(Arc::ptr_eq(
+                        request.partial.as_ref().unwrap(),
+                        opts.partial.as_ref().unwrap()
+                    ));
+                    assert!(Arc::ptr_eq(
+                        request.progress.as_ref().unwrap(),
+                        opts.progress.as_ref().unwrap()
+                    ));
+                    assert_eq!(request.max_audio_secs, opts.max_audio_secs);
+                    assert_eq!(request.diarization, !split_channels);
+                    assert_eq!(request.diarization_outcome.is_some(), !split_channels);
+                    assert_eq!(
+                        opts.progress_channels
+                            .as_ref()
+                            .unwrap()
+                            .load(Ordering::Relaxed),
+                        1
+                    );
+                    Ok(())
+                })
+                .unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn test_raw_routing_threshold_and_one_sample_over_preserve_precision() {
+        use gigastt_core::inference::audio::{
+            TelephonyCodec, decode_audio_bytes, decode_telephony_raw, encode_wav_pcm16,
+        };
+        for samples in [RAW_PCM_MAX_SAMPLES, RAW_PCM_MAX_SAMPLES + 1] {
+            // G.711 at 16 kHz decodes one byte to exactly one output sample.
+            let body: Bytes = (0..samples).map(|i| i as u8).collect::<Vec<_>>().into();
+            let expected = encode_wav_pcm16(
+                &decode_telephony_raw(&body, TelephonyCodec::Pcma, 16000).unwrap(),
+                16000,
+            );
+            let opts = FileTranscribeOpts {
+                raw_codec: Some((TelephonyCodec::Pcma, 16000)),
+                ..Default::default()
+            };
+            with_file_transcribe_request(body, &opts, false, |request| {
+                match request.source {
+                    TranscribeSource::Samples(pcm) => {
+                        assert_eq!(samples, RAW_PCM_MAX_SAMPLES);
+                        assert_eq!(pcm, decode_audio_bytes(&expected).unwrap());
+                    }
+                    TranscribeSource::Bytes(wav) => {
+                        assert_eq!(samples, RAW_PCM_MAX_SAMPLES + 1);
+                        assert_eq!(wav.as_ref(), expected);
+                    }
+                    _ => panic!("unexpected raw source"),
+                }
+                Ok(())
+            })
+            .unwrap();
+        }
+    }
+
+    #[test]
+    fn test_raw_preparation_checks_cancellation_after_both_representations() {
+        use gigastt_core::inference::audio::TelephonyCodec;
+        use std::sync::atomic::AtomicUsize;
+        for samples in [160, RAW_PCM_MAX_SAMPLES + 1] {
+            let body = vec![0xff; samples];
+            let checks = AtomicUsize::new(0);
+            prepare_raw_audio(
+                &body,
+                TelephonyCodec::Pcmu,
+                16000,
+                None,
+                Some(&|| {
+                    checks.fetch_add(1, Ordering::Relaxed);
+                    false
+                }),
+            )
+            .unwrap();
+            let final_check = checks.load(Ordering::Relaxed) - 1;
+            checks.store(0, Ordering::Relaxed);
+            let result = prepare_raw_audio(
+                &body,
+                TelephonyCodec::Pcmu,
+                16000,
+                None,
+                Some(&|| checks.fetch_add(1, Ordering::Relaxed) == final_check),
+            );
+            assert!(matches!(result, Err(GigasttError::Cancelled)));
+        }
+    }
+
+    #[test]
+    fn test_raw_pcm_duration_budget_rejects_before_engine_routing() {
+        use gigastt_core::inference::audio::TelephonyCodec;
+        for codec in [
+            TelephonyCodec::Pcmu,
+            TelephonyCodec::Pcma,
+            TelephonyCodec::G722,
+        ] {
+            let opts = FileTranscribeOpts {
+                raw_codec: Some((codec, 8000)),
+                max_audio_secs: Some(0.01),
+                ..Default::default()
+            };
+            let result =
+                with_file_transcribe_request(Bytes::from(vec![0xff; 8000]), &opts, false, |_| {
+                    Ok(())
+                });
+            assert!(matches!(result, Err(GigasttError::AudioTooLong { .. })));
+        }
+    }
+
+    #[test]
     fn test_file_transcribe_opts_default() {
         let opts = FileTranscribeOpts::default();
         assert!(!opts.split_channels);
@@ -510,12 +715,13 @@ mod tests {
     }
 
     #[test]
-    fn test_raw_codec_to_wav_rejects_empty_pcmu() {
+    fn test_prepare_raw_audio_rejects_empty_pcmu() {
         // Empty PCMU body is invalid for telephony decode.
-        let err = raw_codec_to_wav(
+        let err = prepare_raw_audio(
             &[],
             gigastt_core::inference::audio::TelephonyCodec::Pcmu,
             8000,
+            None,
             None,
         )
         .unwrap_err();
