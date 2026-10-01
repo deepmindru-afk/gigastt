@@ -25,6 +25,34 @@ class TextTests(unittest.TestCase):
                     with self.subTest(text=text):
                         self.assertTrue(publication.scan_text("metadata", text))
 
+    def test_rejects_prose_dotted_and_placeholder_labels(self):
+        values = ["task" + " 12", "Task" + " 0.1", "tasks" + " 1.4/2.2/2.3",
+                  internal(number="1.2"), internal("DOC"),
+                  "Part " + "1 item " + "2"]
+        values += [internal(prefix, marker) for prefix in publication.PREFIXES
+                   for marker in ("NN", "NNN", "XX", "XXX")]
+        values += [internal("T", "NNN"), internal("TODO", "CUDA"), internal(number="<>")]
+        for value in values:
+            with self.subTest(value=value):
+                self.assertTrue(publication.scan_text("metadata", value))
+                errors = publication.scan_text(value, value)
+                self.assertNotIn(value, "\n".join(errors))
+
+    def test_rejects_explicit_labels_with_markdown_or_parentheses(self):
+        for wrapper in ("**{}**", "`{}`", "({})"):
+            for number in ("74", "70/71", "1.2", "70 (rnnt-head-primary)", "72 — quantize-qoperator"):
+                for label in ("task", "tasks"):
+                    value = label + " " + wrapper.format(number)
+                    with self.subTest(value=value):
+                        self.assertTrue(publication.scan_text("metadata", value))
+                        self.assertNotIn(value, "\n".join(publication.scan_text(value, value)))
+
+    def test_allows_public_numbers_process_counts_and_dataset_list(self):
+        text = "run 2 tasks; 12 concurrent tasks; task::spawn; PR #123; RUSTSEC-2026-0001; CUDA-12; TODO: enable CUDA"
+        self.assertEqual(publication.scan_text("source", text), [])
+        roadmap = SCRIPT.parent.parent / "docs/held-out-datasets-roadmap.md"
+        self.assertEqual(publication.scan_text(str(roadmap), roadmap.read_text()), [])
+
     def test_allows_upstream_specification_and_ordinary_issue_numbers(self):
         text = (
             "https://www.opencompute.org/documents/ocp-microscaling-formats-mx-v1-0-spec-final-pdf\n"
