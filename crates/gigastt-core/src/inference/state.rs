@@ -184,35 +184,9 @@ impl StreamingState {
     }
 }
 
-/// Last readable transcript, shared with the caller of a blocking decode.
-/// Updated after each file window, streaming hypothesis, or interrupted decode.
-/// A snapshot is provisional and never represents successful completion.
-#[derive(Debug, Default)]
-pub struct TranscriptSnapshot(parking_lot::Mutex<Option<TranscriptSegment>>);
-
-impl TranscriptSnapshot {
-    pub(crate) fn clear(&self) {
-        *self.0.lock() = None;
-    }
-
-    /// Read the latest snapshot, including after cancellation or timeout.
-    pub fn get(&self) -> Option<TranscriptSegment> {
-        self.0.lock().clone()
-    }
-
-    pub(crate) fn store(&self, mut segment: TranscriptSegment) {
-        segment.is_final = false;
-        segment.speech_final = false;
-        segment.endpoint_reason = None;
-        *self.0.lock() = Some(segment);
-    }
-
-    pub(crate) fn store_words(&self, words: &[WordInfo]) {
-        let mut assembler = TranscriptAssembler::new();
-        assembler.append(words.to_vec());
-        self.store(assembler.partial(now_timestamp()));
-    }
-}
+mod snapshot;
+pub(crate) use snapshot::SnapshotPublisher;
+pub use snapshot::TranscriptSnapshot;
 
 /// Audio feature extraction pipeline.
 ///
@@ -515,18 +489,19 @@ impl TranscriptAssembler {
     pub fn partial(&self, timestamp: f64) -> TranscriptSegment {
         let words = self.full_words();
         let text = self.full_text();
+        let confidence = aggregate_confidence(&words);
         TranscriptSegment {
             committed: self.committed_text.clone(),
             // The separator belongs to the tentative tail so concatenation
             // needs no trimming, and the committed bytes never change.
             tentative: text[self.committed_text.len()..].to_owned(),
             text,
-            words: words.clone(),
+            words,
             is_final: false,
             speech_final: false,
             endpoint_reason: None,
             timestamp,
-            confidence: aggregate_confidence(&words),
+            confidence,
             truncated: false,
         }
     }

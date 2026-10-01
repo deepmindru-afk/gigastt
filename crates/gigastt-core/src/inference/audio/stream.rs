@@ -246,6 +246,12 @@ pub(crate) trait PcmWindows {
     /// remove silence before decoding). Plain sources already use that clock.
     fn remap_words(&self, _words: &mut [crate::inference::WordInfo]) {}
 
+    /// Compressed timestamps up to this boundary have a permanent mapping.
+    /// A growing VAD region list can change previously clamped later times.
+    fn remap_stable_before(&self) -> f64 {
+        f64::INFINITY
+    }
+
     /// Lend the next window, or `Ok(None)` once the stream is exhausted.
     fn next_window(&mut self) -> Result<Option<PcmWindow<'_>>, GigasttError>;
 }

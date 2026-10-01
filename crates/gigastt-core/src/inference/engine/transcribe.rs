@@ -25,9 +25,16 @@ impl Engine {
             Box::new(move |n: u64| counter.store(n, std::sync::atomic::Ordering::Release))
                 as Box<dyn Fn(u64)>
         });
-        let partial_fn = |words: &[WordInfo]| {
+        let publisher = std::cell::RefCell::new(super::super::state::SnapshotPublisher::default());
+        let partial_fn = |update: WordUpdate| {
             if let Some(partial) = &req.partial {
-                partial.store_words(words);
+                publisher.borrow_mut().publish(
+                    partial,
+                    update.retained,
+                    update.words,
+                    update.channel,
+                    now_timestamp(),
+                );
             }
         };
         let ctl = DecodeControls {
@@ -36,7 +43,7 @@ impl Engine {
             on_partial: req
                 .partial
                 .as_ref()
-                .map(|_| &partial_fn as &dyn Fn(&[WordInfo])),
+                .map(|_| &partial_fn as &dyn Fn(WordUpdate)),
         };
         ctl.check_abort()?;
 

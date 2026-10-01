@@ -123,16 +123,27 @@ fn aligned_cut(merged: &[WordInfo], next: &[WordInfo], seam: f64) -> Option<(usi
 /// match the midpoint timestamp rule remains the conservative fallback.
 /// Only the bounded overlap is aligned; the accumulated transcript is not
 /// rescanned or cloned on each window.
+#[cfg(test)]
 pub(crate) fn stitch_chunk_words(
-    mut merged: Vec<WordInfo>,
+    merged: Vec<WordInfo>,
     next: Vec<WordInfo>,
     seam_s: f64,
 ) -> Vec<WordInfo> {
+    stitch_chunk_words_retained(merged, next, seam_s).0
+}
+
+/// Return the exact unchanged prefix length alongside the stitched words.
+pub(crate) fn stitch_chunk_words_retained(
+    mut merged: Vec<WordInfo>,
+    next: Vec<WordInfo>,
+    seam_s: f64,
+) -> (Vec<WordInfo>, usize) {
     if merged.is_empty() {
-        return next;
+        return (next, 0);
     }
     if next.is_empty() {
-        return merged;
+        let retained = merged.len();
+        return (merged, retained);
     }
     let (old_end, new_start) = aligned_cut(&merged, &next, seam_s).unwrap_or_else(|| {
         (
@@ -142,5 +153,5 @@ pub(crate) fn stitch_chunk_words(
     });
     merged.truncate(old_end);
     merged.extend(next.into_iter().skip(new_start));
-    merged
+    (merged, old_end)
 }

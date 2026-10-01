@@ -16,6 +16,8 @@ mod load_files;
 mod pool;
 mod sizing;
 mod state;
+#[cfg(any(test, feature = "__internals"))]
+pub(crate) use state::SnapshotPublisher;
 mod token_format;
 mod types;
 mod windows;
