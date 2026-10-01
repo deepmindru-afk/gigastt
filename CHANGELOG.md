@@ -21,6 +21,12 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 
 ### Changed
 
+- Prepare raw PCMU/PCMA/G.722 uploads with duration checks before codec allocation
+  and cancellation checks during resampling. Clips up to 30 seconds bypass the
+  temporary WAV container with identical PCM16 precision; longer clips retain
+  compact PCM16 WAV storage to avoid doubling retained audio memory. See
+  [raw telephony measurements](docs/raw-telephony-pcm.md).
+
 - Poll cancellation during channel scanning and buffered audio decode, between offline diarization steps, and across speaker-loading and text-postprocessing boundaries. Preserve readable partial transcripts and document the synchronous calls that can delay worker/resource release.
 
 - Run a bounded, serial model smoke gate on every PR: pinned CPU encoder and

@@ -280,14 +280,7 @@ pub(crate) async fn run_transcribe(
         // matching `encode_wav_pcm16` and the PCM decode path. Whether
         // full-precision f32 is better requires telephony WER measurements;
         // do not silently drop this snap.
-        for s in samples.iter_mut() {
-            let v = if s.is_finite() {
-                s.clamp(-1.0, 1.0)
-            } else {
-                0.0
-            };
-            *s = (v * 32767.0).round() as i16 as f32 / 32768.0;
-        }
+        inference::audio::quantize_wav_pcm16_in_place(&mut samples);
         engine.transcribe_request(
             inference::TranscribeRequest::new(inference::TranscribeSource::Samples(&samples)),
             &mut guard,

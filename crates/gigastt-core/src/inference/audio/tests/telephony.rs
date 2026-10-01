@@ -273,3 +273,163 @@ fn test_encode_wav_pcm16_clamps_and_sanitizes() {
     assert!(decoded[2].abs() < 1e-3, "NaN must become silence");
     assert!((decoded[3] - 0.5).abs() < 1e-3);
 }
+
+#[test]
+fn test_in_place_pcm16_precision_matches_wav_for_every_code_and_edges() {
+    let mut samples: Vec<f32> = (i16::MIN..=i16::MAX)
+        .map(|code| f32::from(code) / 32768.0 + 0.25 / 32768.0)
+        .collect();
+    samples.extend([
+        f32::NAN,
+        f32::INFINITY,
+        f32::NEG_INFINITY,
+        -0.0,
+        0.0,
+        -2.0,
+        2.0,
+    ]);
+    let expected = decode_audio_bytes(&encode_wav_pcm16(&samples, 16000)).unwrap();
+    quantize_wav_pcm16_in_place(&mut samples);
+    assert_eq!(
+        samples.iter().map(|s| s.to_bits()).collect::<Vec<_>>(),
+        expected.iter().map(|s| s.to_bits()).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+#[cfg_attr(miri, ignore = "rubato sinc resampler is too slow under Miri")]
+fn test_raw_budget_uses_audio_rate_and_exact_sample_boundaries() {
+    for (codec, rate, bytes_per_second) in [
+        (TelephonyCodec::Pcmu, 8000, 8000),
+        (TelephonyCodec::Pcma, 8000, 8000),
+        (TelephonyCodec::Pcmu, 16000, 16000),
+        (TelephonyCodec::Pcma, 11025, 11025),
+        (TelephonyCodec::Pcma, 48000, 48000),
+        (TelephonyCodec::G722, 8000, 8000),
+        (TelephonyCodec::G722, 16000, 8000),
+    ] {
+        let data = vec![0xff; bytes_per_second];
+        let exact =
+            decode_telephony_raw_bounded_with_abort(&data, codec, rate, Some(1.0), None).unwrap();
+        let legacy = decode_telephony_raw(&data, codec, rate).unwrap();
+        assert_eq!(exact, legacy);
+        for (length, limit) in [
+            (bytes_per_second + 1, 1.0),
+            (bytes_per_second, f64::from_bits(1.0f64.to_bits() - 1)),
+        ] {
+            let err = decode_telephony_raw_bounded_with_abort(
+                &vec![0xff; length],
+                codec,
+                rate,
+                Some(limit),
+                None,
+            )
+            .unwrap_err();
+            assert!(matches!(
+                err.downcast_ref::<crate::error::GigasttError>(),
+                Some(crate::error::GigasttError::AudioTooLong { .. })
+            ));
+        }
+        // G.722's 8 kHz hint is an RTP clock: one byte still decodes two
+        // 16 kHz samples, so a one-sample budget cannot admit one byte.
+        if codec == TelephonyCodec::G722 {
+            assert!(
+                decode_telephony_raw_bounded_with_abort(
+                    &[0xff],
+                    codec,
+                    rate,
+                    Some(1.0 / 16000.0),
+                    None
+                )
+                .is_err()
+            );
+            assert_eq!(
+                decode_telephony_raw_bounded_with_abort(
+                    &[0xff],
+                    codec,
+                    rate,
+                    Some(2.0 / 16000.0),
+                    None
+                )
+                .unwrap()
+                .len(),
+                2
+            );
+        }
+    }
+}
+
+#[test]
+fn test_raw_budget_rejects_before_codec_and_preserves_disabled_limit_semantics() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let checks = AtomicUsize::new(0);
+    let abort = || {
+        checks.fetch_add(1, Ordering::Relaxed);
+        false
+    };
+    let result = decode_telephony_raw_bounded_with_abort(
+        &[0xff; 1000],
+        TelephonyCodec::Pcmu,
+        16000,
+        Some(0.001),
+        Some(&abort),
+    );
+    assert!(result.is_err());
+    // No post-codec checkpoint was reached: ryf rejects the known frame count
+    // before materializing decoded PCM.
+    assert_eq!(checks.load(Ordering::Relaxed), 1);
+    for limit in [
+        None,
+        Some(0.0),
+        Some(-1.0),
+        Some(f64::NAN),
+        Some(f64::INFINITY),
+    ] {
+        assert_eq!(
+            decode_telephony_raw_bounded_with_abort(
+                &[0xff; 100],
+                TelephonyCodec::Pcmu,
+                16000,
+                limit,
+                None
+            )
+            .unwrap()
+            .len(),
+            100
+        );
+    }
+}
+
+#[test]
+#[cfg_attr(miri, ignore = "rubato sinc resampler is too slow under Miri")]
+fn test_raw_decode_cancels_before_codec_and_between_resampling_stages() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    for stop in 0..=4 {
+        let checks = AtomicUsize::new(0);
+        let abort = || checks.fetch_add(1, Ordering::Relaxed) >= stop;
+        let error = decode_telephony_raw_bounded_with_abort(
+            &vec![0xff; 150_000],
+            TelephonyCodec::Pcmu,
+            8000,
+            None,
+            Some(&abort),
+        )
+        .unwrap_err();
+        assert!(matches!(
+            error.downcast_ref::<crate::error::GigasttError>(),
+            Some(crate::error::GigasttError::Cancelled)
+        ));
+    }
+    let error = decode_telephony_raw_bounded_with_abort(
+        &[],
+        TelephonyCodec::Pcmu,
+        1,
+        Some(0.001),
+        Some(&|| true),
+    )
+    .unwrap_err();
+    assert!(matches!(
+        error.downcast_ref::<crate::error::GigasttError>(),
+        Some(crate::error::GigasttError::Cancelled)
+    ));
+}

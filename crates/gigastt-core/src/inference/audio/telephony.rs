@@ -14,7 +14,7 @@ use super::resample::{RESAMPLE_STAGING_FRAMES, ResampleTo16k, SampleRate};
 #[cfg(feature = "file-decode")]
 use super::wave::{decode_options, map_ryf_err, take_mono};
 #[cfg(feature = "file-decode")]
-use super::{WHOLE_BUFFER_MAX_AUDIO_SECS, audio_too_long_err, resolve_budget};
+use super::{audio_too_long_err, check_decode_abort, resolve_budget, whole_buffer_limit_secs};
 
 /// Headerless telephony codecs accepted for raw uploads (`?codec=` on REST,
 /// `--codec` on the CLI). WAV-carried G.711/G.722 needs no such hint — the
@@ -73,13 +73,32 @@ pub fn decode_telephony_raw(
     codec: TelephonyCodec,
     sample_rate: u32,
 ) -> Result<Vec<f32>> {
+    decode_telephony_raw_bounded_with_abort(data, codec, sample_rate, None, None)
+}
+
+/// Decode raw mono telephony with an operator duration limit and cancellation.
+/// The limit is checked at the decoded source rate before codec allocation:
+/// G.711 has one frame per byte; G.722 has two at 16 kHz, including its 8 kHz
+/// RTP clock alias. The whole-buffer safety ceiling still applies.
+/// Cancellation is checked around the synchronous codec call and between
+/// resampling stages; an active third-party codec call is not interruptible.
+#[cfg(feature = "file-decode")]
+pub fn decode_telephony_raw_bounded_with_abort(
+    data: &[u8],
+    codec: TelephonyCodec,
+    sample_rate: u32,
+    max_audio_secs: Option<f64>,
+    abort: Option<&(dyn Fn() -> bool + Sync)>,
+) -> Result<Vec<f32>> {
+    check_decode_abort(abort)?;
     if data.is_empty() {
         anyhow::bail!("Empty audio payload");
     }
     codec
         .validate_sample_rate(sample_rate)
         .map_err(|e| anyhow::anyhow!("{e}"))?;
-    let opts = decode_options(Some(WHOLE_BUFFER_MAX_AUDIO_SECS), ChannelMode::Mono);
+    let limit_secs = whole_buffer_limit_secs(max_audio_secs);
+    let opts = decode_options(Some(limit_secs), ChannelMode::Mono);
     let (rate, pcm) = match codec {
         TelephonyCodec::Pcmu => {
             let decoded = ryf::decode_g711(data, G711Law::MuLaw, sample_rate, 1, &opts)
@@ -96,23 +115,30 @@ pub fn decode_telephony_raw(
             take_mono(decoded)?
         }
     };
-    let (max_samples, limit_secs) = resolve_budget(Some(WHOLE_BUFFER_MAX_AUDIO_SECS), rate);
+    check_decode_abort(abort)?;
+    let (max_samples, _) = resolve_budget(Some(limit_secs), rate);
     if pcm.len() > max_samples {
         return Err(audio_too_long_err(pcm.len(), rate, limit_secs));
     }
-    // Convert and resample in staged chunks so the full-length source-rate
-    // f32 buffer is never materialized alongside the 16 kHz output.
+    // Preserve the cached resampler's established staging boundaries. The codec
+    // owns a whole source-rate PCM buffer; resampling also builds 16 kHz output.
     let mut acc = ResampleTo16k::new(SampleRate(rate), Some(pcm.len()));
     for piece in pcm.chunks(RESAMPLE_STAGING_FRAMES) {
+        check_decode_abort(abort)?;
         acc.stage().extend_from_slice(piece);
         acc.flush_full()?;
     }
-    acc.finish()
+    check_decode_abort(abort)?;
+    let samples = acc.finish()?;
+    check_decode_abort(abort)?;
+    let (max_samples, _) = resolve_budget(Some(limit_secs), 16_000);
+    if samples.len() > max_samples {
+        return Err(audio_too_long_err(samples.len(), 16_000, limit_secs));
+    }
+    Ok(samples)
 }
 
-/// Wrap mono f32 samples in a PCM16 RIFF/WAVE container. Lets raw-codec
-/// uploads (already decoded to 16 kHz) flow back through the standard
-/// container-probing engine entry points without a temp file. Samples are
+/// Wrap mono f32 samples in a PCM16 RIFF/WAVE container. Samples are
 /// clamped to [-1.0, 1.0]; non-finite values become silence.
 #[cfg(feature = "file-decode")]
 pub fn encode_wav_pcm16(samples: &[f32], sample_rate: u32) -> Vec<u8> {
@@ -131,15 +157,31 @@ pub fn encode_wav_pcm16(samples: &[f32], sample_rate: u32) -> Vec<u8> {
     buf.extend_from_slice(&16u16.to_le_bytes()); // bits per sample
     buf.extend_from_slice(b"data");
     buf.extend_from_slice(&data_size.to_le_bytes());
-    for &s in samples {
-        let v = if s.is_finite() {
-            s.clamp(-1.0, 1.0)
-        } else {
-            0.0
-        };
-        buf.extend_from_slice(&((v * 32767.0).round() as i16).to_le_bytes());
+    for &sample in samples {
+        buf.extend_from_slice(&pcm16_sample(sample).to_le_bytes());
     }
     buf
+}
+
+/// Reproduce [`encode_wav_pcm16`] followed by 16 kHz PCM16 decoding in place.
+/// This deliberately multiplies by 32767 before rounding, then divides the
+/// signed sample by 32768. It is not interchangeable with narrowband resampler
+/// rounding, and must still be applied after that separate precision stage.
+#[cfg(feature = "file-decode")]
+pub fn quantize_wav_pcm16_in_place(samples: &mut [f32]) {
+    for sample in samples {
+        *sample = f32::from(pcm16_sample(*sample)) / 32768.0;
+    }
+}
+
+#[cfg(feature = "file-decode")]
+fn pcm16_sample(sample: f32) -> i16 {
+    let sample = if sample.is_finite() {
+        sample.clamp(-1.0, 1.0)
+    } else {
+        0.0
+    };
+    (sample * 32767.0).round() as i16
 }
 
 /// Locate a RIFF chunk payload by 4-byte id, tolerating a truncated final
