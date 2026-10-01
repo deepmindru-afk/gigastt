@@ -110,7 +110,9 @@ source of truth, and out-of-band uploads break SHA-pinned clients (e.g. Murmur).
 
    The same workflow also publishes multi-arch GHCR images (`:x.y.z` / `:latest`, plus
    `:x.y.z-cuda` / `:cuda`), offline bundles and `.deb` packages, an SBOM, SLSA provenance
-   and minisign signatures. Homebrew's Formula is pinned automatically by `homebrew.yml`.
+   and minisign signatures. Homebrew's Formula update is proposed by `homebrew.yml` as a PR. Approve its
+   workflows when prompted, wait for green checks and merge it; see
+   [Homebrew release updates](../docs/homebrew-release.md).
 7. **Verify the release page** on GitHub — all assets attached, release notes generated.
 8. **Publish to crates.io** (only after step 7):
    ```sh

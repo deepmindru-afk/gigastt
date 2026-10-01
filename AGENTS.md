@@ -320,7 +320,7 @@ The `e2e_rnnt` head (`--model-variant e2e_rnnt`) uses the parallel `v3_e2e_rnnt_
 | `.github/workflows/ci.yml` | PR + main push | fmt, clippy, unit tests, feature compile checks (coreml, cuda, diarization, candle, ane), `cargo audit`, `cargo deny` |
 | `.github/workflows/soak.yml` | Nightly 03:17 UTC + manual | soak_test + load_test with cached model |
 | `.github/workflows/release.yml` | Tag push `v*` + manual | Multi-arch build, tarball + SHA256, CycloneDX SBOM, SLSA provenance, minisign signatures |
-| `.github/workflows/homebrew.yml` | Release published | Update Homebrew tap Formula |
+| `.github/workflows/homebrew.yml` | Successful tag release + manual | Propose Homebrew Formula PR; maintainer starts checks and merges |
 
 ### E2E test strategy
 

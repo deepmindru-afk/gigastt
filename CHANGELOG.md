@@ -125,6 +125,8 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 - Resolve and validate release tags before building artifacts. Manual dispatch,
   binary packages, SBOMs and container images now share one immutable source
   commit, with workflow and artifact source recorded separately in provenance.
+- Propose validated Homebrew release pins through a protected pull request instead
+  of pushing directly to main; document the required bot-PR workflow approval.
 
 - Provision punctuation and VAD sidecars before model-backed coverage tests,
   including recognition-only cache hits. Pin the encoder oracle to CPU/rnnt,
