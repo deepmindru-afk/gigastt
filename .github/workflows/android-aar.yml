@@ -1,12 +1,10 @@
 # Build + publish the gigastt Android library (AAR) via UniFFI Kotlin.
 #
-# EXPERIMENTAL — this pipeline has NOT been validated end-to-end on a real
-# Android toolchain (no NDK/Gradle in the authoring environment). The Rust side
-# is proven (the `Android FFI Build` CI already cross-builds gigastt-ffi via
-# cargo-ndk, and gigastt-uniffi is the same kind of cdylib); the Gradle/Maven
-# assembly + publish steps below follow the canonical UniFFI-Android pattern but
-# should be verified by a maintainer with an Android environment before relying
-# on a published AAR. Manual (`workflow_dispatch`).
+# EXPERIMENTAL — nonpublishing CI run 36887391146 verified all three native
+# ABIs, Kotlin generation and Gradle AAR assembly. Android device execution,
+# Maven publication and release attachment remain untested.
+# Evidence: https://github.com/ekhodzitsky/gigastt/actions/runs/36887391146
+# Manual (`workflow_dispatch`).
 #
 # Packages, per ABI, libgigastt_uniffi.so + libonnxruntime.so
 # + the UniFFI-generated Kotlin into a self-contained AAR. The ~215 MB model
