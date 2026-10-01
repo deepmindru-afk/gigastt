@@ -170,7 +170,8 @@ pub async fn transcribe_stream(
     // here (so an unsupported or malformed header still fails as a clean HTTP
     // status, before the stream opens) and decodes packets on demand.
     let max_audio_secs = limits.max_audio_secs_opt();
-    let chunks = tokio::task::spawn_blocking(move || {
+    let (chunks, upload_lifetime) = tokio::task::spawn_blocking(move || {
+        let upload_lifetime = body.clone();
         // catch_unwind mirrors the REST handler: a panic inside the blocking
         // probe (e.g. a crafted container that trips an upstream arithmetic
         // panic) is absorbed and surfaced as a normal decode error instead of a
@@ -178,7 +179,7 @@ pub async fn transcribe_stream(
         match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             open_stream_chunks_blocking(body, max_audio_secs)
         })) {
-            Ok(inner) => inner,
+            Ok(inner) => inner.map(|chunks| (chunks, upload_lifetime)),
             Err(_) => {
                 tracing::error!("Panic in SSE audio probe — treated as decode error");
                 Err(anyhow::anyhow!("Audio decode thread panicked"))
@@ -217,6 +218,7 @@ pub async fn transcribe_stream(
         super::super::file_transcribe::stream_abort(&tx, cancel.clone(), &tracker);
     let span = tracing::Span::current();
     tracker.spawn_blocking(move || {
+        let _upload_lifetime = upload_lifetime;
         let _finished = finished;
         let _enter = span.enter();
         // catch_unwind ensures the triplet is returned to the pool even on panic.

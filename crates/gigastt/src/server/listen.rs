@@ -408,7 +408,17 @@ pub async fn run_with_config_listener_reloadable(
     // `/metrics` is intentionally NOT here: it lives on its own loopback
     // listener (see below) so telemetry is never exposed to allowlisted
     // browser origins nor throttled by the per-IP limiter.
-    let protected = router::protected_v1_router(config.limits.jobs_enabled);
+    let upload_capacity = state.engine.load().pool_for_batch().total();
+    let admission = super::upload::UploadAdmission::new(
+        upload_capacity,
+        config::pool_retry_after_secs(&config.limits),
+    );
+    tracing::info!(
+        upload_capacity,
+        body_limit_bytes = config.limits.body_limit_bytes,
+        "HTTP upload admission enabled (boot-time limits)"
+    );
+    let protected = router::protected_v1_router(config.limits.jobs_enabled, admission);
 
     let protected = protected
         .layer(axum::middleware::from_fn_with_state(

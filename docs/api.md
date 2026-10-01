@@ -945,6 +945,7 @@ mid-job.
 | 422 | `transcription_error` | Audio decoded but inference failed |
 | 429 | `queue_full` | In-memory job store is full; `Retry-After` header included |
 | 429 | `rate_limited` | Per-IP token bucket exhausted; `Retry-After` header included |
+| 503 | `upload_busy` | Active upload limit reached before body collection; `Retry-After` + `retry_after_ms`; see [upload budgets](long-recordings.md#aggregate-upload-admission) |
 | 503 | `timeout` | All inference sessions busy; `Retry-After` + `retry_after_ms` |
 | 503 | `pool_closed` | Server is shutting down, pool closed to new checkouts |
 | 503 | `cancelled` | The run was aborted cooperatively — client disconnect, `DELETE /v1/jobs/{id}`, or shutdown |
