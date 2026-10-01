@@ -209,3 +209,79 @@ async fn test_store_update_missing_returns_error() {
             .is_err()
     );
 }
+
+/// Implements only the original store surface, as an external backend would.
+struct LegacyStore(InMemoryJobStore);
+
+impl JobStore for LegacyStore {
+    fn create<'a>(&'a self, job: Job) -> JobStoreFuture<'a, anyhow::Result<String>> {
+        self.0.create(job)
+    }
+    fn get<'a>(&'a self, id: &str) -> JobStoreFuture<'a, anyhow::Result<Option<Job>>> {
+        self.0.get(id)
+    }
+    fn update<'a>(
+        &'a self,
+        id: &str,
+        f: Box<dyn FnOnce(&mut Job) + Send>,
+    ) -> JobStoreFuture<'a, anyhow::Result<()>> {
+        self.0.update(id, f)
+    }
+    fn next_queued<'a>(&'a self) -> JobStoreFuture<'a, anyhow::Result<Option<String>>> {
+        self.0.next_queued()
+    }
+    fn requeue<'a>(&'a self, id: &str) -> JobStoreFuture<'a, anyhow::Result<()>> {
+        self.0.requeue(id)
+    }
+    fn is_full<'a>(&'a self) -> JobStoreFuture<'a, bool> {
+        self.0.is_full()
+    }
+}
+
+#[tokio::test]
+async fn test_legacy_store_defaults_preserve_lifecycle_and_retry() {
+    let store = LegacyStore(InMemoryJobStore::new(test_limits()));
+    assert_eq!(
+        store
+            .transition("missing", JobTransition::Cancel)
+            .await
+            .unwrap(),
+        TransitionOutcome::Missing
+    );
+    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+    assert!(!store.subscribe("missing", tx).await.unwrap());
+    let id = store
+        .create(Job::queued(
+            Bytes::from_static(b"audio"),
+            ExportParams::default(),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(store.next_queued().await.unwrap(), Some(id.clone()));
+    assert_eq!(
+        store.transition(&id, JobTransition::Start).await.unwrap(),
+        TransitionOutcome::Applied
+    );
+    assert_eq!(
+        store.transition(&id, JobTransition::Retry).await.unwrap(),
+        TransitionOutcome::Applied
+    );
+    assert_eq!(store.next_queued().await.unwrap(), Some(id.clone()));
+    store.transition(&id, JobTransition::Start).await.unwrap();
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    assert!(store.subscribe(&id, tx).await.unwrap());
+    store
+        .transition(&id, JobTransition::Fail("sanitized failure".into()))
+        .await
+        .unwrap();
+    assert!(
+        matches!(rx.try_recv(), Ok(JobEvent::Failed { error }) if error == "sanitized failure")
+    );
+    assert_eq!(
+        store.transition(&id, JobTransition::Cancel).await.unwrap(),
+        TransitionOutcome::Rejected(JobStatus::Failed)
+    );
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    assert!(store.subscribe(&id, tx).await.unwrap());
+    assert!(matches!(rx.try_recv(), Ok(JobEvent::Failed { .. })));
+}

@@ -14,8 +14,10 @@ pub use store::{
     InMemoryJobStore, Job, JobEvent, JobStatus, JobStatusResponse, JobStore, JobStoreFuture,
 };
 
+#[cfg(test)]
 pub(crate) use queue::broadcast_event;
 pub(crate) use store::job_status_response;
+pub use store::{JobStoreFull, JobTransition, TransitionOutcome};
 
 #[cfg(test)]
 mod tests;
