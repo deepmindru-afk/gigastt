@@ -612,6 +612,11 @@ curl http://127.0.0.1:9876/v1/jobs/{job_id}
 # {"job_id":"...","status":"processing","processed_seconds":12.5,"percent":42}
 ```
 
+For split-channel jobs, `processed_seconds` averages completed sample work
+across the channels, and `percent` is bounded by 100. If the container does not
+provide a duration, processed time still advances but `percent` remains 0 while
+the job is running because the total is unknown.
+
 Fetch the result once `status` is `done`:
 
 ```sh

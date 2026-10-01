@@ -137,3 +137,16 @@ fn test_subscribe_evicts_oldest_at_cap() {
         Err(tokio::sync::mpsc::error::TryRecvError::Disconnected)
     ));
 }
+
+#[test]
+fn test_job_status_response_bounds_percent_for_inexact_duration() {
+    let mut job = Job::queued(Bytes::new(), ExportParams::default());
+    job.status = JobStatus::Processing;
+    job.total_seconds = 10.0;
+    job.processed_seconds = 10.5;
+    assert_eq!(job_status_response(&job).percent, 100);
+    job.total_seconds = 0.0;
+    let response = job_status_response(&job);
+    assert_eq!(response.percent, 0);
+    assert_eq!(response.processed_seconds, 10.5);
+}

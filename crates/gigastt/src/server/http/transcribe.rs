@@ -312,6 +312,7 @@ pub(super) async fn run_file_transcription(
         abort: Some(abort.clone()),
         partial: Some(partial.clone()),
         progress: Some(progress.clone()),
+        progress_channels: None,
         diarization_outcome: diar_sink,
         max_audio_secs: limits.max_audio_secs_opt(),
     };

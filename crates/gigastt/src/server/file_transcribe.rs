@@ -32,6 +32,10 @@ pub(crate) struct FileTranscribeOpts {
     /// count of processed 16 kHz samples. The server watchdog reads it to reset
     /// its no-progress deadline and to drive a real job progress bar.
     pub progress: Option<Arc<AtomicU64>>,
+    /// Actual number of independently decoded channels (one for mono fallback).
+    /// Jobs divide sample work by this count for completion presentation; the
+    /// watchdog reads the unscaled sample counter so no work increments vanish.
+    pub progress_channels: Option<Arc<AtomicU64>>,
     /// Write-once sink for the offline-diarization outcome. When set (with
     /// `diarization = true`), the engine records why speakers were or were not
     /// labeled so a surface can turn a `?diarization=true` request that produced
@@ -116,10 +120,13 @@ pub(crate) enum WatchdogOutcome<T> {
 /// Await a blocking transcription `handle`, redefining `inference_timeout_secs`
 /// from a total wall-clock cap into a **no-progress watchdog**: the deadline
 /// resets every time `progress` advances (i.e. a window completes), so a long
-/// file that keeps making progress never trips, while a genuinely stalled run
-/// trips at the same moment it always did. `timeout_secs == 0` disables the
-/// watchdog. A fired `shutdown` also flips `abort`, so SIGTERM cancels the run
-/// at its next window instead of blocking the drain for the whole file.
+/// file that keeps making progress never trips, while a stalled run exhausts
+/// its no-progress budget. `timeout_secs == 0` disables the
+/// watchdog. Progress is sampled every 100 ms: with prompt runtime scheduling,
+/// a stall is detected between `timeout` and `timeout + 100 ms` after the last
+/// increment. Atomic counters carry no write timestamp, so the deadline uses
+/// the observation time. A fired `shutdown` also flips `abort`, so SIGTERM
+/// cancels the run at its next window instead of draining the whole file.
 pub(crate) async fn await_transcription_watchdog<T>(
     mut handle: tokio::task::JoinHandle<T>,
     progress: &AtomicU64,
@@ -145,20 +152,22 @@ pub(crate) async fn await_transcription_watchdog<T>(
     let timeout = std::time::Duration::from_secs(timeout_secs);
     let mut last_progress = progress.load(Ordering::Relaxed);
     let mut deadline = tokio::time::Instant::now() + timeout;
+    let poll_interval = std::time::Duration::from_millis(100);
     loop {
+        let next_poll = deadline.min(tokio::time::Instant::now() + poll_interval);
         tokio::select! {
             joined = &mut handle => return WatchdogOutcome::Joined(joined),
             _ = shutdown.cancelled(), if !shutdown_fired => {
                 shutdown_fired = true;
                 abort.store(true, Ordering::Relaxed);
             }
-            _ = tokio::time::sleep_until(deadline) => {
+            _ = tokio::time::sleep_until(next_poll) => {
                 let cur = progress.load(Ordering::Relaxed);
                 if cur > last_progress {
                     // A window completed since the last check: reset the deadline.
                     last_progress = cur;
                     deadline = tokio::time::Instant::now() + timeout;
-                } else {
+                } else if tokio::time::Instant::now() >= deadline {
                     abort.store(true, Ordering::Relaxed);
                     return WatchdogOutcome::TimedOut;
                 }
@@ -216,6 +225,9 @@ fn with_file_transcribe_request<T>(
     has_vad: bool,
     transcribe: impl FnOnce(TranscribeRequest<'_>) -> Result<T, GigasttError>,
 ) -> Result<T, GigasttError> {
+    if let Some(channels) = &opts.progress_channels {
+        channels.store(1, Ordering::Relaxed);
+    }
     let body = match opts.raw_codec {
         Some((codec, rate)) => raw_codec_to_wav(&body, codec, rate)?,
         None => body,
@@ -228,6 +240,14 @@ fn with_file_transcribe_request<T>(
         // the header alone unless the file is exactly stereo.
         let scan = gigastt_core::inference::audio::scan_channels(body.clone(), opts.max_audio_secs)
             .map_err(map_decode_error)?;
+        if let Some(channels) = &opts.progress_channels {
+            let count = if scan.mono_fallback_reason().is_some() {
+                1
+            } else {
+                scan.channels
+            };
+            channels.store(count as u64, Ordering::Relaxed);
+        }
         if let Some(reason) = scan.mono_fallback_reason() {
             tracing::warn!(
                 "channels=split requested but {reason} detected; falling back to mono transcription"
@@ -312,6 +332,7 @@ mod tests {
                                 abort: Some(Arc::new(AtomicBool::new(false))),
                                 partial: Some(Arc::new(Default::default())),
                                 progress: Some(Arc::new(AtomicU64::new(0))),
+                                progress_channels: Some(Arc::new(AtomicU64::new(0))),
                                 diarization_outcome: Some(Arc::new(Default::default())),
                                 max_audio_secs: Some(1.0),
                                 ..Default::default()
@@ -322,6 +343,13 @@ mod tests {
                                 has_vad,
                                 |request| {
                                     let split = split_channels && channels == 2 && !dual_mono;
+                                    assert_eq!(
+                                        opts.progress_channels
+                                            .as_ref()
+                                            .unwrap()
+                                            .load(Ordering::Relaxed),
+                                        if split { 2 } else { 1 },
+                                    );
                                     match &request.source {
                                         TranscribeSource::Bytes(_) => assert!(!split),
                                         TranscribeSource::Channels(audio) => {
@@ -430,8 +458,10 @@ mod tests {
             tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
             0u32
         });
+        let start = tokio::time::Instant::now();
         let outcome = await_transcription_watchdog(handle, &progress, &abort, 1, &shutdown).await;
         assert!(matches!(outcome, WatchdogOutcome::TimedOut));
+        assert_eq!(start.elapsed(), std::time::Duration::from_secs(1));
         assert!(abort.load(Ordering::Relaxed), "a trip must flip abort");
     }
 
@@ -502,6 +532,80 @@ mod tests {
         let outcome = await_transcription_watchdog(handle, &progress, &abort, 600, &shutdown).await;
         assert!(matches!(outcome, WatchdogOutcome::Joined(Ok(9))));
         assert!(abort.load(Ordering::Relaxed), "shutdown must flip abort");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_watchdog_stall_detection_is_bounded_after_early_progress() {
+        let progress = Arc::new(AtomicU64::new(0));
+        let abort = AtomicBool::new(false);
+        let shutdown = tokio_util::sync::CancellationToken::new();
+        let handle = tokio::spawn({
+            let progress = progress.clone();
+            async move {
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                progress.store(1, Ordering::Relaxed);
+                tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
+            }
+        });
+        let start = tokio::time::Instant::now();
+        let outcome = await_transcription_watchdog(handle, &progress, &abort, 1, &shutdown).await;
+        assert!(matches!(outcome, WatchdogOutcome::TimedOut));
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed >= std::time::Duration::from_millis(1010),
+            "{elapsed:?}"
+        );
+        assert!(
+            elapsed <= std::time::Duration::from_millis(1110),
+            "{elapsed:?}"
+        );
+        assert!(abort.load(Ordering::Relaxed));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_watchdog_channel_transition_preserves_liveness() {
+        let progress = Arc::new(AtomicU64::new(0));
+        let abort = AtomicBool::new(false);
+        let shutdown = tokio_util::sync::CancellationToken::new();
+        let handle = tokio::spawn({
+            let progress = progress.clone();
+            async move {
+                for channel in 0..2 {
+                    for local_samples in 1..=3 {
+                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                        progress.store(channel * 3 + local_samples, Ordering::Relaxed);
+                    }
+                }
+            }
+        });
+        let start = tokio::time::Instant::now();
+        let result = await_transcription_watchdog(handle, &progress, &abort, 1, &shutdown).await;
+        assert!(matches!(result, WatchdogOutcome::Joined(Ok(()))));
+        assert_eq!(start.elapsed(), std::time::Duration::from_secs(3));
+        assert!(!abort.load(Ordering::Relaxed));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_watchdog_disabled_still_cancels_on_shutdown() {
+        let progress = AtomicU64::new(0);
+        let abort = Arc::new(AtomicBool::new(false));
+        let shutdown = tokio_util::sync::CancellationToken::new();
+        let handle = tokio::spawn({
+            let abort = abort.clone();
+            let shutdown = shutdown.clone();
+            async move {
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                shutdown.cancel();
+                while !abort.load(Ordering::Relaxed) {
+                    tokio::task::yield_now().await;
+                }
+            }
+        });
+        let start = tokio::time::Instant::now();
+        let result = await_transcription_watchdog(handle, &progress, &abort, 0, &shutdown).await;
+        assert!(matches!(result, WatchdogOutcome::Joined(Ok(()))));
+        assert_eq!(start.elapsed(), std::time::Duration::from_secs(5));
+        assert!(abort.load(Ordering::Relaxed));
     }
 
     /// Human-readable tag for a `WatchdogOutcome` in test panics.
