@@ -153,6 +153,55 @@ class GitTests(unittest.TestCase):
         }}))
         self.assertEqual(self.run_guard("--event-file", str(event)).returncode, 0)
 
+    def push_event(self, before, after):
+        event = self.root / "event.json"
+        event.write_text(json.dumps({"before": before, "after": after, "ref": "refs/heads/main"}))
+        return self.run_guard("--event-file", str(event))
+
+    def test_rewritten_push_accepts_clean_history_without_previous_object(self):
+        head = self.git("rev-parse", "HEAD")
+        result = self.push_event("a" * 40, head)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_rewritten_push_rejects_reverted_identifier_blob(self):
+        (self.root / "readme.txt").write_text(internal())
+        self.git("add", ".")
+        self.git("commit", "-qm", "Add documentation")
+        self.git("revert", "--no-edit", "HEAD")
+        result = self.push_event("a" * 40, self.git("rev-parse", "HEAD"))
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("readme.txt", result.stderr)
+
+    def test_rewritten_push_rejects_deleted_private_file(self):
+        path = self.root / "specs" / "notes.md"
+        path.parent.mkdir()
+        path.write_text("Private planning")
+        self.git("add", ".")
+        self.git("commit", "-qm", "Add documentation")
+        self.git("revert", "--no-edit", "HEAD")
+        result = self.push_event("a" * 40, self.git("rev-parse", "HEAD"))
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("private planning directory", result.stderr)
+
+    def test_rewritten_and_initial_push_check_all_messages_but_normal_range_does_not(self):
+        self.git("commit", "--allow-empty", "-qm", "Legacy note " + internal())
+        base = self.git("rev-parse", "HEAD")
+        self.git("commit", "--allow-empty", "-qm", "Public update")
+        head = self.git("rev-parse", "HEAD")
+        self.assertEqual(self.push_event(base, head).returncode, 0)
+        for before in ("a" * 40, "0" * 40):
+            result = self.push_event(before, head)
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertIn("commit message", result.stderr)
+
+    def test_push_missing_or_noncommit_new_tip_fails_closed(self):
+        base = self.git("rev-parse", "HEAD")
+        for before in (base, "a" * 40, "0" * 40):
+            for after in ("b" * 40, self.git("rev-parse", "HEAD:readme.txt")):
+                result = self.push_event(before, after)
+                self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertEqual(self.push_event("a" * 40, "0" * 40).returncode, 0)
+
     def test_tag_annotation_and_existing_tip_cannot_bypass_guard(self):
         self.git("tag", "-a", "v1.0.0", "-m", internal())
         tag = self.git("rev-parse", "v1.0.0")
