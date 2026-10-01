@@ -392,3 +392,43 @@ fn test_stream_flush_null_stream_with_engine() {
     let r = unsafe { gigastt_stream_flush(engine, ptr::null_mut()) };
     assert!(r.is_null());
 }
+
+#[test]
+fn test_stream_flush_tail_failure_returns_null_and_preserves_state() {
+    for joiner in [false, true] {
+        for panic in [false, true] {
+            let tmp = tempfile::tempdir().unwrap();
+            gigastt_core::test_support::write_rnnt_layout(tmp.path()).unwrap();
+            let factory = gigastt_core::test_support::FailingStreamFactory::new(joiner, panic);
+            let core = gigastt_core::test_support::load_rnnt_engine_with_factory(
+                tmp.path(),
+                1,
+                Box::new(factory.clone()),
+            )
+            .unwrap();
+            factory.arm(1);
+            let engine = insert_engine(core);
+            let stream = unsafe { gigastt_stream_new(engine) };
+            let pcm = [0u8; 3200];
+            let result = unsafe {
+                gigastt_stream_process_chunk(engine, stream, pcm.as_ptr(), pcm.len(), 16000)
+            };
+            assert!(!result.is_null());
+            unsafe { gigastt_string_free(result) };
+            assert!(unsafe { gigastt_stream_flush(engine, stream) }.is_null());
+            assert!(unsafe { gigastt_stream_flush(engine, stream) }.is_null());
+            assert!(
+                get_stream(stream)
+                    .unwrap()
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .state
+                    .is_failed()
+            );
+            unsafe {
+                gigastt_stream_free(stream);
+                gigastt_engine_free(engine);
+            }
+        }
+    }
+}
