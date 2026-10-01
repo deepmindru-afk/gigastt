@@ -229,3 +229,32 @@ fn leading_and_trailing_boundaries_emit_no_empty_words() {
         vec!["аб"]
     );
 }
+
+#[test]
+fn test_blank_repeated_frames_normalize_only_emissions() {
+    use crate::inference::decode::{CONFIDENCE_NORMALIZATIONS, token_confidence};
+    let rows = [
+        [0., 0., 2.],
+        [2., 0., 0.],
+        [2., 0., 0.],
+        [0., 0., 2.],
+        [2., 0., 0.],
+        [0., 2., 2.],
+        [0., 2., 0.],
+        [0., 2., 0.],
+    ];
+    let expected = token_confidence(&rows[1], 0).to_bits();
+    CONFIDENCE_NORMALIZATIONS.with(|count| count.set(0));
+    let tokens = ctc_greedy_decode(&rows.concat(), rows.len(), 3, 2);
+    assert_eq!(
+        tokens
+            .iter()
+            .map(|t| (t.token_id, t.frame_index))
+            .collect::<Vec<_>>(),
+        vec![(0, 1), (0, 4), (1, 6)]
+    );
+    assert!(tokens.iter().all(|t| t.confidence.to_bits() == expected));
+    assert_eq!(CONFIDENCE_NORMALIZATIONS.with(|count| count.get()), 3);
+    assert!(ctc_greedy_decode(&[], 10, 0, 0).is_empty());
+    assert!(ctc_greedy_decode(&[], 10, 3, 2).is_empty());
+}
