@@ -9,6 +9,13 @@ fn write_file(path: &Path, bytes: &[u8]) {
     f.write_all(bytes).unwrap();
 }
 
+fn content_cache_path(cache: &Path, encoder: &Path) -> PathBuf {
+    cache.join(optimized_content_basename(
+        &optimized_source_hash(encoder).unwrap().unwrap(),
+        &"a".repeat(64),
+    ))
+}
+
 #[test]
 fn test_optimized_cache_basename_from_int8_encoder() {
     let p = Path::new("/m/v3_rnnt_encoder_int8.onnx");
@@ -24,10 +31,10 @@ fn test_prune_optimized_cache_keeps_active_int8_drops_zombies() {
     let dir = tmp.path();
     // Active rnnt INT8 install (lean set stub).
     for f in ModelVariant::Rnnt.prequantized_files() {
-        write_file(&dir.join(f), b"stub");
+        write_file(&dir.join(f), f.as_bytes());
     }
     let cache = dir.join("optimized_cache");
-    let keep = cache.join("v3_rnnt_encoder_int8_optimized.ort");
+    let keep = content_cache_path(&cache, &dir.join("v3_rnnt_encoder_int8.onnx"));
     let legacy_active = cache.join("v3_rnnt_encoder_int8_optimized.onnx");
     let fp32 = cache.join("v3_rnnt_encoder_optimized.onnx");
     let e2e = cache.join("v3_e2e_rnnt_encoder_int8_optimized.ort");
@@ -55,14 +62,14 @@ fn test_prune_optimized_cache_keeps_every_installed_head() {
     let dir = tmp.path();
     // Two heads installed (rnnt + e2e_rnnt); ml_ctc is not.
     for f in ModelVariant::Rnnt.prequantized_files() {
-        write_file(&dir.join(f), b"stub");
+        write_file(&dir.join(f), f.as_bytes());
     }
     for f in ModelVariant::E2eRnnt.prequantized_files() {
-        write_file(&dir.join(f), b"stub");
+        write_file(&dir.join(f), f.as_bytes());
     }
     let cache = dir.join("optimized_cache");
-    let rnnt = cache.join("v3_rnnt_encoder_int8_optimized.ort");
-    let e2e = cache.join("v3_e2e_rnnt_encoder_int8_optimized.ort");
+    let rnnt = content_cache_path(&cache, &dir.join("v3_rnnt_encoder_int8.onnx"));
+    let e2e = content_cache_path(&cache, &dir.join("v3_e2e_rnnt_encoder_int8.onnx"));
     // Graph for a head whose weights are absent: zombie.
     let ml = cache.join("multilingual_ctc.int8_optimized.ort");
     // Legacy pre-flatbuffer graphs: zombies even for installed heads.
@@ -91,10 +98,10 @@ fn test_prune_optimized_cache_keeps_ctc_head_dotted_stem() {
     // ml_ctc-only install: dotted stem (`multilingual_ctc.int8`) must
     // survive `file_stem` handling on the keep path.
     for f in ModelVariant::MlCtc.prequantized_files() {
-        write_file(&dir.join(f), b"stub");
+        write_file(&dir.join(f), f.as_bytes());
     }
     let cache = dir.join("optimized_cache");
-    let keep = cache.join("multilingual_ctc.int8_optimized.ort");
+    let keep = content_cache_path(&cache, &dir.join("multilingual_ctc.int8.onnx"));
     let zombie = cache.join("v3_rnnt_encoder_int8_optimized.ort");
     write_file(&keep, &[1u8; 100]);
     write_file(&zombie, &[2u8; 200]);
@@ -115,7 +122,7 @@ fn test_prune_optimized_cache_keeps_fp32_only_head() {
     // cache-miss rebuild would write, so keep it.
     write_file(&dir.join(ModelVariant::Rnnt.encoder_file()), b"stub");
     let cache = dir.join("optimized_cache");
-    let keep = cache.join("v3_rnnt_encoder_optimized.ort");
+    let keep = content_cache_path(&cache, &dir.join("v3_rnnt_encoder.onnx"));
     let zombie = cache.join("v3_rnnt_encoder_int8_optimized.ort");
     write_file(&keep, &[1u8; 100]);
     write_file(&zombie, &[2u8; 200]);
@@ -143,11 +150,11 @@ vocab = "custom_vocab.txt"
     );
     write_file(&dir.join("custom_enc_int8.onnx"), b"stub");
     for f in ModelVariant::Rnnt.prequantized_files() {
-        write_file(&dir.join(f), b"stub");
+        write_file(&dir.join(f), f.as_bytes());
     }
     let cache = dir.join("optimized_cache");
-    let custom = cache.join("custom_enc_int8_optimized.ort");
-    let rnnt = cache.join("v3_rnnt_encoder_int8_optimized.ort");
+    let custom = content_cache_path(&cache, &dir.join("custom_enc_int8.onnx"));
+    let rnnt = content_cache_path(&cache, &dir.join("v3_rnnt_encoder_int8.onnx"));
     write_file(&custom, &[1u8; 100]);
     write_file(&rnnt, &[2u8; 200]);
 
@@ -168,7 +175,7 @@ fn test_prune_optimized_cache_dry_run_does_not_delete() {
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path();
     for f in ModelVariant::Rnnt.prequantized_files() {
-        write_file(&dir.join(f), b"stub");
+        write_file(&dir.join(f), f.as_bytes());
     }
     let cache = dir.join("optimized_cache");
     let zombie = cache.join("v3_rnnt_encoder_optimized.onnx");
@@ -202,10 +209,10 @@ fn test_prune_optimized_cache_dir_prunes_explicit_dir() {
     // Active rnnt INT8 install with a relocated cache (e.g. systemd
     // CacheDirectory) outside the model dir.
     for f in ModelVariant::Rnnt.prequantized_files() {
-        write_file(&dir.join(f), b"stub");
+        write_file(&dir.join(f), f.as_bytes());
     }
     let cache = tmp.path().join("relocated_cache");
-    let keep = cache.join("v3_rnnt_encoder_int8_optimized.ort");
+    let keep = content_cache_path(&cache, &dir.join("v3_rnnt_encoder_int8.onnx"));
     let zombie = cache.join("v3_e2e_rnnt_encoder_int8_optimized.ort");
     write_file(&keep, &[1u8; 100]);
     write_file(&zombie, &[2u8; 200]);
@@ -315,4 +322,52 @@ fn test_dedupe_dry_run_no_hardlink() {
     assert!(report.dry_run);
     assert_eq!(report.hardlinked, 1);
     assert!(!same_file(&a, &b).unwrap());
+}
+
+#[test]
+fn test_source_hash_rejects_external_marker_across_read_boundaries() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("encoder.onnx");
+    for offset in [0, 65530, 65535, 65536, 65540, 65542, 131070] {
+        let mut bytes = vec![0; offset];
+        bytes.extend_from_slice(b"location");
+        write_file(&path, &bytes);
+        assert_eq!(
+            optimized_source_hash(&path).unwrap(),
+            None,
+            "offset {offset}"
+        );
+    }
+    write_file(&path, &[42; 131080]);
+    assert_eq!(
+        optimized_source_hash(&path).unwrap().unwrap(),
+        sha256_file_streaming(&path).unwrap()
+    );
+}
+
+#[test]
+fn test_prune_optimized_cache_keeps_configurations_but_reclaims_old_content_and_legacy() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path();
+    let encoder = dir.join(ModelVariant::Rnnt.encoder_int8_file());
+    write_file(&encoder, b"original");
+    let cache = dir.join("optimized_cache");
+    let old = content_cache_path(&cache, &encoder);
+    write_file(&old, b"old");
+    write_file(&encoder, b"updated");
+    let hash = optimized_source_hash(&encoder).unwrap().unwrap();
+    let first = cache.join(optimized_content_basename(&hash, &"a".repeat(64)));
+    let second = cache.join(optimized_content_basename(&hash, &"b".repeat(64)));
+    let legacy = cache.join("v3_rnnt_encoder_int8_optimized.ort");
+    for path in [&first, &second, &legacy] {
+        write_file(path, b"graph");
+    }
+    let dry = prune_optimized_cache(dir, true).unwrap();
+    assert_eq!(dry.kept.len(), 2);
+    assert_eq!(dry.removed.len(), 2);
+    assert!(old.exists() && legacy.exists());
+    let report = prune_optimized_cache(dir, false).unwrap();
+    assert_eq!(report.kept.len(), 2);
+    assert!(first.exists() && second.exists());
+    assert!(!old.exists() && !legacy.exists());
 }

@@ -34,7 +34,7 @@ when `--model-variant` is omitted. The reference script passes
 the other head to switch.
 
 The ORT optimized-graph cache is about 216 MB for the `rnnt` encoder
-(`v3_rnnt_encoder_int8_optimized.ort`). If the cache directory cannot be
+(`{source-sha256}-{settings-sha256}_optimized.ort`). If the cache directory cannot be
 created or is not writable, the server logs a warning and still starts, without
 the cache (slower cold start, higher per-session RAM). That warning is not a
 successful setup. Keep the model directory read-only if you want, and put the
@@ -113,7 +113,7 @@ Phases, in order:
 3. **Successful request.** Real model dir, writable temp cache, loopback.
    `/ready` is 200 with `variant=rnnt`, then
    `POST /v1/transcribe` of a short WAV returns 200 and a non-empty `text`.
-   The cache dir contains `v3_rnnt_encoder_int8_optimized.ort` and the log
+   The cache dir contains a content-addressed `*_optimized.ort` file and the log
    has no "cache directory is not writable" warning.
 4. **Offline restart.** `SIGTERM`, `wait`, port free, start again with
    `GIGASTT_OFFLINE=1`, `/ready` 200, same transcribe request succeeds. No
