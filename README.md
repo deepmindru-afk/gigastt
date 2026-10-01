@@ -120,7 +120,7 @@ build time by default. [Prebuilt releases](https://github.com/ekhodzitsky/gigast
 cover macOS Apple Silicon, Linux x86_64/aarch64 and Windows x86_64.
 [Docker instructions](docs/deployment.md#docker) use the published GHCR images.
 
-For Rust embedding: `gigastt-core = "2.21"`. Node: `npm install gigastt`.
+For Rust embedding: `gigastt-core = "2.22"`. Node: `npm install gigastt`.
 Python: `pip install gigastt`. Model setup and platform packaging:
 [quickstarts](docs/quickstarts.md).
 

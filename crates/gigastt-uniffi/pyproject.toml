@@ -43,4 +43,4 @@ Homepage = "https://github.com/ekhodzitsky/gigastt"
 # UniFFI bindings: maturin invokes this crate's [[bin]] uniffi-bindgen in
 # library mode (proc-macro / setup_scaffolding, no .udl).
 bindings = "uniffi"
-# Pull the version from the crate's Cargo metadata (workspace = 2.3.0).
+# Pull the version from the crate's inherited workspace Cargo metadata.
