@@ -4,7 +4,7 @@ use axum::body::Bytes;
 use std::sync::Arc;
 
 use super::super::http::ExportParams;
-use super::store::{JobEvent, JobStatus, JobStore};
+use super::store::{JobEvent, JobStatus, JobStore, JobTransition, TransitionOutcome};
 
 pub trait JobExecution: Send + Sync {
     /// Run one transcription attempt. The executor may update progress via the
@@ -71,17 +71,7 @@ impl JobQueue {
             let Ok(Some(id)) = self.store.next_queued().await else {
                 break;
             };
-            let _ = self
-                .store
-                .update(
-                    &id,
-                    Box::new(|j| {
-                        j.status = JobStatus::Cancelled;
-                        j.updated_at = gigastt_core::inference::now_timestamp();
-                    }),
-                )
-                .await;
-            broadcast_event(&*self.store, &id, JobEvent::Cancelled).await;
+            let _ = self.store.transition(&id, JobTransition::Cancel).await;
         }
     }
 }
@@ -115,27 +105,13 @@ impl<E: JobExecution + 'static> JobWorker<E> {
                 continue;
             };
 
-            let _ = self
-                .store
-                .update(
-                    &id,
-                    Box::new(|j| {
-                        if j.status == JobStatus::Queued {
-                            j.status = JobStatus::Processing;
-                            j.attempts += 1;
-                        }
-                    }),
-                )
-                .await;
-            broadcast_event(
-                &*self.store,
-                &id,
-                JobEvent::Progress {
-                    percent: 0,
-                    processed_seconds: 0.0,
-                },
-            )
-            .await;
+            if !matches!(
+                self.store.transition(&id, JobTransition::Start).await,
+                Ok(TransitionOutcome::Applied)
+            ) {
+                drop(permit);
+                continue;
+            }
 
             let store = self.store.clone();
             let body = match self.store.get(&id).await {
@@ -159,56 +135,12 @@ impl<E: JobExecution + 'static> JobWorker<E> {
                 .await;
             drop(permit);
 
-            // The executor's snapshot remains readable even when cancelled.
-            let cancelled = self
-                .store
-                .get(&id)
-                .await
-                .ok()
-                .flatten()
-                .map(|j| matches!(j.status, JobStatus::Cancelled))
-                .unwrap_or(false);
-            if cancelled {
-                let _ = self
-                    .store
-                    .update(
-                        &id,
-                        Box::new(|j| {
-                            j.body = Bytes::new();
-                            j.abort = None;
-                        }),
-                    )
-                    .await;
-                continue;
-            }
-
             match result {
                 Ok(res) => {
-                    let total = res.duration_s;
                     let _ = self
                         .store
-                        .update(
-                            &id,
-                            Box::new(move |j| {
-                                if j.status == JobStatus::Cancelled {
-                                    j.body = Bytes::new();
-                                    j.abort = None;
-                                    return;
-                                }
-                                j.status = JobStatus::Done;
-                                j.abort = None;
-                                j.partial = None;
-                                j.result = Some(res);
-                                j.processed_seconds = total;
-                                // Release the upload: a terminal job never needs
-                                // its body again, and holding it for the full TTL
-                                // would keep up to jobs_max × body-limit of dead
-                                // audio in RAM.
-                                j.body = Bytes::new();
-                            }),
-                        )
+                        .transition(&id, JobTransition::Complete(res))
                         .await;
-                    broadcast_event(&*self.store, &id, JobEvent::Done).await;
                 }
                 Err(e) => {
                     let attempts = self
@@ -219,57 +151,12 @@ impl<E: JobExecution + 'static> JobWorker<E> {
                         .flatten()
                         .map(|j| j.attempts)
                         .unwrap_or(0);
-                    let retryable = is_retryable_error(&e) && attempts <= self.max_retries;
-                    if retryable {
-                        // Keep the body: the requeued job needs it for the
-                        // next attempt. It is released when the job reaches a
-                        // terminal state.
-                        let _ = self
-                            .store
-                            .update(
-                                &id,
-                                Box::new(|j| {
-                                    if j.status != JobStatus::Cancelled {
-                                        j.status = JobStatus::Queued;
-                                    }
-                                }),
-                            )
-                            .await;
-                        let _ = self.store.requeue(&id).await;
-                        broadcast_event(
-                            &*self.store,
-                            &id,
-                            JobEvent::Progress {
-                                percent: 0,
-                                processed_seconds: 0.0,
-                            },
-                        )
-                        .await;
+                    let transition = if is_retryable_error(&e) && attempts <= self.max_retries {
+                        JobTransition::Retry
                     } else {
-                        let sanitized = sanitize_job_error(&e);
-                        let _ = self
-                            .store
-                            .update(
-                                &id,
-                                Box::new({
-                                    let sanitized = sanitized.clone();
-                                    move |j| {
-                                        if j.status != JobStatus::Cancelled {
-                                            j.status = JobStatus::Failed;
-                                            j.error = Some(sanitized);
-                                        }
-                                        j.abort = None;
-                                        // Same release as the Done path: a
-                                        // failed job is terminal and no longer
-                                        // needs its upload.
-                                        j.body = Bytes::new();
-                                    }
-                                }),
-                            )
-                            .await;
-                        broadcast_event(&*self.store, &id, JobEvent::Failed { error: sanitized })
-                            .await;
-                    }
+                        JobTransition::Fail(sanitize_job_error(&e))
+                    };
+                    let _ = self.store.transition(&id, transition).await;
                 }
             }
         }
@@ -280,31 +167,8 @@ impl<E: JobExecution + 'static> JobWorker<E> {
 /// events are fire-and-forget: the channel is dropped afterwards so the SSE
 /// stream ends naturally.
 pub(crate) async fn broadcast_event(store: &dyn JobStore, id: &str, event: JobEvent) {
-    let channels = match store.get(id).await {
-        Ok(Some(job)) => {
-            // A cancellation may win between execution and terminal update.
-            // Never announce a conflicting terminal state to subscribers.
-            if job.status == JobStatus::Cancelled && !matches!(event, JobEvent::Cancelled) {
-                return;
-            }
-            job.event_channels
-        }
-        _ => return,
-    };
-    let terminal = event.is_terminal();
-    let mut keep = Vec::new();
-    for tx in channels {
-        if tx.send(event.clone()).is_ok() && !terminal {
-            keep.push(tx);
-        }
-    }
     let _ = store
-        .update(
-            id,
-            Box::new(move |j| {
-                j.event_channels = keep;
-            }),
-        )
+        .update(id, Box::new(move |job| job.broadcast(event)))
         .await;
 }
 
