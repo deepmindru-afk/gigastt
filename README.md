@@ -116,7 +116,9 @@ cargo install gigastt
 ```
 
 Building requires Rust 1.94+ and `protoc`; ONNX Runtime is downloaded at
-build time by default. [Prebuilt releases](https://github.com/ekhodzitsky/gigastt/releases)
+build time by default. Linux source builds also need OpenSSL development files;
+see [native build prerequisites](.github/CONTRIBUTING.md#development).
+[Prebuilt releases](https://github.com/ekhodzitsky/gigastt/releases)
 cover macOS Apple Silicon, Linux x86_64/aarch64 and Windows x86_64.
 [Docker instructions](docs/deployment.md#docker) use the published GHCR images.
 

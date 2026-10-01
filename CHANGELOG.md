@@ -22,6 +22,8 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 - Reuse FFT scratch storage during mel feature extraction instead of allocating
   it for every audio frame; streaming keeps the storage in its existing buffer.
 
+- Document Linux OpenSSL build prerequisites and custom-prefix discovery for
+  the ONNX Runtime downloader, including the environment used by Git hooks.
 - Require Symphonia 0.6.1 and remove the vendored metadata and Matroska
   patches. Upstream now handles APEv2 size overflow and unknown-size WebM
   Clusters; the fuzz workspace uses the same upstream fixes.
