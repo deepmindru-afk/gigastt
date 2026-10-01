@@ -168,3 +168,8 @@ required-features = ["__internals"]
 name = "transcript_snapshot"
 harness = false
 required-features = ["__internals"]
+
+[[bench]]
+name = "raw_telephony"
+harness = false
+required-features = ["file-decode"]
