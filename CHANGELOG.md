@@ -82,6 +82,10 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
   including recognition-only cache hits. Pin the encoder oracle to CPU/rnnt,
   record model provenance, and calibrate its maximum-error bound against the
   observed CI runner while retaining cosine and exact-transcript checks.
+- Enforce request duration limits for predecoded mono and split-channel PCM
+  before inference, matching encoded-source boundaries without imposing an
+  encoded-buffer allocation ceiling on caller-owned samples.
+
 - Preserve per-request punctuation, ITN, VAD, and hotword settings when channel
   splitting falls back to mono or uses per-channel VAD processing.
 - Keep split-channel transcription progress monotonic across channels so healthy

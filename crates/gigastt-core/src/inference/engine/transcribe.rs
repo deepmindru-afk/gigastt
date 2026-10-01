@@ -39,6 +39,7 @@ impl Engine {
                 .map(|_| &partial_fn as &dyn Fn(&[WordInfo])),
         };
         ctl.check_abort()?;
+        req.validate_source_budget()?;
 
         // Opt-in operator length limit (`--max-audio-secs`); `None` = unlimited.
         // The streaming path honors it verbatim; the whole-buffer decoders clamp
