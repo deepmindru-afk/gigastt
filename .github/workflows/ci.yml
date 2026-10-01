@@ -31,6 +31,7 @@ jobs:
       - run: python3 scripts/test-resolve-android.py
       - run: python3 scripts/test-release-assets.py
       - run: python3 scripts/test_homebrew_release_metadata.py
+      - run: python3 scripts/test_android_runtime.py
 
   runtime-isolation:
     runs-on: ubuntu-latest
@@ -210,6 +211,10 @@ jobs:
           shared-key: ci
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Check Android runtime API compatibility
+        run: |
+          cargo metadata --locked --offline --filter-platform x86_64-unknown-linux-gnu --format-version 1 > "$RUNNER_TEMP/android-cargo-metadata.json"
+          python3 scripts/check-android-runtime.py --metadata "$RUNNER_TEMP/android-cargo-metadata.json"
 
   unit-tests:
     runs-on: ubuntu-latest
