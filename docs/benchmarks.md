@@ -609,3 +609,39 @@ python benchmark.py --runners gigastt --dataset golos_crowd_1k --max-samples 0 -
 New competitor runners (Vosk 0.54, faster-whisper-turbo, T-one) live under
 [`benchmark/runners/`](../benchmark/runners/); each gracefully skips if its optional
 dependency/model is absent. T-one beam+LM needs the 5.5 GB KenLM (`BENCHMARK_TONE_KENLM`).
+
+## Stereo container decode work
+
+For `channels=split`, the full recording determines whether stereo channels
+are duplicates. Non-Opus formats use a bounded streaming scan. Mono inputs need
+only a header probe before transcription; dual-mono inputs keep the original
+container for mono mixing, preserving mix-before-resample behavior.
+
+Opus channel detection already materializes the channels under the existing
+whole-buffer duration ceiling. With VAD enabled, genuine stereo now reuses that
+PCM instead of decoding and resampling the entire container again. This reduces
+two whole-channel Opus passes to one without adding a buffer or changing the
+ceiling. Dual-mono still uses its original mono fallback. WAV/FLAC VAD splitting
+keeps its scan plus channel decode; non-VAD genuine stereo keeps a scan plus one
+windowed pass per channel. Avoiding those passes would require a different
+memory/storage policy, so this optimization does not change them.
+
+The ignored `benchmark_split_channel_decode` unit test measures container work
+without ASR or VAD inference. Supply `GIGASTT_STEREO_BENCH_FILE` and
+`GIGASTT_STEREO_BENCH_VAD=0|1`; with VAD, `GIGASTT_STEREO_BENCH_REUSE=1` selects
+the retained scan path and `0` selects the previous scan-then-decode path. Run
+one test process per case with `/usr/bin/time -v` for peak RSS, including the
+encoded input and test runtime. Use mono, duplicate-channel and distinct-channel
+fixtures at the same rate/duration across WAV, FLAC and Opus. The test reports
+sample counts, scan/total time and whole-channel Opus decoder invocations.
+These measurements isolate container work and do not establish an end-to-end
+transcription speedup. Without an explicit fixture, the manual test prints a
+skip message so the full ignored model-test suite can still run in CI.
+
+```sh
+GIGASTT_STEREO_BENCH_FILE=/path/to/stereo.opus \
+GIGASTT_STEREO_BENCH_VAD=1 GIGASTT_STEREO_BENCH_REUSE=1 \
+cargo test -p gigastt-core --lib \
+  inference::audio::tests::stream::benchmark_split_channel_decode \
+  -- --ignored --exact --nocapture
+```
