@@ -258,3 +258,44 @@ fn test_blank_repeated_frames_normalize_only_emissions() {
     assert!(ctc_greedy_decode(&[], 10, 0, 0).is_empty());
     assert!(ctc_greedy_decode(&[], 10, 3, 2).is_empty());
 }
+
+#[test]
+fn test_observer_preserves_alignment_ties_and_abort_boundaries() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    struct Counts(Vec<(usize, usize)>);
+    impl BeamObserver for Counts {
+        fn frame(&mut self, candidates: usize, next: &[(Vec<usize>, Hypothesis)]) {
+            self.0.push((candidates, next.len()));
+        }
+    }
+    let biaser = Biaser::from_sequences(vec![vec![0, 1, 0], vec![1, 0]], 5.0).unwrap();
+    for logits in [
+        vec![0.0; 36],
+        logits(&[0, 0, 2, 0, 1, 2, 1, 0, 2, 0, 1, 0], 3),
+    ] {
+        for stop in 0..=12 {
+            let checks = AtomicUsize::new(0);
+            let abort = || checks.fetch_add(1, Ordering::Relaxed) >= stop;
+            let normal =
+                ctc_prefix_beam_decode_with_abort(&logits, 12, 3, 2, &biaser, Some(&abort));
+            checks.store(0, Ordering::Relaxed);
+            let mut counts = Counts(Vec::new());
+            let observed = beam_decode(&logits, 12, 3, 2, &biaser, Some(&abort), &mut counts);
+            let alignment = |tokens: Vec<TokenInfo>| {
+                tokens
+                    .into_iter()
+                    .map(|t| (t.token_id, t.frame_index, t.confidence.to_bits()))
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(alignment(normal), alignment(observed));
+            assert_eq!(counts.0.len(), stop);
+            assert!(
+                counts
+                    .0
+                    .iter()
+                    .all(|&(candidates, prefixes)| candidates <= 3
+                        && prefixes <= BEAM_WIDTH * candidates)
+            );
+        }
+    }
+}
