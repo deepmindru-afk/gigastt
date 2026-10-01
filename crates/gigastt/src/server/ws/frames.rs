@@ -315,6 +315,24 @@ pub(super) async fn handle_binary_frame(
     }
 }
 
+/// Lazy speaker loading (and waiting on another loader) must stay off Tokio
+/// workers. Only the engine and the new state enter the blocking task: the
+/// session retains its old state and pool reservation. If cancelled, native
+/// loading may finish and populate the shared cache; its unused state is dropped
+/// when the detached task completes.
+#[cfg(feature = "diarization")]
+async fn initialize_stream_state<T: Send + 'static>(
+    create: impl FnOnce() -> T + Send + 'static,
+    control: &StreamControl<'_>,
+) -> Result<Result<T, tokio::task::JoinError>, StreamAbort> {
+    let span = tracing::Span::current();
+    let handle = tokio::task::spawn_blocking(move || {
+        let _entered = span.enter();
+        create()
+    });
+    await_decode(handle, control).await
+}
+
 /// Handle `{"type":"configure",…}`. Rejects configure-after-first-audio,
 /// validates sample rate against `SUPPORTED_RATES`, (with diarization
 /// feature) recreates the streaming state, and stores the per-session
@@ -335,6 +353,7 @@ pub(super) async fn handle_configure_message(
     min_silence_ms: Option<u32>,
     commit_policy: Option<String>,
     peer: SocketAddr,
+    control: &StreamControl<'_>,
 ) -> Result<FrameOutcome> {
     if audio_received {
         send_server_message(
@@ -411,7 +430,15 @@ pub(super) async fn handle_configure_message(
     #[cfg(feature = "diarization")]
     if let Some(enable_dia) = diarization {
         tracing::info!("Client {peer} configured diarization: {enable_dia}");
-        let mut new_state = engine.create_state(enable_dia);
+        let engine = Arc::clone(engine);
+        let mut new_state =
+            match initialize_stream_state(move || engine.create_state(enable_dia), control).await {
+                Ok(joined) => joined?,
+                Err(reason) => {
+                    send_abort(sink, control, reason).await?;
+                    return Ok(FrameOutcome::Break);
+                }
+            };
         // The state is recreated wholesale; carry over any post-processing
         // overrides an earlier Configure already set on this session.
         if let Some(old) = state_opt.as_ref() {
@@ -425,7 +452,7 @@ pub(super) async fn handle_configure_message(
         *state_opt = Some(new_state);
     }
     #[cfg(not(feature = "diarization"))]
-    let _ = diarization;
+    let _ = (diarization, control);
 
     // Post-processing / endpoint overrides apply to whatever state the session
     // now holds (the diarization branch above may have just recreated it). An
@@ -583,6 +610,119 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicBool, Ordering};
     use tokio_util::sync::CancellationToken;
+
+    #[cfg(feature = "diarization")]
+    #[tokio::test]
+    async fn test_configure_initialization_keeps_reactor_responsive() {
+        // A current-thread runtime cannot service this timer if even the first
+        // loader or a waiter on its lock runs synchronously on the reactor.
+        let abort = Arc::new(AtomicBool::new(false));
+        let partial = gigastt_core::inference::TranscriptSnapshot::default();
+        let shutdown = CancellationToken::new();
+        let disconnected = CancellationToken::new();
+        let control = StreamControl {
+            abort: &abort,
+            partial: &partial,
+            shutdown: &shutdown,
+            disconnected: &disconnected,
+            timeout_secs: 0,
+            deadline: tokio::time::Instant::now() + std::time::Duration::from_secs(10),
+        };
+        let (release, gate) = std::sync::mpsc::channel();
+        let gate = Arc::new(std::sync::Mutex::new(gate));
+        let loaded = Arc::new(std::sync::OnceLock::new());
+        let attempts = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let create = || {
+            let gate = Arc::clone(&gate);
+            let loaded = Arc::clone(&loaded);
+            let attempts = Arc::clone(&attempts);
+            move || {
+                *loaded.get_or_init(|| {
+                    attempts.fetch_add(1, Ordering::Relaxed);
+                    // Bound the wait so the old synchronous implementation fails
+                    // deterministically instead of deadlocking the test runtime.
+                    gate.lock()
+                        .unwrap()
+                        .recv_timeout(std::time::Duration::from_secs(2))
+                        .is_ok()
+                })
+            }
+        };
+        let timer = async {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            let _ = release.send(());
+        };
+        let (first, second, ()) = tokio::join!(
+            initialize_stream_state(create(), &control),
+            initialize_stream_state(create(), &control),
+            timer,
+        );
+        assert!(first.unwrap().unwrap(), "loader blocked the reactor timer");
+        assert!(second.unwrap().unwrap());
+        assert_eq!(attempts.load(Ordering::Relaxed), 1);
+    }
+
+    #[cfg(feature = "diarization")]
+    #[tokio::test]
+    async fn test_configure_initialization_cancellation_drops_detached_result() {
+        struct LoadedState(Arc<AtomicBool>);
+        impl Drop for LoadedState {
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::Relaxed);
+            }
+        }
+        for disconnect in [false, true] {
+            let abort = Arc::new(AtomicBool::new(false));
+            let partial = gigastt_core::inference::TranscriptSnapshot::default();
+            let shutdown = CancellationToken::new();
+            let disconnected = CancellationToken::new();
+            let control = StreamControl {
+                abort: &abort,
+                partial: &partial,
+                shutdown: &shutdown,
+                disconnected: &disconnected,
+                timeout_secs: 0,
+                deadline: tokio::time::Instant::now() + std::time::Duration::from_secs(10),
+            };
+            let dropped = Arc::new(AtomicBool::new(false));
+            let loaded = LoadedState(Arc::clone(&dropped));
+            let (started, ready) = tokio::sync::oneshot::channel();
+            let (release, gate) = std::sync::mpsc::channel();
+            let cancel = async {
+                ready.await.unwrap();
+                if disconnect {
+                    disconnected.cancel();
+                } else {
+                    shutdown.cancel();
+                }
+            };
+            let initialize = initialize_stream_state(
+                move || {
+                    let _ = started.send(());
+                    let _ = gate.recv_timeout(std::time::Duration::from_secs(2));
+                    loaded
+                },
+                &control,
+            );
+            let (result, ()) = tokio::join!(initialize, cancel);
+            assert!(
+                matches!(result, Err(StreamAbort::Cancelled)) && disconnect
+                    || matches!(result, Err(StreamAbort::Shutdown)) && !disconnect
+            );
+            assert!(
+                !dropped.load(Ordering::Relaxed),
+                "native load still owns its result"
+            );
+            release.send(()).unwrap();
+            tokio::time::timeout(std::time::Duration::from_secs(2), async {
+                while !dropped.load(Ordering::Relaxed) {
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .unwrap();
+        }
+    }
 
     #[tokio::test(start_paused = true)]
     async fn test_stream_abort_sources_stop_in_flight_work() {
