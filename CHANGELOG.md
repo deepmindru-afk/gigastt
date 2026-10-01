@@ -68,6 +68,10 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 
 ### Added
 
+- Reproducible CTC hotword beam allocation profiling with real speech logits,
+  separate encoder timings and an ambiguity stress case; the eight-beam
+  decoder remains unchanged. See [the profile](docs/ctc-beam-profile.md).
+
 - **`gigastt quantize --skip-conv`.** Packaging rebuild that leaves
   convolutions in FP32 and still quantizes `MatMul` and `Gemm`. The
   published INT8 bundle is unchanged. If an INT8 encoder is already in
