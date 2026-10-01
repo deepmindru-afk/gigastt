@@ -130,6 +130,9 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 
 ### Fixed
 
+- Keep CPU and CUDA Docker dependency-cache stubs aligned with the new benchmark
+  targets, with a fast manifest regression check before image builds.
+
 - Resolve Homebrew updates from validated release-run metadata so a manual Release
   dispatched from main can publish a different existing tag and still propose its
   formula pins. Reject stale attempt metadata and retain the manual fallback.
