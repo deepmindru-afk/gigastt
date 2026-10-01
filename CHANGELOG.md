@@ -32,6 +32,8 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
   from the older published `e2e_rnnt` artifacts.
 - Reuse RNN-T decoder and joiner output buffers directly at the ONNX Runtime
   boundary, removing intermediate owned tensor copies during token decoding.
+- Assign speakers with a linear cursor for ordered, non-overlapping turns;
+  preserve first-match behavior for overlaps, unsorted inputs and boundaries.
 
 - Document Linux OpenSSL build prerequisites and custom-prefix discovery for
   the ONNX Runtime downloader, including the environment used by Git hooks.
