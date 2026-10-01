@@ -173,3 +173,8 @@ required-features = ["__internals"]
 name = "ctc_beam"
 harness = false
 required-features = ["__internals", "file-decode"]
+
+[[bench]]
+name = "file_scheduling"
+harness = false
+required-features = ["__internals", "file-decode"]

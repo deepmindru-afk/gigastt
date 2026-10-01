@@ -120,6 +120,27 @@ pub fn load_rnnt_engine_with_factory(
     Engine::load_with_factory(dir, None, pool_size.max(1), 1, 0, factory, 1, true, "cpu")
 }
 
+/// Private scheduling benchmark loader with a caller-controlled mock runtime.
+/// Keeps production engine loading and pool partitioning in the measured path.
+pub fn load_scheduling_engine(
+    dir: &Path,
+    pool_size: usize,
+    batch_pool_size: usize,
+    factory: Box<dyn crate::runtime::RuntimeFactory>,
+) -> Result<Engine, GigasttError> {
+    Engine::load_with_factory(
+        dir,
+        None,
+        pool_size,
+        1,
+        batch_pool_size,
+        factory,
+        1,
+        false,
+        "cpu",
+    )
+}
+
 /// Convenience for this crate's own unit tests (`tempfile` is a dev-dep).
 #[cfg(test)]
 pub fn rnnt_engine() -> (Engine, tempfile::TempDir) {
