@@ -108,17 +108,16 @@ pub fn rnnt_factory() -> MockFactory {
 
 /// Load an INT8 rnnt engine from `dir` (must already hold [`write_rnnt_layout`]).
 pub fn load_rnnt_engine(dir: &Path, pool_size: usize) -> Result<Engine, GigasttError> {
-    Engine::load_with_factory(
-        dir,
-        None,
-        pool_size.max(1),
-        1,
-        0,
-        Box::new(rnnt_factory()),
-        1,
-        true,
-        "cpu",
-    )
+    load_rnnt_engine_with_factory(dir, pool_size, Box::new(rnnt_factory()))
+}
+
+/// Load a model-free engine with custom scripted sessions for server tests.
+pub fn load_rnnt_engine_with_factory(
+    dir: &Path,
+    pool_size: usize,
+    factory: Box<dyn crate::runtime::factory::RuntimeFactory>,
+) -> Result<Engine, GigasttError> {
+    Engine::load_with_factory(dir, None, pool_size.max(1), 1, 0, factory, 1, true, "cpu")
 }
 
 /// Convenience for this crate's own unit tests (`tempfile` is a dev-dep).

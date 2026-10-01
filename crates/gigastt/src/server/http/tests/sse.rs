@@ -115,3 +115,86 @@ fn test_sse_truncated_final_keeps_text_and_omits_the_flag_when_false() {
     let v: serde_json::Value = serde_json::from_str(&sse_data_payload(&Ok(plain))).unwrap();
     assert!(v.get("truncated").is_none());
 }
+
+#[tokio::test(start_paused = true)]
+async fn test_full_stream_queue_times_out_once_and_aborts_request() {
+    use crate::server::http::stream::{STREAM_SEND_TIMEOUT, send_stream_item};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+    tx.try_send("queued").unwrap();
+    let server = tokio_util::sync::CancellationToken::new();
+    let cancel = server.child_token();
+    let abort = AtomicBool::new(false);
+    let start = tokio::time::Instant::now();
+    assert!(
+        !tokio::time::timeout(
+            STREAM_SEND_TIMEOUT * 2,
+            send_stream_item(&tx, "blocked", &cancel, &abort)
+        )
+        .await
+        .expect("bounded send")
+    );
+    assert_eq!(start.elapsed(), STREAM_SEND_TIMEOUT);
+    assert!(abort.load(Ordering::Relaxed));
+    assert!(cancel.is_cancelled());
+    assert!(!server.is_cancelled());
+    assert!(!send_stream_item(&tx, "terminal", &cancel, &abort).await);
+    assert_eq!(start.elapsed(), STREAM_SEND_TIMEOUT);
+    assert_eq!(rx.recv().await, Some("queued"));
+    assert!(rx.try_recv().is_err());
+}
+
+#[tokio::test(start_paused = true)]
+async fn test_full_stream_queue_shutdown_interrupts_pending_send() {
+    use crate::server::http::stream::send_stream_item;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let (tx, _rx) = tokio::sync::mpsc::channel(1);
+    tx.try_send("queued").unwrap();
+    let cancel = tokio_util::sync::CancellationToken::new();
+    let abort = AtomicBool::new(false);
+    let send = send_stream_item(&tx, "blocked", &cancel, &abort);
+    tokio::pin!(send);
+    assert!(futures_util::poll!(&mut send).is_pending());
+    cancel.cancel();
+    assert!(
+        !tokio::time::timeout(std::time::Duration::from_secs(1), send)
+            .await
+            .expect("shutdown interrupts send")
+    );
+    assert!(abort.load(Ordering::Relaxed));
+}
+
+#[tokio::test(start_paused = true)]
+async fn test_full_stream_queue_disconnect_interrupts_pending_send() {
+    use crate::server::http::stream::send_stream_item;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let (tx, rx) = tokio::sync::mpsc::channel(1);
+    tx.try_send("queued").unwrap();
+    let cancel = tokio_util::sync::CancellationToken::new();
+    let abort = AtomicBool::new(false);
+    let send = send_stream_item(&tx, "blocked", &cancel, &abort);
+    tokio::pin!(send);
+    assert!(futures_util::poll!(&mut send).is_pending());
+    drop(rx);
+    assert!(!send.await);
+    assert!(abort.load(Ordering::Relaxed));
+}
+
+#[tokio::test(start_paused = true)]
+async fn test_slow_stream_reader_preserves_fifo_when_capacity_returns_before_deadline() {
+    use crate::server::http::stream::{STREAM_SEND_TIMEOUT, send_stream_item};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+    tx.try_send("committed partial").unwrap();
+    let cancel = tokio_util::sync::CancellationToken::new();
+    let abort = AtomicBool::new(false);
+    let send = send_stream_item(&tx, "final", &cancel, &abort);
+    tokio::pin!(send);
+    assert!(futures_util::poll!(&mut send).is_pending());
+    tokio::time::advance(STREAM_SEND_TIMEOUT - std::time::Duration::from_millis(1)).await;
+    assert_eq!(rx.recv().await, Some("committed partial"));
+    assert!(send.await);
+    assert_eq!(rx.recv().await, Some("final"));
+    assert!(!abort.load(Ordering::Relaxed));
+    assert!(!cancel.is_cancelled());
+}
