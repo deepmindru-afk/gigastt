@@ -73,6 +73,11 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 
 ### Fixed
 
+- Provision punctuation and VAD sidecars before model-backed coverage tests,
+  including recognition-only cache hits. Pin the encoder oracle to CPU/rnnt,
+  record model provenance, and calibrate its maximum-error bound against the
+  observed CI runner while retaining cosine and exact-transcript checks.
+
 - **WebSocket sessions no longer panic on startup when
   `GIGASTT_MAX_SESSION_SECS=0`.** Previously, the unlimited-session deadline
   was computed as `Instant::now() + Duration::from_secs(u64::MAX / 2)`, which
