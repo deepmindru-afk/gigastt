@@ -26,6 +26,7 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
   temporary WAV container with identical PCM16 precision; longer clips retain
   compact PCM16 WAV storage to avoid doubling retained audio memory. See
   [raw telephony measurements](docs/raw-telephony-pcm.md).
+- Add cross-mode transcription contract checks for observable REST/job overrides, cancelled job registration, and real RNN-T numerical parity across file and channel source representations.
 
 - Poll cancellation during channel scanning and buffered audio decode, between offline diarization steps, and across speaker-loading and text-postprocessing boundaries. Preserve readable partial transcripts and document the synchronous calls that can delay worker/resource release.
 
