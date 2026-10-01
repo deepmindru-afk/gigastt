@@ -239,8 +239,10 @@ removes them and entries for obsolete weights, retaining all configuration
 variants of installed encoders. Use a separate cache directory per model
 installation when running GC.
 
-Pinned encoder digests are reused from the existing startup integrity check
-across pool slots. Custom self-contained sources are hashed before cache lookup;
+Every encoder is hashed before cache lookup, and that digest is shared across
+pool slots. Locally quantized RNN-T INT8 files retain their actual content identity;
+their canonical filename does not require the published bundle digest. See
+[model startup measurements](model-hashing.md). For self-contained sources,
 a cold write rechecks the source before atomic publication. Keep model files
 immutable while loading; install replacements between engine loads. A possible
 ONNX external-data `location` marker disables graph caching because hashing the
