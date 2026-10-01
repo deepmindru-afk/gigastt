@@ -30,12 +30,41 @@ permissions:
   contents: write
 
 jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.source.outputs.tag }}
+      commit: ${{ steps.source.outputs.commit }}
+      version: ${{ steps.source.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Resolve Android source and version
+        id: source
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          ANDROID_PUBLISH: ${{ inputs.publish }}
+        run: python3 scripts/resolve-android.py
+      - name: Require existing release for attachment
+        if: ${{ inputs.tag != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.source.outputs.tag }}
+        run: gh release view "$RELEASE_TAG" > /dev/null
+
   aar:
+    needs: resolve
     runs-on: ubuntu-latest
     env:
+      ANDROID_VERSION: ${{ needs.resolve.outputs.version }}
+      RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
       HAS_MAVEN_CREDS: ${{ secrets.MAVEN_CENTRAL_USERNAME != '' && 'true' || 'false' }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.resolve.outputs.commit }}
 
       - uses: actions/setup-java@v6
         with:
@@ -128,7 +157,7 @@ jobs:
 
       - name: Assemble AAR
         working-directory: packaging/android
-        run: gradle :gigastt:assembleRelease --no-daemon
+        run: gradle :gigastt:assembleRelease -PVERSION_NAME="$ANDROID_VERSION" --no-daemon
 
       - name: Upload AAR
         uses: actions/upload-artifact@v4
@@ -140,23 +169,17 @@ jobs:
       # Attach the built AAR to the given GitHub release (mirrors the iOS
       # xcframework distribution). Consumers download the .aar directly — no
       # Maven Central / Sonatype namespace / GPG signing required.
-      - name: Stage AAR for release
-        if: ${{ inputs.tag != '' }}
+      - name: Attach AAR to existing release
+        if: ${{ needs.resolve.outputs.tag != '' }}
         env:
-          TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          VERSION="${TAG#v}"
-          cp "$(ls packaging/android/gigastt/build/outputs/aar/*.aar | head -1)" "gigastt-${VERSION}.aar"
-          ls -la gigastt-*.aar
-
-      - name: Attach AAR to release
-        if: ${{ inputs.tag != '' }}
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ inputs.tag }}
-          fail_on_unmatched_files: true
-          files: gigastt-*.aar
+          files=(packaging/android/gigastt/build/outputs/aar/*.aar)
+          test "${#files[@]}" -eq 1
+          cp "${files[0]}" "$RUNNER_TEMP/gigastt-${ANDROID_VERSION}.aar"
+          gh release upload "$RELEASE_TAG" "$RUNNER_TEMP/gigastt-${ANDROID_VERSION}.aar" --clobber
 
       - name: Warn on missing Maven credentials
         if: ${{ inputs.publish && env.HAS_MAVEN_CREDS != 'true' }}
@@ -168,4 +191,4 @@ jobs:
         env:
           MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
-        run: gradle :gigastt:publish --no-daemon
+        run: gradle :gigastt:publish -PVERSION_NAME="$ANDROID_VERSION" --no-daemon
