@@ -129,3 +129,33 @@ pub fn rnnt_engine() -> (Engine, tempfile::TempDir) {
     let engine = load_rnnt_engine(tmp.path(), 1).expect("mock rnnt engine");
     (engine, tmp)
 }
+
+/// Model-free benchmark driver for file-window snapshot publication.
+#[derive(Default)]
+pub struct SnapshotBenchPublisher {
+    snapshot: crate::inference::TranscriptSnapshot,
+    publisher: crate::inference::SnapshotPublisher,
+}
+
+impl SnapshotBenchPublisher {
+    /// Publish the suffix changed by a synthetic window seam.
+    pub fn publish(
+        &mut self,
+        words: &[crate::inference::WordInfo],
+        retained: usize,
+        channel: Option<usize>,
+    ) {
+        self.publisher.publish(
+            &self.snapshot,
+            retained,
+            words[retained..].to_vec(),
+            channel,
+            0.0,
+        );
+    }
+
+    /// Materialize the current complete owned snapshot.
+    pub fn get(&self) -> Option<crate::inference::TranscriptSegment> {
+        self.snapshot.get()
+    }
+}

@@ -19,6 +19,10 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
   exact transcription oracle plus real-speech WebSocket finalization coverage.
 - Keep internal planning files local, publish benchmark and edge protocols under
   `docs/`, and check public content and Git metadata for internal identifiers.
+- Publish file-transcription snapshots from replacement suffixes instead of
+  rebuilding the accumulated transcript after every window. Readers still get
+  complete owned transcripts; completed split channels share their stored words.
+  See [snapshot allocation measurements](docs/transcript-snapshot-memory.md).
 
 - Require Symphonia 0.6.1 and remove the vendored metadata and Matroska
   patches. Upstream now handles APEv2 size overflow and unknown-size WebM

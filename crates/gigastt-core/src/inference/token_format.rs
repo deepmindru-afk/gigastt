@@ -10,7 +10,9 @@ use super::state::WordInfo;
 use super::tokenizer::{self, Tokenizer};
 
 mod stitch;
+#[cfg(test)]
 pub(crate) use stitch::stitch_chunk_words;
+pub(crate) use stitch::stitch_chunk_words_retained;
 
 /// Absolute-seconds seam between the previous window, which ended at
 /// `prev_end_sample`, and the window starting at `start_sample`: the midpoint of
