@@ -21,6 +21,8 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 
 ### Changed
 
+- Poll cancellation during channel scanning and buffered audio decode, between offline diarization steps, and across speaker-loading and text-postprocessing boundaries. Preserve readable partial transcripts and document the synchronous calls that can delay worker/resource release.
+
 - Run a bounded, serial model smoke gate on every PR: pinned CPU encoder and
   exact transcription oracle plus real-speech WebSocket finalization coverage.
 - Keep internal planning files local, publish benchmark and edge protocols under
@@ -101,6 +103,8 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
   unrelated models or user data.
 
 ### Fixed
+
+- Apply the no-progress timeout to native and OpenAI file streams, close timed-out responses independently of native calls, and retain upload and pool ownership until the worker exits.
 
 - Provision punctuation and VAD sidecars before model-backed coverage tests,
   including recognition-only cache hits. Pin the encoder oracle to CPU/rnnt,

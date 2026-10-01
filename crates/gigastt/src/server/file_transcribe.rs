@@ -194,9 +194,16 @@ pub(crate) fn raw_codec_to_wav(
     body: &[u8],
     codec: gigastt_core::inference::audio::TelephonyCodec,
     sample_rate: u32,
+    abort: Option<&(dyn Fn() -> bool + Sync)>,
 ) -> Result<Bytes, GigasttError> {
+    if abort.is_some_and(|abort| abort()) {
+        return Err(GigasttError::Cancelled);
+    }
     let samples = gigastt_core::inference::audio::decode_telephony_raw(body, codec, sample_rate)
         .map_err(map_decode_error)?;
+    if abort.is_some_and(|abort| abort()) {
+        return Err(GigasttError::Cancelled);
+    }
     Ok(Bytes::from(
         gigastt_core::inference::audio::encode_wav_pcm16(&samples, 16000),
     ))
@@ -225,6 +232,25 @@ fn with_file_transcribe_request<T>(
     has_vad: bool,
     transcribe: impl FnOnce(TranscribeRequest<'_>) -> Result<T, GigasttError>,
 ) -> Result<T, GigasttError> {
+    let cancelled = || {
+        opts.abort
+            .as_ref()
+            .is_some_and(|flag| flag.load(Ordering::Relaxed))
+    };
+    let check_abort = || {
+        if cancelled() {
+            Err(GigasttError::Cancelled)
+        } else {
+            Ok(())
+        }
+    };
+    check_abort()?;
+    let abort: Option<&(dyn Fn() -> bool + Sync)> = opts.abort.as_ref().map(|_| &cancelled as _);
+    // Check the boundary even for mono fallback and already prepared channels.
+    let transcribe = |request| {
+        check_abort()?;
+        transcribe(request)
+    };
     if let Some(channels) = &opts.progress_channels {
         channels.store(1, Ordering::Relaxed);
     }
@@ -232,10 +258,11 @@ fn with_file_transcribe_request<T>(
     // the encoded buffer with prepared audio inside this detached worker.
     let _upload_lifetime = body.clone();
     let body = match opts.raw_codec {
-        Some((codec, rate)) => raw_codec_to_wav(&body, codec, rate)?,
+        Some((codec, rate)) => raw_codec_to_wav(&body, codec, rate, abort)?,
         None => body,
     };
 
+    check_abort()?;
     if opts.split_channels {
         // Deciding whether to split used to mean decoding every channel of the
         // whole file and correlating two of them, which is what pinned this
@@ -243,16 +270,18 @@ fn with_file_transcribe_request<T>(
         // the header alone unless the file is exactly stereo.
         let use_vad = has_vad && opts.overrides.vad.unwrap_or(true);
         let prepared = if use_vad {
-            gigastt_core::inference::audio::prepare_channels_for_vad(
+            gigastt_core::inference::audio::prepare_channels_for_vad_with_abort(
                 body.clone(),
                 opts.max_audio_secs,
+                abort,
             )
             .map_err(map_decode_error)?
         } else {
             gigastt_core::inference::audio::PreparedChannels {
-                scan: gigastt_core::inference::audio::scan_channels(
+                scan: gigastt_core::inference::audio::scan_channels_with_abort(
                     body.clone(),
                     opts.max_audio_secs,
+                    abort,
                 )
                 .map_err(map_decode_error)?,
                 decoded: None,
@@ -278,9 +307,10 @@ fn with_file_transcribe_request<T>(
             // until the VAD itself runs inside the window loop.
             let channels = match prepared.decoded {
                 Some(channels) => channels,
-                None => gigastt_core::inference::audio::decode_audio_bytes_shared_channels_bounded(
+                None => gigastt_core::inference::audio::decode_audio_bytes_shared_channels_bounded_with_abort(
                     body,
                     opts.max_audio_secs,
+                    abort,
                 )
                 .map_err(map_decode_error)?,
             };
@@ -329,6 +359,27 @@ mod tests {
             }
         }
         Bytes::from(wav)
+    }
+
+    #[test]
+    fn test_cancelled_preparation_never_decodes_or_transcribes() {
+        for split_channels in [false, true] {
+            for raw_codec in [
+                None,
+                Some((gigastt_core::inference::audio::TelephonyCodec::Pcmu, 8000)),
+            ] {
+                let opts = FileTranscribeOpts {
+                    split_channels,
+                    raw_codec,
+                    abort: Some(Arc::new(AtomicBool::new(true))),
+                    ..Default::default()
+                };
+                let result = with_file_transcribe_request(Bytes::new(), &opts, true, |_| {
+                    panic!("cancelled preparation reached inference")
+                });
+                assert!(matches!(result, Err::<(), _>(GigasttError::Cancelled)));
+            }
+        }
     }
 
     #[test]
@@ -465,6 +516,7 @@ mod tests {
             &[],
             gigastt_core::inference::audio::TelephonyCodec::Pcmu,
             8000,
+            None,
         )
         .unwrap_err();
         match err {

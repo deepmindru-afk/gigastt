@@ -16,7 +16,9 @@ use super::super::decode::BytesMediaSource;
 use super::super::opus::{OPUS_DECODE_RATE, OpusStream, next_demux_packet};
 use super::super::resample::{RESAMPLE_STAGING_FRAMES, ResampleTo16k, SampleRate};
 use super::super::wave::{WaveRecv, WaveSource, check_budget, try_open_bytes, try_open_path};
-use super::super::{MAX_SAMPLE_RATE, audio_too_long_err, decode_error, resolve_budget};
+use super::super::{
+    MAX_SAMPLE_RATE, audio_too_long_err, check_decode_abort, decode_error, resolve_budget,
+};
 use super::{ChannelSelect, PcmWindow, PcmWindows, WindowCursor, WindowSpec};
 
 use crate::error::GigasttError;
@@ -317,8 +319,15 @@ impl FileWindows {
     ///
     /// Byte-identical to the whole-buffer `decode_audio_inner`: the same packet
     /// loop, the same per-packet resampler flush cadence, the same final drain.
-    pub(crate) fn drain_to_vec(mut self) -> Result<Vec<f32>> {
-        self.fill_to(usize::MAX)?;
+    pub(crate) fn drain_to_vec(self) -> Result<Vec<f32>> {
+        self.drain_to_vec_with_abort(None)
+    }
+
+    pub(crate) fn drain_to_vec_with_abort(
+        mut self,
+        abort: Option<&(dyn Fn() -> bool + Sync)>,
+    ) -> Result<Vec<f32>> {
+        self.fill_to_with_abort(usize::MAX, abort)?;
         Ok(std::mem::take(&mut self.buf))
     }
 
@@ -338,15 +347,28 @@ impl FileWindows {
     /// samples to `buf`. Enforces the source-rate length budget incrementally with
     /// the exact same error string as the whole-buffer path.
     fn fill_to(&mut self, target: usize) -> Result<()> {
+        self.fill_to_with_abort(target, None)
+    }
+
+    fn fill_to_with_abort(
+        &mut self,
+        target: usize,
+        abort: Option<&(dyn Fn() -> bool + Sync)>,
+    ) -> Result<()> {
+        check_decode_abort(abort)?;
         match self.src {
-            Source::Streaming { .. } => self.fill_streaming(target),
-            Source::Opus { .. } => self.fill_opus(target),
-            Source::Wave(_) => self.fill_wave(target),
+            Source::Streaming { .. } => self.fill_streaming(target, abort),
+            Source::Opus { .. } => self.fill_opus(target, abort),
+            Source::Wave(_) => self.fill_wave(target, abort),
         }
     }
 
     /// [`FileWindows::fill_to`] for a container symphonia can decode itself.
-    fn fill_streaming(&mut self, target: usize) -> Result<()> {
+    fn fill_streaming(
+        &mut self,
+        target: usize,
+        abort: Option<&(dyn Fn() -> bool + Sync)>,
+    ) -> Result<()> {
         let channel = self.channel;
         let Source::Streaming {
             format,
@@ -364,6 +386,7 @@ impl FileWindows {
         };
 
         while !self.eof && self.decoded_16k_total < target {
+            check_decode_abort(abort)?;
             let have_pcm = *source_frames > 0;
             let packet = match next_demux_packet(&mut **format, have_pcm)? {
                 Some(p) => p,
@@ -377,6 +400,7 @@ impl FileWindows {
             }
 
             let decoded = decoder.decode(&packet).context("Decode error")?;
+            check_decode_abort(abort)?;
             let num_frames = decoded.frames();
             let ch = decoded.spec().channels().count();
 
@@ -428,6 +452,7 @@ impl FileWindows {
             self.decoded_16k_total += self.buf.len() - before;
         }
 
+        check_decode_abort(abort)?;
         if self.eof && !self.finished {
             let before = self.buf.len();
             resampler.finish_into(&mut self.buf)?;
@@ -440,7 +465,11 @@ impl FileWindows {
     /// [`FileWindows::fill_to`] for OGG/Opus, decoded through the `opus-rs`
     /// fallback. Same loop as [`FileWindows::fill_streaming`]: one packet at a
     /// time, budget checked incrementally, resampler drained into `buf`.
-    fn fill_opus(&mut self, target: usize) -> Result<()> {
+    fn fill_opus(
+        &mut self,
+        target: usize,
+        abort: Option<&(dyn Fn() -> bool + Sync)>,
+    ) -> Result<()> {
         let Source::Opus {
             format,
             track_id,
@@ -456,6 +485,7 @@ impl FileWindows {
         };
 
         while !self.eof && self.decoded_16k_total < target {
+            check_decode_abort(abort)?;
             let have_pcm = *decoded_48k > 0;
             let packet = match next_demux_packet(&mut **format, have_pcm)? {
                 Some(p) => p,
@@ -469,6 +499,7 @@ impl FileWindows {
             }
 
             *decoded_48k += stream.decode_packet(&packet.data, pending)?;
+            check_decode_abort(abort)?;
             if *decoded_48k > *max_samples {
                 return Err(audio_too_long_err(
                     *decoded_48k,
@@ -494,6 +525,7 @@ impl FileWindows {
             self.decoded_16k_total += self.buf.len() - before;
         }
 
+        check_decode_abort(abort)?;
         if self.eof && !self.finished {
             resampler.stage().extend_from_slice(pending);
             pending.clear();
@@ -506,14 +538,20 @@ impl FileWindows {
     }
 
     /// [`FileWindows::fill_to`] for WAVE family files decoded by ryf.
-    fn fill_wave(&mut self, target: usize) -> Result<()> {
+    fn fill_wave(
+        &mut self,
+        target: usize,
+        abort: Option<&(dyn Fn() -> bool + Sync)>,
+    ) -> Result<()> {
         let Source::Wave(wave) = &mut self.src else {
             return Ok(());
         };
 
         while !self.eof && self.decoded_16k_total < target {
+            check_decode_abort(abort)?;
             match wave.recv_block()? {
                 WaveRecv::Block(block) => {
+                    check_decode_abort(abort)?;
                     wave.source_frames += block.frames;
                     check_budget(
                         wave.source_frames,
@@ -536,6 +574,7 @@ impl FileWindows {
             }
         }
 
+        check_decode_abort(abort)?;
         if self.eof && !self.finished {
             let before = self.buf.len();
             wave.resampler.finish_into(&mut self.buf)?;

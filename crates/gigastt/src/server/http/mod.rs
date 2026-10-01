@@ -8,6 +8,7 @@ mod jobs_api;
 mod openai_api;
 mod state;
 mod stream;
+mod stream_watchdog;
 mod transcribe;
 
 #[cfg(test)]

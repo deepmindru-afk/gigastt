@@ -10,9 +10,11 @@ use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 
 use super::super::MAX_SAMPLE_RATE;
-use super::super::opus::{OPUS_DECODE_RATE, decode_opus_channels, next_demux_packet};
+use super::super::opus::{OPUS_DECODE_RATE, decode_opus_channels_with_abort, next_demux_packet};
 use super::super::resample::{RESAMPLE_STAGING_FRAMES, ResampleTo16k, SampleRate};
-use super::super::{audio_too_long_err, resolve_budget, whole_buffer_limit_secs};
+use super::super::{
+    audio_too_long_err, check_decode_abort, resolve_budget, whole_buffer_limit_secs,
+};
 use super::BytesMediaSource;
 
 /// Decode an audio file to one f32 sample vector per channel at 16 kHz.
@@ -53,7 +55,7 @@ pub(crate) fn load_audio_channels_bounded(
             .to_string_lossy()
     );
 
-    decode_audio_inner_channels(mss, hint, &source_label, max_audio_secs)
+    decode_audio_inner_channels(mss, hint, &source_label, max_audio_secs, None)
 }
 
 /// Decode raw audio bytes to one f32 sample vector per channel at 16 kHz.
@@ -72,9 +74,22 @@ pub fn decode_audio_bytes_shared_channels_bounded(
     data: Bytes,
     max_audio_secs: Option<f64>,
 ) -> Result<Vec<Vec<f32>>> {
+    decode_audio_bytes_shared_channels_bounded_with_abort(data, max_audio_secs, None)
+}
+
+/// Bounded channel decode with cooperative checks between codec and resampler calls.
+/// A true predicate returns typed [`GigasttError::Cancelled`](crate::error::GigasttError::Cancelled).
+/// `None` preserves the existing decode path; active native calls are not interrupted.
+#[cfg(feature = "file-decode")]
+pub fn decode_audio_bytes_shared_channels_bounded_with_abort(
+    data: Bytes,
+    max_audio_secs: Option<f64>,
+    abort: Option<&(dyn Fn() -> bool + Sync)>,
+) -> Result<Vec<Vec<f32>>> {
+    check_decode_abort(abort)?;
     let source = BytesMediaSource::new(data);
     let mss = MediaSourceStream::new(Box::new(source), Default::default());
-    decode_audio_inner_channels(mss, Hint::new(), "bytes", max_audio_secs)
+    decode_audio_inner_channels(mss, Hint::new(), "bytes", max_audio_secs, abort)
 }
 
 /// Shared non-mixing decode: probe → format → decode → per-channel resample.
@@ -84,6 +99,7 @@ fn decode_audio_inner_channels<'s>(
     hint: Hint,
     source_label: &str,
     max_audio_secs: Option<f64>,
+    abort: Option<&(dyn Fn() -> bool + Sync)>,
 ) -> Result<Vec<Vec<f32>>> {
     let mut format = symphonia::default::get_probe()
         .probe(
@@ -94,6 +110,7 @@ fn decode_audio_inner_channels<'s>(
         )
         .context("Unsupported audio format")?;
 
+    check_decode_abort(abort)?;
     let track = format
         .default_track(TrackType::Audio)
         .context("No audio track found")?;
@@ -143,13 +160,20 @@ fn decode_audio_inner_channels<'s>(
     // Symphonia demuxes OGG/Opus but ships no Opus decoder, so Opus packets
     // go through the `opus-rs` fallback and rejoin the shared resample tail.
     let acc: Vec<ResampleTo16k> = if is_opus {
-        let decoded =
-            decode_opus_channels(&mut *format, track_id, channels, max_samples, limit_secs)?;
+        let decoded = decode_opus_channels_with_abort(
+            &mut *format,
+            track_id,
+            channels,
+            max_samples,
+            limit_secs,
+            abort,
+        )?;
         source_frames = decoded.first().map(|v| v.len()).unwrap_or(0);
         let mut acc = Vec::with_capacity(decoded.len());
         for samples in decoded {
             let mut chan = ResampleTo16k::new(SampleRate(pcm_rate), Some(samples.len()));
             for piece in samples.chunks(RESAMPLE_STAGING_FRAMES) {
+                check_decode_abort(abort)?;
                 chan.stage().extend_from_slice(piece);
                 chan.flush_full()?;
             }
@@ -166,6 +190,7 @@ fn decode_audio_inner_channels<'s>(
             .collect();
 
         loop {
+            check_decode_abort(abort)?;
             let have_pcm = source_frames > 0;
             let Some(packet) = next_demux_packet(&mut *format, have_pcm)? else {
                 break;
@@ -176,6 +201,7 @@ fn decode_audio_inner_channels<'s>(
             }
 
             let decoded = decoder.decode(&packet).context("Decode error")?;
+            check_decode_abort(abort)?;
             let spec = decoded.spec().clone();
             let num_frames = decoded.frames();
             let ch = spec.channels().count();
@@ -211,6 +237,7 @@ fn decode_audio_inner_channels<'s>(
             }
 
             for chan in &mut acc {
+                check_decode_abort(abort)?;
                 chan.flush_full()?;
             }
         }
@@ -230,11 +257,15 @@ fn decode_audio_inner_channels<'s>(
     let channel_count = acc.len();
     let per_channel = acc
         .into_iter()
-        .map(ResampleTo16k::finish)
+        .map(|channel| {
+            check_decode_abort(abort)?;
+            channel.finish()
+        })
         .collect::<Result<Vec<_>>>()?;
     if pcm_rate != 16000 {
         tracing::info!("Resampled {channel_count} channel(s) to 16kHz");
     }
 
+    check_decode_abort(abort)?;
     Ok(per_channel)
 }

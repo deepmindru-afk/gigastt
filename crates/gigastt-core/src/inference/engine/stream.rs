@@ -188,7 +188,14 @@ impl Engine {
             } else {
                 EndpointReason::Blank
             };
-            let seg = self.finalize_stream_segment(state, ts, reason);
+            let seg = match self.finalize_stream_segment(state, ts, reason) {
+                Ok(segment) => segment,
+                Err(error) => {
+                    state.failed = true;
+                    self.publish_stream_partial(state);
+                    return Err(error);
+                }
+            };
             Self::slide_streaming_window(state);
             if seg.text.trim().is_empty() {
                 return Ok(vec![]);
@@ -533,6 +540,12 @@ impl Engine {
                 return Err(GigasttError::Cancelled);
             }
             let segment = self.flush_state(state);
+            // A cancelled postprocess preserves the assembler and marks failure.
+            // Once flush commits successfully, later cancellation belongs to the
+            // next operation; rejecting that final here would lose its text.
+            if state.failed {
+                return Err(GigasttError::Cancelled);
+            }
             // A sub-frame tail cannot be decoded yet. Keep it pending so a
             // reusable flush can combine it with the next chunk.
             if state.audio_buffer.len() >= N_FFT {
@@ -567,7 +580,14 @@ impl Engine {
         if state.assembler.is_empty() {
             return None;
         }
-        Some(self.finalize_stream_segment(state, now_timestamp(), EndpointReason::Stop))
+        match self.finalize_stream_segment(state, now_timestamp(), EndpointReason::Stop) {
+            Ok(segment) => Some(segment),
+            Err(_) => {
+                state.failed = true;
+                self.publish_stream_partial(state);
+                Some(self.stream_partial(state, now_timestamp()))
+            }
+        }
     }
 
     /// Flush for a terminal cap (session limit or shutdown).
@@ -622,13 +642,20 @@ impl Engine {
         state: &mut StreamingState,
         timestamp: f64,
         reason: EndpointReason,
-    ) -> TranscriptSegment {
+    ) -> Result<TranscriptSegment, GigasttError> {
         let partial = self.stream_partial(state, timestamp);
+        let abort = state.abort.as_ref();
+        let cancelled =
+            || abort.is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed));
         let tail = self.apply_text_postprocess(
             partial.tentative.trim_start().to_owned(),
             state.itn.unwrap_or(self.itn),
             state.punctuation.unwrap_or(true),
-        );
+            DecodeControls {
+                abort: Some(&cancelled),
+                ..Default::default()
+            },
+        )?;
         // Preserve the readable assembler if post-processing panics.
         let mut segment = state.assembler.finalize_with_reason(timestamp, reason);
         segment.text = if partial.committed.is_empty() {
@@ -643,6 +670,6 @@ impl Engine {
         if let Some(snapshot) = &state.partial {
             snapshot.clear();
         }
-        segment
+        Ok(segment)
     }
 }

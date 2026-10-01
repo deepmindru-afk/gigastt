@@ -137,20 +137,24 @@ pub(crate) fn audio_too_long_err(
 #[cfg(test)]
 pub(crate) use decode::BytesMediaSource;
 #[cfg(feature = "file-decode")]
-pub use decode::{ChannelScan, PreparedChannels, prepare_channels_for_vad, scan_channels};
+pub use decode::{
+    ChannelScan, PreparedChannels, prepare_channels_for_vad, prepare_channels_for_vad_with_abort,
+    scan_channels, scan_channels_with_abort,
+};
 #[cfg(feature = "file-decode")]
 pub use decode::{
     decode_audio_bytes, decode_audio_bytes_shared, decode_audio_bytes_shared_bounded,
     decode_audio_bytes_shared_channels, decode_audio_bytes_shared_channels_bounded,
-    decode_audio_file, load_audio_channels, probe_duration_bytes, probe_duration_file,
+    decode_audio_bytes_shared_channels_bounded_with_abort, decode_audio_file, load_audio_channels,
+    probe_duration_bytes, probe_duration_file,
 };
 // Length-bounded file decode used by the engine's whole-buffer branch; the
 // streaming path threads its budget through `FileWindows` instead. The bytes /
 // channels bounded variants above are `pub` because the server decodes those
 // buffers itself; the path variant is engine-only.
-#[cfg(feature = "file-decode")]
-pub(crate) use decode::decode_audio_file_bounded;
 pub use decode::{DualMonoDetector, is_dual_mono, mix_channels_to_mono};
+#[cfg(feature = "file-decode")]
+pub(crate) use decode::{decode_audio_bytes_with_abort, decode_audio_file_with_abort};
 
 pub(crate) use pcm::{consume_audio_buffer, prepare_audio_buffer};
 pub use pcm::{parse_pcm16_with_carry, parse_pcm16_with_carry_into};
@@ -183,3 +187,13 @@ pub use telephony::{decode_telephony_raw, encode_wav_pcm16};
 #[cfg(all(test, feature = "file-decode"))]
 #[allow(unused_imports)]
 pub(crate) use opus::is_recoverable_packet_eof;
+
+/// Cooperative boundary for synchronous container work. An active codec call
+/// completes before this check can observe cancellation.
+#[cfg(feature = "file-decode")]
+pub(crate) fn check_decode_abort(abort: Option<&(dyn Fn() -> bool + Sync)>) -> anyhow::Result<()> {
+    if abort.is_some_and(|abort| abort()) {
+        return Err(crate::error::GigasttError::Cancelled.into());
+    }
+    Ok(())
+}
