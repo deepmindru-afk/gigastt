@@ -26,10 +26,16 @@ def resolve(tag):
         raise ValueError('release version exceeds Docker tag length')
     git('fetch', '--no-tags', '--depth=1', 'origin', f'refs/tags/{tag}')
     commit = git('rev-parse', '--verify', 'FETCH_HEAD^{commit}')
-    manifest = tomllib.loads(git('show', f'{commit}:Cargo.toml'))
-    version = manifest['workspace']['package']['version']
+    version = workspace_version(commit)
     if version != tag[1:]:
         raise ValueError(f'tag {tag} disagrees with workspace version {version}')
+    return {'tag': tag, 'commit': commit, 'version': version}
+
+
+def workspace_version(commit):
+    """Check that all built workspace crates share the source version."""
+    manifest = tomllib.loads(git('show', f'{commit}:Cargo.toml'))
+    version = manifest['workspace']['package']['version']
     for member in manifest['workspace']['members']:
         package = tomllib.loads(git('show', f'{commit}:{member}/Cargo.toml'))['package']
         effective = package['version']
@@ -37,7 +43,7 @@ def resolve(tag):
             effective = version
         if effective != version:
             raise ValueError(f'{member} version {effective} disagrees with {version}')
-    return {'tag': tag, 'commit': commit, 'version': version}
+    return version
 
 
 def provenance(source, env):

@@ -131,6 +131,10 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 - Wait for operational readiness in the CLI server smoke test before checking
   metrics, and reap the owned subprocess on assertion failures. Startup and
   metrics time budgets are unchanged.
+- Build Android release AARs from the validated tag commit and use its version
+  consistently for native source, Gradle publication, and release filenames.
+  Tagged runs require an existing release; untagged dispatches build artifacts only.
+
 - Resolve and validate release tags before building artifacts. Manual dispatch,
   binary packages, SBOMs and container images now share one immutable source
   commit, with workflow and artifact source recorded separately in provenance.
