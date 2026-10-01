@@ -45,6 +45,28 @@ pub(crate) struct FileTranscribeOpts {
     pub max_audio_secs: Option<f64>,
 }
 
+impl FileTranscribeOpts {
+    /// Shared engine request context for every audio-routing branch.
+    fn request<'a>(&'a self, source: TranscribeSource<'a>) -> TranscribeRequest<'a> {
+        // Channel speaker labels take precedence over offline diarization,
+        // including when the split request falls back to mono.
+        let diarization = self.diarization && !self.split_channels;
+        TranscribeRequest::new(source)
+            .with_overrides(self.overrides)
+            .with_hotwords(self.hotwords.as_ref())
+            .with_diarization(diarization)
+            .with_diarization_outcome(if self.split_channels {
+                None
+            } else {
+                self.diarization_outcome.clone()
+            })
+            .with_abort(self.abort.clone())
+            .with_partial(self.partial.clone())
+            .with_progress(self.progress.clone())
+            .with_max_audio_secs(self.max_audio_secs)
+    }
+}
+
 /// Sets a shared abort flag when dropped. Held in the REST handler's async
 /// scope so that a client disconnect — which drops the handler future before it
 /// returns — flips the flag, and the detached blocking decode observes it at the
@@ -182,6 +204,18 @@ pub(crate) fn run_file_transcribe_blocking(
     reservation: &mut OwnedReservation<SessionTriplet>,
     opts: &FileTranscribeOpts,
 ) -> Result<TranscribeResult, GigasttError> {
+    with_file_transcribe_request(body, opts, engine.has_vad(), |request| {
+        engine.transcribe_request(request, reservation)
+    })
+}
+
+/// Route the audio while keeping the request visible at the engine boundary.
+fn with_file_transcribe_request<T>(
+    body: Bytes,
+    opts: &FileTranscribeOpts,
+    has_vad: bool,
+    transcribe: impl FnOnce(TranscribeRequest<'_>) -> Result<T, GigasttError>,
+) -> Result<T, GigasttError> {
     let body = match opts.raw_codec {
         Some((codec, rate)) => raw_codec_to_wav(&body, codec, rate)?,
         None => body,
@@ -198,65 +232,152 @@ pub(crate) fn run_file_transcribe_blocking(
             tracing::warn!(
                 "channels=split requested but {reason} detected; falling back to mono transcription"
             );
-            engine.transcribe_request(
-                TranscribeRequest::new(TranscribeSource::Bytes(body))
-                    .with_abort(opts.abort.clone())
-                    .with_partial(opts.partial.clone())
-                    .with_progress(opts.progress.clone())
-                    .with_max_audio_secs(opts.max_audio_secs),
-                reservation,
-            )
-        } else if engine.has_vad() && opts.overrides.vad.unwrap_or(true) {
+            transcribe(opts.request(TranscribeSource::Bytes(body)))
+        } else if has_vad && opts.overrides.vad.unwrap_or(true) {
             // The per-channel VAD pass still needs each channel resident, so a
             // VAD-enabled server keeps the whole-buffer split (and its ceiling)
             // until the VAD itself runs inside the window loop.
             let channels =
                 gigastt_core::inference::audio::decode_audio_bytes_shared_channels_bounded(
-                    body.clone(),
+                    body,
                     opts.max_audio_secs,
                 )
                 .map_err(map_decode_error)?;
-            engine.transcribe_request(
-                TranscribeRequest::new(TranscribeSource::Channels(&channels))
-                    .with_abort(opts.abort.clone())
-                    .with_partial(opts.partial.clone())
-                    .with_max_audio_secs(opts.max_audio_secs),
-                reservation,
-            )
+            transcribe(opts.request(TranscribeSource::Channels(&channels)))
         } else {
-            engine.transcribe_request(
-                TranscribeRequest::new(TranscribeSource::ChannelStreams {
-                    data: body,
-                    channels: scan.channels,
-                })
-                .with_overrides(opts.overrides)
-                .with_hotwords(opts.hotwords.as_ref())
-                .with_abort(opts.abort.clone())
-                .with_partial(opts.partial.clone())
-                .with_max_audio_secs(opts.max_audio_secs),
-                reservation,
-            )
+            transcribe(opts.request(TranscribeSource::ChannelStreams {
+                data: body,
+                channels: scan.channels,
+            }))
         }
     } else {
-        // Mono path (optional diarization) via unified Engine request API.
-        engine.transcribe_request(
-            TranscribeRequest::new(TranscribeSource::Bytes(body))
-                .with_overrides(opts.overrides)
-                .with_hotwords(opts.hotwords.as_ref())
-                .with_diarization(opts.diarization)
-                .with_diarization_outcome(opts.diarization_outcome.clone())
-                .with_abort(opts.abort.clone())
-                .with_partial(opts.partial.clone())
-                .with_progress(opts.progress.clone())
-                .with_max_audio_secs(opts.max_audio_secs),
-            reservation,
-        )
+        transcribe(opts.request(TranscribeSource::Bytes(body)))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn channel_fixture(channels: u16, dual_mono: bool) -> Bytes {
+        let frames = 1600u32;
+        let data_bytes = frames * u32::from(channels) * 2;
+        let mut wav = Vec::new();
+        wav.extend_from_slice(b"RIFF");
+        wav.extend_from_slice(&(36 + data_bytes).to_le_bytes());
+        wav.extend_from_slice(b"WAVEfmt ");
+        wav.extend_from_slice(&16u32.to_le_bytes());
+        wav.extend_from_slice(&1u16.to_le_bytes());
+        wav.extend_from_slice(&channels.to_le_bytes());
+        wav.extend_from_slice(&16000u32.to_le_bytes());
+        wav.extend_from_slice(&(16000 * u32::from(channels) * 2).to_le_bytes());
+        wav.extend_from_slice(&(channels * 2).to_le_bytes());
+        wav.extend_from_slice(&16u16.to_le_bytes());
+        wav.extend_from_slice(b"data");
+        wav.extend_from_slice(&data_bytes.to_le_bytes());
+        for frame in 0..frames {
+            for channel in 0..channels {
+                let frequency = if channel == 0 || dual_mono {
+                    440.0
+                } else {
+                    710.0
+                };
+                let sample = ((frame as f32 * frequency * std::f32::consts::TAU / 16000.0).sin()
+                    * 10000.0) as i16;
+                wav.extend_from_slice(&sample.to_le_bytes());
+            }
+        }
+        Bytes::from(wav)
+    }
+
+    #[test]
+    fn test_channel_routing_preserves_request_context() {
+        for (channels, dual_mono) in [(1, false), (2, true), (2, false)] {
+            for has_vad in [false, true] {
+                for vad in [None, Some(false), Some(true)] {
+                    for enabled in [false, true] {
+                        for split_channels in [false, true] {
+                            let opts = FileTranscribeOpts {
+                                overrides: TranscribeOverrides {
+                                    punctuation: Some(enabled),
+                                    itn: Some(!enabled),
+                                    vad,
+                                },
+                                hotwords: Some(HotwordOverride::new(
+                                    vec!["тест".into()],
+                                    Some(3.0),
+                                )),
+                                split_channels,
+                                diarization: true,
+                                abort: Some(Arc::new(AtomicBool::new(false))),
+                                partial: Some(Arc::new(Default::default())),
+                                progress: Some(Arc::new(AtomicU64::new(0))),
+                                diarization_outcome: Some(Arc::new(Default::default())),
+                                max_audio_secs: Some(1.0),
+                                ..Default::default()
+                            };
+                            with_file_transcribe_request(
+                                channel_fixture(channels, dual_mono),
+                                &opts,
+                                has_vad,
+                                |request| {
+                                    let split = split_channels && channels == 2 && !dual_mono;
+                                    match &request.source {
+                                        TranscribeSource::Bytes(_) => assert!(!split),
+                                        TranscribeSource::Channels(audio) => {
+                                            assert!(split && has_vad && vad.unwrap_or(true));
+                                            assert_eq!(audio.len(), 2);
+                                        }
+                                        TranscribeSource::ChannelStreams { channels, .. } => {
+                                            assert!(split && !(has_vad && vad.unwrap_or(true)));
+                                            assert_eq!(*channels, 2);
+                                        }
+                                        _ => panic!("unexpected source"),
+                                    }
+                                    assert_eq!(
+                                        request.overrides.punctuation,
+                                        opts.overrides.punctuation
+                                    );
+                                    assert_eq!(request.overrides.itn, opts.overrides.itn);
+                                    assert_eq!(request.overrides.vad, opts.overrides.vad);
+                                    assert!(std::ptr::eq(
+                                        request.hotwords.unwrap(),
+                                        opts.hotwords.as_ref().unwrap()
+                                    ));
+                                    assert!(Arc::ptr_eq(
+                                        request.abort.as_ref().unwrap(),
+                                        opts.abort.as_ref().unwrap()
+                                    ));
+                                    assert!(Arc::ptr_eq(
+                                        request.partial.as_ref().unwrap(),
+                                        opts.partial.as_ref().unwrap()
+                                    ));
+                                    assert!(Arc::ptr_eq(
+                                        request.progress.as_ref().unwrap(),
+                                        opts.progress.as_ref().unwrap()
+                                    ));
+                                    assert_eq!(request.max_audio_secs, opts.max_audio_secs);
+                                    // Channel speaker labels take precedence over offline diarization,
+                                    // including mono fallback, as on the existing split path.
+                                    assert_eq!(request.diarization, !split_channels);
+                                    if split_channels {
+                                        assert!(request.diarization_outcome.is_none());
+                                    } else {
+                                        assert!(Arc::ptr_eq(
+                                            request.diarization_outcome.as_ref().unwrap(),
+                                            opts.diarization_outcome.as_ref().unwrap()
+                                        ));
+                                    }
+                                    Ok(())
+                                },
+                            )
+                            .unwrap();
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn test_file_transcribe_opts_default() {
