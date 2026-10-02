@@ -99,17 +99,23 @@ async fn test_load_4_concurrent_ws_streaming() {
 #[tokio::test]
 #[ignore] // Requires model download — run locally
 async fn test_load_4_concurrent_rest_transcribe() {
+    const CLIENTS: usize = 4;
     let model_dir = common::model_dir();
-    let (port, _shutdown) = common::start_server(&model_dir).await;
+    // Upload admission is bounded by the loaded pool, so provision one slot
+    // per client for this successful-load scenario. Overload is tested separately.
+    let (port, _shutdown) = common::start_server_with_pool(&model_dir, CLIENTS).await;
 
+    let barrier = std::sync::Arc::new(tokio::sync::Barrier::new(CLIENTS));
     let start = Instant::now();
     let mut handles = Vec::new();
 
-    for i in 0..4usize {
+    for i in 0..CLIENTS {
         // Generate 5s WAV at 16kHz per task
         let wav = common::generate_wav(5, 16000);
 
+        let barrier = barrier.clone();
         handles.push(tokio::spawn(async move {
+            barrier.wait().await;
             let resp = reqwest::Client::new()
                 .post(format!("http://127.0.0.1:{port}/v1/transcribe"))
                 .body(wav)
@@ -118,7 +124,16 @@ async fn test_load_4_concurrent_rest_transcribe() {
                 .unwrap_or_else(|e| panic!("Client {i}: POST /v1/transcribe failed: {e}"));
 
             let status = resp.status();
-            assert_eq!(status, 200, "Client {i}: expected 200, got {status}");
+            let body = resp.text().await.expect("complete response body");
+            assert_eq!(
+                status, 200,
+                "Client {i}: expected 200, got {status}: {body}"
+            );
+            let body: serde_json::Value = serde_json::from_str(&body).expect("transcription JSON");
+            assert!(body["text"].is_string(), "Client {i}: {body}");
+            assert!(body["words"].is_array(), "Client {i}: {body}");
+            let duration = body["duration"].as_f64().expect("audio duration");
+            assert!((duration - 5.0).abs() < 0.01, "Client {i}: {body}");
 
             i
         }));
@@ -149,7 +164,7 @@ async fn test_load_4_concurrent_rest_transcribe() {
 }
 
 // ---------------------------------------------------------------------------
-// 3. Burst of 20 WebSocket connections (pool is 4, rest will queue)
+// 3. Burst of 20 WebSocket connections (exceeds the default pool; clients queue)
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -162,7 +177,7 @@ async fn test_load_burst_20_connections() {
     let mut handles = Vec::new();
 
     // Spawn all 20 tasks immediately with no delay — connections will queue
-    // because the server pool is 4. That is expected behaviour.
+    // because the burst exceeds the default server pool. That is expected behaviour.
     for i in 0..20usize {
         handles.push(tokio::spawn(async move {
             let (mut sink, mut stream, _ready) = common::ws_connect(port).await;
