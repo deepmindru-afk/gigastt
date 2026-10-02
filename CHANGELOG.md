@@ -136,6 +136,9 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 
 ### Fixed
 
+- Give the four-client REST load test four explicit pool slots, matching bounded
+  upload admission, and validate complete transcription responses from a synchronized burst.
+
 - Validate the complete replacement history when a push event references an old
   commit unavailable after a history rewrite, including reverted private content.
   Missing or invalid new commit tips still fail the publication check.
