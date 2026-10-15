@@ -90,7 +90,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/performance-gates.py release "$GITHUB_SHA"
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: verified-model-bundle
           path: dist
