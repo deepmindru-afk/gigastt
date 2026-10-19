@@ -188,11 +188,10 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
 name = "audio-codec"
-version = "0.4.7"
+version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ed17b200d60e7981699bc7b43317ddc8c33c57231cc5a164e3f429d12c6e940"
+checksum = "92f02cd3e986f5512564c722a0b94de5e0660445a21e7369764104a859b8bc05"
 dependencies = [
- "g729-sys",
  "libm",
 ]
 
@@ -1413,12 +1412,6 @@ dependencies = [
  "pin-project-lite",
  "slab",
 ]
-
-[[package]]
-name = "g729-sys"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "582ee481959b69a3557c190d4c038fb8c1ff2319be9ef84ea9c98faeffebbf98"
 
 [[package]]
 name = "gemm"
@@ -5139,7 +5132,7 @@ dependencies = [
  "serde",
  "tempfile",
  "textwrap",
- "toml 0.9.12+spec-1.1.0",
+ "toml 1.1.6+spec-1.1.0",
  "uniffi_internal_macros",
  "uniffi_meta",
  "uniffi_pipeline",
@@ -5184,7 +5177,7 @@ dependencies = [
  "quote",
  "serde",
  "syn 2.0.117",
- "toml 0.9.12+spec-1.1.0",
+ "toml 1.1.6+spec-1.1.0",
  "uniffi_meta",
 ]
 
