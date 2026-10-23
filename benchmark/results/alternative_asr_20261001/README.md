@@ -47,7 +47,7 @@ These are single-clip controls, **not precision-equivalence evidence**. CTransla
 
 ## Reproduction and scope
 
-Lab-only packages are pinned in [requirements.txt](requirements.txt). Install the CPU build `torch==2.9.1+cpu` from the PyTorch CPU index before installing the remaining requirements. Model snapshots must match the revisions and SHA-256 values in `provenance.json`; the runner checks the weight hashes.
+Lab-only packages are pinned in [requirements.txt](requirements.txt). The original measurements used `certifi==2026.7.22`; on 2026-10-23 the installation pin was updated to `2026.10.19` to address [GHSA-6q48-6c7w-9gw2](https://github.com/advisories/GHSA-6q48-6c7w-9gw2). The archived measurements have not been rerun or relabelled; this changes the download trust store, not model weights. Install the CPU build `torch==2.9.1+cpu` from the PyTorch CPU index before installing the remaining requirements. Model snapshots must match the revisions and SHA-256 values in `provenance.json`; the runner checks the weight hashes.
 
 From the repository root, with the two pinned snapshots under `base/` and `adapter/`:
 
