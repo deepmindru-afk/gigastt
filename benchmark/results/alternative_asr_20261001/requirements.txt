@@ -24,7 +24,7 @@ rapidfuzz==3.14.6
 regex==2026.9.3
 requests==2.34.2
 safetensors==0.8.0
-setuptools==78.1.0
+setuptools==83.0.0
 soundfile==0.14.0
 sympy==1.14.0
 tokenizers==0.22.2

@@ -47,7 +47,9 @@ These are single-clip controls, **not precision-equivalence evidence**. CTransla
 
 ## Reproduction and scope
 
-Lab-only packages are pinned in [requirements.txt](requirements.txt). The original measurements used `certifi==2026.7.22`; on 2026-10-23 the installation pin was updated to `2026.10.19` to address [GHSA-6q48-6c7w-9gw2](https://github.com/advisories/GHSA-6q48-6c7w-9gw2). The archived measurements have not been rerun or relabelled; this changes the download trust store, not model weights. Install the CPU build `torch==2.9.1+cpu` from the PyTorch CPU index before installing the remaining requirements. Model snapshots must match the revisions and SHA-256 values in `provenance.json`; the runner checks the weight hashes.
+[requirements.txt](requirements.txt) records the lab dependency versions, with two security updates applied on 2026-10-23: `certifi` from `2026.7.22` to `2026.10.19` ([advisory](https://github.com/advisories/GHSA-6q48-6c7w-9gw2)) and `setuptools` from `78.1.0` to `83.0.0` ([path traversal](https://github.com/advisories/GHSA-5rjg-fvgr-3xxf), [sdist exclusion bypass](https://github.com/advisories/GHSA-h35f-9h28-mq5c)). These changes do not rerun or relabel the archived measurements.
+
+This historical environment is **not a currently qualified installation recipe**. The 2026-10-23 PyPI advisory review also found advisories affecting the pinned PyTorch and Transformers versions, including records without a published fix. Reproducing the experiment requires a separate security and compatibility review in an isolated lab; do not install these pins into a deployed service or load untrusted model artifacts. Updating the ML stack and revalidating its numerical behavior is outside this evidence archive. The original experiment used the PyTorch CPU build `2.9.1+cpu`. Model snapshots must match the revisions and SHA-256 values in `provenance.json`; the runner checks the weight hashes.
 
 From the repository root, with the two pinned snapshots under `base/` and `adapter/`:
 
