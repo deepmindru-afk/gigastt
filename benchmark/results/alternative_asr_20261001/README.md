@@ -47,9 +47,9 @@ These are single-clip controls, **not precision-equivalence evidence**. CTransla
 
 ## Reproduction and scope
 
-[requirements.txt](requirements.txt) records the lab dependency versions, with two security updates applied on 2026-10-23: `certifi` from `2026.7.22` to `2026.10.19` ([advisory](https://github.com/advisories/GHSA-6q48-6c7w-9gw2)) and `setuptools` from `78.1.0` to `83.0.0` ([path traversal](https://github.com/advisories/GHSA-5rjg-fvgr-3xxf), [sdist exclusion bypass](https://github.com/advisories/GHSA-h35f-9h28-mq5c)). These changes do not rerun or relabel the archived measurements.
+The original lab package versions are retained as historical metadata in [provenance.json](provenance.json), alongside the model revisions and hashes. They describe the environment that produced these results and are **not installation requirements**.
 
-This historical environment is **not a currently qualified installation recipe**. The 2026-10-23 PyPI advisory review also found advisories affecting the pinned PyTorch and Transformers versions, including records without a published fix. Reproducing the experiment requires a separate security and compatibility review in an isolated lab; do not install these pins into a deployed service or load untrusted model artifacts. Updating the ML stack and revalidating its numerical behavior is outside this evidence archive. The original experiment used the PyTorch CPU build `2.9.1+cpu`. Model snapshots must match the revisions and SHA-256 values in `provenance.json`; the runner checks the weight hashes.
+A 2026-10-23 security review found advisories affecting the original certifi, setuptools, PyTorch and Transformers versions, including PyTorch/Transformers records without a published fix. The archive therefore does not distribute an installation requirements file or recommend installing those pins. A new reproduction environment needs separate security, compatibility and numerical validation in an isolated lab. Do not load untrusted model artifacts. The archived measurements have not been rerun or relabelled; the original experiment used the PyTorch CPU build `2.9.1+cpu`. Model snapshots must match the revisions and SHA-256 values in `provenance.json`; the runner checks the weight hashes.
 
 From the repository root, with the two pinned snapshots under `base/` and `adapter/`:
 
