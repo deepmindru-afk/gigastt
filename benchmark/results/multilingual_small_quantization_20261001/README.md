@@ -181,6 +181,6 @@ format checks passed. No product code was changed for these candidate conversion
 ## Standalone packaging follow-up
 
 A reproducible archive and verified installer are now available; see
-[standalone model packs](../../../docs/model-packs.md). The updated CLI accepts
+[standalone model packs](https://github.com/ekhodzitsky/gigastt/blob/ebb65ddd321ca9dd2d34313b86597d64c542e2c0/docs/model-packs.md). The updated CLI accepts
 the standalone manifest without the original encoder companion. The earlier
 benchmark pack and binary above remain frozen for reproducibility.
