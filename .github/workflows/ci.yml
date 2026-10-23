@@ -797,14 +797,11 @@ jobs:
       - uses: crate-ci/typos@v1
 
   docs-drift:
-    # Advisory gate against documentation drift (scripts/check-docs-drift.py):
+    # Gate against documentation drift (scripts/check-docs-drift.py):
     # CLI flags vs cli.md, WS error codes vs asyncapi.yaml/api.md, audio
     # formats, OpenAPI routes, relative links and version pins.
-    # continue-on-error keeps it non-blocking while it stabilizes — revisit
-    # promoting it to a required check after 2026-09-15.
-    continue-on-error: true
     runs-on: ubuntu-latest
-    name: Docs Drift (advisory)
+    name: Docs Drift
     permissions:
       contents: read
       pull-requests: read
@@ -820,7 +817,7 @@ jobs:
           filters: |
             docs:
               - 'docs/**'
-              - '.github/*.md'
+              - '**/*.md'
               - 'crates/gigastt/src/main.rs'
               - 'crates/gigastt/src/serve.rs'
               - 'crates/gigastt/src/serve/bind.rs'
@@ -832,13 +829,16 @@ jobs:
               - 'crates/gigastt/src/server/listen.rs'
               - 'crates/gigastt-core/src/inference/audio/**'
               - 'scripts/check-docs-drift.py'
+              - 'scripts/test_docs_drift.py'
               - 'scripts/check-docs-drift.allowlist'
               - 'README*.md'
               - 'Cargo.toml'
               - 'packaging/**/README*'
       - if: github.ref == 'refs/heads/main' || steps.filter.outputs.docs == 'true'
         name: Check docs drift
-        run: python3 scripts/check-docs-drift.py
+        run: |
+          python3 scripts/test_docs_drift.py
+          python3 scripts/check-docs-drift.py
 
   dependency-review:
     needs: comparison-base
