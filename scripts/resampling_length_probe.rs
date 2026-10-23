@@ -59,14 +59,14 @@ fn main() -> anyhow::Result<()> {
             let src = [x.clone()];
             let mut allr = make(n)?;
             let need = allr.process_all_needed_output_len(n);
-            let mut allo = [vec![0.; need]];
+            let mut full_output = [vec![0.; need]];
             let (_, alln) = allr.process_all_into_buffer(
                 &SequentialSliceOfVecs::new(&src, 1, n)?,
-                &mut SequentialSliceOfVecs::new_mut(&mut allo, 1, need)?,
+                &mut SequentialSliceOfVecs::new_mut(&mut full_output, 1, need)?,
                 n,
                 None,
             )?;
-            let all = &allo[0][..alln];
+            let all = &full_output[0][..alln];
             let mut cache = None;
             let mut staged = vec![];
             let mut scratch = vec![];
