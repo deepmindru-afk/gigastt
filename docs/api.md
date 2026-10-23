@@ -703,7 +703,8 @@ them in.
   diarization. The mutual-exclusion check with `channels=split` treats `diarization=true`
   as an explicit request; returns `400` with code `conflicting_modes` if both are set.
   Actual diarization output requires the speaker-encoder model to be loaded on the
-  server (downloaded automatically when the `diarization` feature is enabled).
+  server (provisioned by `gigastt download` unless `--skip-diarization` is set;
+  loading for recognition is lazy).
 
 Per-request overrides of the boot defaults (all optional; absent means "use the
 server default", so a request that sets none is byte-identical to before these

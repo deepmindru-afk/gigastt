@@ -15,6 +15,12 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 
 ### Changed
 
+- Reorganize the README and documentation around installation, model selection,
+  operation and validation. Distinguish published bundles from main, correct SDK
+  examples and backend constraints, remove superseded backend plans, and check
+  Markdown links across the repository with regression coverage. Documentation
+  drift now fails its job in manually dispatched CI.
+
 - Run GitHub workflows only on manual dispatch to conserve Actions minutes.
   Preserve protected checks and exact-source release validation; manual CI
   requires an immutable comparison baseline and opts into full model/E2E checks.
