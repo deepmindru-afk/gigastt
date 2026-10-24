@@ -27,6 +27,9 @@ fn test_g726_wave_matches_independent_reference_and_streaming() {
         // Both signals use the same production resampler; the reference PCM
         // was decoded independently by FFmpeg, never by the updated library.
         let expected = decode_audio_bytes(reference).unwrap();
+        // Even the 2-bit fixture must cross the decoder's 4096-byte input
+        // block; the 3- and 5-bit rates also exercise carried partial bytes.
+        assert!(expected.len() > 32_768, "fixture must cross decode blocks");
         let actual = decode_audio_bytes(encoded).unwrap();
         assert!(!actual.is_empty());
         assert_eq!(actual, expected);
