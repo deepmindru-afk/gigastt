@@ -32,6 +32,12 @@ def require(condition, message):
         raise ValueError(message)
 
 
+def require_model_host(version):
+    require(re.fullmatch(r'\d+(?:\.\d+)*', version) is not None
+            and int(version.split('.')[0]) >= 15,
+            'Pinned CoreML8 encoder requires macOS 15 or newer; got ' + version)
+
+
 def validate(report):
     require(all(len(report[a]) == 7 for a in ('base', 'candidate')), 'seven paired rounds required')
     reference = report['base'][0]
@@ -101,6 +107,7 @@ def main():
         print('Objective-C dependencies and bridge unchanged; no model download or benchmark needed.')
         return
     require(sys.platform == 'darwin', 'Core ML comparison requires macOS')
+    require_model_host(run('sw_vers', '-productVersion', capture_output=True).stdout.strip())
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     harness = (ROOT / 'scripts/objc-revision-probe.rs').read_bytes()

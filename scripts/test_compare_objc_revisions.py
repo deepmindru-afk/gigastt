@@ -79,6 +79,21 @@ class AffectedTests(unittest.TestCase):
                                      'crates/gigastt-core/src/runtime/coreml/bridge/tests/objc_lifetime.rs'))
 
 
+class HostTests(unittest.TestCase):
+    def test_model_requires_macos_15_or_newer(self):
+        for version in ('14.8.9', '', 'unknown'):
+            with self.subTest(version=version), self.assertRaises(ValueError):
+                module.require_model_host(version)
+        for version in ('15.0', '15.7.1', '26.0'):
+            module.require_model_host(version)
+
+    def test_ci_runner_supports_pinned_model(self):
+        workflow = (module.ROOT / '.github/workflows/ci.yml').read_text()
+        job = workflow.split('  build-ane:\n', 1)[1]
+        job = re.split(r'\n  [a-zA-Z0-9_-]+:\n', job, maxsplit=1)[0]
+        self.assertIn('runs-on: macos-15', job)
+
+
 class ProtectedGateTests(unittest.TestCase):
     def test_coreml_failure_blocks_required_model_smoke(self):
         workflow = (module.ROOT / '.github/workflows/ci.yml').read_text()

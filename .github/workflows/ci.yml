@@ -430,7 +430,7 @@ jobs:
 
   build-ane:
     needs: comparison-base
-    runs-on: macos-14
+    runs-on: macos-15
     name: Build (ANE)
     timeout-minutes: 60
     steps:

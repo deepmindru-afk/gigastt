@@ -221,3 +221,7 @@ check measures encoder equivalence, not end-to-end WER. Unaffected changes skip
 the optimized ownership build, model download and comparison. The macOS job
 feeds the required Model smoke status, so failure, cancellation or a skipped job
 blocks merge. CI remains manually dispatched.
+
+The pinned Core ML bridge comparison model uses the CoreML8 opset and requires
+macOS 15 or newer. The manual ANE job uses macOS 15; the comparison rejects an
+older host before downloading assets or building either revision.
