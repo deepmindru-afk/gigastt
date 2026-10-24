@@ -215,4 +215,4 @@ measurements are uploaded as the `objc-revisions` artifact.
 Both CPU-only and CPUAndNeuralEngine policies are exercised. The latter does
 not establish that a hosted runner used physical ANE hardware. This bridge
 check measures encoder equivalence, not end-to-end WER. Unaffected changes skip
-the model download and comparison. CI remains manually dispatched.
+the optimized ownership build, model download and comparison. CI remains manually dispatched.

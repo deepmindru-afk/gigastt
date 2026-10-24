@@ -2,6 +2,7 @@ import copy
 import importlib.util
 from pathlib import Path
 import unittest
+from unittest import mock
 
 spec = importlib.util.spec_from_file_location('objc_gate', Path(__file__).with_name('compare-objc-revisions.py'))
 module = importlib.util.module_from_spec(spec)
@@ -48,6 +49,31 @@ class GateTests(unittest.TestCase):
         with self.assertRaises(ValueError): module.validate(r)
         r = fixture(); r['candidate'][0]['modes']['cpu']['cached'] = False
         with self.assertRaises(ValueError): module.validate(r)
+
+
+class AffectedTests(unittest.TestCase):
+    def changed(self, base_source, candidate_source, paths=''):
+        def git(*args):
+            if args[0] == 'show':
+                source = base_source if args[1].startswith('base:') else candidate_source
+                return '[[package]]\nname = "objc2"\nversion = "0.6.5"\nsource = "' + source + '"\n'
+            return paths
+        with mock.patch.object(module, 'git', side_effect=git):
+            return module.affected('base', 'candidate')
+
+    def test_unchanged_runtime_skips_measurement(self):
+        self.assertFalse(self.changed('registry+same', 'registry+same'))
+
+    def test_source_revision_change_is_detected(self):
+        self.assertTrue(self.changed('git+repo#old', 'git+repo#new'))
+
+    def test_bridge_change_is_detected(self):
+        self.assertTrue(self.changed('registry+same', 'registry+same',
+                                    'crates/gigastt-core/src/runtime/coreml/bridge/predict.rs'))
+
+    def test_test_only_change_skips_measurement(self):
+        self.assertFalse(self.changed('registry+same', 'registry+same',
+                                     'crates/gigastt-core/src/runtime/coreml/bridge/tests/objc_lifetime.rs'))
 
 
 if __name__ == '__main__': unittest.main()

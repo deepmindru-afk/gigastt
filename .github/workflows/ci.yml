@@ -450,11 +450,18 @@ jobs:
       - run: cargo build -p gigastt --features ane
       - run: cargo clippy -p gigastt --features ane --all-targets -- -D warnings
       - run: cargo test -p gigastt-core --lib --features ane
+      - name: Detect Objective-C runtime changes
+        id: objc-delta
+        env:
+          BASE_SHA: ${{ needs.comparison-base.outputs.sha }}
+        run: python3 scripts/compare-objc-revisions.py --base "$BASE_SHA" --affected-only >> "$GITHUB_OUTPUT"
       - name: Check optimized Objective-C ownership
+        if: steps.objc-delta.outputs.changed == 'true'
         run: cargo test --release --locked -p gigastt-core --lib --features ane test_objc_autorelease -- --test-threads=1
       - name: Test Objective-C comparison harness
         run: python3 -O scripts/test_compare_objc_revisions.py
       - name: Compare affected Core ML bridge revisions
+        if: steps.objc-delta.outputs.changed == 'true'
         env:
           BASE_SHA: ${{ needs.comparison-base.outputs.sha }}
         run: python3 scripts/compare-objc-revisions.py --base "$BASE_SHA"

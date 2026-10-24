@@ -4,6 +4,10 @@ use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 use std::time::Instant;
 
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
 #[test]
 #[ignore = "run with scripts/compare-objc-revisions.py on macOS"]
 #[allow(clippy::assertions_on_constants)]
@@ -12,15 +16,12 @@ fn test_objc_revision_probe() {
     let package = PathBuf::from(std::env::var_os("GIGASTT_OBJC_PROBE_MODEL").unwrap());
     assert!(package.is_dir(), "verified model package missing");
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../gigastt/tests/fixtures");
-    let features = crate::inference::features::MelSpectrogram::new();
+    let features = crate::inference::FeatureExtractor::new();
     let mut fixtures = Vec::new();
     let mut inputs = Vec::new();
     for name in ["golos_00.wav", "golos_01.wav", "golos_02.wav"] {
         let file = root.join(name);
-        fixtures.push(format!(
-            "{:x}",
-            Sha256::digest(std::fs::read(&file).unwrap())
-        ));
+        fixtures.push(hex(&Sha256::digest(std::fs::read(&file).unwrap())));
         let samples = crate::inference::audio::decode_audio_file(file.to_str().unwrap()).unwrap();
         let (mel, frames) = features.compute(&samples[..samples.len().min(48_000)]);
         assert!((1..=768).contains(&frames));
@@ -39,7 +40,7 @@ fn test_objc_revision_probe() {
         for value in values {
             hash.update(value.to_bits().to_le_bytes());
         }
-        serde_json::json!({"sha256": format!("{:x}", hash.finalize()), "shape": shape})
+        serde_json::json!({"sha256": hex(&hash.finalize()), "shape": shape})
     };
     let mut modes = serde_json::Map::new();
     for (name, cpu_and_ne) in [("cpu", false), ("cpu_and_ne", true)] {

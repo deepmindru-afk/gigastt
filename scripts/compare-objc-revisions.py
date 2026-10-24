@@ -74,7 +74,7 @@ def git(*args):
 def affected(base, candidate):
     def versions(ref):
         lock = tomllib.loads(git('show', ref + ':Cargo.lock'))
-        return sorted((p['name'], p['version'], p.get('checksum')) for p in lock['package']
+        return sorted((p['name'], p['version'], p.get('source', ''), p.get('checksum', '')) for p in lock['package']
                       if p['name'].startswith('objc2'))
     paths = git('diff', '--name-only', base, candidate, '--',
                 'crates/gigastt-core/src/runtime/coreml').splitlines()
@@ -84,6 +84,8 @@ def affected(base, candidate):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--base', required=True)
+    parser.add_argument('--affected-only', action='store_true',
+                        help='Emit a GitHub Actions changed output without building or downloading')
     parser.add_argument('--output', type=Path, default=ROOT / 'target/objc-revisions')
     args = parser.parse_args()
     require(re.fullmatch('[0-9a-f]{40}', args.base) is not None, 'immutable base SHA required')
@@ -91,7 +93,11 @@ def main():
     candidate = git('rev-parse', 'HEAD')
     require(base != candidate, 'base must differ from candidate')
     run('git', 'merge-base', '--is-ancestor', base, candidate)
-    if not affected(base, candidate):
+    changed = affected(base, candidate)
+    if args.affected_only:
+        print('changed=' + str(changed).lower())
+        return
+    if not changed:
         print('Objective-C dependencies and bridge unchanged; no model download or benchmark needed.')
         return
     require(sys.platform == 'darwin', 'Core ML comparison requires macOS')
