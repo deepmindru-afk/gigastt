@@ -80,6 +80,13 @@ The default `full=false` runs the branch checks, including both performance gate
 and Model smoke. It does not run full E2E, E2E coverage, CoreML runtime smoke or
 all Docker builds. These expensive checks are opt-in with `full=true`.
 
+For a PR from a fork, a maintainer may push its reviewed head to a temporary
+branch in the destination repository and dispatch on that branch. The mirrored
+commit must match the PR head exactly; do not merge or rebase it onto another
+commit for validation. Publication hygiene verifies both that SHA and the PR
+destination repository. This preserves the same checks for external contributors
+without requiring write access to Actions in their fork.
+
 Also run **Publication hygiene** on the same branch, providing `baseline_sha`
 and `pull_request_number`. It verifies the PR's exact head before checking its
 title, body, branch, commits and content. Wait for all protected checks before
@@ -192,3 +199,20 @@ The Engine uses gigastt's CPU runtime for speaker inference. The historical
 public `SpeakerEncoder` alias still names polyvoice's extractor, so its tract
 feature remains for Rust source compatibility. Engine inference must not use
 that alias; removing the public dependency surface belongs in a major release.
+
+### Objective-C bridge updates
+
+The manual CI ANE job compares the base and candidate when `objc2*` locked
+dependencies or production Core ML bridge sources change.
+`scripts/compare-objc-revisions.py` builds both revisions with the same release
+probe and checksum-verified encoder package. Three speech fixtures must produce
+identical encoder output shapes and hashes. Seven alternating paired process
+runs measure cached model loading, inference and peak RSS; a median latency
+regression above 5% or RSS increase above 10% fails the check. Cold compilation
+is retained separately and excluded from the cached comparison. Raw logs and
+measurements are uploaded as the `objc-revisions` artifact.
+
+Both CPU-only and CPUAndNeuralEngine policies are exercised. The latter does
+not establish that a hosted runner used physical ANE hardware. This bridge
+check measures encoder equivalence, not end-to-end WER. Unaffected changes skip
+the model download and comparison. CI remains manually dispatched.
