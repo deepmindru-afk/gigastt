@@ -15,11 +15,23 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 
 ### Changed
 
+- Reorganize the README and documentation around installation, model selection,
+  operation and validation. Distinguish published bundles from main, correct SDK
+  examples and backend constraints, remove superseded backend plans, and check
+  Markdown links across the repository with regression coverage. Documentation
+  drift now fails its job in manually dispatched CI.
+
 - Run GitHub workflows only on manual dispatch to conserve Actions minutes.
   Preserve protected checks and exact-source release validation; manual CI
   requires an immutable comparison baseline and opts into full model/E2E checks.
 
 ### Fixed
+
+- Correct a Cyrillic window-start capital at a long-form seam only when an
+  unambiguous aligned word from the older window confirms the lowercase form.
+  Preserve sentence starts, acronyms, unsupported proper-name casing, and words
+  that did not begin the decoded window. Timing, confidence, speaker labels and
+  the retained transcript prefix are unchanged.
 
 - Update locked rustls to 0.23.46 and quinn-proto to 0.11.18 for TLS/QUIC
   security fixes without relaxing the advisory checks.
