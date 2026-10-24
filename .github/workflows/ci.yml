@@ -540,17 +540,18 @@ jobs:
     # All PRs, including forks: indirect inference dependencies cannot skip this gate.
     runs-on: ubuntu-latest
     name: Model smoke
-    needs: [bench, speaker-performance]
+    needs: [bench, speaker-performance, build-ane]
     if: always()
     timeout-minutes: 25
     permissions:
       contents: read
     steps:
-      - name: Require performance gates
+      - name: Require performance and bridge checks
         env:
           BENCH_RESULT: ${{ needs.bench.result }}
           SPEAKER_RESULT: ${{ needs.speaker-performance.result }}
-        run: test "$BENCH_RESULT" = success && test "$SPEAKER_RESULT" = success
+          OBJC_RESULT: ${{ needs.build-ane.result }}
+        run: test "$BENCH_RESULT" = success && test "$SPEAKER_RESULT" = success && test "$OBJC_RESULT" = success
       - uses: actions/checkout@v7
         with:
           persist-credentials: false

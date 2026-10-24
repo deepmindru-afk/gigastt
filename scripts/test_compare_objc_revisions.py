@@ -2,6 +2,9 @@ import copy
 import importlib.util
 from pathlib import Path
 import unittest
+import os
+import re
+import subprocess
 from unittest import mock
 
 spec = importlib.util.spec_from_file_location('objc_gate', Path(__file__).with_name('compare-objc-revisions.py'))
@@ -74,6 +77,23 @@ class AffectedTests(unittest.TestCase):
     def test_test_only_change_skips_measurement(self):
         self.assertFalse(self.changed('registry+same', 'registry+same',
                                      'crates/gigastt-core/src/runtime/coreml/bridge/tests/objc_lifetime.rs'))
+
+
+class ProtectedGateTests(unittest.TestCase):
+    def test_coreml_failure_blocks_required_model_smoke(self):
+        workflow = (module.ROOT / '.github/workflows/ci.yml').read_text()
+        job = workflow.split('  model-smoke:\n', 1)[1]
+        job = re.split(r'\n  [a-zA-Z0-9_-]+:\n', job, maxsplit=1)[0]
+        command = re.search(r'^        run: (.+)$', job, re.MULTILINE).group(1)
+        for result in ('failure', 'cancelled', 'skipped', '', 'success'):
+            with self.subTest(result=result):
+                run = subprocess.run(['bash', '-c', command], check=False,
+                                     env=dict(os.environ, BENCH_RESULT='success',
+                                              SPEAKER_RESULT='success', OBJC_RESULT=result))
+                self.assertEqual(run.returncode == 0, result == 'success')
+        self.assertRegex(job, r'needs: \[[^\]]*build-ane[^\]]*\]')
+        self.assertIn('    if: always()', job)
+        self.assertIn('OBJC_RESULT: ${{ needs.build-ane.result }}', job)
 
 
 if __name__ == '__main__': unittest.main()

@@ -47,7 +47,8 @@ missing, renamed and removed benchmark results require investigation.
   turns. Median paired increases above 20% for load, embedding, offline or streaming
   time, or above 10% for RSS/peak RSS, fail the check. This catches changes shared
   by the live oracle and candidate, including an ONNX Runtime upgrade.
-- **Model smoke** explicitly requires both performance jobs to succeed. It
+- **Model smoke** explicitly requires both Linux performance jobs and the macOS
+  bridge job to succeed. It
   runs even if a dependency fails, and fails itself in that case. This is
   necessary because a skipped required GitHub job can otherwise permit merge.
   Keep `Model smoke` required in branch protection.
@@ -77,8 +78,10 @@ moving refs, missing commits, unrelated history and comparison against the
 candidate itself. Use the last accepted revision covering the entire change;
 do not replace a failing baseline with the candidate to hide a regression.
 The default `full=false` runs the branch checks, including both performance gates
-and Model smoke. It does not run full E2E, E2E coverage, CoreML runtime smoke or
-all Docker builds. These expensive checks are opt-in with `full=true`.
+and Model smoke. It does not run full E2E, E2E coverage, the ORT CoreML execution-provider
+smoke or all Docker builds. These expensive checks are opt-in with `full=true`.
+The ANE bridge comparison below runs in ordinary manual CI when its code or
+Objective-C dependencies change.
 
 For a PR from a fork, a maintainer may push its reviewed head to a temporary
 branch in the destination repository and dispatch on that branch. The mirrored
@@ -215,4 +218,6 @@ measurements are uploaded as the `objc-revisions` artifact.
 Both CPU-only and CPUAndNeuralEngine policies are exercised. The latter does
 not establish that a hosted runner used physical ANE hardware. This bridge
 check measures encoder equivalence, not end-to-end WER. Unaffected changes skip
-the optimized ownership build, model download and comparison. CI remains manually dispatched.
+the optimized ownership build, model download and comparison. The macOS job
+feeds the required Model smoke status, so failure, cancellation or a skipped job
+blocks merge. CI remains manually dispatched.
