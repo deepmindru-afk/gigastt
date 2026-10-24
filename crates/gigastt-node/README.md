@@ -66,6 +66,21 @@ npm run build               # napi build --platform --release -> index.js + inde
 GIGASTT_MODEL_DIR=~/.gigastt/models npm run smoke   # transcribes the golos_00.wav fixture
 ```
 
+The smoke test also checks concurrent calls, typed failures, event-loop progress,
+and native engine lifetime after JavaScript releases its reference and runs GC.
+`npm run benchmark --silent` runs the same checks with 21 warmed serial and
+concurrent rounds and emits JSON with latency, RSS, output and binary/fixture
+hashes. It uses two pool slots. `loadMs` is a single descriptive startup sample,
+not a statistically qualified cold-load comparison.
+
+For a dependency update, build both revisions with the same compiler and release
+settings, then set `GIGASTT_TEST_ADDON` to each absolute `.node` path to exercise
+both with this same harness. Keep the same model files and hardware, alternate
+fresh-process base/candidate runs, and retain all measurements and model hashes.
+Compare complete transcripts, word timings and streamed segments as well as
+latency and memory; see [dependency acceptance](../../docs/performance-regressions.md).
+These model-backed commands remain manual and do not enable automatic CI.
+
 `npm run build` produces the native `gigastt.<platform>.node` addon (git-ignored); `loader.js`, `install.js`, and `gigastt.d.ts` are the committed, published package files.
 
 ## Performance note
