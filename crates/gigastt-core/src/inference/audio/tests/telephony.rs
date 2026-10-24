@@ -433,3 +433,34 @@ fn test_raw_decode_cancels_before_codec_and_between_resampling_stages() {
         Some(crate::error::GigasttError::Cancelled)
     ));
 }
+
+#[test]
+fn test_fixture_mulaw_encoder_preserves_independent_codepoints() {
+    // FFmpeg decoded every mu-law byte (0..=255) into this independent PCM
+    // reference. Both zero codes decode to zero, whose canonical encoding is FF.
+    let reference =
+        include_bytes!("../../../../tests/fixtures/telephony/pcmu_codepoints_ffmpeg.pcm");
+    assert_eq!(reference.len(), 256 * 2);
+    let pcm: Vec<i16> = reference
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|&pair| i16::from_le_bytes(pair))
+        .collect();
+    let canonical: Vec<u8> = (0..=u8::MAX)
+        .map(|code| if code == 0x7f { 0xff } else { code })
+        .collect();
+    let encoded = encode_telephony(&mut audio_codec::pcmu::PcmuEncoder::new(), &pcm);
+    assert_eq!(
+        encoded, canonical,
+        "fixture encoder changed canonical levels"
+    );
+
+    let codes: Vec<u8> = (0..=u8::MAX).collect();
+    let samples: Vec<f32> = pcm.iter().map(|&x| f32::from(x) / 32768.0).collect();
+    let expected = resample(&samples, SampleRate(8000), SampleRate(16000)).unwrap();
+    assert_eq!(
+        decode_telephony_raw(&codes, TelephonyCodec::Pcmu, 8000).unwrap(),
+        expected
+    );
+}

@@ -188,10 +188,11 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
 name = "audio-codec"
-version = "0.4.10"
+version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92f02cd3e986f5512564c722a0b94de5e0660445a21e7369764104a859b8bc05"
+checksum = "0fde8feef1948bfc57c451e36665deece149e8ef9c015fae52e06da30d2fa154"
 dependencies = [
+ "fearless_simd",
  "libm",
 ]
 
@@ -1206,6 +1207,15 @@ name = "fastrand"
 version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f1f227452a390804cdb637b74a86990f2a7d7ba4b7d5693aac9b4dd6defd8d6"
+
+[[package]]
+name = "fearless_simd"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3296eb97d869113eaf148a6bdf01884e90b3828ad7ae2340b0f93362fc158611"
+dependencies = [
+ "libm",
+]
 
 [[package]]
 name = "filetime"
