@@ -1,6 +1,66 @@
 use super::*;
 
 #[test]
+fn test_g726_wave_matches_independent_reference_and_streaming() {
+    use super::super::stream::FileWindows;
+    use bytes::Bytes;
+
+    let fixtures: [(&[u8], &[u8]); 4] = [
+        (
+            include_bytes!("../../../../tests/fixtures/telephony/g726_16k.wav"),
+            include_bytes!("../../../../tests/fixtures/telephony/g726_16k_reference.wav"),
+        ),
+        (
+            include_bytes!("../../../../tests/fixtures/telephony/g726_24k.wav"),
+            include_bytes!("../../../../tests/fixtures/telephony/g726_24k_reference.wav"),
+        ),
+        (
+            include_bytes!("../../../../tests/fixtures/telephony/g726_32k.wav"),
+            include_bytes!("../../../../tests/fixtures/telephony/g726_32k_reference.wav"),
+        ),
+        (
+            include_bytes!("../../../../tests/fixtures/telephony/g726_40k.wav"),
+            include_bytes!("../../../../tests/fixtures/telephony/g726_40k_reference.wav"),
+        ),
+    ];
+    for (encoded, reference) in fixtures {
+        // Both signals use the same production resampler; the reference PCM
+        // was decoded independently by FFmpeg, never by the updated library.
+        let expected = decode_audio_bytes(reference).unwrap();
+        let actual = decode_audio_bytes(encoded).unwrap();
+        assert!(!actual.is_empty());
+        assert_eq!(actual, expected);
+        assert_eq!(
+            FileWindows::decode_bytes(Bytes::copy_from_slice(encoded), None).unwrap(),
+            expected
+        );
+        let error =
+            FileWindows::decode_bytes(Bytes::copy_from_slice(encoded), Some(0.05)).unwrap_err();
+        assert!(matches!(
+            error.downcast_ref::<crate::error::GigasttError>(),
+            Some(crate::error::GigasttError::AudioTooLong { .. })
+        ));
+    }
+}
+
+#[test]
+fn test_wave_ambiguous_0064_is_rejected_in_both_decode_paths() {
+    use super::super::stream::FileWindows;
+    use bytes::Bytes;
+
+    // A 32 kbit/s header could mean G.726; interpreting it as G.722 would
+    // silently return the wrong signal. Valid 64 kbit/s aliases are covered
+    // by test_decode_audio_bytes_g722_wav_fallback.
+    let wav = make_compressed_wav(0x0064, 8000, 4000, &[0x55; 80]);
+    for result in [
+        decode_audio_bytes(&wav),
+        FileWindows::decode_bytes(Bytes::from(wav), None),
+    ] {
+        assert!(result.is_err(), "ambiguous codec must not be guessed");
+    }
+}
+
+#[test]
 fn test_telephony_codec_from_name() {
     assert_eq!(
         TelephonyCodec::from_name("pcmu"),
