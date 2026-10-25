@@ -27,6 +27,9 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 
 ### Fixed
 
+- Use actual overlap bounds for word alignment and window-start case evidence
+  in end-anchored trailing windows, retaining ambiguity and proper-name guards.
+
 - Correct a Cyrillic window-start capital at a long-form seam only when an
   unambiguous aligned word from the older window confirms the lowercase form.
   Preserve sentence starts, acronyms, unsupported proper-name casing, and words
