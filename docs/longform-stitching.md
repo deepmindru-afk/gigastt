@@ -13,11 +13,16 @@ overlap. The encoder and RNN-T predictor start afresh for each window. This
 bounds inference memory; it also changes acoustic context compared with a
 single pass.
 
-The stitch aligns words within the overlap by normalized text, sequence order
-and start time. It maximizes matching words, then minimizes timestamp drift
+The stitch aligns words within the actual overlap by normalized text, sequence
+order and start time. Both alignment and case-evidence checks use the new
+window start and previous window end; an end-anchored tail is not restricted
+to the nominal two-second band. It maximizes matching words, then minimizes timestamp drift
 (at most 400 ms per pair). Matching ignores case, punctuation and `ё`/`е`, but
-the selected word retains its original text, timing and confidence. A matching
-word near the overlap midpoint supplies a shared cut: both copies belong to
+the selected word retains its original timing and confidence. A Cyrillic
+window-start capital can take the older copy's lowercase spelling only when
+the correspondence is unique and the preceding word does not end a sentence.
+Without that evidence its spelling is preserved. A matching word near the
+overlap midpoint supplies a shared cut: both copies belong to
 the same side, so timestamp jitter cannot independently retain or discard both.
 Sequence alignment preserves repeated words such as “да да”.
 

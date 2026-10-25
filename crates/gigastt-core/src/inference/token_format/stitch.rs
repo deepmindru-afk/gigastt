@@ -1,7 +1,7 @@
 //! Word alignment at a file-window seam. All times are on the same timeline.
 
 use super::WordInfo;
-use crate::inference::windows::CHUNK_OVERLAP_SAMPLES;
+use std::ops::RangeInclusive;
 
 // Bound work even for a pathological decoder emitting many words at one time.
 const MAX_OVERLAP_WORDS: usize = 64;
@@ -39,12 +39,16 @@ impl Score {
 /// same side of its two copies. Maximizing the number of matches before
 /// minimizing time drift preserves rapid repetitions; nearest-word matching
 /// alone can mistake the second "yes" for the first one in the next window.
-fn aligned_cut(merged: &[WordInfo], next: &[WordInfo], seam: f64) -> Option<(usize, usize)> {
-    let half_overlap = CHUNK_OVERLAP_SAMPLES as f64 / 32_000.0;
-    let old_start = merged.partition_point(|w| w.start < seam - half_overlap);
-    let old_end = merged.partition_point(|w| w.start <= seam + half_overlap);
-    let new_start = next.partition_point(|w| w.start < seam - half_overlap);
-    let new_end = next.partition_point(|w| w.start <= seam + half_overlap);
+fn aligned_cut(
+    merged: &[WordInfo],
+    next: &[WordInfo],
+    overlap: &RangeInclusive<f64>,
+) -> Option<(usize, usize)> {
+    let seam = (overlap.start() + overlap.end()) / 2.0;
+    let old_start = merged.partition_point(|w| w.start < *overlap.start());
+    let old_end = merged.partition_point(|w| w.start <= *overlap.end());
+    let new_start = next.partition_point(|w| w.start < *overlap.start());
+    let new_end = next.partition_point(|w| w.start <= *overlap.end());
     let old = &merged[old_start..old_end];
     let new = &next[new_start..new_end];
     if old.is_empty()
@@ -129,15 +133,16 @@ pub(crate) fn stitch_chunk_words(
     next: Vec<WordInfo>,
     seam_s: f64,
 ) -> Vec<WordInfo> {
-    stitch_chunk_words_retained(merged, next, seam_s).0
+    stitch_chunk_words_retained(merged, next, (seam_s - 1.0)..=(seam_s + 1.0)).0
 }
 
 /// Return the exact unchanged prefix length alongside the stitched words.
 pub(crate) fn stitch_chunk_words_retained(
     mut merged: Vec<WordInfo>,
     mut next: Vec<WordInfo>,
-    seam_s: f64,
+    overlap: RangeInclusive<f64>,
 ) -> (Vec<WordInfo>, usize) {
+    let seam_s = (overlap.start() + overlap.end()) / 2.0;
     if merged.is_empty() {
         return (next, 0);
     }
@@ -145,9 +150,9 @@ pub(crate) fn stitch_chunk_words_retained(
         let retained = merged.len();
         return (merged, retained);
     }
-    let aligned = aligned_cut(&merged, &next, seam_s);
+    let aligned = aligned_cut(&merged, &next, &overlap);
     if let Some((old_end, 0)) = aligned {
-        reconcile_seam_case(&merged, old_end, &mut next, seam_s);
+        reconcile_seam_case(&merged, old_end, &mut next, &overlap);
     }
     let (old_end, new_start) = aligned.unwrap_or_else(|| {
         (
@@ -164,7 +169,12 @@ pub(crate) fn stitch_chunk_words_retained(
 /// aligned older copy to differ solely in that initial case: guessing from the
 /// preceding punctuation alone would lowercase proper names. Ambiguous repeated
 /// words and fallback cuts retain the selected hypothesis unchanged.
-fn reconcile_seam_case(old: &[WordInfo], boundary: usize, next: &mut [WordInfo], seam: f64) {
+fn reconcile_seam_case(
+    old: &[WordInfo],
+    boundary: usize,
+    next: &mut [WordInfo],
+    overlap: &RangeInclusive<f64>,
+) {
     let Some(first) = next.first() else {
         return;
     };
@@ -193,17 +203,21 @@ fn reconcile_seam_case(old: &[WordInfo], boundary: usize, next: &mut [WordInfo],
     // among rapid repetitions can otherwise lend case from another occurrence.
     // aligned_cut already bounds both overlap slices to MAX_OVERLAP_WORDS.
     let key = word_key(&first.word);
-    if unique_overlap_match(old, first, &key, seam)
-        && unique_overlap_match(next, &old[boundary], &key, seam)
+    if unique_overlap_match(old, first, &key, overlap)
+        && unique_overlap_match(next, &old[boundary], &key, overlap)
     {
         next[0].word = lower;
     }
 }
 
-fn unique_overlap_match(words: &[WordInfo], anchor: &WordInfo, key: &str, seam: f64) -> bool {
-    let half_overlap = CHUNK_OVERLAP_SAMPLES as f64 / 32_000.0;
-    let start = words.partition_point(|w| w.start < seam - half_overlap);
-    let end = words.partition_point(|w| w.start <= seam + half_overlap);
+fn unique_overlap_match(
+    words: &[WordInfo],
+    anchor: &WordInfo,
+    key: &str,
+    overlap: &RangeInclusive<f64>,
+) -> bool {
+    let start = words.partition_point(|w| w.start < *overlap.start());
+    let end = words.partition_point(|w| w.start <= *overlap.end());
     words[start..end]
         .iter()
         .filter(|w| (w.start - anchor.start).abs() <= MAX_START_DRIFT && word_key(&w.word) == key)

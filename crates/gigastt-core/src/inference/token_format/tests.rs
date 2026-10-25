@@ -172,16 +172,16 @@ fn test_stitch_unmatched_continuous_speech_keeps_midpoint_fallback() {
 }
 
 #[test]
-fn test_seam_seconds_is_midpoint_of_actual_overlap() {
+fn test_overlap_seconds_includes_actual_window_bounds() {
     // Regular grid: a 24 s window ending at 24 s and the next one starting at
     // the 22 s stride (352_000) share 2 s, so the seam is 23.0 s.
-    assert_eq!(seam_seconds(384_000, 352_000), 23.0);
+    assert_eq!(overlap_seconds(384_000, 352_000), 22.0..=24.0);
     // An end-anchored trailing window overlaps more: [44, 68] then
     // [47.25, 71.25] seams at the middle of [47.25, 68].
-    assert_eq!(seam_seconds(68 * 16_000, 756_000), (47.25 + 68.0) / 2.0);
+    assert_eq!(overlap_seconds(68 * 16_000, 756_000), 47.25..=68.0);
     // No overlap (or no previous window): the seam is the window start.
-    assert_eq!(seam_seconds(0, 352_000), 22.0);
-    assert_eq!(seam_seconds(0, 0), 0.0);
+    assert_eq!(overlap_seconds(0, 352_000), 22.0..=22.0);
+    assert_eq!(overlap_seconds(0, 0), 0.0..=0.0);
 }
 
 #[test]
@@ -381,7 +381,7 @@ fn test_stitch_seam_case_preserves_russian_names() {
     for name in ["Москве", "Иван", "Яндекс", "Ёлки"] {
         let old = vec![word("в", 22.5, 22.7), word(name, 23.1, 23.3)];
         let next = vec![word(name, 23.1, 23.3), word("сегодня", 23.5, 23.8)];
-        let (out, retained) = stitch_chunk_words_retained(old, next, 23.0);
+        let (out, retained) = stitch_chunk_words_retained(old, next, 22.0..=24.0);
         assert_eq!(retained, 1);
         assert_eq!(out[1].word, name);
     }
@@ -391,7 +391,7 @@ fn test_stitch_seam_case_preserves_russian_names() {
 fn test_stitch_seam_case_requires_the_first_decoded_word() {
     let old = vec![word("и", 22.7, 22.9), word("он", 23.1, 23.3)];
     let next = vec![word("и", 22.7, 22.9), word("Он", 23.1, 23.3)];
-    let (out, retained) = stitch_chunk_words_retained(old, next, 23.0);
+    let (out, retained) = stitch_chunk_words_retained(old, next, 22.0..=24.0);
     assert_eq!(retained, 1);
     assert_eq!(out[1].word, "Он");
 }
@@ -415,7 +415,7 @@ fn test_stitch_seam_case_uses_older_context_and_preserves_metadata() {
         let mut first = WordInfo::new(capital, 23.12, 23.4, 0.75, Some(2));
         let tail = word("дальше", 23.6, 23.9);
         let next = vec![first.clone(), tail.clone()];
-        let (out, retained) = stitch_chunk_words_retained(old, next, 23.0);
+        let (out, retained) = stitch_chunk_words_retained(old, next, 22.0..=24.0);
         first.word = lower.into();
         assert_eq!(retained, 1);
         assert_eq!(
@@ -491,16 +491,16 @@ fn test_stitch_seam_case_preserves_unaligned_and_unbounded_overlap() {
 #[test]
 fn test_stitch_seam_case_preserves_edges_and_older_winner() {
     let first = vec![word("Он", 23.1, 23.3)];
-    let (out, retained) = stitch_chunk_words_retained(Vec::new(), first.clone(), 23.0);
+    let (out, retained) = stitch_chunk_words_retained(Vec::new(), first.clone(), 22.0..=24.0);
     assert_eq!(retained, 0);
     assert_eq!(out[0].word, "Он");
-    let (out, retained) = stitch_chunk_words_retained(first, Vec::new(), 23.0);
+    let (out, retained) = stitch_chunk_words_retained(first, Vec::new(), 22.0..=24.0);
     assert_eq!(retained, 1);
     assert_eq!(out[0].word, "Он");
     let (out, retained) = stitch_chunk_words_retained(
         vec![word("он", 23.1, 23.3)],
         vec![word("Он", 23.1, 23.3)],
-        23.0,
+        22.0..=24.0,
     );
     assert_eq!(retained, 0);
     assert_eq!(out[0].word, "Он");
@@ -519,7 +519,7 @@ fn test_stitch_seam_case_preserves_repetitions_in_new_window() {
     let (out, retained) = stitch_chunk_words_retained(
         vec![prefix.clone(), word("да", 23.1, 23.2)],
         next.clone(),
-        23.0,
+        22.0..=24.0,
     );
     assert_eq!(retained, 1);
     assert_eq!(
@@ -571,7 +571,7 @@ fn test_stitch_seam_case_matches_public_audio_reproductions() {
     for case in cases.as_array().unwrap() {
         let old = words(&case["old"]);
         let next = words(&case["new"]);
-        let (out, retained) = stitch_chunk_words_retained(old, next, 23.0);
+        let (out, retained) = stitch_chunk_words_retained(old, next, 22.0..=24.0);
         assert_eq!(
             serde_json::to_value(out).unwrap(),
             serde_json::to_value(words(&case["expected"])).unwrap(),
@@ -580,4 +580,66 @@ fn test_stitch_seam_case_matches_public_audio_reproductions() {
         );
         assert_eq!(retained, case["retained"].as_u64().unwrap() as usize);
     }
+}
+
+#[test]
+fn test_stitch_seam_case_uses_wide_trailing_overlap() {
+    // A 31.04 s file has windows [0, 24] and [7.08, 31.04].
+    // The first new word is outside the old nominal midpoint +/-1 s band.
+    let old = vec![
+        word("Может,", 14.0, 14.4),
+        word("оставить", 15.0, 15.5),
+        word("один", 17.0, 17.3),
+    ];
+    let next = vec![word("Один", 17.0, 17.3), word("файл", 17.5, 17.9)];
+    let (out, retained) = stitch_chunk_words_retained(old, next, 7.08..=24.0);
+    assert_eq!(retained, 2);
+    assert_eq!(
+        out.iter().map(|w| w.word.as_str()).collect::<Vec<_>>(),
+        ["Может,", "оставить", "один", "файл"]
+    );
+}
+
+#[test]
+fn test_stitch_wide_overlap_preserves_names_and_metadata() {
+    for name in ["Москва", "Иван", "Яндекс"] {
+        let prefix = word("про", 15.0, 15.3);
+        let next = vec![word(name, 17.0, 17.3), word("сегодня", 18.0, 18.4)];
+        let (out, retained) = stitch_chunk_words_retained(
+            vec![prefix.clone(), word(name, 17.0, 17.3)],
+            next.clone(),
+            7.08..=24.0,
+        );
+        assert_eq!(retained, 1);
+        assert_eq!(
+            serde_json::to_value(out).unwrap(),
+            serde_json::to_value([vec![prefix], next].concat()).unwrap()
+        );
+    }
+}
+
+#[test]
+fn test_stitch_wide_overlap_rejects_ambiguous_case_evidence() {
+    for duplicate_old in [false, true] {
+        let mut old = vec![word("и", 15.0, 15.3), word("да", 17.0, 17.1)];
+        let mut next = vec![word("Да", 17.0, 17.1)];
+        if duplicate_old {
+            old.push(word("да", 17.2, 17.3));
+        } else {
+            next.push(word("да", 17.2, 17.3));
+        }
+        let (out, _) = stitch_chunk_words_retained(old, next, 7.08..=24.0);
+        assert_eq!(out[1].word, "Да");
+    }
+}
+
+#[test]
+fn test_stitch_wide_overlap_requires_evidence_before_previous_window_end() {
+    let next = vec![word("Один", 24.96, 25.2)];
+    let (out, _) = stitch_chunk_words_retained(
+        vec![word("оставить", 15.0, 15.4), word("один", 24.96, 25.2)],
+        next,
+        7.08..=24.0,
+    );
+    assert_eq!(out.last().unwrap().word, "Один");
 }
