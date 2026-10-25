@@ -1209,6 +1209,7 @@ jobs:
               - 'Cargo.lock'
               - 'crates/**/Cargo.toml'
               - 'crates/**/build.rs'
+              - 'vendor/**'
               - 'crates/gigastt-quantize/proto/**'
               - 'rust-toolchain.toml'
 

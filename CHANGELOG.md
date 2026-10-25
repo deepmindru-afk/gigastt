@@ -13,6 +13,10 @@ Versions 0.1.0 and 0.1.1 were published to crates.io on 2026-04-09 and yanked
 
 ## [Unreleased]
 
+### Security
+
+- Update TLS verification and root certificates in workspace/fuzz lockfiles; patch Candle ZIP handling and Askama TOML parsing to remove vulnerable or unmaintained dependencies from repository builds. See [dependency patch scope](vendor/README.md), including the limitation for downstream crates.io consumers.
+
 ### Changed
 
 - Reorganize the README and documentation around installation, model selection,
