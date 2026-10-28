@@ -437,7 +437,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
@@ -728,6 +728,9 @@ jobs:
           shared-key: ci
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: obi1kenobi/cargo-semver-checks-action@v2
+        env:
+          # rustdoc-only API comparison does not execute native inference.
+          ORT_SKIP_DOWNLOAD: "1"
         with:
           # coreml+cuda are mutually exclusive; --all-features is impossible.
           feature-group: default-features
