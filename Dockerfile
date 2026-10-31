@@ -7,16 +7,15 @@
 # build doubles as an MSRV check; bump both together. `--locked` keeps the
 # image on the audited Cargo.lock graph — a fresh resolve could pull deps
 # with a newer MSRV (polyvoice 0.18 raised the floor to 1.94).
-# trixie (not bookworm): ort's prebuilt onnxruntime statics are compiled with
-# gcc >= 13 and reference `__cxa_call_terminate` (CXXABI_1.3.15), which
-# bookworm's libstdc++ 12 lacks — the final link fails there.
 FROM rust:1.94-trixie AS builder
 
-# `prost-build` (via build.rs) requires `protoc` at compile time; without it
-# the build aborts with "prost-build failed to compile gigastt-quantize proto/onnx.proto".
+# Устанавливаем protobuf-compiler, а также libonnxruntime-dev для сборки ort-sys без сети
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends protobuf-compiler && \
+    apt-get install -y --no-install-recommends protobuf-compiler libonnxruntime-dev && \
     rm -rf /var/lib/apt/lists/*
+
+# Заставляем ort-sys искать локальную библиотеку вместо скачивания prebuilt-архивов
+ENV ORT_STRATEGY=system
 
 WORKDIR /build
 
@@ -34,10 +33,9 @@ COPY crates/gigastt-ffi/Cargo.toml crates/gigastt-ffi/
 COPY crates/gigastt/Cargo.toml crates/gigastt/
 COPY crates/gigastt-uniffi/Cargo.toml crates/gigastt-uniffi/
 COPY crates/gigastt-node/Cargo.toml crates/gigastt-node/
+
 # Every [[bench]]/[[test]]/[[bin]] target declared in the manifests must exist
 # on disk for cargo to parse the workspace, hence the extra stubs below.
-# (gigastt-uniffi and gigastt-node are workspace members but not dependencies of
-# `gigastt`, so they are never compiled here — their stubs only satisfy parsing.)
 RUN mkdir -p crates/gigastt-core/src crates/gigastt-quantize/src crates/gigastt-ffi/src crates/gigastt/src/server crates/gigastt-uniffi/src/bin crates/gigastt-node/src && \
     echo 'pub mod error; pub mod inference; pub mod model; pub mod protocol;' > crates/gigastt-core/src/lib.rs && \
     echo '#[cfg(feature = "quantize")] pub mod quantize { pub use gigastt_quantize::*; }' >> crates/gigastt-core/src/lib.rs && \
@@ -87,8 +85,9 @@ FROM debian:trixie-slim AS model-fetcher
 
 ARG GIGASTT_BAKE_MODEL=0
 
+# Добавляем libonnxruntime-dev, так как бинарнику на этом этапе нужен доступ к shared library
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates && \
+    apt-get install -y --no-install-recommends ca-certificates libonnxruntime-dev && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /build/target/release/gigastt /usr/local/bin/gigastt
@@ -103,8 +102,9 @@ FROM debian:trixie-slim
 
 ARG GIGASTT_BAKE_MODEL=0
 
+# Добавляем динамическую библиотеку libonnxruntime-dev и утилиту curl в финальный контейнер
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates curl && \
+    apt-get install -y --no-install-recommends ca-certificates curl libonnxruntime-dev && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /build/target/release/gigastt /usr/local/bin/gigastt
