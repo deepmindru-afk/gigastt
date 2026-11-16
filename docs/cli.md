@@ -105,6 +105,14 @@ gigastt serve [OPTIONS]
                             without widening the window [default: true].
                             Opt out with --stream-stable-prefix=false.
                             Env: GIGASTT_STREAM_STABLE_PREFIX.
+  --stream-ctc-model-dir <DIR> Cached ml_ctc_large sidecar for RNN-T WebSocket
+                            speech/automatic-endpoint confirmation [default: off].
+                            Env: GIGASTT_STREAM_CTC_MODEL_DIR. No automatic download.
+                            Requires CPU INT8 rnnt, pool-size=1, pool-min-size=1,
+                            batch-pool-size=0, file-window-concurrency=1,
+                            encoder-intra-threads=1, auto endpoint,
+                            stable prefix enabled and VAD off. File/REST/jobs
+                            transcription is unchanged. See stream-ctc-confirmation.md.
   --profile <P>             Deploy profile: default | edge [default: default].
                             edge applies --pool-size 1 and --vad when those
                             flags are left at defaults. Env: GIGASTT_PROFILE.
@@ -202,8 +210,8 @@ gigastt download [OPTIONS]
   --progress <FORMAT>    Progress output: human (default) | json.
                          Env: GIGASTT_DOWNLOAD_PROGRESS.
 
-  Always fetches the lean **INT8** bundle (~310 MiB). There is no FP32 download
-  path and no on-device quantize step for runtime.
+  Fetches the default **INT8** bundle (~310 MiB). This command does not provision
+  FP32 or quantize models. See docs/fp32-cpu.md for the separate FP32 installer.
 
   Machine-readable progress (--progress=json)
     stdout carries one NDJSON event per line and nothing else (the human

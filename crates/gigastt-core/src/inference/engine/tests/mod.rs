@@ -21,3 +21,7 @@ mod transcribe;
 
 #[cfg(feature = "file-decode")]
 mod runtime_workspace;
+
+mod ctc_prefix;
+
+mod speech_admission;
